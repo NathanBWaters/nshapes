@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useSharedValue,
   useAnimatedStyle,
   withTiming,
 } from 'react-native-reanimated';
+import { useReducedMotion } from './useReducedMotion';
 
 type ParticleType = 'sparkle' | 'explosion';
 
@@ -105,6 +107,13 @@ function ParticleComponent({ particle }: ParticleComponentProps) {
     scale.value = withTiming(particle.type === 'explosion' ? 0 : particle.scale * 0.5, {
       duration: particle.maxLifetime,
     });
+    return () => {
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
+      cancelAnimation(rotate);
+      cancelAnimation(opacity);
+      cancelAnimation(scale);
+    };
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -141,11 +150,13 @@ function ParticleComponent({ particle }: ParticleComponentProps) {
 }
 
 export function useParticles() {
+  const reducedMotion = useReducedMotion();
   const [particles, setParticles] = useState<Particle[]>([]);
   const cleanupTimeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const spawnParticles = useCallback(
     (count: number, origin: ParticleOrigin, type: ParticleType) => {
+      if (reducedMotion) return;
       const newParticles: Particle[] = [];
       for (let i = 0; i < count; i++) {
         newParticles.push(generateParticle(origin, type, i));
@@ -161,7 +172,7 @@ export function useParticles() {
         cleanupTimeouts.current.push(timeout);
       });
     },
-    []
+    [reducedMotion]
   );
 
   useEffect(() => {

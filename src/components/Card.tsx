@@ -1,9 +1,12 @@
-import React, { createContext, memo, useCallback, useContext, useState } from 'react';
-import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
+import React, { createContext, memo, useCallback, useContext, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, Pattern, Polygon, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { MONO_FONT } from '@/utils/fonts';
+import { selectionHaptic } from '@/utils/haptics';
+import { EASE, SCALE } from '@/utils/motion';
 import {
   cardBgPatternMeta,
   cardColorCode,
@@ -23,6 +26,7 @@ import {
   getCardStockBackground,
 } from '@/utils/cardVisuals';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon, { type IconName } from './Icon';
 
 /** Board-level static visual overlays (Mirror Shard, Tightrope, Catalyst target, Hot Potato timestamp, 5th background attribute). */
@@ -288,6 +292,8 @@ interface CardProps {
   catalystLabel?: string | null;
   /** Optional direct override indicating the 5th `background` attribute is active */
   showBackgroundCode?: boolean;
+  /** Adventure's Effects switch: off skips the finger-down scale squish while keeping instant haptics */
+  effects?: boolean;
 }
 
 interface PrioritizedChip {
@@ -309,13 +315,16 @@ const Card: React.FC<CardProps> = ({
   tightropeSlot,
   catalystLabel,
   showBackgroundCode,
+  effects = true,
 }) => {
   const { shape, color, number, shading, selected, isHint, isDud, isFaceDown, hasCountdown, countdownTimer, hasBomb, bombTimer } = card;
   const boardOverlay = useContext(CardBoardContext);
   const colorblind = useColorblind();
+  const reducedMotion = useReducedMotion();
 
   // Cards that cannot be selected (dud, face-down, or locked)
   const isUnselectable = isDud || isFaceDown || !!card.locked;
+  const isClickDisabled = disabled || isUnselectable;
   const isMirrorSlot = (mirrorSlot ?? boardOverlay.mirrorCardIds?.has(card.id) ?? false) && !isDud && !isFaceDown;
   const isTightropeSlot = (tightropeSlot ?? boardOverlay.tightropeCardIds?.has(card.id) ?? false) && !isDud && !isFaceDown;
   const resolvedCatalystLabel = catalystLabel !== undefined ? catalystLabel : (boardOverlay.catalystRecipeName ?? null);
@@ -331,12 +340,46 @@ const Card: React.FC<CardProps> = ({
     onBurnComplete?.(card);
   }, [onBurnComplete, card]);
 
-  const fireProgress = useBurnTimer({
+  const burnProgress = useBurnTimer({
     isOnFire: card.onFire ?? false,
     fireStartTime: card.fireStartTime,
     isPaused,
     onComplete: handleBurnComplete,
   });
+
+  // [FX-20]: Frame-1 finger-down tactile press (`SCALE.press = 0.96` in 32ms) + immediate selection haptic
+  const pressScale = useSharedValue(1);
+  const allowPressMotion = effects && !reducedMotion;
+
+  useEffect(() => {
+    if (!allowPressMotion) {
+      cancelAnimation(pressScale);
+      pressScale.value = 1;
+    }
+    return () => cancelAnimation(pressScale);
+  }, [allowPressMotion, pressScale]);
+
+  const handlePressIn = useCallback(() => {
+    if (isClickDisabled) return;
+    void selectionHaptic();
+    if (allowPressMotion) {
+      pressScale.value = withTiming(SCALE.press, { duration: 32, easing: EASE.enter });
+    }
+  }, [isClickDisabled, allowPressMotion, pressScale]);
+
+  const handlePressOut = useCallback(() => {
+    if (!allowPressMotion) return;
+    pressScale.value = withTiming(1, { duration: 64, easing: EASE.ui });
+  }, [allowPressMotion, pressScale]);
+
+  const pressAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pressScale.value }],
+  }));
+
+  // [FX-25]: 60fps GPU burn progress overlay opacity driven directly by Reanimated SharedValue
+  const fireOverlayStyle = useAnimatedStyle(() => ({
+    opacity: burnProgress.value * 0.3,
+  }));
 
   // Desktop fine-pointer hover glow (shadow only; borders/outlines are strictly for selection)
   const handleHoverIn = useCallback(() => {
@@ -670,15 +713,13 @@ const Card: React.FC<CardProps> = ({
     ? { cursor: disabled ? 'default' : 'pointer' } as any
     : undefined;
 
-  // Determine if click should be blocked
-  const isClickDisabled = disabled || isUnselectable;
-
   const spokenColor = cardColorLabel(color, colorblind);
   const spokenShape = formatShapeName(shape).toLowerCase();
   const spokenBg = card.background ? bgMeta.a11yLabel : null;
 
   return (
-    <TouchableOpacity
+    <Animated.View testID="card-press-wrap" style={[styles.pressRoot, pressAnimStyle]}>
+    <Pressable
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
       accessibilityLabel={`${number} ${spokenColor} ${shading} ${spokenShape}${spokenBg ? ` on ${spokenBg}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? (resolvedCatalystLabel ? (resolvedCatalystLabel === 'Pick Evo' ? ', evolution choice catalyst' : `, catalyst for ${resolvedCatalystLabel}`) : ', evolution ready') : ', dormant catalyst') : ''}${isMirrorSlot ? ', mirror slot' : ''}${isTightropeSlot ? ', on tightrope' : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
       style={[
@@ -686,10 +727,10 @@ const Card: React.FC<CardProps> = ({
         isHovered && !selected && !disabled && !isUnselectable && styles.hoveredCard,
         webCursorStyle,
       ]}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       onPress={() => !isClickDisabled && onClick(card)}
       disabled={isClickDisabled}
-      // No press dim: the lift in CardMotion answers the tap (a 250 ms fade-back on release only blurred it)
-      activeOpacity={1}
       hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
       // @ts-ignore - onHoverIn/Out are web-only props
       onHoverIn={handleHoverIn}
@@ -849,15 +890,11 @@ const Card: React.FC<CardProps> = ({
       {/* Hue-neutral SVG locked overlay (0% color wash over center shapes) */}
       {card.locked && visible && <LockedPatternOverlay frozen={(card.frozen ?? 0) > 0} />}
 
-      {/* Fire overlay — progressive ember tint (no border, borders are for selection only) */}
+      {/* Fire overlay — 60fps GPU progressive ember tint (no border, borders are for selection only) */}
       {card.onFire && visible && (
-        <View
-          style={[
-            styles.fireOverlay,
-            {
-              backgroundColor: `rgba(239, 68, 68, ${fireProgress * 0.25})`,
-            },
-          ]}
+        <Animated.View
+          testID="card-fire-overlay"
+          style={[styles.fireOverlay, fireOverlayStyle]}
           pointerEvents="none"
         />
       )}
@@ -871,7 +908,8 @@ const Card: React.FC<CardProps> = ({
           </View>
         </>
       )}
-    </TouchableOpacity>
+    </Pressable>
+    </Animated.View>
   );
 };
 
@@ -986,6 +1024,9 @@ const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, 
 });
 
 const styles = StyleSheet.create({
+  pressRoot: {
+    flex: 1,
+  },
   patternLayer: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: RADIUS.module - 3,
@@ -1263,6 +1304,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: RADIUS.module - 2,
+    backgroundColor: '#EF4444',
   },
   lockedOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1477,6 +1519,7 @@ const areCardPropsEqual = (prev: CardProps, next: CardProps): boolean =>
   prev.tightropeSlot === next.tightropeSlot &&
   prev.catalystLabel === next.catalystLabel &&
   prev.showBackgroundCode === next.showBackgroundCode &&
+  prev.effects === next.effects &&
   prev.onClick === next.onClick &&
   prev.onBurnComplete === next.onBurnComplete &&
   areCardsShallowEqual(prev.card, next.card);

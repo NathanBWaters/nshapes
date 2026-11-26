@@ -854,7 +854,10 @@ class Band {
     const g = (running && this.bpm ? this.stepDur() : 60 / 120 / 4) / 2;
     const now = this.now;
     const earliest = now + 0.012;
-    const t0 = running ? nextGridTime(earliest, this.nextTime, g) : earliest;
+    // [FX-23]: Subdivide to 64th-note grid when a 32nd exceeds 32 ms and cap slip t0 - now <= 0.032 s
+    const snap = g > 0.032 ? g / 2 : g;
+    const snapped = running ? nextGridTime(earliest, this.nextTime, snap) : earliest;
+    const t0 = Math.min(snapped, now + 0.032);
     this.stretchT0 = t0;
     try {
       fn();

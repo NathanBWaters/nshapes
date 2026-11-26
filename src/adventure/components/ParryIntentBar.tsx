@@ -3,10 +3,12 @@
  *
  * Constant height so the board never shifts when the foe transitions between
  * calm → windup → golden Perfect Parry window → Staggered ×2.
- * Animations strictly touch GPU-composited `transform`/`opacity` and are gated
- * on `useAppActive()` with `cancelAnimation(...)` cleanup.
+ * [FX-24] Fill glides at 60fps via GPU-composited `transform: [{ scaleX }]`
+ * interpolated smoothly over `TICK_MS` (250 ms) with zero layout `width` thrash.
+ * [FX-14] All animations are gated on `useAppActive()`, `effects`, and
+ * `useReducedMotion()` with `cancelAnimation(...)` cleanup.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -18,12 +20,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { useColorblind } from '@/utils/cardColors';
 import { formatParryCounterMeta } from '@/utils/cardVisuals';
+import { EASE } from '@/utils/motion';
 import type { ParryState } from '../types';
 import { isInPerfectWindow } from '../engine/parry';
 import { INK } from './ui';
+
+/** Matches AdventureRun's 250 ms simulation tick for seamless 60fps GPU interpolation ([FX-24]) */
+const PARRY_TICK_MS = 250;
 
 interface Props {
   parry: ParryState;
@@ -32,11 +39,21 @@ interface Props {
   counterAvailable?: boolean;
   /** Compact side-by-side mode when paired with Shading Surge in the shared Dual Threat Rail */
   compact?: boolean;
+  /** Adventure's Effects switch: off stops infinite pulse & tick glide cleanly ([FX-14]) */
+  effects?: boolean;
   onPress?: () => void;
 }
 
-const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = true, compact = false, onPress }) => {
+const ParryIntentBar: React.FC<Props> = ({
+  parry,
+  active,
+  counterAvailable = true,
+  compact = false,
+  effects = true,
+  onPress,
+}) => {
   const appActive = useAppActive();
+  const reducedMotion = useReducedMotion();
   const colorblind = useColorblind();
   const meta = formatParryCounterMeta(parry.spec.counter, colorblind);
   const perfect = isInPerfectWindow(parry);
@@ -57,8 +74,43 @@ const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = tru
       ? Math.max(0, Math.min(96, (1 - parry.spec.perfectWindowMs / parry.durationMs) * 100))
       : null;
 
+  // [FX-24] 60fps GPU scaleX interpolation over TICK_MS (freezes at exact pixel on pause / reducedMotion)
+  const fillSv = useSharedValue(progress);
+  const prevPhaseRef = useRef(parry.phase);
+  const glideActive = active && appActive && effects && !reducedMotion && (windup || staggered) && parry.durationMs > 0;
+
+  useEffect(() => {
+    const phaseChanged = prevPhaseRef.current !== parry.phase;
+    prevPhaseRef.current = parry.phase;
+
+    if (!glideActive) {
+      cancelAnimation(fillSv);
+      fillSv.value = progress;
+      return;
+    }
+
+    if (phaseChanged || Math.abs(fillSv.value - progress) > 0.14) {
+      cancelAnimation(fillSv);
+      fillSv.value = progress;
+    }
+
+    const delta = PARRY_TICK_MS / parry.durationMs;
+    const nextProgress = windup
+      ? Math.min(1, progress + delta)
+      : Math.max(0, progress - delta);
+    fillSv.value = withTiming(nextProgress, { duration: PARRY_TICK_MS, easing: EASE.linear });
+
+    return () => cancelAnimation(fillSv);
+  }, [progress, parry.phase, parry.durationMs, windup, glideActive, fillSv]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    opacity: fillSv.value <= 0.001 ? 0 : 1,
+    transform: [{ scaleX: Math.max(0.0001, fillSv.value) }],
+  }));
+
+  // [FX-14] Gate infinite pulse strictly on active && appActive && effects && !reducedMotion
   const pulse = useSharedValue(1);
-  const shouldPulse = active && appActive && (perfect || staggered);
+  const shouldPulse = active && appActive && effects && !reducedMotion && (perfect || staggered);
   useEffect(() => {
     if (!shouldPulse) {
       cancelAnimation(pulse);
@@ -116,13 +168,15 @@ const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = tru
         ]}
       >
         {(windup || staggered) && (
-          <View
+          <Animated.View
+            testID="parry-bar-fill"
+            pointerEvents="none"
             style={[
               st.fill,
               windup && st.fillWindup,
               perfect && st.fillPerfect,
               staggered && st.fillStaggered,
-              { width: `${progress * 100}%` },
+              fillStyle,
             ]}
           />
         )}
@@ -192,8 +246,10 @@ const st = StyleSheet.create({
   fill: {
     position: 'absolute',
     left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
+    transformOrigin: 'left center',
   },
   fillWindup: {
     backgroundColor: '#FCA5A5',

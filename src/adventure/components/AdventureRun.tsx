@@ -81,12 +81,15 @@ import {
 import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
 import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
-import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, recipeIdOfEvent, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FX_TIMING, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, recipeIdOfEvent, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { SLOWMO_BOSS_EXTRA_HOLD_MS, SLOWMO_BRISK_TOTAL_MS, resolveKillCamMode, viewportShakeScale } from '../fx/KillCamOverlay';
+import { flightFor } from '../fx/script';
 import { counterForWeapon } from '../fx/GearBelt';
 import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
 import EvolutionPickOverlay from './EvolutionPickOverlay';
+import DefeatFreezeOverlay, { resolveFatalSource } from './DefeatFreezeOverlay';
 import DefeatOverlay from './DefeatOverlay';
 import WeaponExplainer from './WeaponExplainer';
 import PowerMeter from './PowerMeter';
@@ -99,8 +102,12 @@ import FightDebugDrawer, { type FightDebugActions } from './FightDebugDrawer';
 import TrainingLabBar, { type DummyMode, type TrainingLabActions } from './TrainingLabBar';
 
 const TICK_MS = 250;
-/** A Set's cards are thrown at the foe, then the next ones are dealt: long enough to see the throw, short enough to keep moving */
-const REPLACE_DELAY_MS = 560;
+/** [FX-21] Picked Set cards refill right after thrown flight clears slots (was 560 ms) */
+const REPLACE_DELAY_MS = 260;
+/** [FX-21] Collateral weapon-destroyed cards refill after blast/beam bursts finish painting */
+const REPLACE_COLLATERAL_DELAY_MS = 460;
+/** [FX-21] Invalid-pick refill delay right after CardMotion's 300 ms miss-leave fade (was 520 ms) */
+const REPLACE_INVALID_DELAY_MS = 380;
 
 /** How long the foe's taunt is up as a fight (or a wave) opens, before your fighter speaks */
 const FOE_TAUNT_MS = 2400;
@@ -108,8 +115,6 @@ const FOE_TAUNT_MS = 2400;
 const INTRO_TAUNT_MS = 900;
 /** [OB-16] Non-blocking banner hold before auto-advancing shopless waves (e.g. 3-3) */
 const AUTO_WAVE_MS = 650;
-/** [OB-13] Brief defeat freeze before DefeatOverlay appears over the paused board */
-const DEFEAT_OVERLAY_DELAY_MS = 300;
 
 /** Defeat metadata recorded once by AdventureMode when DefeatOverlay mounts ([OB-13]). */
 export interface RecordedDefeat {
@@ -281,7 +286,19 @@ const AdventureRun: React.FC<Props> = ({
   const [isRetry, setIsRetry] = useState(initialIsRetry);
   const [attemptKey, setAttemptKey] = useState(0);
   const [defeatOverlay, setDefeatOverlay] = useState<{ run: RunState; recorded: RecordedDefeat } | null>(null);
+  const [defeatFreezeActive, setDefeatFreezeActive] = useState(false);
   const defeatHandledRef = useRef(false);
+  const defeatFreezeStartedRef = useRef(false);
+  const finaleFiredRef = useRef(false);
+  const finishedFiredRef = useRef(false);
+  const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const finaleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // [FX-23] Unified Beat.onLand sync bus state for MultiplierIgnition & KillCamOverlay
+  const [leadLandSeq, setLeadLandSeq] = useState(0);
+  const [leadImpactMs, setLeadImpactMs] = useState<number>(FX_TIMING.flightMs);
+  const [lethalLanded, setLethalLanded] = useState(false);
+  const pendingDamageRef = useRef(0);
+  const shakeParityRef = useRef<1 | -1>(1);
   // [OB-11] Dynamic 1-4D Back Field resolves only traits & features unlocked in save
   const effectiveLevel = useMemo(() => resolvePracticeLevel(level, startSave), [level, startSave]);
   const [run, setRun] = useState(() => {
@@ -316,6 +333,8 @@ const AdventureRun: React.FC<Props> = ({
   const [lastMatchTime, setLastMatchTime] = useState(Date.now());
   const [megaFlash, setMegaFlash] = useState(0);
   const [stage, setStage] = useState({ w: 0, h: 0 });
+  const stageWidthRef = useRef(375);
+  stageWidthRef.current = stage.w > 0 ? stage.w : 375;
   /** A weapon on the belt the player tapped to read about (the fight waits) */
   const [inspect, setInspect] = useState<Weapon | null>(null);
   /** The Power meter in the header was tapped to read about Power (the fight waits) */
@@ -501,21 +520,101 @@ const AdventureRun: React.FC<Props> = ({
     triggerEnemyReaction('entrance');
   }, [triggerEntrance, triggerEnemyReaction]);
 
-  // A beat of the cascade reached its target: the HUD reacts
-  const foeShake = useSharedValue(0);
-  const foeScale = useSharedValue(1);
-  const screenShake = useSharedValue(0);
+  // [FX-01] Foe impact transform collision removed: EnemyAvatar is the single transform owner.
+  // [FX-08] Deterministic viewport-scaled, pattern-varied combat screen shake + victory push-in.
+  const screenShakeX = useSharedValue(0);
+  const screenShakeY = useSharedValue(0);
+  const screenShakeRot = useSharedValue(0);
   const victoryZoom = useSharedValue(1);
   const victoryPanY = useSharedValue(0);
+
+  useEffect(() => () => {
+    cancelAnimation(screenShakeX);
+    cancelAnimation(screenShakeY);
+    cancelAnimation(screenShakeRot);
+    cancelAnimation(victoryZoom);
+    cancelAnimation(victoryPanY);
+    if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+    if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
+  }, [screenShakeX, screenShakeY, screenShakeRot, victoryZoom, victoryPanY]);
+
+  const triggerStageShake = useCallback(
+    (kind: 'small' | 'medium' | 'large') => {
+      if (!effects || reducedMotion) return;
+      const scale = viewportShakeScale(stageWidthRef.current);
+      const sign = shakeParityRef.current;
+      shakeParityRef.current = sign === 1 ? -1 : 1;
+
+      const decayLegs = (amp: number, legs: number, legSign: 1 | -1) => {
+        const out: number[] = [];
+        let cur = amp * scale;
+        let dir = legSign;
+        for (let i = 0; i < legs; i++) {
+          out.push(Math.round(cur * dir * 100) / 100);
+          cur *= 0.7;
+          dir = dir === 1 ? -1 : 1;
+        }
+        out.push(0);
+        return out;
+      };
+      const toSeq = (vals: number[], legMs: number) =>
+        withSequence(
+          ...vals.map((v, i) =>
+            withTiming(v, {
+              duration: i === 0 ? 24 : i === vals.length - 1 ? 44 : legMs,
+              easing: i === 0 ? EASE.enter : i === vals.length - 1 ? EASE.enterSoft : EASE.ui,
+            })
+          )
+        );
+
+      cancelAnimation(screenShakeX);
+      cancelAnimation(screenShakeY);
+      cancelAnimation(screenShakeRot);
+
+      if (kind === 'small') {
+        screenShakeX.value = 0;
+        screenShakeY.value = toSeq(decayLegs(3, 4, sign), 24);
+        screenShakeRot.value = 0;
+      } else if (kind === 'medium') {
+        screenShakeX.value = toSeq(decayLegs(6, 5, sign), 32);
+        screenShakeY.value = toSeq(decayLegs(4, 5, sign === 1 ? -1 : 1), 32);
+        screenShakeRot.value = 0;
+      } else {
+        screenShakeX.value = toSeq(decayLegs(10, 6, sign), 36);
+        screenShakeY.value = toSeq(decayLegs(6, 6, sign === 1 ? -1 : 1), 36);
+        screenShakeRot.value = toSeq(decayLegs(0.7, 6, sign), 36);
+      }
+    },
+    [effects, reducedMotion, screenShakeX, screenShakeY, screenShakeRot]
+  );
+
+  // [FX-23] Unified Beat.onLand sync bus: coordinates MultiplierIgnition slam, KillCamOverlay,
+  // viewport-scaled combat shake, creature reactions, fighter vocal calls, and impact haptics.
   const onLand = (beat: Beat) => {
     const { row, tier } = beat;
-    if (row.shake && effects && !reducedMotion) {
-      foeShake.value = withSequence(withTiming(-8, { duration: 40 }), withTiming(8, { duration: 60 }), withTiming(-4, { duration: 50 }), withTiming(0, { duration: 50 }));
-      foeScale.value = withSequence(withTiming(0.9, { duration: 60 }), withTiming(1, { duration: 120, easing: Easing.out(Easing.quad) }));
+    const evType = beat.event.type;
+
+    if (beat.lead) {
+      setLeadLandSeq(s => s + 1);
     }
-    if (tier >= 2 && effects && !reducedMotion) {
-      const amp = tier === 3 ? 10 : 6;
-      screenShake.value = withSequence(withTiming(-amp, { duration: 40 }), withTiming(amp, { duration: 60 }), withTiming(-amp / 2, { duration: 50 }), withTiming(amp / 2, { duration: 50 }), withTiming(0, { duration: 50 }));
+    if (beat.damage > 0) {
+      pendingDamageRef.current = Math.max(0, pendingDamageRef.current - beat.damage);
+    }
+    if (
+      runRef.current.status === 'won' &&
+      ((beat.damage > 0 && pendingDamageRef.current <= 0) || evType === 'foe_defeated')
+    ) {
+      setLethalLanded(true);
+    }
+
+    if (effects && !reducedMotion) {
+      if (tier === 3 || evType === 'perfect_parry' || evType === 'foe_defeated') {
+        triggerStageShake('large');
+      } else if (tier === 2 || evType === 'blast' || evType === 'parry') {
+        triggerStageShake('medium');
+      } else if (tier === 1 || evType === 'foe_strike' || evType === 'hurt') {
+        triggerStageShake('small');
+      }
     }
     if (tier === 3 && effects && !reducedMotion && runRef.current.status === 'playing') setMegaFlash(f => f + 1);
     switch (row.fighter) {
@@ -534,7 +633,6 @@ const AdventureRun: React.FC<Props> = ({
       case 'entrance': triggerEnemyReaction('entrance'); break;
     }
     // [AU-07]: Short scale-locked fighter vocal calls (1.8s per-fighter cooldown enforced in band)
-    const evType = beat.event.type;
     if (typeof band?.fighterCall === 'function') {
       if (evType === 'parry' || evType === 'perfect_parry') {
         band.fighterCall(runRef.current.fighter, 'signature');
@@ -566,8 +664,19 @@ const AdventureRun: React.FC<Props> = ({
   const fx = useFightFx({
     anchors,
     reduced: !effects,
-    onSegment: segment =>
-      playSounds(soundsFor(segment.events, { weapons: runRef.current.weapons.map(w => w.id), combo: runRef.current.combo }), segment.stride),
+    onSegment: segment => {
+      const slip = playSounds(
+        soundsFor(segment.events, { weapons: runRef.current.weapons.map(w => w.id), combo: runRef.current.combo }),
+        segment.stride
+      );
+      const clampedSlip = typeof slip === 'number' && Number.isFinite(slip) ? Math.max(0, Math.min(32, slip)) : 0;
+      const leadBeat = segment.beats.find(b => b.lead);
+      if (leadBeat) {
+        const plannedImpact = leadBeat.land > 0 ? leadBeat.land + clampedSlip : flightFor(band.gridMs) + clampedSlip;
+        setLeadImpactMs(plannedImpact);
+      }
+      return slip;
+    },
     onLand,
   });
 
@@ -600,15 +709,19 @@ const AdventureRun: React.FC<Props> = ({
     // [OB-08] Repeat evolutions & recipes just chosen in EvolutionPickOverlay use non-blocking EvolutionBanner
     const bannerOnlyRecipes = new Set(seenCutInRecipesRef.current);
     if (justPickedEvoIdRef.current) bannerOnlyRecipes.add(justPickedEvoIdRef.current);
-    fx.play(
-      scriptFor(staged, {
-        weapons: run.weapons,
-        gridMs: band.gridMs,
-        reduced: !effects,
-        skipCutIn: fightEnded,
-        bannerOnlyRecipes,
-      })
+    const nextScript = scriptFor(staged, {
+      weapons: run.weapons,
+      gridMs: band.gridMs,
+      reduced: !effects,
+      skipCutIn: fightEnded,
+      bannerOnlyRecipes,
+    });
+    const addedDamage = nextScript.segments.reduce(
+      (sum, seg) => sum + (seg.kind === 'beats' ? seg.beats.reduce((d, b) => d + b.damage, 0) : 0),
+      0
     );
+    if (addedDamage > 0) pendingDamageRef.current += addedDamage;
+    fx.play(nextScript);
     for (const e of fresh) {
       if (e.type === 'evolution_start') {
         const rid = recipeIdOfEvent(e);
@@ -661,38 +774,105 @@ const AdventureRun: React.FC<Props> = ({
   }, [anchors, run.board.length, run.weapons.length, run.activeEvolutions.length, run.status, stage.w, stage.h, hudHeight]);
   const slotRef = useCallback((index: number) => anchors.ref(`slot:${index}`), [anchors]);
 
-  // End of run → Expedition 33 slow-mo defeat cinema, then seamless handoff straight into Results
+  // End of run → [FX-08] Stakes-split KillCamOverlay (victory) or 300 ms DefeatFreezeOverlay → DefeatOverlay (defeat)
   const endedAtRef = useRef<number | null>(null);
   const slowMoCinema = effects && !reducedMotion && !practice;
   const victoryImpactDelay = run.lastSetIgnition?.lethal ? SLOWMO_IMPACT_DELAY_MS : 0;
   const isVictoryRun = (s: RunState) => s.status === 'won' && (!chrome?.requireKnockoutToWin || s.endReason === 'defeated');
   const fightVictory = isVictoryRun(run);
+  const previousBestStars = startSave.stars[level.id] ?? 0;
+  const victoryStars = chrome?.starlessVictory ? null : computeStars(run);
+  const isEliteFight = Boolean(chrome?.isEliteEncounter || level.branchOf);
+  const killCamMode = resolveKillCamMode({
+    isBoss: Boolean(level.isBoss),
+    isElite: isEliteFight,
+    previousBestStars,
+    stars: victoryStars,
+  });
+  const killCamHoldMs = SLOWMO_HOLD_MS + (level.isBoss ? SLOWMO_BOSS_EXTRA_HOLD_MS : 0);
+  const fatalSource = useMemo(
+    () => (ended && !fightVictory && !practice ? resolveFatalSource(run) : null),
+    [ended, fightVictory, practice, run]
+  );
+
+  const fireFinaleOnce = useCallback((won: boolean) => {
+    if (finaleFiredRef.current) return;
+    finaleFiredRef.current = true;
+    band.finale(won);
+  }, []);
+
+  const handleKillCamImpact = useCallback(() => {
+    if (!slowMoCinema || killCamMode !== 'full') return;
+    if (level.isBoss) {
+      triggerStageShake('large');
+    }
+    victoryZoom.value = withSequence(
+      withTiming(1.045, { duration: MS.hero * 0.72, easing: EASE.enterSoft }),
+      withDelay(killCamHoldMs - MS.hero * 0.72, withTiming(1, { duration: SLOWMO_RELEASE_MS, easing: EASE.exitSoft }))
+    );
+    victoryPanY.value = withSequence(
+      withTiming(10, { duration: MS.hero * 0.72, easing: EASE.enterSoft }),
+      withDelay(killCamHoldMs - MS.hero * 0.72, withTiming(0, { duration: SLOWMO_RELEASE_MS, easing: EASE.exitSoft }))
+    );
+    if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
+    finaleTimerRef.current = setTimeout(() => {
+      finaleTimerRef.current = null;
+      fireFinaleOnce(true);
+    }, killCamHoldMs);
+  }, [slowMoCinema, killCamMode, level.isBoss, triggerStageShake, victoryZoom, victoryPanY, killCamHoldMs, fireFinaleOnce]);
+
+  const handleKillCamSkip = useCallback(() => {
+    if (finishedFiredRef.current) return;
+    finishedFiredRef.current = true;
+    finaleFiredRef.current = true; // KillCamOverlay invokes band.finale(true) on skip
+    if (finishTimerRef.current) {
+      clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = null;
+    }
+    if (finaleTimerRef.current) {
+      clearTimeout(finaleTimerRef.current);
+      finaleTimerRef.current = null;
+    }
+    cancelAnimation(victoryZoom);
+    cancelAnimation(victoryPanY);
+    victoryZoom.value = 1;
+    victoryPanY.value = 0;
+    onFinish(runRef.current, recordingOf());
+  }, [onFinish, recordingOf, victoryZoom, victoryPanY]);
+
+  const handleDefeatFreezeComplete = useCallback(() => {
+    setDefeatFreezeActive(false);
+    if (defeatHandledRef.current || finishedFiredRef.current) return;
+    if (!practice && onDefeatRecorded) {
+      defeatHandledRef.current = true;
+      const recorded = onDefeatRecorded(runRef.current, recordingOf());
+      setDefeatOverlay({ run: runRef.current, recorded });
+    } else {
+      finishedFiredRef.current = true;
+      onFinish(runRef.current, recordingOf());
+    }
+  }, [practice, onDefeatRecorded, onFinish, recordingOf]);
+
   useEffect(() => {
     if (!ended) return;
     endedAtRef.current = Date.now();
     const won = isVictoryRun(run);
-    if (won && slowMoCinema) {
-      // Subtle dramatic camera push-in during the slow-mo breath, releasing cleanly into Results
-      victoryZoom.value = withDelay(
-        victoryImpactDelay,
-        withSequence(
-          withTiming(1.045, { duration: MS.hero * 0.72, easing: EASE.enterSoft }),
-          withDelay(SLOWMO_HOLD_MS - MS.hero * 0.72, withTiming(1, { duration: SLOWMO_RELEASE_MS, easing: EASE.exitSoft }))
-        )
-      );
-      victoryPanY.value = withDelay(
-        victoryImpactDelay,
-        withSequence(
-          withTiming(10, { duration: MS.hero * 0.72, easing: EASE.enterSoft }),
-          withDelay(SLOWMO_HOLD_MS - MS.hero * 0.72, withTiming(0, { duration: SLOWMO_RELEASE_MS, easing: EASE.exitSoft }))
-        )
-      );
-      // Wait for KillCamOverlay's slowMoDefeat resonance trough to release, then bloom into the victory finale
-      const releaseAt = victoryImpactDelay + SLOWMO_HOLD_MS;
-      const t = setTimeout(() => band.finale(true), releaseAt);
-      return () => clearTimeout(t);
+    // Full KillCam holds band.finale(true) until impact + killCamHoldMs (or tap-to-skip)
+    if (won && slowMoCinema && killCamMode === 'full') {
+      // Safety fallback in case KillCam impact callback didn't fire (e.g. non-flying win)
+      if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
+      finaleTimerRef.current = setTimeout(() => {
+        finaleTimerRef.current = null;
+        fireFinaleOnce(true);
+      }, victoryImpactDelay + killCamHoldMs + 160);
+      return () => {
+        if (finaleTimerRef.current) {
+          clearTimeout(finaleTimerRef.current);
+          finaleTimerRef.current = null;
+        }
+      };
     }
-    band.finale(won);
+    fireFinaleOnce(won);
   }, [ended]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     // If a fight ends while an Evolution cut-in is open or queued, dismiss it so victory/defeat flows smoothly
@@ -702,29 +882,36 @@ const AdventureRun: React.FC<Props> = ({
     }
   }, [ended, fx.cutIn, fx.dismissCutIn]);
   useEffect(() => {
-    // The last cascade plays out first; hand off right as slow-mo release completes (or mount DefeatOverlay on defeat!)
-    if (!ended || fx.busy) return;
+    // The last cascade plays out first; hand off right as KillCam finishes or trigger 300 ms DefeatFreezeOverlay!
+    if (!ended || fx.busy || finishedFiredRef.current) return;
     const won = isVictoryRun(runRef.current);
-    const targetMs = won
-      ? slowMoCinema
-        ? victoryImpactDelay + SLOWMO_HOLD_MS + SLOWMO_RELEASE_MS + SLOWMO_SETTLE_PAD_MS
-        : SLOWMO_REDUCED_TOTAL_MS
-      : effects && !reducedMotion
-        ? DEFEAT_OVERLAY_DELAY_MS
-        : 80;
+    if (!won && !practice) {
+      if (!defeatFreezeStartedRef.current && !defeatHandledRef.current) {
+        defeatFreezeStartedRef.current = true;
+        setDefeatFreezeActive(true);
+      }
+      return;
+    }
+    const targetMs = slowMoCinema
+      ? killCamMode === 'full'
+        ? victoryImpactDelay + killCamHoldMs + SLOWMO_RELEASE_MS + SLOWMO_SETTLE_PAD_MS
+        : victoryImpactDelay + SLOWMO_BRISK_TOTAL_MS
+      : SLOWMO_REDUCED_TOTAL_MS;
     const elapsed = endedAtRef.current ? Date.now() - endedAtRef.current : 0;
     const wait = Math.max(80, targetMs - elapsed);
-    const t = setTimeout(() => {
-      if (!won && !practice && onDefeatRecorded) {
-        if (defeatHandledRef.current) return;
-        defeatHandledRef.current = true;
-        const recorded = onDefeatRecorded(runRef.current, recordingOf());
-        setDefeatOverlay({ run: runRef.current, recorded });
-      } else {
-        onFinish(runRef.current, recordingOf());
-      }
+    if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+    finishTimerRef.current = setTimeout(() => {
+      finishTimerRef.current = null;
+      if (finishedFiredRef.current) return;
+      finishedFiredRef.current = true;
+      onFinish(runRef.current, recordingOf());
     }, wait);
-    return () => clearTimeout(t);
+    return () => {
+      if (finishTimerRef.current) {
+        clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
+    };
   }, [ended, fx.busy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep DefeatOverlay's Tailwind toggle synced when parent updates `save.tailwindActive`
@@ -762,10 +949,22 @@ const AdventureRun: React.FC<Props> = ({
       });
       timeouts.current.forEach(clearTimeout);
       timeouts.current = [];
+      if (finishTimerRef.current) {
+        clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
+      if (finaleTimerRef.current) {
+        clearTimeout(finaleTimerRef.current);
+        finaleTimerRef.current = null;
+      }
       recorder.current = new FightRecorder(nextSeed);
       lastEventId.current = 0;
       endedAtRef.current = null;
       defeatHandledRef.current = false;
+      defeatFreezeStartedRef.current = false;
+      finaleFiredRef.current = false;
+      finishedFiredRef.current = false;
+      pendingDamageRef.current = 0;
       saidRemarks.current.clear();
       saidFoeBarks.current.clear();
       prevPowerRef.current = 0;
@@ -775,6 +974,9 @@ const AdventureRun: React.FC<Props> = ({
       setActiveRelief(nextRelief);
       setRun(nextRun);
       setDefeatOverlay(null);
+      setDefeatFreezeActive(false);
+      setLethalLanded(false);
+      setLeadLandSeq(0);
       setIsRetry(true);
       setAttemptKey(k => k + 1);
       setOpening(false);
@@ -838,10 +1040,14 @@ const AdventureRun: React.FC<Props> = ({
     const didHeal = rewards.some(r => (r.healing ?? 0) > 0) || Boolean(effects?.bonusHealing);
     triggerMatch({ isGraceMatch: graceUsed, isMegaMatch, didHeal });
     dispatch({ type: 'MATCH', cards, rewards, effects, hinted: info?.hinted });
-    const ids = cards.map(c => c.id);
-    later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_DELAY_MS);
-    // (the three picked cards come first; anything a weapon took with them follows)
+    // [FX-21] Picked Set cards refill right after thrown flight (260 ms); collateral weapon blasts refill at 460 ms
     const picked = cards.slice(0, 3);
+    const pickedIds = picked.map(c => c.id);
+    const collateralIds = cards.slice(3).map(c => c.id);
+    later(() => dispatch({ type: 'REPLACE', ids: pickedIds }), REPLACE_DELAY_MS);
+    if (collateralIds.length > 0) {
+      later(() => dispatch({ type: 'REPLACE', ids: collateralIds }), REPLACE_COLLATERAL_DELAY_MS);
+    }
     setLastSet(picked);
     later(() => setLastSet(cur => (cur === picked ? null : cur)), LAST_SET_MS);
   }, [dispatch, triggerMatch, later, markSurgeGuidedProgress]);
@@ -866,7 +1072,7 @@ const AdventureRun: React.FC<Props> = ({
     setLastSet(null);
     dispatch({ type: 'INVALID', cards });
     const ids = cards.map(c => c.id);
-    later(() => dispatch({ type: 'REPLACE', ids }), 520);
+    later(() => dispatch({ type: 'REPLACE', ids }), REPLACE_INVALID_DELAY_MS);
   }, [dispatch, triggerMistake, triggerEnemyReaction, later]);
 
   const handleBurn = useCallback((card: Card) => dispatch({ type: 'BURN', card }), [dispatch]);
@@ -892,11 +1098,11 @@ const AdventureRun: React.FC<Props> = ({
     return () => clearTimeout(t);
   }, [autoPlayer, run.status, fx.busy, run.evolutionPickOptions, run.forgedRecipes, handlePickEvolution]);
 
-  const foeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: foeShake.value }, { scale: foeScale.value }] }));
   const screenStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: screenShake.value },
-      { translateY: victoryPanY.value },
+      { translateX: screenShakeX.value },
+      { translateY: screenShakeY.value + victoryPanY.value },
+      { rotate: `${screenShakeRot.value}deg` },
       { scale: victoryZoom.value },
     ],
   }));
@@ -1461,13 +1667,14 @@ const AdventureRun: React.FC<Props> = ({
               parry={run.parry}
               active={playing && appActive}
               counterAvailable={parryCounterAvailable}
+              effects={effects}
               onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
             />
           </View>
         )}
         {run.surge && (
           <View style={st.threatRowSlot}>
-            <SurgeBar surge={run.surge} active={playing && appActive} />
+            <SurgeBar surge={run.surge} active={playing && appActive} effects={effects} />
           </View>
         )}
       </View>
@@ -1479,10 +1686,11 @@ const AdventureRun: React.FC<Props> = ({
             active={playing && appActive}
             counterAvailable={parryCounterAvailable}
             compact={dualThreat}
+            effects={effects}
             onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
           />
         )}
-        {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} compact={dualThreat} />}
+        {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} compact={dualThreat} effects={effects} />}
       </View>
     )
   ) : null;
@@ -1527,7 +1735,16 @@ const AdventureRun: React.FC<Props> = ({
             <HpBar hp={shownHp} max={run.foeMaxHp} endless={practice} />
             {ui.showInactivityBar && (
               <View style={st.idleTrack}>
-                <View style={[st.idleFill, { width: `${Math.min(100, (ui.showInactivityBar.current / ui.showInactivityBar.max) * 100)}%` }]} />
+                <View
+                  style={[
+                    st.idleFill,
+                    {
+                      transform: [
+                        { scaleX: Math.max(0.0001, Math.min(1, ui.showInactivityBar.current / Math.max(1, ui.showInactivityBar.max))) },
+                      ],
+                    },
+                  ]}
+                />
               </View>
             )}
           </TouchableOpacity>
@@ -1539,7 +1756,12 @@ const AdventureRun: React.FC<Props> = ({
             <View style={[st.stageGround, compactStage && st.stageGroundCompact, { backgroundColor: biome.colors.ground }]} />
             {run.features.has('xp') && (
               <View style={st.xpRimTrack}>
-                <View style={[st.xpRimFill, { width: `${Math.max(4, (run.xp / xpNeed) * 100)}%` }]} />
+                <View
+                  style={[
+                    st.xpRimFill,
+                    { transform: [{ scaleX: Math.max(0.04, Math.min(1, run.xp / Math.max(1, xpNeed))) }] },
+                  ]}
+                />
               </View>
             )}
           </View>
@@ -1574,6 +1796,7 @@ const AdventureRun: React.FC<Props> = ({
                     reaction={conductor.reaction}
                     streak={conductor.streak}
                     animate={appActive}
+                    quiet={!effects}
                     interactive
                   />
                 </View>
@@ -1609,19 +1832,18 @@ const AdventureRun: React.FC<Props> = ({
             </View>
 
             <Anchor name="foe">
-              <Animated.View style={foeStyle}>
-                <EnemyAvatar
-                  testID="adventure-run-enemy"
-                  enemy={foeAvatarEnemy}
-                  size={foeSize}
-                  hp={run.foeHp}
-                  maxHp={run.foeMaxHp}
-                  mood={enemyMood}
-                  reaction={enemyConductor.reaction}
-                  animate={appActive}
-                  interactive
-                />
-              </Animated.View>
+              <EnemyAvatar
+                testID="adventure-run-enemy"
+                enemy={foeAvatarEnemy}
+                size={foeSize}
+                hp={run.foeHp}
+                maxHp={run.foeMaxHp}
+                mood={enemyMood}
+                reaction={enemyConductor.reaction}
+                animate={appActive}
+                quiet={!effects}
+                interactive
+              />
             </Anchor>
           </View>
         </View>
@@ -1845,6 +2067,8 @@ const AdventureRun: React.FC<Props> = ({
             run={run}
             enabled={effects}
             wide={isWide}
+            landSeq={leadLandSeq}
+            impactMs={leadImpactMs}
             onPress={() => { sfx('click'); setHudInspect({ kind: 'score' }); }}
           />
         )}
@@ -1919,8 +2143,8 @@ const AdventureRun: React.FC<Props> = ({
       >
         <View style={[st.boardInner, boardMaxWidth ? { maxWidth: boardMaxWidth } : null, isDevBuild && devOverrides.layers.dimBoard && { opacity: 0.35 }]}>
           {/* Evolution pulse: a glow behind the cards, never a card border */}
-          {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} />}
-          {run.surge?.active && <SurgeGlow active={playing && appActive} />}
+          {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} effects={effects} />}
+          {run.surge?.active && <SurgeGlow active={playing && appActive} effects={effects} />}
           {run.frozenMs > 0 && (
             <View style={st.frozen} pointerEvents="none">
               <Icon name="lorc/snowflake-1" size={18} color="#1D4ED8" />
@@ -1958,6 +2182,7 @@ const AdventureRun: React.FC<Props> = ({
               slotRef={slotRef}
               onSlotLayout={anchors.measure}
               quietRewards
+              effects={effects}
             />
           </CardBoardProvider>
         </View>
@@ -1970,19 +2195,33 @@ const AdventureRun: React.FC<Props> = ({
       <KillCamOverlay
         ignition={run.lastSetIgnition}
         victory={fightVictory && !practice}
-        stars={chrome?.starlessVictory ? null : computeStars(run)}
+        stars={victoryStars}
         endReason={run.endReason}
         damageReceived={run.roundStats.damageReceived}
         mistakes={run.mistakes}
         hasHearts={hasHearts}
         heartsLeft={run.hearts}
         isBoss={Boolean(level.isBoss)}
-        isElite={Boolean(chrome?.isEliteEncounter)}
+        isElite={isEliteFight}
         impactDelayMs={victoryImpactDelay}
+        cinemaMode={killCamMode}
+        triggerNow={fightVictory && !practice ? (run.lastSetIgnition?.lethal && slowMoCinema ? lethalLanded : true) : false}
+        onImpact={handleKillCamImpact}
+        onSkip={handleKillCamSkip}
         anchors={anchors}
         stageSize={stage}
         enabled={effects && !practice}
         reduced={reducedMotion}
+      />
+      {/* [FX-08] 300 ms Defeat Freeze-Frame + crimson fatal-source ring handing off at 0 ms into DefeatOverlay */}
+      <DefeatFreezeOverlay
+        active={defeatFreezeActive}
+        fatal={fatalSource}
+        anchors={anchors}
+        stageSize={stage}
+        enabled={effects && !practice}
+        reduced={reducedMotion}
+        onComplete={handleDefeatFreezeComplete}
       />
       {opening && effects && !practice && anchors.rect('board') && (
         <View style={st.openingLayer} pointerEvents="none" testID="run-opening">
@@ -2253,24 +2492,75 @@ const PowerDeltaBadge: React.FC<{ text: string; animate: boolean }> = ({ text, a
 };
 
 /**
- * The foe's HP: the bar drops as each hit lands, and a pale trail shows what was just taken.
- * A practice dummy's bar never moves and reads ∞.
+ * The foe's HP: [FX-24] GPU-composited `scaleX` bar + non-resetting pale damage trail
+ * (zero per-frame Yoga/CSS layout `width` recalculation). A practice dummy's bar reads ∞.
  */
 const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, max, endless }) => {
+  const reducedMotion = useReducedMotion();
   const pct = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
   const fill = useSharedValue(pct);
   const trail = useSharedValue(pct);
+  const trailTargetRef = useRef(pct);
+  const trailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    const rising = pct > fill.value;
-    fill.value = withTiming(pct, { duration: 140, easing: Easing.out(Easing.quad) });
-    trail.value = rising ? pct : withDelay(260, withTiming(pct, { duration: 340, easing: Easing.out(Easing.quad) }));
-  }, [pct, fill, trail]);
-  const fillStyle = useAnimatedStyle(() => ({ width: `${fill.value * 100}%` }));
-  const trailStyle = useAnimatedStyle(() => ({ width: `${trail.value * 100}%` }));
+    const prevTarget = trailTargetRef.current;
+    trailTargetRef.current = pct;
+
+    if (reducedMotion) {
+      if (trailTimerRef.current) {
+        clearTimeout(trailTimerRef.current);
+        trailTimerRef.current = null;
+      }
+      cancelAnimation(fill);
+      cancelAnimation(trail);
+      fill.value = pct;
+      trail.value = pct;
+      return;
+    }
+
+    const rising = pct > prevTarget;
+    fill.value = withTiming(pct, { duration: MS.feedback, easing: EASE.enter });
+    if (rising) {
+      if (trailTimerRef.current) {
+        clearTimeout(trailTimerRef.current);
+        trailTimerRef.current = null;
+      }
+      cancelAnimation(trail);
+      trail.value = pct;
+    } else if (!trailTimerRef.current) {
+      // Non-resetting catch-up timer so rapid multi-beat cascades smoothly drain trail instead of freezing forever
+      trailTimerRef.current = setTimeout(() => {
+        trailTimerRef.current = null;
+        trail.value = withTiming(trailTargetRef.current, { duration: MS.move, easing: EASE.ui });
+      }, 220);
+    } else {
+      // Trail catch-up is already scheduled; when it fires it will read the latest trailTargetRef.current
+    }
+  }, [pct, reducedMotion, fill, trail]);
+
+  useEffect(() => () => {
+    if (trailTimerRef.current) {
+      clearTimeout(trailTimerRef.current);
+      trailTimerRef.current = null;
+    }
+    cancelAnimation(fill);
+    cancelAnimation(trail);
+  }, [fill, trail]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    opacity: fill.value <= 0.001 ? 0 : 1,
+    transform: [{ scaleX: Math.max(0.0001, fill.value) }],
+  }));
+  const trailStyle = useAnimatedStyle(() => ({
+    opacity: trail.value <= 0.001 ? 0 : 1,
+    transform: [{ scaleX: Math.max(0.0001, trail.value) }],
+  }));
   return (
     <View testID="run-foe-hp" style={st.hpTrack} accessibilityLabel={endless ? 'Foe health: endless' : `Foe health ${hp} of ${max}`}>
-      <Animated.View style={[st.hpFill, st.hpTrail, trailStyle]} />
+      <Animated.View testID="run-foe-hp-trail" style={[st.hpFill, st.hpTrail, trailStyle]} />
       <Animated.View
+        testID="run-foe-hp-fill"
         style={[
           st.hpFill,
           { backgroundColor: endless ? COLORS.redSurface : pct > 0.5 ? COLORS.redSurface : pct > 0.25 ? COLORS.orangeSurface : '#B91C1C' },
@@ -2377,46 +2667,87 @@ const PassiveChip: React.FC<{ id: PassiveId; run: RunState; onPress?: () => void
   );
 };
 
-/** Soft pulsing glow behind the board while an evolution runs. */
-const EvolutionGlow: React.FC<{ active: boolean }> = ({ active }) => {
-  const o = useSharedValue(0.25);
+/** Soft pulsing glow behind the board while an evolution runs ([FX-14] gated on effects & reducedMotion). */
+const EvolutionGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ active, effects = true }) => {
+  const reducedMotion = useReducedMotion();
+  const shouldPulse = active && effects && !reducedMotion;
+  const o = useSharedValue(0.32);
   useEffect(() => {
-    if (!active) {
+    if (!shouldPulse) {
       cancelAnimation(o);
-      o.value = 0.25;
+      o.value = 0.32;
       return;
     }
     o.value = withRepeat(withSequence(withTiming(0.6, { duration: 500 }), withTiming(0.25, { duration: 500 })), -1);
     return () => cancelAnimation(o);
-  }, [active, o]);
+  }, [shouldPulse, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View testID="evolution-glow" pointerEvents="none" style={[st.glow, style]} />;
 };
 
 /**
- * Shading Surge meter: fills toward the next surge while shading is off, then
- * drains through the ×5 window. Pulses in the last seconds before it starts.
+ * Shading Surge meter: [FX-24] 60fps GPU `scaleX` fill interpolated over `TICK_MS`,
+ * plus [FX-14] pulse gated strictly on `active && effects && !reducedMotion`.
  */
-const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']>; active: boolean; compact?: boolean }> = ({
+const SurgeBar: React.FC<{
+  surge: NonNullable<RunState['surge']>;
+  active: boolean;
+  compact?: boolean;
+  effects?: boolean;
+}> = ({
   surge,
   active,
   compact = false,
+  effects = true,
 }) => {
+  const reducedMotion = useReducedMotion();
   const secs = Math.ceil(surge.msLeft / 1000);
-  const fill = surge.active ? surge.msLeft / SURGE_RULES.surgeMs : 1 - surge.msLeft / SURGE_RULES.calmMs;
+  const durationMs = surge.active ? SURGE_RULES.surgeMs : SURGE_RULES.calmMs;
+  const fill = Math.max(0, Math.min(1, surge.active ? surge.msLeft / SURGE_RULES.surgeMs : 1 - surge.msLeft / SURGE_RULES.calmMs));
   const imminent = !surge.active && surge.msLeft <= SURGE_RULES.warnMs;
-  const pulse = useSharedValue(1);
+
+  const fillSv = useSharedValue(fill);
+  const prevSurgeActiveRef = useRef(surge.active);
+  const glideActive = active && effects && !reducedMotion && durationMs > 0;
+
   useEffect(() => {
-    if (!active) {
+    const phaseChanged = prevSurgeActiveRef.current !== surge.active;
+    prevSurgeActiveRef.current = surge.active;
+
+    if (!glideActive) {
+      cancelAnimation(fillSv);
+      fillSv.value = fill;
+      return;
+    }
+
+    if (phaseChanged || Math.abs(fillSv.value - fill) > 0.14) {
+      cancelAnimation(fillSv);
+      fillSv.value = fill;
+    }
+
+    const delta = TICK_MS / durationMs;
+    const nextFill = surge.active ? Math.max(0, fill - delta) : Math.min(1, fill + delta);
+    fillSv.value = withTiming(nextFill, { duration: TICK_MS, easing: EASE.linear });
+
+    return () => cancelAnimation(fillSv);
+  }, [fill, surge.active, durationMs, glideActive, fillSv]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    opacity: fillSv.value <= 0.001 ? 0 : 1,
+    transform: [{ scaleX: Math.max(0.0001, fillSv.value) }],
+  }));
+
+  const pulse = useSharedValue(1);
+  const shouldPulse = active && effects && !reducedMotion && (imminent || surge.active);
+  useEffect(() => {
+    if (!shouldPulse) {
       cancelAnimation(pulse);
       pulse.value = 1;
       return;
     }
-    pulse.value = imminent || surge.active
-      ? withRepeat(withSequence(withTiming(1.04, { duration: 260 }), withTiming(1, { duration: 260 })), -1)
-      : withTiming(1, { duration: 120 });
+    pulse.value = withRepeat(withSequence(withTiming(1.04, { duration: 260 }), withTiming(1, { duration: 260 })), -1);
     return () => cancelAnimation(pulse);
-  }, [active, imminent, surge.active, pulse]);
+  }, [shouldPulse, pulse]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
   const fullLabel = surge.active
     ? `SHADING SURGE · SETS ×${SURGE_RULES.multiplier} · ${secs}s`
@@ -2442,24 +2773,30 @@ const SurgeBar: React.FC<{ surge: NonNullable<RunState['surge']>; active: boolea
         style,
       ]}
     >
-      <View style={[st.surgeFill, { width: `${Math.max(0, Math.min(1, fill)) * 100}%` }, surge.active && st.surgeFillLive]} />
+      <Animated.View
+        testID="surge-bar-fill"
+        pointerEvents="none"
+        style={[st.surgeFill, surge.active && st.surgeFillLive, fillStyle]}
+      />
       <Icon name="lorc/stone-block" size={compact ? 11 : 13} color={surge.active ? '#FFFFFF' : TONE.surge} />
       <Text style={[st.surgeText, compact && st.surgeTextCompact, surge.active && { color: '#FFFFFF' }]} numberOfLines={1}>{label}</Text>
     </Animated.View>
   );
 };
 
-const SurgeGlow: React.FC<{ active: boolean }> = ({ active }) => {
-  const o = useSharedValue(0.2);
+const SurgeGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ active, effects = true }) => {
+  const reducedMotion = useReducedMotion();
+  const shouldPulse = active && effects && !reducedMotion;
+  const o = useSharedValue(0.3);
   useEffect(() => {
-    if (!active) {
+    if (!shouldPulse) {
       cancelAnimation(o);
-      o.value = 0.2;
+      o.value = 0.3;
       return;
     }
     o.value = withRepeat(withSequence(withTiming(0.5, { duration: 380 }), withTiming(0.2, { duration: 380 })), -1);
     return () => cancelAnimation(o);
-  }, [active, o]);
+  }, [shouldPulse, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View testID="surge-glow" pointerEvents="none" style={[st.glow, { backgroundColor: TONE.surge }, style]} />;
 };
@@ -2599,8 +2936,8 @@ const st = StyleSheet.create({
   stageClip: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 10, overflow: 'hidden' },
   stageGround: { position: 'absolute', left: -30, right: -30, bottom: -52, height: 74, borderRadius: 200, opacity: 0.72 },
   stageGroundCompact: { bottom: -58, height: 74, opacity: 0.62 },
-  xpRimTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, backgroundColor: 'rgba(241, 233, 224, 0.85)', borderTopWidth: 1, borderTopColor: 'rgba(56, 56, 56, 0.35)' },
-  xpRimFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#5EB8FF' },
+  xpRimTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, backgroundColor: 'rgba(241, 233, 224, 0.85)', borderTopWidth: 1, borderTopColor: 'rgba(56, 56, 56, 0.35)', overflow: 'hidden' },
+  xpRimFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#5EB8FF', transformOrigin: 'left center' },
   xpBadgeWrap: { position: 'absolute', bottom: 1, left: 0, right: 0, alignItems: 'center', zIndex: 8 },
   xpBadge: { backgroundColor: COLORS.canvasWhite, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 5, paddingVertical: 0 },
   xpBadgeText: { fontSize: 7.5, lineHeight: 9.5, fontWeight: '900', color: INK, letterSpacing: 0.3 },
@@ -2622,15 +2959,15 @@ const st = StyleSheet.create({
   foeName: { fontWeight: '900', fontSize: 13.5, color: INK, flexShrink: 1 },
   wave: { fontWeight: '900', fontSize: 10, color: INK, letterSpacing: 0.8 },
   hpTrack: { height: 17, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  hpFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
+  hpFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, transformOrigin: 'left center' },
   hpTrail: { backgroundColor: '#FFE9A8' },
   hpTextPill: { backgroundColor: 'rgba(255, 253, 247, 0.9)', paddingHorizontal: 6, borderRadius: 3 },
   hpText: { textAlign: 'center', fontWeight: '900', fontSize: 10.5, color: INK, fontVariant: ['tabular-nums'] },
   hpEndless: { fontSize: 15, lineHeight: 16, color: COLORS.canvasWhite },
   doneBtn: { backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 1 },
   doneText: { fontWeight: '900', fontSize: 11, letterSpacing: 1, color: INK },
-  idleTrack: { height: 4, borderRadius: 2, backgroundColor: '#EEE', overflow: 'hidden' },
-  idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
+  idleTrack: { height: 4, borderRadius: 2, backgroundColor: '#EEE', overflow: 'hidden', position: 'relative' },
+  idleFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: COLORS.impactOrange, transformOrigin: 'left center' },
   counters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 1, paddingHorizontal: 4 },
   powerWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   powerDelta: { backgroundColor: COLORS.actionYellow, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 4.5, paddingVertical: 0.5 },
@@ -2696,7 +3033,7 @@ const st = StyleSheet.create({
   surgeBarCompact: { flex: 1, paddingHorizontal: 6 },
   surgeBarSoon: { borderColor: TONE.surge },
   surgeBarLive: { borderColor: TONE.surge, backgroundColor: '#9D174D' },
-  surgeFill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#FBCFE8' },
+  surgeFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#FBCFE8', transformOrigin: 'left center' },
   surgeFillLive: { backgroundColor: TONE.surge },
   surgeText: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: INK, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
   surgeTextCompact: { fontSize: 10, letterSpacing: 0.1 },

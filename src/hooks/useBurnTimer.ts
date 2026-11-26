@@ -1,8 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
-import { registerInterval } from '@/utils/perfWatchdog';
+import { useEffect, useRef } from 'react';
+import {
+  cancelAnimation,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
+import { EASE, STAYS } from '@/utils/motion';
 import { useAppActive } from './useAppActive';
 
-const FIRE_BURN_DURATION = 250; // 0.25 seconds
+export const FIRE_BURN_DURATION = 250; // 0.25 seconds
 
 interface UseBurnTimerOptions {
   isOnFire: boolean;
@@ -12,75 +18,105 @@ interface UseBurnTimerOptions {
 }
 
 /**
- * Manages a burn timer that tracks progress from 0 to 1 over 0.25 seconds.
- * Supports pause/resume by tracking accumulated time rather than wall clock.
- * Calls onComplete exactly once when the timer finishes.
+ * [FX-25] Manages a 0.25s card burn lifecycle with ZERO `setInterval` polling
+ * and ZERO React re-renders during the burn:
+ *  - One pause-aware `setTimeout` triggers `onComplete` exactly once.
+ *  - A Reanimated `SharedValue<number>` drives the 60fps GPU burn overlay opacity
+ *    via `withTiming(1, { duration: remainingMs, easing: EASE.linear, ...STAYS })`,
+ *    freezing cleanly via `cancelAnimation` whenever paused or backgrounded.
  */
 export function useBurnTimer({
   isOnFire,
   fireStartTime,
   isPaused,
   onComplete,
-}: UseBurnTimerOptions): number {
+}: UseBurnTimerOptions): SharedValue<number> {
   const appActive = useAppActive();
   const effectivePaused = Boolean(isPaused) || !appActive;
-  const [progress, setProgress] = useState(0);
+  const burnProgress = useSharedValue(0);
 
   const accumulatedTimeRef = useRef(0);
-  const lastTickRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number | null>(null);
   const completeCalledRef = useRef(false);
+  const activeKeyRef = useRef<number | null>(null);
 
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
-  // Reset when fire starts
-  useEffect(() => {
-    if (isOnFire && fireStartTime) {
-      completeCalledRef.current = false;
-      accumulatedTimeRef.current = 0;
-      lastTickRef.current = Date.now();
-    }
-  }, [isOnFire, fireStartTime]);
-
   useEffect(() => {
     if (!isOnFire || !fireStartTime) {
-      setProgress(0);
+      cancelAnimation(burnProgress);
+      burnProgress.value = 0;
       accumulatedTimeRef.current = 0;
-      lastTickRef.current = null;
+      startedAtRef.current = null;
+      completeCalledRef.current = false;
+      activeKeyRef.current = null;
+      return;
+    }
+
+    // New burn instance: reset progress and accumulation once
+    if (activeKeyRef.current !== fireStartTime) {
+      activeKeyRef.current = fireStartTime;
+      completeCalledRef.current = false;
+      accumulatedTimeRef.current = 0;
+      startedAtRef.current = null;
+      cancelAnimation(burnProgress);
+      burnProgress.value = 0;
+    }
+
+    if (completeCalledRef.current) {
+      burnProgress.value = 1;
       return;
     }
 
     if (effectivePaused) {
-      lastTickRef.current = null;
+      cancelAnimation(burnProgress);
+      burnProgress.value = Math.min(1, accumulatedTimeRef.current / FIRE_BURN_DURATION);
+      startedAtRef.current = null;
       return;
     }
 
-    const updateProgress = () => {
-      const now = Date.now();
-
-      if (lastTickRef.current !== null) {
-        const delta = now - lastTickRef.current;
-        accumulatedTimeRef.current += delta;
-      }
-      lastTickRef.current = now;
-
-      const newProgress = Math.min(accumulatedTimeRef.current / FIRE_BURN_DURATION, 1);
-      setProgress(newProgress);
-
-      if (newProgress >= 1 && onCompleteRef.current && !completeCalledRef.current) {
+    const remainingMs = Math.max(0, FIRE_BURN_DURATION - accumulatedTimeRef.current);
+    if (remainingMs <= 0) {
+      burnProgress.value = 1;
+      if (!completeCalledRef.current) {
         completeCalledRef.current = true;
-        onCompleteRef.current();
+        onCompleteRef.current?.();
+      }
+      return;
+    }
+
+    startedAtRef.current = Date.now();
+    burnProgress.value = Math.min(1, accumulatedTimeRef.current / FIRE_BURN_DURATION);
+    burnProgress.value = withTiming(1, {
+      duration: remainingMs,
+      easing: EASE.linear,
+      ...STAYS,
+    });
+
+    const timeout = setTimeout(() => {
+      startedAtRef.current = null;
+      accumulatedTimeRef.current = FIRE_BURN_DURATION;
+      burnProgress.value = 1;
+      if (!completeCalledRef.current) {
+        completeCalledRef.current = true;
+        onCompleteRef.current?.();
+      }
+    }, remainingMs);
+
+    return () => {
+      clearTimeout(timeout);
+      cancelAnimation(burnProgress);
+      if (startedAtRef.current !== null && !completeCalledRef.current) {
+        accumulatedTimeRef.current = Math.min(
+          FIRE_BURN_DURATION,
+          accumulatedTimeRef.current + Math.max(0, Date.now() - startedAtRef.current)
+        );
+        startedAtRef.current = null;
+        burnProgress.value = Math.min(1, accumulatedTimeRef.current / FIRE_BURN_DURATION);
       }
     };
+  }, [isOnFire, fireStartTime, effectivePaused, burnProgress]);
 
-    updateProgress();
-    const stopTrack = registerInterval('useBurnTimer');
-    const interval = setInterval(updateProgress, 100);
-    return () => {
-      clearInterval(interval);
-      stopTrack();
-    };
-  }, [isOnFire, fireStartTime, effectivePaused]);
-
-  return progress;
+  return burnProgress;
 }
