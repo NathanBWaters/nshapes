@@ -83,34 +83,34 @@ export const WEAPON_GUIDE: Record<string, WeaponGuide> = {
   'fog-lantern': { kind: 'gamble', tip: 'A face-down card is a smaller board for 8 seconds. Remember where it is: it flips up as a power card.', look: { icon: 'lorc/lantern-flame', color: '#B45309', text: 'A lantern on the back of a face-down card.' }, calls: ['The fog lifts'] },
 
   // ── Board ─────────────────────────────────────────────────────────────────
-  'field-stone': { kind: 'always', tip: 'More cards means more Sets to choose from, and any cards past the max board size empower the board instead.' },
+  'field-stone': { kind: 'always', tip: 'More cards means more Sets to choose from, higher Catalyst odds, and overflow Power cards whenever your board reaches 18+ cards.' },
   'growth-seed': { kind: 'luck', tip: 'Each growth makes the whole board hit harder, and even at max board size it keeps empowering every card.', events: ['grow'], calls: ['Bloom'] },
-  'clarity-lens': { kind: 'rhythm', tip: 'For 10 seconds one trait stops mattering, so Sets (and even Rainbows!) are much easier to spot. Go fast while it lasts.', events: ['simplified'] },
+  'clarity-lens': { kind: 'rhythm', tip: 'Pure board clarity: strips away one trait (and up to two traits at Lv 3+) so Sets and Rainbows jump right off the screen.', events: ['simplified'] },
   'wild-card': { kind: 'hunt', tip: 'A wild card makes a Set with ANY two other cards. Use it with your two strongest cards.', look: { icon: 'delapouite/card-joker', color: '#7C3AED', text: 'A joker in place of the shapes.' } },
 
   // ── Hearts & graces ───────────────────────────────────────────────────────
-  'mending-charm': { kind: 'luck', tip: 'It heals when you are hurt and hits the foe when you are not. Never wasted.', events: ['heal'] },
-  'life-vessel': { kind: 'always', tip: 'An extra heart, and a small bonus while your hearts are full. Play carefully and it pays twice.' },
+  'mending-charm': { kind: 'luck', tip: 'Pure survival tank: heals when hurt and banks Over-Shield mistake protection whenever it overheals at full hearts.', events: ['heal'] },
+  'life-vessel': { kind: 'always', tip: 'Pure HP tank: stacks extra max hearts and heals at the start of every wave so you can weather long multi-wave gauntlets.' },
   'life-link': { kind: 'rhythm', tip: 'Starts every wave with a mistake shield, and every 4th Set at full hearts blasts the board. If you do lose a heart, it blasts back and blasts can heal you.' },
   'soul-harvest': { kind: 'luck', tip: 'Destroying extra cards (blasts, fire, lasers, ricochets) can heal you, and every heal hits the foe back — even at full hearts.' },
-  'revenge-linker': { kind: 'rhythm', tip: 'Wires a Tripwire link every 4th Set and on trap defuses, and unleashes a big Revenge blast of links if you take a hit.', look: LINK },
-  'second-chance': { kind: 'always', tip: 'A grace forgives a Set that is wrong by one trait. This gives you one more, and each save hits back.', events: ['grace'] },
-  'fortune-token': { kind: 'luck', tip: 'Graces let you guess when you are nearly sure. More graces, bolder play.' },
-  'grace-conduit': { kind: 'reaction', tip: 'Each grace you spend can fire a laser. A near miss becomes an attack.' },
-  'chaos-conduit': { kind: 'luck', tip: 'Blasts can hand you graces. Best beside another blast weapon.' },
+  'revenge-linker': { kind: 'rhythm', tip: 'Wires a Tripwire link every 4th Set and on trap defuses, and detonates linked cards while weaving more if you take a hit.', look: LINK },
+  'second-chance': { kind: 'always', tip: 'Safety Cushion: stacks extra starting graces and can refund a spent grace so near-misses keep you safely in the fight.', events: ['grace'] },
+  'fortune-token': { kind: 'luck', tip: 'Grace Generator: earns graces on Sets and tops you up at the start of every wave for steady, fearless play.' },
+  'grace-conduit': { kind: 'reaction', tip: 'Defensive Retaliator: turns near-miss grace saves into high-chance row or column laser counter-punches.' },
+  'chaos-conduit': { kind: 'luck', tip: 'Blast-to-Grace Bridge: explosions mint new graces, and spending a grace detonates a 2×2 blast right back.' },
 
   // ── Hints, coins & XP ─────────────────────────────────────────────────────
-  'seeker-lens': { kind: 'luck', tip: 'Hoard your hints! Every unspent hint you hold adds +1 damage to every Set before multipliers, so save them unless you are truly stuck.', events: ['hint'] },
-  'crystal-orb': { kind: 'always', tip: 'Starts you with extra filled hints. Spending a hint strikes the foe, and finishing the hinted Set hits even harder.' },
-  'oracle-eye': { kind: 'hunt', tip: 'Points out a card after 5 quiet seconds and boosts both hinted Sets and mistake-free play. Pairs sharply with manual hints and Mystic Sight.' },
-  'mystic-sight': { kind: 'rhythm', tip: 'Every 3rd Set hits harder (and multiplies with Set multipliers). Save a strong Set for the third, and watch for 2-card auto-hints.' },
-  'fortunes-favor': { kind: 'luck', tip: 'Extra coins for the shop between waves and for Camp afterwards. Coins are kept even if you lose.', events: ['coins'] },
-  'fortunes-blessing': { kind: 'hunt', tip: 'Gilds a card every wave and hits hard when you match gold or power cards. Coins generate hints, and gained hints can gild even more cards.' },
-  'scholars-tome': { kind: 'luck', tip: 'More XP means more level-ups, and every level-up is a free weapon. Strongest early in a fight.' },
-  'wisdom-chain': { kind: 'rhythm', tip: 'Boosts all coin gains, surges XP every 5th Set, and turns XP into Dividend coin strikes. Great fuel for intermission shops and level-ups.' },
+  'seeker-lens': { kind: 'luck', tip: 'Hint Hoarder: hoard your unspent hints! Every hint you keep in reserve adds flat Set damage before multipliers.', events: ['hint'] },
+  'crystal-orb': { kind: 'always', tip: 'Active Hint Bank: fills extra hint slots at fight start, and tapping a hint freezes both the clock and foe for tactical breathing room.' },
+  'oracle-eye': { kind: 'hunt', tip: 'Idle Radar: points out a card after 4 quiet seconds and refunds clock time whenever you finish a hinted Set.' },
+  'mystic-sight': { kind: 'rhythm', tip: '2-Card Precision Sniper: auto-hints reveal 2 cards at once, hinted Sets snipe for bonus damage, and every 3rd hinted Set primes ×1.5.' },
+  'fortunes-favor': { kind: 'luck', tip: 'Shop & Coin Magnate: boosts every coin source and drops steady windfalls for intermission shops and Camp upgrades.', events: ['coins'] },
+  'fortunes-blessing': { kind: 'hunt', tip: 'Gilded Alchemist: gilds a card each wave, doubles gold-card coin payouts, and turns bonus cards and coins into fresh hints.' },
+  'scholars-tome': { kind: 'luck', tip: 'Rapid Level-Up Engine: accelerates XP gains and unlocks an extra pick choice at Lv 3+ so you draft your mid-fight build faster.' },
+  'wisdom-chain': { kind: 'rhythm', tip: 'Dividend Loop: boosts coins, surges XP every 5th Set, turns XP into coins, and charges every wave opener with a Set multiplier.' },
 
   // ── Time & evolutions ─────────────────────────────────────────────────────
-  'chrono-shard': { kind: 'always', tip: 'More seconds on the clock means more Sets. Does nothing on levels that count moves instead.' },
+  'chrono-shard': { kind: 'always', tip: 'Adds extra seconds on the clock and slows time down right from the start. Does nothing on levels that count moves instead.' },
   'time-drop': { kind: 'luck', tip: 'Each drop adds seconds. A fight can gain at most as much time as it started with.', events: ['time_gain'] },
   'temporal-rift': { kind: 'luck', tip: 'Time gains can echo a free Set. Best beside another time weapon.' },
   'catalyst-prism': { kind: 'hunt', tip: 'Rainbow Sets (every trait different) hit harder and bring Catalysts, which start evolutions.', events: ['catalyst_spawn'] },
@@ -120,10 +120,10 @@ export const WEAPON_GUIDE: Record<string, WeaponGuide> = {
   'echo-stone': { kind: 'luck', tip: 'An echo is a free Set made for you. Every weapon that fires on a Set can fire on the echo too.', events: ['echo'] },
   'chain-reaction': { kind: 'luck', tip: 'Echoes can come in pairs. Best beside another echo weapon.' },
   'cascade-core': { kind: 'luck', tip: 'Echoes can start fires. Best beside another echo weapon.', look: FIRE },
-  connector: { kind: 'luck', tip: 'Linked cards fall together, so every blast, burn or laser that hits one hits both.', look: LINK, events: ['link', 'link_burst'] },
-  'web-weaver': { kind: 'always', tip: 'You start with links already on the board. Pair it with weapons that destroy cards.', look: LINK },
-  'neural-network': { kind: 'luck', tip: 'Links can make more links. Best beside another link weapon.', look: LINK },
-  'echo-chamber': { kind: 'reaction', tip: 'Every card destroyed through a link adds time. Needs links, so bring a link weapon.', look: LINK },
+  connector: { kind: 'luck', tip: 'Active Weaver: links matched spots so blasts, burns, and lasers clear both, and preserves your web between waves at Lv 3+.', look: LINK, events: ['link', 'link_burst'] },
+  'web-weaver': { kind: 'always', tip: 'Opening Web: starts every wave pre-wired with links for immediate turn-one chain bursts.', look: LINK },
+  'neural-network': { kind: 'luck', tip: 'Branching Mesh: every new link can fork into a chain of linked cards for exponential board clears.', look: LINK },
+  'echo-chamber': { kind: 'reaction', tip: 'Chrono-Link Conduit: every card destroyed through a link adds generous time back onto the clock.', look: LINK },
 };
 
 const UNKNOWN: WeaponGuide = { kind: 'always', tip: '' };

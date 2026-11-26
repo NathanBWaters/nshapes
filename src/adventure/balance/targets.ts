@@ -48,12 +48,12 @@ export const BALANCE_TARGETS = {
     // (the hunts and gambles change their own rules as they grow in a fight: a little room for that)
     tricks: [1.15, 4.0],
     gambles: [1.15, 4.2],
-    // The support roles have headroom for what they grow into during a fight (data/weaponGrowth.ts):
-    // that growth is where a build snowballs, so their ceilings sit closer to the damage weapons'
-    board: [1.15, 3.6],
-    survival: [1.15, 3.6],
-    insight: [1.15, 3.6],
-    tempo: [1.15, 3.6],
+    // Pure utility/support roles (board, survival, insight, tempo) don't need solo dummy DPS ([GP-11]):
+    // gate them instead on in-build synergy (`inBuild`) and Human Gauntlet survival/clear lift.
+    board: [0.95, 3.6],
+    survival: [0.95, 3.6],
+    insight: [0.95, 3.6],
+    tempo: [0.95, 3.6],
     chains: [1.15, 3.6],
   } satisfies Record<WeaponRole, Band>,
   /** A weapon alone the day you find it (level 1, untuned), early game: felt, never dominant */
@@ -64,12 +64,12 @@ export const BALANCE_TARGETS = {
    * Held in a real five-charm build vs the same build without it (restricted
    * play). The honest measure: what the slot is worth next to other weapons.
    */
-  // (Seconds are worth more now that every weapon grows through a fight: the clock weapons set this ceiling)
-  inBuild: [1.02, 2.6] as Band,
+  // Utility weapons prove their keep via inBuild & Human Gauntlet clear lift ([GP-11])
+  inBuild: [1.08, 2.6] as Band,
   /** An evolution vs its two weapons with evolutions switched off */
   recipeLift: [1.04, 2.6] as Band,
-  /** An evolution's bespoke rules vs a blank evolution shell (isolates real recipe value from the universal +10/+2/×1.5 chassis) */
-  recipeRuleLift: [1.04, 1.85] as Band,
+  /** An evolution's bespoke rules vs a blank evolution shell (isolates real recipe value from the halved +6/0/×1.25 chassis) */
+  recipeRuleLift: [1.2, 1.85] as Band,
   /** The middle recipe: evolutions as a whole are a power trip */
   recipeLiftMedian: 1.2,
   /** A held recipe starts at least this often per fight */

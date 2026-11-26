@@ -194,8 +194,8 @@ describe('Custom Enemy Rigs & Procedural Animation Engine', () => {
 describe('Custom Weapon Relics & Single-Tap Animation', () => {
   const uniqueWeaponNames = Array.from(new Set(WEAPONS.map((w) => w.name)));
 
-  it('explicitly covers all 34 unique weapons in ALL_CUSTOM_WEAPON_NAMES', () => {
-    expect(uniqueWeaponNames.length).toBe(34);
+  it('explicitly covers all 33 unique shared/Free-Play weapons in ALL_CUSTOM_WEAPON_NAMES', () => {
+    expect(uniqueWeaponNames.length).toBe(33);
     const customSet = new Set(ALL_CUSTOM_WEAPON_NAMES);
     const missing = uniqueWeaponNames.filter((name) => !customSet.has(name));
     expect(missing).toEqual([]);

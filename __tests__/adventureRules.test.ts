@@ -349,6 +349,9 @@ describe('evolutions', () => {
     expect(s.forgedRecipes).toEqual([phoenix.id]);
     expect(eventsOf(s, 'evolution_start')[0].text).toBe(phoenix.name);
     const before = s.foeHp;
+    // Mending Charm grants an Over-Shield when Phoenix Pyre's opening heal overheals at full hearts;
+    // consume any Over-Shield first so the next miss loses a heart and fires Phoenix's 3×2 blast.
+    while (s.freeMistakesLeft > 0) s = miss(s);
     s = miss(s); // Phoenix: a lost heart blasts a 3×2 block
     expect(eventsOf(s, 'blast').length).toBeGreaterThan(0);
     expect(s.foeHp).toBeLessThan(before);
@@ -617,8 +620,8 @@ describe('Arcana', () => {
   });
 
   it('rainbow multipliers combine relative to the standard ×2', () => {
-    expect(arcanaRules(['monochrome_pact', 'prismatic_fever']).rainbowMultiplier).toBeCloseTo(1.5);
-    expect(arcanaRules('prismatic_fever').rainbowMultiplier).toBe(3);
+    expect(arcanaRules(['monochrome_pact', 'prismatic_fever']).rainbowMultiplier).toBeCloseTo(1.75);
+    expect(arcanaRules('prismatic_fever').rainbowMultiplier).toBe(3.5);
   });
 
   it('equipped Arcana combine in a fight, up to the Tarot Deck slots', () => {

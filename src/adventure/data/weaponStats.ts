@@ -2,20 +2,13 @@
  * A weapon's numbers in Adventure, and the two separate ways to grow them.
  *
  *  - LEVEL (1-5) is found in the world. The first star or bounty reward that
- *    names a weapon unlocks it; every later one is +1 level. Each level adds
- *    the weapon's flat `perLevel` gain to EVERY number it has (Blast Powder:
- *    +6% blast chance and +0.5 damage per blasted card).
+ *    names a weapon unlocks it; every later one is +1 level. Continuous stats
+ *    add `perLevel`; whole-unit stats (`WHOLE_STATS`) use clean integer Lv 1–5
+ *    breakpoints (`byLevel`) with zero fractional gambling ([GP-19]).
  *  - TUNING is bought at the Camp Workshop with coins, one track per number:
- *    ×1.1, ×1.2, ×1.35, ×1.5 on the levelled value. Tuning never raises the
- *    level, and levels never cost coins.
- *
- * Every weapon starts solid at level 1 and gets good through both. There are no
- * rarities in Adventure: `rarity` on a built weapon is only the trim colour of
- * its relic art, and follows its level.
- *
- * Whole-number stats (hearts, graces, board cards, hint slots, links) can end
- * up fractional after tuning. A fight rounds each one by chance: 2.4 extra
- * cards is 2, with a 40% chance of a third (loadout.ts resolveWholeStats).
+ *    continuous stats multiply by ×1.1, ×1.2, ×1.35, ×1.5; tunable whole-unit
+ *    stats grant a guaranteed +1 whole unit at Tier 2 (×1.2) and +2 whole units
+ *    at Tier 4 (×1.5) — zero random fight-start rounding.
  */
 import type { PlayerStats, Weapon, WeaponRarity } from '@/types';
 import type { AdventureWeapon } from '../types';
@@ -24,10 +17,10 @@ import {
   LIFE_LINK_PULSE_EVERY,
   MYSTIC_EVERY,
   ORACLE_WAIT_S,
-  SEEKER_DAMAGE_PER_HINT,
   WISDOM_COIN_PCT,
   WISDOM_XP_EVERY,
 } from './weaponTuning';
+import { WEAPON_CADENCE, type LevelBreakpoints, type StatUnit } from './weapons/schema';
 
 export const MAX_WEAPON_LEVEL = 5;
 /** Workshop tuning multipliers by tier (tier 0 = untuned) */
@@ -44,7 +37,7 @@ export interface WeaponBuild {
 export type WeaponBuilds = Readonly<Record<string, WeaponBuild>>;
 export const BASE_BUILD: WeaponBuild = { level: 1, tuning: {} };
 
-type Unit = '%' | 's' | 'count' | 'dmg' | '×';
+type Unit = StatUnit;
 
 /** One number of a weapon (a stat for plain weapons, a rule parameter for rule weapons). */
 export interface WeaponStatDef {
@@ -52,6 +45,10 @@ export interface WeaponStatDef {
   unit: Unit;
   base: number;
   perLevel: number;
+  /** Explicit integer/stepped Lv 1–5 breakpoints (overrides `base + perLevel * (lvl - 1)`) */
+  byLevel?: LevelBreakpoints;
+  /** True when the stat resolves strictly to whole integer units */
+  whole?: boolean;
   /** false: levels raise it but the Workshop can't tune it */
   tunable?: boolean;
 }
@@ -66,8 +63,12 @@ export interface StatLine extends WeaponStatDef {
   tunable: boolean;
 }
 
-/** Stats a fight resolves to whole numbers by chance. */
+/** Whole-unit stats that always resolve to clean integers (zero fractional gambling). */
 export const WHOLE_STATS = ['fieldSize', 'graces', 'maxHealth', 'health', 'maxHints', 'hints', 'startingConnections'] as const;
+const WHOLE_STAT_SET = new Set<string>(WHOLE_STATS);
+
+/** Guaranteed integer bonus granted by Workshop tiers on tunable whole-unit stats (+1 at T2, +2 at T4). */
+export const wholeStatTuningBonus = (tier: number): number => (tier >= 4 ? 2 : tier >= 2 ? 1 : 0);
 
 const STAT_META: Partial<Record<keyof PlayerStats | 'bridgeChance', { label: string; unit: Unit }>> = {
   explosionChance: { label: 'Blast chance', unit: '%' },
@@ -113,13 +114,33 @@ export const weaponStatDefs = (w: Weapon): Record<string, WeaponStatDef> => {
   if (rule) return rule;
   const defs: Record<string, WeaponStatDef> = {};
   const per = (w.perLevel ?? {}) as Record<string, number | undefined>;
+  const tuning = ADVENTURE_TUNING[w.id];
+  const untunable = new Set(tuning?.untunable ?? []);
   for (const [key, v] of Object.entries(w.effects)) {
     if (typeof v !== 'number' || HIDDEN_STATS.has(key)) continue;
     const meta = STAT_META[key as keyof PlayerStats] ?? { label: key, unit: '%' as const };
-    defs[key] = { ...meta, base: v, perLevel: per[key] ?? 0 };
+    const byLevel = tuning?.byLevel?.[key];
+    const whole = WHOLE_STAT_SET.has(key);
+    defs[key] = {
+      ...meta,
+      base: byLevel ? byLevel[0] : v,
+      perLevel: per[key] ?? 0,
+      ...(byLevel ? { byLevel } : {}),
+      ...(whole ? { whole: true } : {}),
+      ...(untunable.has(key) ? { tunable: false } : {}),
+    };
   }
-  if (w.bridgeEffect) defs.bridgeChance = { ...STAT_META.bridgeChance!, base: w.bridgeEffect.chance, perLevel: per.bridgeChance ?? 0 };
-  return { ...defs, ...ADVENTURE_TUNING[w.id]?.extra };
+  if (w.bridgeEffect) {
+    const byLevel = tuning?.byLevel?.bridgeChance;
+    defs.bridgeChance = {
+      ...STAT_META.bridgeChance!,
+      base: byLevel ? byLevel[0] : w.bridgeEffect.chance,
+      perLevel: per.bridgeChance ?? 0,
+      ...(byLevel ? { byLevel } : {}),
+      ...(untunable.has('bridgeChance') ? { tunable: false } : {}),
+    };
+  }
+  return { ...defs, ...tuning?.extra };
 };
 
 const clampLevel = (level: number) => Math.max(1, Math.min(MAX_WEAPON_LEVEL, Math.floor(level) || 1));
@@ -132,9 +153,11 @@ export const weaponStatLines = (w: Weapon, build: WeaponBuild = BASE_BUILD): Sta
   return Object.entries(weaponStatDefs(w)).map(([key, def]) => {
     const tunable = def.tunable !== false;
     const tier = tunable ? clampTier(build.tuning[key]) : 0;
-    const levelled = tidy(def.base + def.perLevel * (level - 1));
+    const isWhole = def.whole === true || WHOLE_STAT_SET.has(key);
+    const levelled = def.byLevel ? def.byLevel[level - 1] : tidy(def.base + def.perLevel * (level - 1));
     const multiplier = TUNING_MULTIPLIERS[tier];
-    return { ...def, key, tunable, levelled, tier, multiplier, value: tidy(levelled * multiplier) };
+    const value = isWhole ? Math.round(levelled) + wholeStatTuningBonus(tier) : tidy(levelled * multiplier);
+    return { ...def, key, whole: isWhole, tunable, levelled, tier, multiplier, value };
   });
 };
 
@@ -146,11 +169,11 @@ export const weaponValues = (w: Weapon, build: WeaponBuild = BASE_BUILD): Record
 
 const num = (n: number) => String(tidy(Math.round(n * 10) / 10));
 const pct = (n: number) => `${num(n)}%`;
-/** "2" or, when a fight rounds it by chance, "2-3" */
-export const count = (n: number) => (Number.isInteger(tidy(n)) ? String(tidy(n)) : `${Math.floor(n)}-${Math.ceil(n)}`);
-const plural = (n: number, word: string) => `${word}${tidy(n) === 1 ? '' : 's'}`;
+/** Clean integer count (never fractional ranges like "2-3") */
+export const count = (n: number) => String(Math.round(tidy(n)));
+const plural = (n: number, word: string) => `${word}${Math.round(tidy(n)) === 1 ? '' : 's'}`;
 
-/** A stat line's value as shown in the Workshop ("36%", "+1.5", "2.4") */
+/** A stat line's value as shown in the Workshop ("36%", "+1.5", "2") */
 export const formatStat = (unit: Unit, n: number): string =>
   unit === '%' ? pct(n) : unit === 's' ? `${num(n)}s` : unit === 'dmg' ? `+${num(n)}` : unit === '×' ? `×${num(n)}` : num(n);
 
@@ -168,16 +191,16 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `${pct(v.explosionChance)} blast, ${num(1 + v.explosionDamage)} dmg per card`,
   }),
   'oracle-eye': v => ({
-    description: `After ${ORACLE_WAIT_S}s without a Set, ${pct(v.autoHintChance)} chance to point out a card of a Set. Sets made on a pointed-out card deal +${num(v.insight)}; Sets with no mistakes yet deal +${num(v.clarity)}.`,
-    shortDescription: `${ORACLE_WAIT_S}s auto-hint (${pct(v.autoHintChance)}); hinted +${num(v.insight)}, clean play +${num(v.clarity)}`,
+    description: `Idle Radar: after ${ORACLE_WAIT_S}s without a Set, ${pct(v.autoHintChance)} chance to point out a card of a Set. Matching a hinted Set refunds +${num(v.refund)}s on the clock.`,
+    shortDescription: `${ORACLE_WAIT_S}s auto-hint (${pct(v.autoHintChance)}); hinted Sets +${num(v.refund)}s`,
   }),
   'mystic-sight': v => ({
-    description: `Every ${MYSTIC_EVERY}rd Set hits the foe for ${num(v.third)} more. ${pct(v.autoHintChance)} auto-hint chance, and ${pct(v.enhancedHintChance)} of auto-hints point out 2 cards.`,
-    shortDescription: `Every ${MYSTIC_EVERY}rd Set +${num(v.third)}, 2-card hints`,
+    description: `2-Card Precision Sniper: ${pct(v.autoHintChance)} auto-hint chance (${pct(v.enhancedHintChance)} point out 2 cards). Hinted Sets deal +${num(v.snipe)}, and every ${MYSTIC_EVERY}rd hinted Set primes ×1.5 next Set.`,
+    shortDescription: `${pct(v.enhancedHintChance)} 2-card hints; hinted Sets +${num(v.snipe)} & ×1.5`,
   }),
   'field-stone': v => ({
-    description: `Every fight starts with ${count(v.fieldSize)} extra ${plural(v.fieldSize, 'card')} (any beyond max size empower the board). Every card on a wave's opening board deals +${num(Math.round(v.charge * 2) / 2)} when matched.`,
-    shortDescription: `+${count(v.fieldSize)} cards, opening board +${num(Math.round(v.charge * 2) / 2)}`,
+    description: `Start every fight with ${count(v.fieldSize)} extra ${plural(v.fieldSize, 'card')} (+${pct(v.catalystBoost)} Catalyst odds). At ${WEAPON_CADENCE.FIELD_OVERFLOW_BOARD}+ cards, waves open and every ${WEAPON_CADENCE.FIELD_OVERFLOW_EVERY}th Set spawns a Power card.`,
+    shortDescription: `+${count(v.fieldSize)} cards, +${pct(v.catalystBoost)} Catalysts & overflow Power cards`,
   }),
   'growth-seed': v => ({
     description: `${pct(v.boardGrowthChance)} chance per Set to add a card to the board (or empower the board at max size). Each time it fires, every card on the board deals +1 more when matched.`,
@@ -188,40 +211,40 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `${pct(v.fireSpreadChance)} fire, ${num(1 + v.burnDamage)} dmg per burned card`,
   }),
   'second-chance': v => ({
-    description: `Start every fight with ${count(v.graces)} extra ${plural(v.graces, 'grace')}. Every grace save hits the foe for ${num(v.strike)}.`,
-    shortDescription: `+${count(v.graces)} ${plural(v.graces, 'grace')}, saves hit for ${num(v.strike)}`,
+    description: `Safety Cushion: start every fight with ${count(v.graces)} extra ${plural(v.graces, 'grace')}, with a ${pct(v.keepChance)} chance a spent grace is spared and stays ready.`,
+    shortDescription: `+${count(v.graces)} ${plural(v.graces, 'grace')}, ${pct(v.keepChance)} chance to keep spent graces`,
   }),
   'fortune-token': v => ({
-    description: `${pct(v.graceGainChance)} chance per Set to gain a grace and hit the foe for ${num(v.strike)}.`,
-    shortDescription: `${pct(v.graceGainChance)} grace + ${num(v.strike)} dmg`,
+    description: `Grace Generator: ${pct(v.graceGainChance)} chance per Set to gain a grace, and refills +1 grace at the start of every wave.`,
+    shortDescription: `${pct(v.graceGainChance)} grace/Set + 1 grace each wave`,
   }),
   'life-vessel': v => ({
-    description: `+${count(v.maxHealth)} max ${plural(v.maxHealth, 'heart')} in every fight. While at full hearts, every Set deals +${num(v.vigor)}.`,
-    shortDescription: `+${count(v.maxHealth)} ${plural(v.maxHealth, 'heart')}, full hearts +${num(v.vigor)}`,
+    description: `Pure HP Tank: +${count(v.maxHealth)} max ${plural(v.maxHealth, 'heart')} in every fight and heals ${count(v.waveHeal)} ${plural(v.waveHeal, 'heart')} at the start of every wave.`,
+    shortDescription: `+${count(v.maxHealth)} max ${plural(v.maxHealth, 'heart')}, heal +${count(v.waveHeal)} each wave`,
   }),
   'mending-charm': v => ({
-    description: `${pct(v.healingChance)} chance per Set to heal 1 heart. While at full hearts, it also hits the foe for ${num(v.overheal)}.`,
-    shortDescription: `${pct(v.healingChance)} heal, overheal hits for ${num(v.overheal)}`,
+    description: `${pct(v.healingChance)} chance per Set to heal 1 heart. Overhealing at full hearts grants +1 Over-Shield that absorbs your next mistake.`,
+    shortDescription: `${pct(v.healingChance)} heal; overheal grants +1 Over-Shield`,
   }),
   'crystal-orb': v => ({
-    description: `+${count(v.maxHints)} hint ${plural(v.maxHints, 'slot')}, filled when the fight starts. Using a hint hits the foe for ${num(v.strike)}, and Sets made on a hinted card deal +${num(v.insight)}.`,
-    shortDescription: `+${count(v.maxHints)} ${plural(v.maxHints, 'hint')}; use +${num(v.strike)}, hinted Sets +${num(v.insight)}`,
+    description: `Active Hint Bank: +${count(v.maxHints)} filled hint ${plural(v.maxHints, 'slot')} at fight start. Spending a hint freezes the clock and foe for ${num(v.freeze)}s.`,
+    shortDescription: `+${count(v.maxHints)} ${plural(v.maxHints, 'hint')}; spending a hint freezes ${num(v.freeze)}s`,
   }),
   'seeker-lens': v => ({
-    description: `${pct(v.hintGainChance)} chance per Set to gain a hint and hit the foe for ${num(v.strike)}. Every hint you are holding adds +${SEEKER_DAMAGE_PER_HINT} to every Set.`,
-    shortDescription: `${pct(v.hintGainChance)} hint + ${num(v.strike)} dmg; Sets +${SEEKER_DAMAGE_PER_HINT} per hint held`,
+    description: `Hint Hoarder: ${pct(v.hintGainChance)} chance per Set to gain a hint. Every unspent hint you hold adds +${num(v.perHint)} damage to every Set.`,
+    shortDescription: `${pct(v.hintGainChance)} hint; +${num(v.perHint)} dmg per unspent hint held`,
   }),
   'scholars-tome': v => ({
-    description: `${pct(v.xpGainChance)} chance per Set to gain +1 XP and hit the foe for ${num(v.strike)}.`,
-    shortDescription: `${pct(v.xpGainChance)} bonus XP + ${num(v.strike)} dmg`,
+    description: `Rapid Level-Up Engine: ${pct(v.xpGainChance)} chance per Set for +1 XP and +2 XP every ${WEAPON_CADENCE.SCHOLAR_XP_EVERY}rd Set${v.extraPicks > 0 ? `, plus +${count(v.extraPicks)} extra level-up choice` : ''}.`,
+    shortDescription: `${pct(v.xpGainChance)} XP + steady study${v.extraPicks > 0 ? ` (+${count(v.extraPicks)} pick choice)` : ''}`,
   }),
   'fortunes-favor': v => ({
-    description: `${pct(v.coinGainChance)} chance per Set to gain +1 coin and hit the foe for ${num(v.strike)}.`,
-    shortDescription: `${pct(v.coinGainChance)} bonus coin + ${num(v.strike)} dmg`,
+    description: `Shop & Coin Magnate: ${pct(v.coinGainChance)} chance per Set for +1 coin, +2 coins every 3rd Set, and +${pct(v.coinBonus)} coins from all sources.`,
+    shortDescription: `${pct(v.coinGainChance)} coin + +${pct(v.coinBonus)} total coins`,
   }),
   'chrono-shard': v => ({
-    description: `+${num(v.startingTime)}s on the clock in timed fights.`,
-    shortDescription: `+${num(v.startingTime)}s clock`,
+    description: `+${num(v.startingTime)}s on the clock in timed fights and slows the fight clock by ${pct(v.slow)}.`,
+    shortDescription: `+${num(v.startingTime)}s clock, ${pct(v.slow)} slower clock`,
   }),
   'time-drop': v => ({
     description: `${pct(v.timeGainChance)} chance per Set to add ${num(v.timeGainAmount)}s to the clock.`,
@@ -244,24 +267,24 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `${pct(v.echoChance)} echo, ${pct(v.chainReactionChance)} double, +${num(v.strike)} each`,
   }),
   connector: v => ({
-    description: `${pct(v.connectionChance)} chance per Set to link two of its spots. Linked cards are destroyed together.`,
-    shortDescription: `${pct(v.connectionChance)} link per Set`,
+    description: `Active Weaver: ${pct(v.connectionChance)} chance per Set to link two matched spots. Linked cards are destroyed together${v.persist > 0 ? ' and persist across waves' : ''}.`,
+    shortDescription: `${pct(v.connectionChance)} link/Set${v.persist > 0 ? ' (persists across waves)' : ''}`,
   }),
   'web-weaver': v => ({
-    description: `Start every fight with ${count(v.startingConnections)} ${plural(v.startingConnections, 'link')} already placed. Linked cards are destroyed together.`,
-    shortDescription: `+${count(v.startingConnections)} starting links`,
+    description: `Opening Web: start every wave with ${count(v.startingConnections)} pre-wired ${plural(v.startingConnections, 'link')}. Linked cards are destroyed together.`,
+    shortDescription: `+${count(v.startingConnections)} opening wave ${plural(v.startingConnections, 'link')}`,
   }),
   'echo-chamber': v => ({
-    description: `Start every fight with ${count(v.startingConnections)} ${plural(v.startingConnections, 'link')}. +${num(v.echoTimeBonusPerLink)}s on the clock for every card destroyed through a link.`,
+    description: `Chrono-Link Conduit: start every fight with ${count(v.startingConnections)} ${plural(v.startingConnections, 'link')}, and gain +${num(v.echoTimeBonusPerLink)}s on the clock per linked card destroyed.`,
     shortDescription: `+${count(v.startingConnections)} ${plural(v.startingConnections, 'link')}, +${num(v.echoTimeBonusPerLink)}s per linked card`,
   }),
   'neural-network': v => ({
-    description: `${pct(v.connectionChance)} chance per Set to link two of its spots, and ${pct(v.bonusConnectionChance)} chance that a new link makes a second one.`,
-    shortDescription: `${pct(v.connectionChance)} link, ${pct(v.bonusConnectionChance)} bonus link`,
+    description: `Branching Mesh: ${pct(v.connectionChance)} chance per Set to link two spots, and ${pct(v.bonusConnectionChance)} chance every new link forks into an extra linked pair.`,
+    shortDescription: `${pct(v.connectionChance)} link, ${pct(v.bonusConnectionChance)} fork chain`,
   }),
   'chaos-conduit': v => ({
-    description: `${pct(v.explosionChance)} chance per Set to blast the cards next to it. Every explosion: ${pct(v.bridgeChance)} chance to gain a grace.`,
-    shortDescription: `${pct(v.explosionChance)} blast; blasts: ${pct(v.bridgeChance)} grace`,
+    description: `Blast-to-Grace Bridge: ${pct(v.explosionChance)} blast chance; blasts have a ${pct(v.bridgeChance)} chance to grant a grace, and every grace save blasts a 2×2 block.`,
+    shortDescription: `${pct(v.explosionChance)} blast; blasts: ${pct(v.bridgeChance)} grace; saves blast 2×2`,
   }),
   'temporal-rift': v => ({
     description: `${pct(v.timeGainChance)} chance per Set to add ${num(v.timeGainAmount)}s. Every time gain: ${pct(v.bridgeChance)} chance to echo (match another Set for you).`,
@@ -276,16 +299,16 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `${pct(v.echoChance)} echo; echoes: ${pct(v.bridgeChance)} fire`,
   }),
   'fortunes-blessing': v => ({
-    description: `Each wave gilds 1 card (+3 coins). ${pct(v.coinGainChance)} chance per Set for +1 coin; coin gains have a ${pct(v.bridgeChance)} chance to grant a hint. Matching a gold or power card hits the foe for +${num(v.strike)}.`,
-    shortDescription: `Wave gold card; bonus cards +${num(v.strike)}; coins: ${pct(v.bridgeChance)} hint`,
+    description: `Gilded Alchemist: each wave gilds 1 card; matching bonus cards pays +3 extra coins (2× gold) with a ${pct(v.bonusHintChance)} chance for a hint. ${pct(v.coinGainChance)} coin chance; coins have ${pct(v.bridgeChance)} hint chance.`,
+    shortDescription: `Wave gold card; 2× gold + ${pct(v.bonusHintChance)} hint; coins: ${pct(v.bridgeChance)} hint`,
   }),
   'wisdom-chain': v => ({
-    description: `+${WISDOM_COIN_PCT}% coins from all sources. ${pct(v.xpGainChance)} chance per Set for +1 XP, and every ${WISDOM_XP_EVERY}th Set grants +2 XP. XP gains have a ${pct(v.bridgeChance)} chance for a coin, and every bonus coin hits for +${num(v.strike)}.`,
-    shortDescription: `+${WISDOM_COIN_PCT}% coins, ${WISDOM_XP_EVERY}th Set +2 XP; XP: ${pct(v.bridgeChance)} coin + ${num(v.strike)} dmg`,
+    description: `Dividend Loop: +${WISDOM_COIN_PCT}% coins, ${pct(v.xpGainChance)} XP chance (+2 XP every ${WISDOM_XP_EVERY}th Set), XP has ${pct(v.bridgeChance)} coin chance, and wave openers prime ×${num(v.openerMult)} next Set.`,
+    shortDescription: `+${WISDOM_COIN_PCT}% coins, XP→${pct(v.bridgeChance)} coin, wave openers ×${num(v.openerMult)}`,
   }),
   'grace-conduit': v => ({
-    description: `Start every fight with ${count(v.graces)} extra ${plural(v.graces, 'grace')}. Every grace used: ${pct(v.bridgeChance)} chance to fire a laser (${num(2 + v.laserDamage)} per card).`,
-    shortDescription: `+${count(v.graces)} ${plural(v.graces, 'grace')}; graces: ${pct(v.bridgeChance)} laser`,
+    description: `Defensive Retaliator: +${count(v.graces)} starting ${plural(v.graces, 'grace')}. Every grace save has a ${pct(v.bridgeChance)} chance to fire a laser (${num(2 + v.laserDamage)} dmg per card).`,
+    shortDescription: `+${count(v.graces)} ${plural(v.graces, 'grace')}; saves: ${pct(v.bridgeChance)} laser`,
   }),
   'life-link': v => ({
     description: `+${count(v.maxHealth)} max ${plural(v.maxHealth, 'heart')}, 1 mistake shield each wave, and ${pct(v.explosionChance)} blast chance per Set. Every ${LIFE_LINK_PULSE_EVERY}th Set at full hearts deals +${num(v.strike)} and blasts 2 cards. Losing a heart: ${pct(v.bridgeChance)} chance to blast 4 cards.`,
@@ -317,9 +340,8 @@ export const buildWeapon = (w: Weapon, build: WeaponBuild = BASE_BUILD, grown?: 
   const effects: Record<string, number> = { ...(w.effects as Record<string, number>) };
   for (const [k, value] of Object.entries(v)) if (k in effects) effects[k] = value;
   if ('maxHealth' in effects && 'health' in w.effects) effects.health = effects.maxHealth;
-  // Starting filled hints scale with levelled+tuned maxHints (resolved cleanly by resolveWholeStats),
-  // using baseV so mid-fight growth stacks don't double-grant hints alongside `now: { do: 'hint' }`.
-  if ('maxHints' in effects && 'hints' in w.effects) effects.hints = baseV.maxHints;
+  // Starting filled hints match clean integer levelled+tuned maxHints (using baseV so mid-fight growth doesn't double-grant)
+  if ('maxHints' in effects && 'hints' in w.effects) effects.hints = Math.round(baseV.maxHints);
   const text = STAT_TEXT[w.id]?.(v);
   return {
     ...w,

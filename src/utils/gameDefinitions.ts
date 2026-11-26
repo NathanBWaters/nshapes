@@ -118,10 +118,10 @@ export const CHARACTERS: Character[] = [
   },
 ];
 
-// Weapon system - one entry per weapon. A weapon grows stronger through levels
-// (`perLevel`: flat gains per level, found as Adventure rewards) and Workshop
-// tuning (multipliers on those numbers), not through separate copies.
-export const WEAPONS: Weapon[] = [
+// Shared weapon definitions (32 weapons shared between Free Play and Adventure Armory).
+// Adventure-only weapons (including `revenge-linker`) live exclusively in
+// `src/adventure/data/adventureWeapons.ts` so there is zero duplicate-id shadowing.
+export const SHARED_WEAPONS: Weapon[] = [
   // 1. BLAST POWDER - Explosive adjacent cards on match
   {
     id: 'blast-powder',
@@ -599,22 +599,6 @@ export const WEAPONS: Weapon[] = [
     perLevel: { connectionChance: 5 }
   },
 
-  // REVENGE LINKER - Create connections when taking damage
-  {
-    id: 'revenge-linker',
-    name: 'Revenge Linker',
-    rarity: 'legendary',
-    level: 1,
-    price: 11,
-    description: 'When you lose health: 3 separate 20% rolls. Each success connects two random positions in a triangle pattern.',
-    shortDescription: 'Damage creates links',
-    flavorText: 'Pain weaves a web of vengeance.',
-    icon: 'lorc/broken-heart-zone',
-    specialEffect: 'revengeLinker',
-    effects: {},
-    maxCount: 1,
-  },
-
   // WEB WEAVER - Start rounds with connections
   {
     id: 'web-weaver',
@@ -647,21 +631,6 @@ export const WEAPONS: Weapon[] = [
     perLevel: { echoTimeBonusPerLink: 0.5 }
   },
 
-  // SYMPATHETIC FLAMES - Fire spreads faster on connected positions
-  {
-    id: 'sympathetic-flames',
-    name: 'Sympathetic Flames',
-    rarity: 'rare',
-    level: 1,
-    price: 15,
-    description: 'Cards at connected positions have 2x fire spread chance.',
-    shortDescription: '2x fire on linked',
-    flavorText: 'Where one burns, all burn.',
-    icon: 'lorc/fire-ring',
-    specialEffect: 'sympatheticFlames',
-    effects: { linkedFireMultiplier: 2 },
-  },
-
   // NEURAL NETWORK - Bonus connections on link creation
   {
     id: 'neural-network',
@@ -679,6 +648,30 @@ export const WEAPONS: Weapon[] = [
     maxCount: 1,
   },
 ];
+
+/**
+ * Free-Play-only weapon definitions kept explicitly separate from Adventure's
+ * 64-weapon Armory catalog (their mechanics only exist in the Free Play loop).
+ */
+export const FREE_PLAY_ONLY_DEFINITIONS: Weapon[] = [
+  // SYMPATHETIC FLAMES - Fire spreads faster on connected positions
+  {
+    id: 'sympathetic-flames',
+    name: 'Sympathetic Flames',
+    rarity: 'rare',
+    level: 1,
+    price: 15,
+    description: 'Cards at connected positions have 2x fire spread chance.',
+    shortDescription: '2x fire on linked',
+    flavorText: 'Where one burns, all burn.',
+    icon: 'lorc/fire-ring',
+    specialEffect: 'sympatheticFlames',
+    effects: { linkedFireMultiplier: 2 },
+  },
+];
+
+// Full Free Play weapon pool (32 shared + 1 Free-Play-only = 33 weapons; zero duplicates with Adventure Armory).
+export const WEAPONS: Weapon[] = [...SHARED_WEAPONS, ...FREE_PLAY_ONLY_DEFINITIONS];
 
 /**
  * Weapons that no longer exist under these ids, for reading old saves. Each
@@ -773,6 +766,7 @@ export const LEGACY_WEAPON_IDS: Readonly<Record<string, { id: string; tier: numb
 
 /** What an old weapon's rarity was, so a refund of its Workshop tiers uses the price it was bought at. */
 export const LEGACY_WEAPON_RARITY: Readonly<Record<string, WeaponRarity>> = {
+  'revenge-linker': 'legendary',
   'inferno-charge': 'epic', 'ember-heart': 'epic', 'lucky-charm': 'epic', 'restoration-aura': 'epic',
   'spectrum-annihilator': 'epic', 'resonance-crystal': 'epic', 'golden-touch': 'epic',
   'connector-legendary': 'legendary',

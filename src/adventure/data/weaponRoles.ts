@@ -10,7 +10,7 @@ export const WEAPON_ROLES: { id: WeaponRole; label: string; blurb: string }[] = 
   { id: 'tricks', label: 'Tricks', blurb: 'Something to hunt for or keep up, every Set.' },
   { id: 'gambles', label: 'Board gambles', blurb: 'They make your board harder. Pull it off and they pay the most.' },
   { id: 'board', label: 'Board', blurb: 'Bigger, stranger, stronger boards.' },
-  { id: 'survival', label: 'Hearts & graces', blurb: 'Stay alive, and hit back while you do.' },
+  { id: 'survival', label: 'Hearts & graces', blurb: 'Stay alive with shields, hearts, graces, and defensive retaliation.' },
   { id: 'insight', label: 'Hints, coins & XP', blurb: 'See more, earn more, level faster.' },
   { id: 'tempo', label: 'Time & evolutions', blurb: 'More clock, more Catalysts, longer power trips.' },
   { id: 'chains', label: 'Echoes & links', blurb: 'Free Sets and cards that fall together.' },

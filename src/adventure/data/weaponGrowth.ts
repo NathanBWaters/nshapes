@@ -90,10 +90,10 @@ const weaponOn = (kind: WeaponTriggerKind): GrowthWatch => ({ on: 'weapon', kind
 export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // ── Hearts ────────────────────────────────────────────────────────────────
   'mending-charm': [
-    { watch: { on: 'set', test: 'fullHearts' }, every: 3, stat: { overheal: 3 }, look: 'Sets made at full hearts', gives: 'overheal hits +3 harder' },
+    { watch: { on: 'set', test: 'fullHearts' }, every: 4, max: 5, stat: { healingChance: 1 }, now: { do: 'shield', count: 1 }, look: 'Sets made at full hearts', gives: '+1% heal chance and 1 Over-Shield' },
   ],
   'life-vessel': [
-    { watch: { on: 'set', test: 'rainbow' }, every: 2, unbroken: true, max: 4, now: { do: 'emptyHeart', amount: 1 }, look: 'Rainbows back to back', gives: '+1 max heart (it arrives empty)' },
+    { watch: { on: 'set', test: 'fullHearts' }, every: 4, max: 3, now: { do: 'emptyHeart', amount: 1 }, look: 'Sets made at full hearts', gives: '+1 max heart (it arrives empty)' },
   ],
   // Souls stretch the vessel: healing makes room for more healing
   'soul-harvest': [{ watch: { on: 'healed' }, every: 3, max: 3, now: { do: 'emptyHeart', amount: 1 }, look: 'times you heal', gives: '+1 max heart (it arrives empty)' }],
@@ -124,11 +124,18 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: weaponOn('laser'), max: 12, mods: { laserSetChance: 3 }, look: 'laser', gives: '+3% chance the cards that replace a laser hold a Set among themselves' },
   ],
   'chaos-shard': [
-    { watch: { on: 'mistake', allRed: true }, max: 4, stat: { ricochetChance: 5 }, look: 'mistake made of three red cards', gives: '+5% ricochet chance' },
-    { watch: { on: 'set', test: 'oneTwoThree' }, max: 30, mods: { ricochetHealChance: 1 }, look: 'Set with a 1, a 2 and a 3 in it', gives: '+1% chance a ricochet heals a heart' },
+    {
+      watch: weaponOn('ricochet'),
+      every: 3,
+      max: 6,
+      stat: { ricochetChance: 3, ricochetDamage: 0.25 },
+      mods: { ricochetHealChance: 3 },
+      look: 'ricochets',
+      gives: '+3% ricochet chance, +0.25 ricochet damage, and +3% chance a ricochet heals a heart',
+    },
   ],
   'echo-stone': [
-    { watch: { on: 'set', test: 'sameColorAgain' }, max: 4, stat: { echoChance: 3, strike: 1 }, look: 'one-color Set right after a Set of that same color', gives: '+3% echo chance and echoes hit +1 harder' },
+    { watch: weaponOn('echo'), every: 2, max: 5, stat: { echoChance: 2, strike: 1 }, look: 'echoes', gives: '+2% echo chance and echoes hit +1 harder' },
   ],
   // The reaction jumps the gap
   'chain-reaction': [
@@ -181,9 +188,9 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'fortune-token': [
     { watch: weaponOn('grace'), every: 3, max: 6, now: { do: 'growBoard', count: 1 }, look: 'graces gained (the ones you start with count)', gives: '+1 card on the board, for good' },
   ],
-  // A grace spent goes off like a bomb
+  // Graces fuel more explosions
   'chaos-conduit': [
-    { watch: weaponOn('grace'), max: 5, proc: { on: { on: 'graceUsed' }, pct: 20, effect: { do: 'explode', area: { shape: 'block', cols: 2, rows: 2 } } }, look: 'grace you gain', gives: '+20% chance that a grace that saves you also sets off a 2×2 blast' },
+    { watch: weaponOn('grace'), max: 5, stat: { explosionChance: 2 }, look: 'grace you gain', gives: '+2% blast chance' },
   ],
   // Spent graces start coming back
   'grace-conduit': [
@@ -195,10 +202,9 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // Using hints makes room for more of them (and a hoard is what Seeker Lens pays for)
   'crystal-orb': [{ watch: { on: 'hintUsed' }, every: 3, max: 3, stat: { maxHints: 1 }, now: { do: 'hint', amount: 1 }, look: 'hints you use', gives: '+1 hint slot, and a hint to put in it' }],
   'oracle-eye': [
-    { watch: { on: 'set' }, every: 2, max: 5, stat: { autoHintChance: 2 }, look: 'Sets you make', gives: '+2% chance to point out a card' },
-    { watch: { on: 'set', test: 'hinted' }, max: 6, mods: { hintedSetDamage: 1 }, look: 'Set made on a pointed-out card', gives: 'Sets made on a pointed-out card hit +1 harder' },
+    { watch: { on: 'set', test: 'hinted' }, max: 6, stat: { refund: 0.25 }, look: 'Set made on a pointed-out card', gives: 'hinted Sets refund +0.25s more on the clock' },
   ],
-  'mystic-sight': [{ watch: { on: 'own' }, max: 3, stat: { enhancedHintChance: 2 }, look: 'Third Eye', gives: '+2% chance an auto-hint points out 2 cards' }],
+  'mystic-sight': [{ watch: { on: 'set', test: 'hinted' }, max: 6, stat: { snipe: 1.5 }, look: 'hinted Set', gives: 'Third Eye snipes hit +1.5 harder' }],
   // Hints gild the board and build coin momentum
   'fortunes-blessing': [
     {
@@ -219,11 +225,11 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // Study pays: XP brings more XP, so level-ups come faster as the fight goes on
   'scholars-tome': [{ watch: weaponOn('xp'), every: 3, max: 6, stat: { xpGainChance: 1 }, now: { do: 'xp', amount: 2 }, look: 'bonus XP gains', gives: '+2 XP at once and +1% XP chance' }],
   // Coins teach and dividends compound
-  'wisdom-chain': [{ watch: weaponOn('coin'), max: 6, stat: { xpGainChance: 2, strike: 0.35 }, look: 'bonus coin', gives: '+2% bonus XP chance and Dividend hits +0.35 harder' }],
+  'wisdom-chain': [{ watch: weaponOn('coin'), max: 6, stat: { xpGainChance: 2 }, mods: { coinPercent: 3 }, look: 'bonus coin', gives: '+2% bonus XP chance and +3% more coins' }],
 
   // ── Time ──────────────────────────────────────────────────────────────────
   'chrono-shard': [
-    { watch: { on: 'set', test: 'corners' }, max: 5, mods: { clockSlowPct: 5 }, look: 'Set that uses two of the board\'s four corner cards', gives: 'the clock runs 5% slower' },
+    { watch: { on: 'set' }, every: 3, max: 5, mods: { clockSlowPct: 5 }, look: 'Sets you make', gives: 'the clock runs 5% slower' },
   ],
   'time-drop': [{ watch: { on: 'set', test: 'rainbow' }, max: 4, stat: { timeGainAmount: 0.5 }, look: 'Rainbow', gives: 'time gains add 0.5s more' }],
 

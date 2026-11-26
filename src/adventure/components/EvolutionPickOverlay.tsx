@@ -1,18 +1,21 @@
 /**
  * Evolution choice modal shown when matching a Catalyst card while 2+ armed
- * evolutions are idle. Presents up to 3 randomly drawn recipes so players can
- * adapt to the fight and enjoy strategic luck across both Adventure Mode and
- * Starfall Summit.
+ * evolutions are idle. Streamlined for <1.5s mid-fight scanning ([GP-12]):
+ * shows only the recipe name, ★ SIGNATURE / NEW! badge, icon, and concise
+ * ≤55-char combat verb (italic flavor stays in the out-of-combat Recipe Guide).
  */
 import React from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import type { EvolutionRecipe } from '../types';
+import { evolutionShortVerb, isSignatureRecipe } from '../data/evolutions';
 import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
 import { Eyebrow, INK, PopIn } from './ui';
 
 const EVO_ACCENT = '#B45309';
+const SIG_BG = '#FEF3C7';
+const SIG_INK = '#92400E';
 
 export interface EvolutionPickOverlayProps {
   /** Up to 3 randomly selected idle armed evolution recipe IDs */
@@ -41,6 +44,10 @@ const EvolutionPickOverlay: React.FC<EvolutionPickOverlayProps> = ({
   if (recipes.length === 0) return null;
 
   const drawnFromPool = totalIdle > recipes.length;
+  const chassisSummary =
+    EVOLUTION_RULES.setDamage > 0
+      ? `+${EVOLUTION_RULES.setDamage} dmg & ×${EVOLUTION_RULES.setMultiplier} every Set`
+      : `×${EVOLUTION_RULES.setMultiplier} every Set`;
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={() => {}}>
@@ -52,11 +59,11 @@ const EvolutionPickOverlay: React.FC<EvolutionPickOverlayProps> = ({
             </View>
             <Text style={st.title}>CHOOSE AN EVOLUTION</Text>
             <Text style={st.subtitle} testID="evo-pick-subtitle">
-              {`Pick 1 of ${recipes.length} · Lasts ${durationSec}s (+${EVOLUTION_RULES.setDamage} dmg & ×${EVOLUTION_RULES.setMultiplier} every Set)`}
+              {`Pick 1 of ${recipes.length} · ${durationSec}s (${chassisSummary})`}
             </Text>
             {drawnFromPool && (
               <Text style={st.drawnNote} testID="evo-pick-drawn-note">
-                {`${recipes.length} randomly drawn from ${totalIdle} armed`}
+                {`${recipes.length} drawn from ${totalIdle} armed`}
               </Text>
             )}
           </View>
@@ -69,6 +76,8 @@ const EvolutionPickOverlay: React.FC<EvolutionPickOverlayProps> = ({
           >
             {recipes.map((recipe, idx) => {
               const isNew = !knownIds?.has(recipe.id);
+              const isSig = isSignatureRecipe(recipe.id);
+              const shortVerb = evolutionShortVerb(recipe);
               return (
                 <TouchableOpacity
                   key={recipe.id}
@@ -76,38 +85,36 @@ const EvolutionPickOverlay: React.FC<EvolutionPickOverlayProps> = ({
                   onPress={() => onPick(recipe.id)}
                   activeOpacity={0.82}
                   accessibilityRole="button"
-                  accessibilityLabel={`Ignite ${recipe.name}${isNew ? ', new' : ''}: ${recipe.activeText}`}
-                  style={st.card}
+                  accessibilityLabel={`Ignite ${recipe.name}${isSig ? ', signature' : ''}${isNew ? ', new' : ''}: ${shortVerb}`}
+                  style={[st.card, isSig && st.sigCard]}
                 >
                   <View style={st.cardHead}>
-                    <View style={st.medallion}>
+                    <View style={[st.medallion, isSig && st.sigMedallion]}>
                       <Icon name={recipe.icon} size={24} color={EVO_ACCENT} />
                     </View>
                     <View style={st.titleBlock}>
                       <View style={st.nameRow}>
                         <Text style={st.name}>{recipe.name}</Text>
+                        {isSig && (
+                          <View style={st.sigPill} testID={`evo-pick-sig-${idx}`}>
+                            <Text style={st.sigPillText}>★ SIGNATURE</Text>
+                          </View>
+                        )}
                         {isNew && (
                           <View style={st.newPill} testID={`evo-pick-new-${idx}`}>
                             <Text style={st.newPillText}>NEW!</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={st.parents}>{recipe.familyText}</Text>
+                      <Text style={st.shortVerb} testID={`evo-pick-desc-${idx}`}>
+                        {shortVerb}
+                      </Text>
                     </View>
                     <View style={st.ignitePill}>
                       <Icon name="lorc/crystal-shine" size={13} color={INK} />
                       <Text style={st.igniteText}>IGNITE</Text>
                     </View>
                   </View>
-
-                  <Text style={st.activeText} testID={`evo-pick-desc-${idx}`}>
-                    {recipe.activeText}
-                  </Text>
-                  {!!recipe.flavor && (
-                    <Text style={st.flavor} testID={`evo-pick-flavor-${idx}`}>
-                      {recipe.flavor}
-                    </Text>
-                  )}
                 </TouchableOpacity>
               );
             })}
@@ -188,7 +195,10 @@ const st = StyleSheet.create({
     borderBottomWidth: 4,
     borderColor: INK,
     padding: 12,
-    gap: 8,
+  },
+  sigCard: {
+    backgroundColor: '#FFFBEB',
+    borderColor: EVO_ACCENT,
   },
   cardHead: {
     flexDirection: 'row',
@@ -207,10 +217,13 @@ const st = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
+  sigMedallion: {
+    backgroundColor: SIG_BG,
+  },
   titleBlock: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
+    gap: 4,
   },
   nameRow: {
     flexDirection: 'row',
@@ -227,6 +240,21 @@ const st = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
+  sigPill: {
+    backgroundColor: SIG_BG,
+    borderWidth: 1.5,
+    borderColor: EVO_ACCENT,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    flexShrink: 0,
+  },
+  sigPillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    color: SIG_INK,
+  },
   newPill: {
     backgroundColor: COLORS.actionYellow,
     borderWidth: 1.5,
@@ -241,13 +269,6 @@ const st = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.6,
     color: INK,
-  },
-  parents: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '800',
-    color: EVO_ACCENT,
-    flexShrink: 1,
   },
   ignitePill: {
     flexDirection: 'row',
@@ -268,19 +289,11 @@ const st = StyleSheet.create({
     letterSpacing: 0.8,
     color: INK,
   },
-  activeText: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '600',
+  shortVerb: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
     color: INK,
-    flexShrink: 1,
-  },
-  flavor: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontStyle: 'italic',
-    color: INK,
-    opacity: 0.72,
     flexShrink: 1,
   },
 });

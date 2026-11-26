@@ -2,7 +2,14 @@
  * The evolution roster: 4 evolutions per Armory weapon, every pair arms at
  * most one recipe, and every recipe forges and runs in a real fight.
  */
-import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
+import {
+  EVOLUTION_RECIPES,
+  EVOLUTION_SHORT_VERBS,
+  SIGNATURE_RECIPES,
+  SIGNATURE_RECIPE_IDS,
+  evolutionShortVerb,
+  isSignatureRecipe,
+} from '@/adventure/data/evolutions';
 import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
 import { TRICK_WEAPON_IDS } from '@/adventure/data/adventureWeapons';
 import { findAdventureWeapon } from '@/adventure/data/armory';
@@ -577,5 +584,26 @@ describe('Wave 2 evolution overhaul invariants & live behavior', () => {
     expect(r.source.modifiers?.conditionalDamage?.some(cd => cd.when.some(c => c.kind === 'diffCount' && c.n === 1))).toBe(true);
     expect(r.source.modifiers?.rainbowMultiplierBonus).toBeGreaterThan(0);
     expect(r.source.rules?.some(ru => ru.trigger.on === 'rainbow')).toBe(true);
+  });
+
+  it('[GP-12] all 208 recipes have <=55-char shortVerbs and all 9 signature recipes are flagged', () => {
+    expect(EVOLUTION_RECIPES).toHaveLength(208);
+    expect(SIGNATURE_RECIPES).toHaveLength(9);
+    expect(SIGNATURE_RECIPE_IDS.size).toBe(9);
+    for (const r of SIGNATURE_RECIPES) {
+      expect(isSignatureRecipe(r.id)).toBe(true);
+    }
+    for (const r of PAIR_RECIPES) {
+      expect(isSignatureRecipe(r.id)).toBe(false);
+    }
+    for (const r of EVOLUTION_RECIPES) {
+      expect(EVOLUTION_SHORT_VERBS[r.id]).toBeDefined();
+      const verb = evolutionShortVerb(r);
+      expect({ id: r.id, len: verb.length, ok: verb.length >= 10 && verb.length <= 55 }).toEqual({
+        id: r.id,
+        len: verb.length,
+        ok: true,
+      });
+    }
   });
 });

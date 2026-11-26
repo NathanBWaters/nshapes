@@ -3,6 +3,7 @@
  * stack gives (data/weaponGrowth.ts, engine/growth.ts).
  */
 import type { Card } from '@/types';
+import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { WEAPON_GROWTH, NO_GROWTH, growthKey, growthStacks, growthText } from '@/adventure/data/weaponGrowth';
 import { armoryBaseWeapon, getArmoryWeapon } from '@/adventure/data/armory';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, weaponStatDefs, weaponValues } from '@/adventure/data/weaponStats';
@@ -20,15 +21,44 @@ const ARMORY = createMaxedSave().armory;
 const held = (ids: string[], over: Parameters<typeof startFight>[0] = {}) =>
   startFight({ ...over, save: { armory: ids, charms: ids, ...(over.save ?? {}) } });
 
+const makeFx = (over: Partial<WeaponEffectResult>): WeaponEffectResult => ({
+  explosiveCards: [],
+  laserCards: [],
+  laserCount: 0,
+  fireCards: [],
+  ricochetCards: [],
+  ricochetCount: 0,
+  autoMatchedSets: [],
+  bonusPoints: 0,
+  bonusMoney: 0,
+  bonusTime: 0,
+  bonusGraces: 0,
+  bonusHealing: 0,
+  bonusHints: 0,
+  bonusExperience: 0,
+  bonusCoins: 0,
+  boardGrowth: 0,
+  notifications: [],
+  timeGainTriggered: false,
+  ...over,
+});
+
 type Traits = Pick<Card, 'shape' | 'color' | 'number'>;
 /** Put these three cards on the given slots and match them (they must form a Set). */
-const matchAt = (s: RunState, slots: number[], traits: Traits[], hinted = false): RunState => {
+const matchAt = (
+  s: RunState,
+  slots: number[],
+  traits: Traits[],
+  hinted = false,
+  fx?: Partial<WeaponEffectResult>
+): RunState => {
   const board = s.board.map((c, i) => {
     const k = slots.indexOf(i);
     return k < 0 ? c : { ...c, ...traits[k], shading: 'solid' as const };
   });
   const cards = slots.map(i => board[i]);
-  let next = runReducer({ ...s, board }, { type: 'MATCH', cards, rewards: plainRewards(cards), hinted });
+  const effects = fx ? makeFx(fx) : undefined;
+  let next = runReducer({ ...s, board }, { type: 'MATCH', cards, rewards: plainRewards(cards), hinted, effects });
   next = runReducer(next, { type: 'REPLACE', ids: cards.map(c => c.id) });
   return next;
 };
@@ -40,7 +70,6 @@ const missWith = (s: RunState, traits: Traits[]): RunState => {
 };
 const RED: Traits[] = [{ shape: 'oval', color: 'red', number: 1 }, { shape: 'oval', color: 'red', number: 2 }, { shape: 'oval', color: 'red', number: 3 }];
 const GREEN: Traits[] = RED.map(t => ({ ...t, color: 'green' as const }));
-const RAINBOW: Traits[] = [{ shape: 'oval', color: 'red', number: 1 }, { shape: 'diamond', color: 'green', number: 2 }, { shape: 'squiggle', color: 'purple', number: 3 }];
 const SAME_NUMBER: Traits[] = [{ shape: 'oval', color: 'red', number: 2 }, { shape: 'diamond', color: 'red', number: 2 }, { shape: 'squiggle', color: 'red', number: 2 }];
 const stacksOf = (s: RunState, id: string, track = 0) => s.growth[growthKey(id, track)]?.stacks ?? 0;
 const weapon = (s: RunState, id: string) => s.weapons.find(w => w.id === id)! as AdventureWeapon;
@@ -70,84 +99,81 @@ describe('the growth table', () => {
 });
 
 describe('weapons grow during a fight', () => {
-  it('Mending Charm: every 3 Sets at full hearts, the overheal hits 3 harder', () => {
+  it('Mending Charm: every 4 Sets at full hearts adds +1% heal chance and 1 Over-Shield (pure survival, no raw DPS rider)', () => {
     let s = held(['mending-charm']);
-    const before = getArmoryWeapon('mending-charm')!.description;
-    for (let i = 0; i < 2; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    const beforeChance = s.stats.healingChance;
+    for (let i = 0; i < 3; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
     expect(stacksOf(s, 'mending-charm')).toBe(0);
     s = matchAt(s, [0, 1, 2], SAME_NUMBER);
     expect(stacksOf(s, 'mending-charm')).toBe(1);
-    // The weapon itself is rebuilt from its grown numbers: its rule and its wording both say 3 more
-    expect(weapon(s, 'mending-charm').description).not.toBe(before);
-    expect(weapon(s, 'mending-charm').description).toContain('hits the foe for 7');
+    expect(s.stats.healingChance).toBe(beforeChance + 1);
+    expect(s.freeMistakesLeft).toBeGreaterThanOrEqual(1);
     expect(eventsOf(s, 'power_up')).toHaveLength(1);
     expect(eventsOf(s, 'power_up')[0].source).toMatch(/^w0:mending-charm/);
     // Not at full hearts: no progress
     s = { ...s, hearts: s.maxHearts! - 1 };
-    for (let i = 0; i < 3; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    for (let i = 0; i < 4; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
     expect(stacksOf(s, 'mending-charm')).toBe(1);
   });
 
-  it('Life Vessel: two Rainbows back to back add an empty heart; a plain Set between them starts the count over', () => {
+  it('Life Vessel: every 4 Sets at full hearts adds an empty max heart ([GP-09])', () => {
     let s = held(['life-vessel'], { features: ['hearts', 'gear', 'rainbow'] });
     const max = s.maxHearts!;
-    s = matchAt(s, [0, 1, 2], RAINBOW);
-    s = matchAt(s, [0, 1, 2], SAME_NUMBER);
-    s = matchAt(s, [0, 1, 2], RAINBOW);
+    for (let i = 0; i < 3; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
     expect(s.maxHearts).toBe(max);
-    s = matchAt(s, [0, 1, 2], RAINBOW);
+    s = matchAt(s, [0, 1, 2], SAME_NUMBER);
     expect(s.maxHearts).toBe(max + 1);
     expect(s.hearts).toBe(max);
   });
 
-  it('Echo Stone: a one-color Set right after a Set of that color adds 3% echo chance and 1 echo damage', () => {
+  it('Echo Stone: every 2 echoes adds +2% echo chance and +1 echo damage ([GP-09])', () => {
     let s = held(['echo-stone']);
     const chance = s.stats.echoChance;
-    s = matchAt(s, [0, 1, 2], RED);
-    s = matchAt(s, [0, 1, 2], GREEN);
-    expect(s.stats.echoChance).toBe(chance);
-    s = matchAt(s, [0, 1, 2], GREEN);
-    expect(s.stats.echoChance).toBe(chance + 3);
+    const w = weapon(s, 'echo-stone');
+    s = matchAt(s, [0, 1, 2], SAME_NUMBER, false, { autoMatchedSets: [s.board.slice(3, 6)] });
+    expect(stacksOf(s, 'echo-stone')).toBe(0);
+    s = matchAt(s, [0, 1, 2], SAME_NUMBER, false, { autoMatchedSets: [s.board.slice(3, 6)] });
+    expect(stacksOf(s, 'echo-stone')).toBe(1);
+    expect(s.stats.echoChance).toBe(chance + 2);
+    expect(weapon(s, 'echo-stone').description).not.toBe(w.description);
     expect(weapon(s, 'echo-stone').description).toContain('hits the foe for 4');
   });
 
-  it('Chrono Shard: a Set through two corner cards slows the clock by 5%, up to 25%', () => {
+  it('Chrono Shard: starts at 5% clock slow and slows by 5% every 3 Sets, up to 5 stacks ([GP-09], [GP-11])', () => {
     let s = held(['chrono-shard'], { level: testLevel({ rules: { timer: 200, boardSize: 12 } }) });
     expect(cornerSlots(12)).toEqual([0, 2, 9, 11]);
     const drain = (x: RunState) => x.timeLeft! - tick(x, 10000, 1000).timeLeft!;
-    expect(drain(s)).toBeCloseTo(10);
-    s = matchAt(s, [0, 2, 5], SAME_NUMBER);
+    // Base Lv1 Chrono Shard starts with 5% clock slow
     expect(drain(s)).toBeCloseTo(9.5);
-    // One corner is not enough
-    s = matchAt(s, [0, 4, 5], SAME_NUMBER);
+    s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    s = matchAt(s, [0, 1, 2], SAME_NUMBER);
+    expect(stacksOf(s, 'chrono-shard')).toBe(0);
+    s = matchAt(s, [0, 1, 2], SAME_NUMBER);
     expect(stacksOf(s, 'chrono-shard')).toBe(1);
-    for (let i = 0; i < 8; i++) s = matchAt(s, [0, 2, 5], SAME_NUMBER);
+    expect(drain(s)).toBeCloseTo(9.0);
+    for (let i = 0; i < 15; i++) s = matchAt(s, [0, 1, 2], SAME_NUMBER);
     expect(stacksOf(s, 'chrono-shard')).toBe(5);
-    expect(drain(s)).toBeCloseTo(7.5);
+    expect(drain(s)).toBeLessThanOrEqual(7.5);
   });
 
-  it('Chaos Shard: an all-red mistake adds 5% ricochet (4 times); a 1-2-3 Set adds a chance that ricochets heal', () => {
+  it('Chaos Shard: every 3 ricochets adds +3% ricochet chance, +0.25 dmg, and +3% ricochet heal chance ([GP-09])', () => {
     let s = held(['chaos-shard'], { level: testLevel({ rules: { hearts: 30 } }) });
     const chance = s.stats.ricochetChance;
-    const wrongRed: Traits[] = [{ shape: 'oval', color: 'red', number: 1 }, { shape: 'oval', color: 'red', number: 1 }, { shape: 'diamond', color: 'red', number: 2 }];
-    s = missWith(s, [{ ...wrongRed[0] }, { ...wrongRed[1], color: 'green' }, wrongRed[2]]);
-    expect(s.stats.ricochetChance).toBe(chance);
-    for (let i = 0; i < 6; i++) s = missWith(s, wrongRed);
-    expect(s.stats.ricochetChance).toBe(chance + 20);
-    s = matchAt(s, [0, 1, 2], RED);
-    expect(stacksOf(s, 'chaos-shard', 1)).toBe(1);
-    s = matchAt(s, [0, 1, 2], SAME_NUMBER);
-    expect(stacksOf(s, 'chaos-shard', 1)).toBe(1);
+    for (let i = 0; i < 3; i++) {
+      s = matchAt(s, [0, 1, 2], SAME_NUMBER, false, { ricochetCards: [s.board[3]], ricochetCount: 1 });
+    }
+    expect(stacksOf(s, 'chaos-shard')).toBe(1);
+    expect(s.stats.ricochetChance).toBe(chance + 3);
   });
 
-  it('Seeker Lens: every hint held adds 1 to a Set, and a Set made on a hint adds 1% hint chance', () => {
+  it('Seeker Lens: every hint held adds 1.5 dmg to a Set, and a Set made on a hint adds 1% hint chance ([GP-11])', () => {
     const level = testLevel({ rules: { startingHints: 3 }, foes: [{ name: 'Dummy', hp: 9999 }] });
     const plain = matchAt(startFight({ level }), [0, 1, 2], SAME_NUMBER);
     let s = held(['seeker-lens'], { level });
     const chance = s.stats.hintGainChance;
     const hints = s.stats.hints;
     s = matchAt(s, [0, 1, 2], SAME_NUMBER);
-    expect(s.totalDamage - plain.totalDamage).toBe(hints);
+    expect(s.totalDamage - plain.totalDamage).toBe(Math.round(hints * 1.5));
     expect(s.stats.hintGainChance).toBe(chance);
     s = matchAt(s, [0, 1, 2], SAME_NUMBER, true);
     expect(s.stats.hintGainChance).toBe(chance + 1);
@@ -306,9 +332,11 @@ describe('growth and evolutions', () => {
 
   it('an evolution does not change how a weapon grows: same step, same limit', () => {
     let s = start();
+    // start() already made 1 Catalyst Set; 2 more reach chrono-shard's first 3-Set stack
+    s = matchAt(s, [0, 2, 5], SAME_NUMBER);
     s = matchAt(s, [0, 2, 5], SAME_NUMBER);
     expect(stacksOf(s, 'chrono-shard')).toBe(1);
-    for (let i = 0; i < 8; i++) s = matchAt(s, [0, 2, 5], SAME_NUMBER);
+    for (let i = 0; i < 15; i++) s = matchAt(s, [0, 2, 5], SAME_NUMBER);
     expect(stacksOf(s, 'chrono-shard')).toBe(5);
   });
 
@@ -372,19 +400,19 @@ describe('Wave 2 weapons overhaul invariants & reworks', () => {
     }
   });
 
-  it('Crystal Orb L1 Workshop tuning scales starting hints via resolveWholeStats instead of Math.floor(1.5) === 1', () => {
+  it('Crystal Orb L1 Workshop tuning grants guaranteed whole-unit starting hints without random fight-start rounding ([GP-19])', () => {
     const base = armoryBaseWeapon('crystal-orb')!;
     const lv1T4 = getArmoryWeapon('crystal-orb', { 'crystal-orb': { level: 1, tuning: { maxHints: 4 } } })!;
-    expect(lv1T4.effects.maxHints).toBe(1.5);
-    expect(lv1T4.effects.hints).toBe(1.5);
-    // With rand() < 0.5, resolveWholeStats grants +2 starting hints (instead of wasting all 4 L1 tiers!)
+    expect(lv1T4.effects.maxHints).toBe(4);
+    expect(lv1T4.effects.hints).toBe(4);
+    // Deterministic regardless of rand()
     const save = { ...createMaxedSave(), charms: ['crystal-orb'], skillNodes: {}, equippedArcana: [], upgrades: {}, weaponTuning: { 'crystal-orb': { maxHints: 4 } } };
     const lv1Build = { 'crystal-orb': { level: 1, tuning: { maxHints: 4 } } };
     const highRoll = startingLoadout(testLevel({ rules: { startingHints: 0 } }), save, new Set(['hearts', 'gear', 'hints']), () => 0.1, { weaponBuilds: lv1Build });
     const lowRoll = startingLoadout(testLevel({ rules: { startingHints: 0 } }), save, new Set(['hearts', 'gear', 'hints']), () => 0.9, { weaponBuilds: lv1Build });
-    expect(highRoll.stats.hints).toBe(2);
-    expect(lowRoll.stats.hints).toBe(1);
-    expect(base.effects.maxHints).toBe(1);
+    expect(highRoll.stats.hints).toBe(4);
+    expect(lowRoll.stats.hints).toBe(4);
+    expect(base.effects.maxHints).toBe(2);
   });
 
   it('Life Link grants a wave mistake shield, scales maxHealth, and fires Life Pulse on every 4th Set at full hearts', () => {
@@ -406,17 +434,19 @@ describe('Wave 2 weapons overhaul invariants & reworks', () => {
     expect(WEAPON_GROWTH['revenge-linker'].find(d => d.watch.on === 'hurt')?.max).toBe(2);
   });
 
-  it('Oracle Eye rewards hinted Sets and mistake-free play without an 8s wait-to-win rider', () => {
-    const level = testLevel({ foes: [{ name: 'Dummy', hp: 9999 }] });
+  it('Oracle Eye is pure insight utility: 4s auto-hint and hinted Sets refund clock time without raw damage riders ([GP-11])', () => {
+    const level = testLevel({ rules: { timer: 120 }, foes: [{ name: 'Dummy', hp: 9999 }] });
     const plain = matchAt(startFight({ level }), [0, 1, 2], SAME_NUMBER);
     let s = held(['oracle-eye'], { level });
-    // Clean Set immediately deals +2 bonus (no 8s stall needed!)
+    // Pure utility: zero flat damage rider on plain or hinted Sets
     const clean = matchAt(s, [0, 1, 2], SAME_NUMBER);
-    expect(clean.totalDamage - plain.totalDamage).toBeGreaterThanOrEqual(2);
-    // Hinted clean Set deals both clean (+2) and insight (+4) bonuses!
+    expect(clean.totalDamage).toBe(plain.totalDamage);
+    // Hinted Set refunds clock time (1s base + 0.25s from first hinted-Set growth stack)
+    s = tick(s, 5000, 1000);
+    const timeBefore = s.timeLeft!;
     const hinted = matchAt(s, [0, 1, 2], SAME_NUMBER, true);
-    expect(hinted.totalDamage - plain.totalDamage).toBeGreaterThanOrEqual(6);
-    expect(getArmoryWeapon('oracle-eye')!.effects.autoHintInterval).toBe(3000);
+    expect(hinted.timeLeft!).toBeCloseTo(timeBefore + 1.25);
+    expect(getArmoryWeapon('oracle-eye')!.effects.autoHintInterval).toBe(4000);
   });
 
   it("Fortune's Blessing gilds a wave card and strikes on bonus cards; Wisdom Chain boosts coins and grants 5th-Set XP", () => {

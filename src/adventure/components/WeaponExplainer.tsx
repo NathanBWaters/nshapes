@@ -25,6 +25,7 @@ import { NO_GROWTH, WEAPON_GROWTH, growthKey, growthText, type GrowthState } fro
 import { powerText } from '../data/weaponPower';
 import { WEAPON_ROLES, weaponRole } from '../data/weaponRoles';
 import { BASE_BUILD, formatStat, weaponStatLines, type WeaponBuild } from '../data/weaponStats';
+import { bracketParam } from '../data/weapons/schema';
 import type { ActiveWeaponCounter } from '../engine/fight';
 import { INK } from './ui';
 
@@ -145,8 +146,15 @@ const WeaponExplainer: React.FC<Props> = ({
           {stats.length > 0 && (
             <View style={st.numbers}>
               {stats.map(line => (
-                <View key={line.key} style={st.number}>
-                  <Text style={st.numberValue}>{formatStat(line.unit, line.value)}</Text>
+                <View
+                  key={line.key}
+                  style={st.number}
+                  accessibilityLabel={`${bracketParam(line.label)} ${formatStat(line.unit, line.value)}`}
+                >
+                  <View style={st.numberHead}>
+                    <Text style={st.numberValue}>{formatStat(line.unit, line.value)}</Text>
+                    {line.tier > 0 && <Text style={st.tierTag}>{`T${line.tier}`}</Text>}
+                  </View>
                   <Text style={st.numberLabel}>{line.label}</Text>
                 </View>
               ))}
@@ -204,7 +212,9 @@ const st = StyleSheet.create({
   rowTitle: { fontWeight: '900' },
   numbers: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   number: { backgroundColor: COLORS.paperBeige, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 92 },
+  numberHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   numberValue: { fontSize: 16, fontWeight: '900', color: INK },
+  tierTag: { fontSize: 10, fontWeight: '900', color: '#B45309', backgroundColor: '#FEF3C7', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
   numberLabel: { fontSize: 11, color: INK, opacity: 0.7 },
   sound: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8 },
 });
