@@ -49,6 +49,55 @@ const SENDS: Record<Space, [number, number]> = { dry: [0, 0], room: [0.16, 0], h
 /** More voices than this at once and quiet layers are skipped (phones) */
 const MAX_VOICES = 56;
 
+/** Emergency ceiling for raw oscillator pitch (Hz) — prevents aliasing and shrieks. */
+export const MAX_OSC_FREQ_HZ = 4200;
+/** Soft-clipper output ceiling (-0.3 dBFS ≈ 0.966). */
+export const SOFT_CLIP_CEILING = Math.pow(10, -0.3 / 20);
+/** Phone-speaker-safe master bus mastering parameters ([AU-15]). */
+export const MASTER_BUS = {
+  gain: 0.88,
+  hpfHz: 70,
+  hpfQ: 0.707,
+  presenceHz: 4000,
+  presenceQ: 0.9,
+  presenceGainDb: -3,
+  lpfHz: 10500,
+  limiterThreshold: -6,
+  limiterKnee: 2,
+  limiterRatio: 20,
+  limiterAttack: 0.001,
+  limiterRelease: 0.09,
+  softClipDrive: 1.15,
+  softClipSamples: 4096,
+} as const;
+
+/**
+ * Octave-fold frequencies above `maxHz` down into a phone-friendly register
+ * while preserving exact pitch class and harmonic consonance ([AU-14]).
+ */
+export const foldFreq = (freq: number, maxHz = 2600): number => {
+  if (!Number.isFinite(freq) || freq <= 0 || maxHz <= 0) return freq;
+  let f = freq;
+  while (f > maxHz) f /= 2;
+  return f;
+};
+
+/** Smooth odd-symmetric tanh soft-clipper curve capped at -0.3 dBFS ([AU-15]). */
+export const makeSoftClipCurve = (
+  samples = MASTER_BUS.softClipSamples,
+  drive = MASTER_BUS.softClipDrive
+): Float32Array<ArrayBuffer> => {
+  const curve = new Float32Array(samples);
+  const norm = Math.tanh(drive);
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / (samples - 1) - 1;
+    curve[i] = (Math.tanh(drive * x) / norm) * SOFT_CLIP_CEILING;
+  }
+  return curve;
+};
+
+const SOFT_CLIP_CURVE = makeSoftClipCurve();
+
 type Ctx = BaseAudioContext;
 
 const getAudioContextCtor = (): (new () => AudioContext) | null => {
@@ -148,19 +197,37 @@ export class Chip {
     this.ends = [];
     this.voiceCount = 0;
     this.master = ctx.createGain();
-    this.master.gain.value = 0.9;
-    // A limiter, so a jackpot on top of a full band never clips
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -9;
-    limiter.knee.value = 8;
-    limiter.ratio.value = 9;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.16;
-    // gentle low-pass to take the edge off raw squares
+    this.master.gain.value = MASTER_BUS.gain;
+    // Phone-speaker-safe master bus ([AU-15]):
+    // 70 Hz HPF → 4 kHz -3 dB presence shelf → 10.5 kHz LPF → 20:1 / 1 ms limiter → tanh -0.3 dBFS soft-clipper
+    const hpf = ctx.createBiquadFilter();
+    hpf.type = 'highpass';
+    hpf.frequency.value = MASTER_BUS.hpfHz;
+    hpf.Q.value = MASTER_BUS.hpfQ;
+    const presence = ctx.createBiquadFilter();
+    presence.type = 'peaking';
+    presence.frequency.value = MASTER_BUS.presenceHz;
+    presence.Q.value = MASTER_BUS.presenceQ;
+    if (presence.gain) presence.gain.value = MASTER_BUS.presenceGainDb;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = 11000;
-    this.master.connect(limiter).connect(lp).connect(ctx.destination);
+    lp.frequency.value = MASTER_BUS.lpfHz;
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = MASTER_BUS.limiterThreshold;
+    limiter.knee.value = MASTER_BUS.limiterKnee;
+    limiter.ratio.value = MASTER_BUS.limiterRatio;
+    limiter.attack.value = MASTER_BUS.limiterAttack;
+    limiter.release.value = MASTER_BUS.limiterRelease;
+    const postLimiter = this.master.connect(hpf).connect(presence).connect(lp).connect(limiter);
+    if (typeof ctx.createWaveShaper === 'function') {
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = SOFT_CLIP_CURVE;
+      const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent ?? '');
+      shaper.oversample = isMobile ? 'none' : '2x';
+      postLimiter.connect(shaper).connect(ctx.destination);
+    } else {
+      postLimiter.connect(ctx.destination);
+    }
 
     // Music: bus → filter (muffles when paused or hurt) → duck (dips under big hits) → master
     this.musicBus = ctx.createGain();
@@ -362,13 +429,14 @@ export class Chip {
     const osc = ctx.createOscillator();
     const wave = opts.voice === 'wave' ? this.waveVoice : this.pulseWaves.get(opts.duty ?? 0.5);
     if (wave) osc.setPeriodicWave(wave);
-    osc.frequency.setValueAtTime(opts.freq, opts.at);
-    if (opts.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, opts.slideTo), opts.at + opts.dur);
+    const freq = Math.min(opts.freq, MAX_OSC_FREQ_HZ);
+    osc.frequency.setValueAtTime(freq, opts.at);
+    if (opts.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.min(MAX_OSC_FREQ_HZ, Math.max(20, opts.slideTo)), opts.at + opts.dur);
     if (opts.vibrato) {
       const lfo = ctx.createOscillator();
       const lfoGain = ctx.createGain();
       lfo.frequency.value = 5.5;
-      lfoGain.gain.value = opts.freq * opts.vibrato;
+      lfoGain.gain.value = freq * opts.vibrato;
       lfo.connect(lfoGain).connect(osc.frequency);
       lfo.start(opts.at + Math.min(0.12, opts.dur / 2));
       lfo.stop(opts.at + opts.dur + 0.05);
@@ -400,7 +468,7 @@ export class Chip {
     if (!ctx || !o.freq || !isFinite(o.freq)) return;
     const dest = this.input(o.bus, o.space ?? p.space);
     if (!dest) return;
-    const freq = Math.min(o.freq, 7000);
+    const freq = Math.min(o.freq, MAX_OSC_FREQ_HZ);
     const plucked = p.s === 0;
     const hold = plucked ? p.d : Math.max(p.a, o.dur);
     const releaseAt = o.at + hold;
@@ -438,16 +506,34 @@ export class Chip {
     pre.gain.value = p.detune ? 0.7 : 1;
     const carrier = add(freq, 1);
     if (p.detune) add(freq, 1, p.detune);
-    for (const [ratio, gain] of p.partials ?? []) if (freq * ratio < 9000) add(freq * ratio, gain, 0, true);
+    const maxPartialHz = Math.min(9000, ctx.sampleRate * 0.42);
+    for (const [ratio, gain] of p.partials ?? []) if (freq * ratio < maxPartialHz) add(freq * ratio, gain, 0, true);
     if (p.fm) {
-      const mod = ctx.createOscillator();
-      mod.type = 'sine';
-      mod.frequency.setValueAtTime(freq * p.fm.ratio, o.at);
-      const depth = ctx.createGain();
-      depth.gain.setValueAtTime(freq * p.fm.index, o.at);
-      depth.gain.setTargetAtTime(freq * p.fm.index * 0.08, o.at, Math.max(0.01, p.fm.decay / 3));
-      mod.connect(depth).connect(carrier.frequency);
-      sources.push(mod);
+      // Nyquist FM safety guard ([AU-14]): taper modulation index cleanly as modFreq approaches 0.35*sr,
+      // and skip creating the FM modulator entirely whenever modFreq >= 0.42*sr to eliminate aliasing.
+      const modFreq = freq * p.fm.ratio;
+      const nyqHard = ctx.sampleRate * 0.42;
+      if (modFreq < nyqHard) {
+        const nyqStart = ctx.sampleRate * 0.2;
+        const nyqKnee = ctx.sampleRate * 0.35;
+        let fmScale = 1;
+        if (modFreq >= nyqKnee) {
+          fmScale = Math.max(0, ((nyqHard - modFreq) / Math.max(1, nyqHard - nyqKnee)) * 0.15);
+        } else if (modFreq > nyqStart) {
+          fmScale = 1 - 0.85 * ((modFreq - nyqStart) / Math.max(1, nyqKnee - nyqStart));
+        }
+        const effectiveIndex = p.fm.index * fmScale;
+        if (effectiveIndex > 0.001) {
+          const mod = ctx.createOscillator();
+          mod.type = 'sine';
+          mod.frequency.setValueAtTime(modFreq, o.at);
+          const depth = ctx.createGain();
+          depth.gain.setValueAtTime(freq * effectiveIndex, o.at);
+          depth.gain.setTargetAtTime(freq * effectiveIndex * 0.08, o.at, Math.max(0.01, p.fm.decay / 3));
+          mod.connect(depth).connect(carrier.frequency);
+          sources.push(mod);
+        }
+      }
     }
     if (p.vibrato) {
       const lfo = ctx.createOscillator();

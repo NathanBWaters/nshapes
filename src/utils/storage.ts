@@ -1,5 +1,4 @@
 import { createMMKV } from 'react-native-mmkv';
-import { Platform } from 'react-native';
 import type { PlayerStats, AdventureDifficulty } from '@/types';
 
 // Create a single MMKV instance for the app
@@ -139,9 +138,9 @@ const notifyListeners = (listeners: Set<BoolListener>, value: boolean) => {
 // Settings storage helpers (legacy Sound API kept 100% backwards-compatible)
 export const SettingsStorage = {
   getSoundEnabled: (): boolean => {
-    // Default off on native (expo-av sample playback is slow on iOS);
-    // on in browsers, where sounds are synthesized live by the chip.
-    return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? Platform.OS === 'web';
+    // Default on across web and native now that all clips are lightweight AAC .m4a
+    // with staged non-blocking preload ([AU-01]/[AU-03]).
+    return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? true;
   },
 
   setSoundEnabled: (enabled: boolean): void => {
