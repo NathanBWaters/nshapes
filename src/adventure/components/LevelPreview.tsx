@@ -1,10 +1,18 @@
 /**
- * Level preview sheet — "what am I up against?" Foe, difficulty, new
- * mechanic, star goals with their coin rewards, secret unlocks shown as
- * silhouettes, and the fighter + charm you'll bring.
+ * Level preview sheet — "what am I up against?"
+ *
+ * [UI-20] Clean 2-tab segmented switcher (`Briefing` | `Loadout`) above the
+ * persistent sticky `Fight!` / `Test Loadout` footer:
+ *   - Briefing (default): Foe header, Lesson, Rules, Foe Ability + Parry + Hazards,
+ *     Rewards, Friendly Tailwind / Starfall Cauldron, plus a compact 1-row Loadout
+ *     summary bar ("Tap Loadout to swap").
+ *   - Loadout: Fighter picker + Passives, reorderable Weapon Belt (`Understudy`
+ *     helper), Filter/Sort (`Fuses First` default) + 1-tap `Auto-Equip for Foe`
+ *     + 3 saved Loadout Presets, single focused `WeaponExplainer`, Evolutions,
+ *     and Arcana.
  */
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler } from 'react-native';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, BackHandler, TextInput } from 'react-native';
 import Animated, { ReduceMotion, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { SCREEN_INSTANT } from '@/components/ScreenTransition';
@@ -23,8 +31,10 @@ import { getMechanic } from '../data/mechanics';
 import { FIGHTERS, getFighter } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { ARCANA } from '../data/arcana';
+import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
+import { WEAPON_ROLES, type WeaponRole } from '../data/weaponRoles';
 import WeaponExplainer from './WeaponExplainer';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { getLevel } from '../data/levels';
@@ -57,6 +67,17 @@ import {
   weaponLevel,
   weaponBuilds,
 } from '../progress';
+import {
+  DEFAULT_PRESET_NAMES,
+  applyLoadoutPreset,
+  autoBuildLoadout,
+  filterAndSortArmory,
+  loadLoadoutPresets,
+  reorderCharmSlots,
+  type ArmoryQuickFilter,
+  type ArmorySortMode,
+  type LoadoutPreset,
+} from '../loadoutPresets';
 import { startingLoadout } from '../loadout';
 import { companionVoice, shouldShowPassiveHud } from '../coach';
 import CompanionBubble from './CompanionBubble';
@@ -65,6 +86,21 @@ import { Btn, Heart, INK, Skulls, StarRow, TONE } from './ui';
 import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
 const ATTR_ICONS = { shape: 'lorc/diamond-hard', color: 'lorc/crystal-shine', number: 'lorc/cycle', shading: 'lorc/stone-block', background: 'lorc/field' } as const;
+
+type PreviewTab = 'briefing' | 'loadout';
+
+const QUICK_FILTERS: { id: ArmoryQuickFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'fuses', label: '✦ Fuses' },
+  { id: 'equipped', label: 'Equipped' },
+  { id: 'lv2plus', label: 'Lv 2+' },
+];
+
+const SORT_MODES: { id: ArmorySortMode; label: string }[] = [
+  { id: 'fuses', label: 'Fuses First' },
+  { id: 'level', label: 'Highest Lv' },
+  { id: 'az', label: 'A–Z' },
+];
 
 interface Props {
   level: LevelDef | null;
@@ -85,6 +121,14 @@ interface Props {
   onToggleTailwind?: (active: boolean) => void;
   /** [GP-18] Choose a Starfall Cauldron upward coin wager tier (0 | 1 | 2) */
   onSelectWager?: (tier: CauldronWagerTier) => void;
+  /** [GP-21] Optional full-save updater for Auto-Equip, Presets, and belt slot reorder */
+  onApplyLoadout?: (nextSave: AdventureSave) => void;
+  /** [GP-21] Optional dedicated slot reorder callback */
+  onReorderCharm?: (fromIndex: number, toIndex: number) => void;
+  /** [TP-12] 1-tap launch into 1-4D Training Lab sandbox alongside FIGHT */
+  onTestLoadout?: () => void;
+  /** Initial tab when opened (defaults to 'briefing') */
+  initialTab?: PreviewTab;
   /**
    * How the sheet goes when `level` turns null: 'slide' (put away with ✕, the
    * backdrop or the back button: it goes down the way it came), 'screen' (it
@@ -94,26 +138,15 @@ interface Props {
   exit?: 'slide' | 'screen' | 'cut';
 }
 
-/**
- * The sheet's motion (docs/motion/reviews/preview-sheet.md). The backdrop
- * dims in place; the sheet rises a short way on its own; the foe drops into
- * its portrait once the sheet is nearly there; put away, it goes back down the
- * same way in two thirds of the time. Interrupted either way, every value
- * carries on from where it is to the new end, so a quick double tap always
- * ends fully open or fully closed.
- */
 const SHEET_RISE = 96;
-/** Fades still play when the device asks for reduced motion (Reanimated would otherwise cut them): only the travel goes */
 const KEEP = { reduceMotion: ReduceMotion.Never } as const;
 const NO_INSETS = { top: 0, bottom: 0, left: 0, right: 0 };
 
 const LevelPreview: React.FC<Props> = props => {
   const { level, onClose, exit = 'slide' } = props;
   const reduced = useReducedMotion();
-  /** The level on screen: it outlives `level` while the sheet goes down */
   const [shown, setShown] = useState<LevelDef | null>(level);
   const [closing, setClosing] = useState(false);
-  /** Bumped on every opening: the foe's drop-in waits for the sheet */
   const [foeCue, setFoeCue] = useState(0);
   const dim = useSharedValue(level ? 1 : 0);
   const rise = useSharedValue(level ? 0 : SHEET_RISE);
@@ -132,16 +165,13 @@ const LevelPreview: React.FC<Props> = props => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     if (level) {
-      // Reopened before the exit finished: the sheet is still there, so the foe stays put
       const midExit = !wasOpen.current && shownRef.current !== null;
       setShown(level);
       setClosing(false);
       if (!wasOpen.current) {
-        // Opening (or reopening mid-exit): from wherever the values are now
         const enter = reduced ? MS.feedback : MS.panel;
         dim.value = withTiming(1, { duration: reduced ? MS.feedback : MS.quick, easing: EASE.ui, ...KEEP });
         rise.value = reduced ? 0 : withTiming(0, { duration: enter, easing: EASE.enterSoft });
-        // Opaque within 4 frames: a longer fade shows the map's words through the sheet
         fade.value = withTiming(1, { duration: reduced ? MS.feedback : MS.feedback / 2, easing: EASE.ui, ...KEEP });
         if (!midExit) timer.current = setTimeout(() => setFoeCue(c => c + 1), reduced ? 0 : MS.feedback);
       }
@@ -155,7 +185,6 @@ const LevelPreview: React.FC<Props> = props => {
       if (finished) runOnJS(finishExit)();
     };
     if (exit === 'screen' && !SCREEN_INSTANT) {
-      // Goes with the screen under it: no travel of its own, gone when the screen is
       const out = exitMs(reduced ? MS.feedback : MS.screen);
       setClosing(true);
       dim.value = withTiming(0, { duration: out, easing: EASE.exitSoft, ...KEEP });
@@ -171,33 +200,22 @@ const LevelPreview: React.FC<Props> = props => {
     }
     const out = exitMs(reduced ? MS.feedback : MS.panel);
     setClosing(true);
-    // The backdrop answers the tap at once (ease-out); the sheet accelerates away, opaque,
-    // and only fades in its last 4 frames, as it came (a long fade shows the map through it)
     const vanish = MS.feedback / 2;
     dim.value = withTiming(0, { duration: out, easing: EASE.ui, ...KEEP });
     rise.value = reduced ? rise.value : withTiming(SHEET_RISE, { duration: out, easing: EASE.exitSoft });
-    // Gone only once it has faded all the way (an interrupted exit does not finish, so it does not unmount)
     fade.value = reduced
       ? withTiming(0, { duration: out, easing: EASE.ui, ...KEEP }, onGone)
       : withDelay(out - vanish, withTiming(0, { duration: vanish, easing: EASE.exitSoft }, onGone));
   }, [level, exit, reduced, dim, rise, fade, finishExit]);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  // Android's back button puts the sheet away, as the modal it replaces did
   useEffect(() => {
     if (!level) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => { onClose(); return true; });
     return () => sub.remove();
   }, [level, onClose]);
 
-  // The context, not the hook: a sheet rendered without a provider (a test) simply has no insets
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
-  /**
-   * The dim covers the whole phone, as the Modal's did: AdventureMode sits inside
-   * the app's SafeAreaView, so the backdrop reaches past its box by the insets
-   * (no ancestor clips: AdventureMode, Game and app/index.tsx have no overflow
-   * hidden). The sheet itself stays inside the safe area. On web the insets are 0.
-   */
   const backdropBox = { top: -insets.top, bottom: -insets.bottom, left: -insets.left, right: -insets.right };
   const backdropStyle = useAnimatedStyle(() => ({ opacity: dim.value }));
   const sheetStyle = useAnimatedStyle(() => ({ opacity: fade.value, transform: [{ translateY: rise.value }] }));
@@ -208,8 +226,6 @@ const LevelPreview: React.FC<Props> = props => {
       style={[StyleSheet.absoluteFill, st.layer]}
       pointerEvents={closing ? 'none' : 'box-none'}
       testID="preview-sheet-root"
-      // What the Modal gave for free: screen readers stay in the sheet, not on the map behind it.
-      // Once closing begins, release modal focus immediately so the map behind is accessible again.
       role={closing ? undefined : 'dialog'}
       aria-modal={!closing}
       accessibilityViewIsModal={!closing}
@@ -217,7 +233,6 @@ const LevelPreview: React.FC<Props> = props => {
       importantForAccessibility={closing ? 'no-hide-descendants' : 'auto'}
     >
       <Animated.View style={[st.backdrop, backdropBox, backdropStyle]} pointerEvents="none" />
-      {/* box-none hands touches to its children, so the closing sheet must say none here too */}
       <View style={st.overlay} pointerEvents={closing ? 'none' : 'box-none'}>
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
         <Animated.View style={[st.sheet, sheetStyle]}>
@@ -228,12 +243,46 @@ const LevelPreview: React.FC<Props> = props => {
   );
 };
 
-const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ level, save, onClose, onPlay, onSelectFighter, onSelectCharm, onSelectArcana, onShowMechanic, onOpenCamp, onArmRecipe, onToggleTailwind, onSelectWager, foeCue }) => {
+const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
+  level,
+  save,
+  onClose,
+  onPlay,
+  onSelectFighter,
+  onSelectCharm,
+  onSelectArcana,
+  onShowMechanic,
+  onOpenCamp,
+  onArmRecipe,
+  onToggleTailwind,
+  onSelectWager,
+  onApplyLoadout,
+  onReorderCharm,
+  onTestLoadout,
+  initialTab = 'briefing',
+  foeCue,
+}) => {
+  const [activeTab, setActiveTab] = useState<PreviewTab>(initialTab);
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
-  /** The charm tapped last: explained below the row even when it could not be equipped */
+  /** Single focused weapon explained below the shelf (never stacks 6 open explainers) */
   const [focusCharm, setFocusCharm] = useState<string | null>(null);
   const [localTailwind, setLocalTailwind] = useState<boolean>(Boolean(save.tailwindActive));
   const [localWager, setLocalWager] = useState<CauldronWagerTier>(save.cauldronWager ?? 0);
+  /** [GP-21] Filter, sort (`fuses` default on LevelPreview), search, slot reorder & Auto-Equip undo */
+  const [quickFilter, setQuickFilter] = useState<ArmoryQuickFilter>('all');
+  const [roleFilter, setRoleFilter] = useState<WeaponRole | 'all'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<ArmorySortMode>('fuses');
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  const [autoUndo, setAutoUndo] = useState<{ prevSave: AdventureSave; summary: string } | null>(null);
+  const [presets] = useState<(LoadoutPreset | null)[]>(() => loadLoadoutPresets());
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+    setSelectedSlot(null);
+    setAutoUndo(null);
+  }, [level.id, initialTab]);
+
   useEffect(() => {
     setLocalTailwind(Boolean(save.tailwindActive));
   }, [save.tailwindActive, level.id]);
@@ -269,6 +318,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
     }
     onSelectWager?.(tier);
   };
+
   const biome = getBiome(level.biome);
   const foe = levelFoe(level);
   const mech = getMechanic(level.introduces);
@@ -294,49 +344,153 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
   const charms = equippedCharms(save);
   const slots = charmSlots(save);
   const arcana = equippedArcanaOf(save);
-  // The engine's view: it also counts skill nodes and charms that add evolution likelihood
+  const builds = weaponBuilds(save);
   const armed = EVOLUTION_RECIPES.filter(r => loadout.armedRecipes.includes(r.id));
   const evolutionsOn = gearOn && loadout.features.has('evolutions');
   const fighter = getFighter(save.selectedFighter);
   const charmsFull = charms.length >= slots;
-  /** A practice fight: nothing to win or lose, so no goals, rewards or difficulty */
   const practice = !!level.rules.sandbox;
   const trialFighter = isFighterTrial(level) ? FIGHTERS.find(f => f.signature === level.introduces) : undefined;
-  // Swapping charms is its own lesson (the level that introduces 'charm'); before it, or with nothing to swap, the picker stays away
   const charmsTaught = level.introduces === 'charm' || save.seenMechanics.includes('charm') || save.armory.length > slots || practice;
+  const showPassives = gearOn && shouldShowPassiveHud(level, save);
+  const hasLoadoutTab =
+    gearOn &&
+    (charmsTaught ||
+      save.unlockedFighters.length > 1 ||
+      save.unlockedArcana.length > 0 ||
+      showPassives);
+
+  const filteredWeapons = useMemo(
+    () =>
+      filterAndSortArmory(save, {
+        quick: quickFilter,
+        role: roleFilter,
+        query: searchQuery,
+        sort: sortMode,
+      }),
+    [save, quickFilter, roleFilter, searchQuery, sortMode]
+  );
+
+  const understudyIdx = charms.indexOf(UNDERSTUDY_ID);
+  const understudyTarget = understudyIdx > 0 ? getArmoryWeapon(charms[understudyIdx - 1], builds) : null;
+
+  const applySaveFallback = (nextSave: AdventureSave) => {
+    if (onApplyLoadout) {
+      onApplyLoadout(nextSave);
+      return;
+    }
+    if (nextSave.selectedFighter !== save.selectedFighter) {
+      onSelectFighter(nextSave.selectedFighter);
+    }
+    const desired = nextSave.charms;
+    // Remove charms not in desired, then equip desired in order
+    for (const oldId of charms) {
+      if (!desired.includes(oldId)) onSelectCharm(oldId);
+    }
+    for (const newId of desired) {
+      if (!charms.includes(newId)) onSelectCharm(newId);
+    }
+    if (onSelectArcana) {
+      for (const oldA of arcana) {
+        if (!nextSave.equippedArcana.includes(oldA)) onSelectArcana(oldA);
+      }
+      for (const newA of nextSave.equippedArcana) {
+        if (!arcana.includes(newA)) onSelectArcana(newA);
+      }
+    }
+  };
+
+  const handleReorder = (from: number, to: number) => {
+    if (to < 0 || to >= charms.length || from === to) return;
+    if (onReorderCharm) {
+      onReorderCharm(from, to);
+    } else if (onApplyLoadout) {
+      onApplyLoadout(reorderCharmSlots(save, from, to));
+    }
+    setSelectedSlot(to);
+  };
+
+  const handleAutoEquip = () => {
+    const prevSave = save;
+    const result = autoBuildLoadout(save, level);
+    setAutoUndo({ prevSave, summary: result.summary });
+    setSelectedSlot(null);
+    applySaveFallback(result.save);
+  };
+
+  const handleApplyPreset = (preset: LoadoutPreset) => {
+    const nextSave = applyLoadoutPreset(save, preset);
+    setSelectedSlot(null);
+    applySaveFallback(nextSave);
+  };
+
+  /** Single focused weapon for Loadout's canonical WeaponExplainer (never stacks 6!) */
+  const singleFocusedId = focusCharm ?? charms[0] ?? null;
+  const singleFocusedWeapon = singleFocusedId ? getArmoryWeapon(singleFocusedId, builds) : undefined;
 
   return (
     <>
-          <View style={[st.header, { backgroundColor: biome.colors.sky }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={[st.levelId, { color: biome.colors.ink }]}>
-                {biome.name.toUpperCase()}{practice ? ' · PRACTICE' : ` · ${level.id}${level.isBoss ? ' · BOSS' : ''}${level.branchOf ? (isFighterTrial(level) ? ' · TRIAL' : ' · ELITE') : ''}`}
-              </Text>
-              <TouchableOpacity testID="preview-close" onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
-            </View>
-            <View style={st.foeRow}>
-              <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && !practice && st.foeElite, practice && st.foePractice]}>
-                <EnemyAvatar
-                  testID="preview-enemy-avatar"
-                  enemy={foe}
-                  size={level.isBoss ? 78 : 68}
-                  mood={level.isBoss ? 'enraged' : practice ? 'idle' : 'menacing'}
-                  reaction={foeCue > 0 ? { type: 'entrance', id: foeCue } : null}
-                  interactive
-                />
-              </View>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={st.levelName}>{level.name}</Text>
-                <Text style={st.foeName}>vs {level.foes.length > 1 ? `${level.foes.length} waves` : foe.name}</Text>
-                {practice ? <Text style={st.practiceTag}>NO STARS · NO CLOCK · NO LOSING</Text> : <Skulls n={level.difficulty} />}
-              </View>
-            </View>
-            {level.foes[level.foes.length - 1].taunt && (
-              <View style={st.bubble}><Text style={st.bubbleText}>“{level.foes[level.foes.length - 1].taunt}”</Text></View>
-            )}
+      <View style={[st.header, { backgroundColor: biome.colors.sky }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={[st.levelId, { color: biome.colors.ink }]} numberOfLines={1}>
+            {biome.name.toUpperCase()}{practice ? ' · PRACTICE' : ` · ${level.id}${level.isBoss ? ' · BOSS' : ''}${level.branchOf ? (isFighterTrial(level) ? ' · TRIAL' : ' · ELITE') : ''}`}
+          </Text>
+          <TouchableOpacity testID="preview-close" onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
+        </View>
+        <View style={st.foeRow}>
+          <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && !practice && st.foeElite, practice && st.foePractice]}>
+            <EnemyAvatar
+              testID="preview-enemy-avatar"
+              enemy={foe}
+              size={level.isBoss ? 78 : 68}
+              mood={level.isBoss ? 'enraged' : practice ? 'idle' : 'menacing'}
+              reaction={foeCue > 0 ? { type: 'entrance', id: foeCue } : null}
+              interactive
+            />
           </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={st.levelName}>{level.name}</Text>
+            <Text style={st.foeName}>vs {level.foes.length > 1 ? `${level.foes.length} waves` : foe.name}</Text>
+            {practice ? <Text style={st.practiceTag}>NO STARS · NO CLOCK · NO LOSING</Text> : <Skulls n={level.difficulty} />}
+          </View>
+        </View>
+        {level.foes[level.foes.length - 1].taunt && (
+          <View style={st.bubble}><Text style={st.bubbleText}>“{level.foes[level.foes.length - 1].taunt}”</Text></View>
+        )}
+      </View>
 
-          <ScrollView contentContainerStyle={st.body} bounces={false}>
+      {/* [UI-20] Clean 2-tab segmented switcher: Briefing | Loadout */}
+      {hasLoadoutTab && (
+        <View style={st.tabBar} testID="preview-tabs">
+          <TouchableOpacity
+            testID="preview-tab-briefing"
+            onPress={() => setActiveTab('briefing')}
+            style={[st.tabBtn, activeTab === 'briefing' && st.tabBtnOn]}
+            activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'briefing' }}
+          >
+            <Icon name="lorc/open-book" size={14} color={INK} />
+            <Text style={st.tabBtnText}>BRIEFING</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="preview-tab-loadout"
+            onPress={() => setActiveTab('loadout')}
+            style={[st.tabBtn, activeTab === 'loadout' && st.tabBtnOn]}
+            activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'loadout' }}
+          >
+            <Icon name="lorc/gems" size={14} color={INK} />
+            <Text style={st.tabBtnText}>LOADOUT ({charms.length}/{slots})</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      <ScrollView contentContainerStyle={st.body} bounces={false}>
+        {/* ═══════════════════════ BRIEFING TAB ═══════════════════════ */}
+        {activeTab === 'briefing' && (
+          <>
             {level.id === '1-1' ? (
               best === 0 ? (
                 <CompanionBubble
@@ -347,8 +501,6 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
                 />
               ) : null
             ) : practice ? null : (
-              // The lesson: the one new thing this level brings, with its picture. Tap for the full page.
-              // (A practice level says what it is in its own box, below.)
               <LessonCard mech={mech} isNew={isNew} onMore={() => onShowMechanic(level.introduces)} onOpenCamp={onOpenCamp} />
             )}
 
@@ -451,195 +603,6 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
               })}
             </View>
 
-            {gearOn && (
-              <>
-                {(save.unlockedFighters.length > 1 || save.seenMechanics.includes('skill_tree') || Object.keys(save.skillNodes).length > 0) && (
-                  <>
-                    <Text style={st.section}>FIGHTER</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4, paddingTop: 6 }}>
-                      {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
-                        const selected = f.name === save.selectedFighter;
-                        const rec = level.recommended?.includes(f.name);
-                        const spent = fighterStarsSpent(save, f.name);
-                        return (
-                          <TouchableOpacity
-                            key={f.name}
-                            testID={`preview-fighter-${f.name}`}
-                            onPress={() => onSelectFighter(f.name)}
-                            style={[st.fighter, selected && st.fighterSel]}
-                            activeOpacity={0.85}
-                            accessibilityState={{ selected }}
-                          >
-                            <FighterAvatar
-                              character={f.name}
-                              size={42}
-                              mood={selected ? 'anticipation' : 'idle'}
-                              reaction={selected ? { type: 'entrance', id: 1 } : null}
-                              animate={selected}
-                            />
-                            <Text style={st.fighterName} numberOfLines={1}>{f.name}</Text>
-                            <View style={st.passiveIcons}>
-                              {f.passives.map(id => <Icon key={id} name={getPassive(id).icon} size={13} color={INK} />)}
-                              {spent > 0 && <Text style={st.fighterLvl}>{spent}★</Text>}
-                            </View>
-                            {rec && <View style={st.rec}><Text style={st.recText}>STRONG</Text></View>}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </>
-                )}
-                {shouldShowPassiveHud(level, save) && (
-                  <>
-                    <Text style={st.section}>
-                      PASSIVES <Text style={st.sectionHint}>always on for {fighter.name}</Text>
-                    </Text>
-                    <FighterPassivesList fighter={fighter.name} testID="preview-passives" />
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Until charms are taught, the weapons simply come along: nothing to manage yet */}
-            {gearOn && save.armory.length > 0 && !charmsTaught && (
-              <View style={st.bringing} testID="preview-bringing">
-                <Text style={st.bringingLabel}>WITH YOU</Text>
-                {charms.map(id => {
-                  const w = getArmoryWeapon(id, weaponBuilds(save));
-                  return w ? (
-                    <View key={id} style={st.bringingItem}>
-                      <WeaponAvatar weapon={w} size={22} />
-                      <Text style={st.bringingName} numberOfLines={1}>{w.name}</Text>
-                    </View>
-                  ) : null;
-                })}
-              </View>
-            )}
-
-            {gearOn && save.armory.length > 0 && charmsTaught && (
-              <>
-                <Text style={st.section}>
-                  CHARMS <Text style={st.sectionHint}>{charms.length}/{slots} equipped · tap to equip or remove</Text>
-                </Text>
-                <View style={st.slotRow} testID="preview-charm-slots">
-                  {Array.from({ length: slots }).map((_, i) => {
-                    const id = charms[i];
-                    const w = id ? getArmoryWeapon(id, weaponBuilds(save)) : undefined;
-                    return w ? (
-                      <TouchableOpacity
-                        key={i}
-                        testID={`preview-slot-${i}`}
-                        onPress={() => onSelectCharm(id)}
-                        style={[st.slot, { borderColor: INK, borderStyle: 'solid', backgroundColor: COLORS.canvasWhite }]}
-                        accessibilityLabel={`Remove ${w.name}`}
-                      >
-                        <WeaponAvatar weapon={w} size={26} />
-                      </TouchableOpacity>
-                    ) : (
-                      <View key={i} testID={`preview-slot-${i}`} style={st.slot}><Text style={st.slotEmpty}>+</Text></View>
-                    );
-                  })}
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
-                  {save.armory.map(id => {
-                    const w = getArmoryWeapon(id, weaponBuilds(save));
-                    if (!w) return null;
-                    const selected = charms.includes(id);
-                    const blocked = !selected && charmsFull;
-                    const wLevel = weaponLevel(save, id);
-                    const synergy = !selected ? charmSynergyWithEquipped(save, id) : null;
-                    return (
-                      <TouchableOpacity
-                        key={id}
-                        testID={`charm-${id}`}
-                        onPress={() => {
-                          setCharmTapCounts(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
-                          setFocusCharm(id);
-                          onSelectCharm(id);
-                        }}
-                        style={[st.charm, selected && st.charmSel, blocked && { opacity: 0.5 }]}
-                        activeOpacity={0.85}
-                        accessibilityState={{ selected }}
-                      >
-                        <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
-                        <Text style={[st.fighterName, { textAlign: 'center' }]} numberOfLines={2}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
-                        <View style={[st.kindDot, { backgroundColor: WEAPON_KINDS[weaponGuide(id).kind].color }]}>
-                          <Text style={st.kindDotText}>{WEAPON_KINDS[weaponGuide(id).kind].label.toUpperCase()}</Text>
-                        </View>
-                        {synergy && (
-                          <View style={st.fusesTag} testID={`preview-fuses-${id}`}>
-                            <Text style={st.fusesText}>✦ FUSES</Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-                {charmsFull && save.armory.length > charms.length && (
-                  <Text style={st.note}>Slots full. Tap an equipped charm to swap it out.</Text>
-                )}
-
-                {/* Before 1-4 teaches swapping charms, keep charm details tucked unless tapped */}
-                {(focusCharm !== null || save.seenMechanics.includes('charm') || save.armory.length >= 3) && (
-                  <View style={{ gap: 8 }} testID="preview-charm-guide">
-                    {focusCharm && !charms.includes(focusCharm) && (() => {
-                      const w = getArmoryWeapon(focusCharm, weaponBuilds(save));
-                      return w ? (
-                        <WeaponExplainer key={`look-${focusCharm}`} weapon={w} build={weaponBuilds(save)[focusCharm]} badge={charmsFull ? 'Slots full' : 'Not equipped'} defaultOpen />
-                      ) : null;
-                    })()}
-                    {charms.length > 0 && <Text style={st.sectionHint}>WHAT YOUR CHARMS DO · tap one for tips</Text>}
-                    {charms.map(id => {
-                      const w = getArmoryWeapon(id, weaponBuilds(save));
-                      return w ? <WeaponExplainer key={id} weapon={w} build={weaponBuilds(save)[id]} defaultOpen={id === focusCharm} /> : null;
-                    })}
-                    {charms.length === 0 && !focusCharm && <Text style={st.note}>Tap a charm above to equip it and see what it does.</Text>}
-                  </View>
-                )}
-              </>
-            )}
-
-            {/* Evolutions: which unlocked recipes the current charms arm */}
-            {evolutionsOn && save.unlockedEvolutions.length > 0 && (
-              <View style={st.evoBox} testID="preview-evolutions">
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Icon name="lorc/crystal-shine" size={16} color={TONE.combo} />
-                  <Text style={st.evoHintTitle}>
-                    {armed.length > 0 ? `${armed.length} evolution${armed.length === 1 ? '' : 's'} armed` : 'No evolution armed'}
-                  </Text>
-                </View>
-                {armed.map(r => {
-                  const known = save.unlockedEvolutions.includes(r.id) || save.discoveredEvolutions.includes(r.id);
-                  return <ArmedEvolutionRow key={r.id} recipe={r} known={known} testID={`preview-recipe-${r.id}`} />;
-                })}
-                {armed.length > 0 ? (
-                  <Text style={st.evoHintSub} testID="preview-evo-likelihood">
-                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · {Number.isFinite(loadout.evolutionCap) ? `up to ${loadout.evolutionCap} evolutions this fight` : 'as many evolutions as you like'}. Match the Catalyst to evolve for 30 s.
-                  </Text>
-                ) : (() => {
-                  const armable = armableRecipesFromArmory(save);
-                  if (armable.length === 0 || !onArmRecipe) return null;
-                  const top = armable[0];
-                  const w0 = getArmoryWeapon(top.pair[0]);
-                  const w1 = getArmoryWeapon(top.pair[1]);
-                  return (
-                    <View style={{ gap: 6 }}>
-                      <Text style={st.evoHintSub}>
-                        Equip {w0?.name ?? top.pair[0]} + {w1?.name ?? top.pair[1]} to arm {top.known ? top.recipe.name : '??? Evolution'}.
-                      </Text>
-                      <Btn
-                        small
-                        testID="preview-arm-recipe"
-                        icon="lorc/fireball"
-                        label={`Arm ${top.known ? top.recipe.name : '??? Evolution'}`}
-                        onPress={() => onArmRecipe(top.recipe.id)}
-                      />
-                    </View>
-                  );
-                })()}
-              </View>
-            )}
-
             {/* [GP-18] Friendly Tailwind — warm, zero-shame relief after 2+ consecutive losses */}
             {tailwindOffered && (
               <View style={[st.reliefCard, tailwindOn && st.reliefCardOn]} testID="preview-tailwind-card">
@@ -721,8 +684,448 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
               </View>
             )}
 
+            {/* Early levels (before charms are taught): compact "WITH YOU" strip */}
+            {gearOn && save.armory.length > 0 && !charmsTaught && (
+              <View style={st.bringing} testID="preview-bringing">
+                <Text style={st.bringingLabel}>WITH YOU</Text>
+                {charms.map(id => {
+                  const w = getArmoryWeapon(id, builds);
+                  return w ? (
+                    <View key={id} style={st.bringingItem}>
+                      <WeaponAvatar weapon={w} size={22} />
+                      <Text style={st.bringingName} numberOfLines={1}>{w.name}</Text>
+                    </View>
+                  ) : null;
+                })}
+              </View>
+            )}
+
+            {/* [UI-20] Compact 1-row Loadout summary card on Briefing ("Tap Loadout to swap") */}
+            {hasLoadoutTab && (
+              <View style={st.summaryCard} testID="preview-loadout-summary">
+                <TouchableOpacity
+                  testID="preview-open-loadout"
+                  onPress={() => setActiveTab('loadout')}
+                  activeOpacity={0.85}
+                  style={st.summaryHead}
+                  accessibilityRole="button"
+                  accessibilityLabel="Tap Loadout to swap fighter, weapons, or Arcana"
+                >
+                  <FighterAvatar character={fighter.name} size={34} mood="idle" animate={false} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.summaryTitle} numberOfLines={1}>{fighter.name}</Text>
+                    <Text style={st.summaryHint} numberOfLines={1}>Tap Loadout to swap</Text>
+                  </View>
+                  <View style={st.summaryCta}>
+                    <Text style={st.summaryCtaText}>LOADOUT ›</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {showPassives && (
+                  <View style={st.summaryPassives} testID="preview-passives">
+                    {fighter.passives.map(id => {
+                      const p = getPassive(id);
+                      return (
+                        <View key={id} style={st.summaryPassiveChip}>
+                          <Icon name={p.icon} size={13} color={INK} />
+                          <Text style={st.summaryPassiveText} numberOfLines={1}>{p.name}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {save.armory.length > 0 && charmsTaught && (
+                  <View style={st.slotRow} testID="preview-charm-slots">
+                    {Array.from({ length: slots }).map((_, i) => {
+                      const id = charms[i];
+                      const w = id ? getArmoryWeapon(id, builds) : undefined;
+                      return w ? (
+                        <TouchableOpacity
+                          key={i}
+                          testID={`preview-slot-${i}`}
+                          onPress={() => setActiveTab('loadout')}
+                          style={[st.slot, st.slotSmall, { borderColor: INK, borderStyle: 'solid', backgroundColor: COLORS.canvasWhite }]}
+                          accessibilityLabel={`${w.name} equipped in slot ${i + 1}`}
+                        >
+                          <WeaponAvatar weapon={w} size={22} />
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          key={i}
+                          testID={`preview-slot-${i}`}
+                          onPress={() => setActiveTab('loadout')}
+                          style={[st.slot, st.slotSmall]}
+                          accessibilityLabel={`Empty weapon slot ${i + 1}`}
+                        >
+                          <Text style={st.slotEmpty}>+</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {evolutionsOn && save.unlockedEvolutions.length > 0 && (() => {
+                  const armable = armed.length === 0 ? armableRecipesFromArmory(save) : [];
+                  const top = armable[0];
+                  return (
+                    <View style={{ gap: 6 }}>
+                      <Text style={st.summaryEvo}>
+                        {armed.length > 0
+                          ? `${armed.length} evolution${armed.length === 1 ? '' : 's'} armed`
+                          : 'No evolution armed'}
+                      </Text>
+                      {armed.length === 0 && top && onArmRecipe && (
+                        <Btn
+                          small
+                          testID="preview-arm-recipe"
+                          icon="lorc/fireball"
+                          label={`Arm ${top.known ? top.recipe.name : '??? Evolution'}`}
+                          onPress={() => onArmRecipe(top.recipe.id)}
+                        />
+                      )}
+                    </View>
+                  );
+                })()}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* ═══════════════════════ LOADOUT TAB ═══════════════════════ */}
+        {activeTab === 'loadout' && gearOn && (
+          <View style={{ gap: 12 }} testID="preview-loadout-pane">
+            {(save.unlockedFighters.length > 1 || save.seenMechanics.includes('skill_tree') || Object.keys(save.skillNodes).length > 0) && (
+              <>
+                <Text style={st.section}>FIGHTER</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4, paddingTop: 6 }}>
+                  {FIGHTERS.filter(f => save.unlockedFighters.includes(f.name)).map(f => {
+                    const selected = f.name === save.selectedFighter;
+                    const rec = level.recommended?.includes(f.name);
+                    const spent = fighterStarsSpent(save, f.name);
+                    return (
+                      <TouchableOpacity
+                        key={f.name}
+                        testID={`preview-fighter-${f.name}`}
+                        onPress={() => onSelectFighter(f.name)}
+                        style={[st.fighter, selected && st.fighterSel]}
+                        activeOpacity={0.85}
+                        accessibilityState={{ selected }}
+                      >
+                        <FighterAvatar
+                          character={f.name}
+                          size={42}
+                          mood={selected ? 'anticipation' : 'idle'}
+                          reaction={selected ? { type: 'entrance', id: 1 } : null}
+                          animate={selected}
+                        />
+                        <Text style={st.fighterName} numberOfLines={1}>{f.name}</Text>
+                        <View style={st.passiveIcons}>
+                          {f.passives.map(id => <Icon key={id} name={getPassive(id).icon} size={13} color={INK} />)}
+                          {spent > 0 && <Text style={st.fighterLvl}>{spent}★</Text>}
+                        </View>
+                        {rec && <View style={st.rec}><Text style={st.recText}>STRONG</Text></View>}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            )}
+
+            {showPassives && (
+              <>
+                <Text style={st.section}>
+                  PASSIVES <Text style={st.sectionHint}>always on for {fighter.name}</Text>
+                </Text>
+                <FighterPassivesList fighter={fighter.name} testID="preview-passives" />
+              </>
+            )}
+
+            {save.armory.length > 0 && charmsTaught && (
+              <>
+                <View style={st.beltHeaderRow}>
+                  <Text style={[st.section, { marginTop: 0 }]}>
+                    WEAPON BELT <Text style={st.sectionHint}>{charms.length}/{slots} · tap slot to reorder</Text>
+                  </Text>
+                </View>
+
+                {/* Reorderable Weapon Belt */}
+                <View style={st.slotRow} testID="preview-charm-slots">
+                  {Array.from({ length: slots }).map((_, i) => {
+                    const id = charms[i];
+                    const w = id ? getArmoryWeapon(id, builds) : undefined;
+                    const isSel = selectedSlot === i;
+                    return w ? (
+                      <View key={i} style={{ alignItems: 'center', gap: 2 }}>
+                        <TouchableOpacity
+                          testID={`preview-slot-${i}`}
+                          onPress={() => {
+                            setFocusCharm(id);
+                            if (selectedSlot === i) {
+                              setSelectedSlot(null);
+                              onSelectCharm(id);
+                            } else if (selectedSlot !== null && (onApplyLoadout || onReorderCharm)) {
+                              handleReorder(selectedSlot, i);
+                            } else {
+                              setSelectedSlot(i);
+                            }
+                          }}
+                          style={[
+                            st.slot,
+                            { borderColor: INK, borderStyle: 'solid', backgroundColor: COLORS.canvasWhite },
+                            isSel && st.slotSelected,
+                          ]}
+                          accessibilityLabel={`${w.name} in slot ${i + 1}`}
+                        >
+                          <WeaponAvatar weapon={w} size={26} />
+                        </TouchableOpacity>
+                        {isSel && (
+                          <View style={st.nudgeRow}>
+                            <TouchableOpacity
+                              testID={`preview-slot-left-${i}`}
+                              disabled={i === 0}
+                              onPress={() => handleReorder(i, i - 1)}
+                              style={[st.nudgeBtn, i === 0 && st.nudgeBtnDisabled]}
+                              accessibilityLabel={`Move ${w.name} left`}
+                            >
+                              <Text style={st.nudgeText}>◀</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              testID={`preview-slot-right-${i}`}
+                              disabled={i >= charms.length - 1}
+                              onPress={() => handleReorder(i, i + 1)}
+                              style={[st.nudgeBtn, i >= charms.length - 1 && st.nudgeBtnDisabled]}
+                              accessibilityLabel={`Move ${w.name} right`}
+                            >
+                              <Text style={st.nudgeText}>▶</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                    ) : (
+                      <View key={i} testID={`preview-slot-${i}`} style={st.slot}><Text style={st.slotEmpty}>+</Text></View>
+                    );
+                  })}
+                </View>
+
+                {understudyIdx === 0 && (
+                  <View style={st.understudyWarn} testID="preview-understudy-warning">
+                    <Icon name="lorc/two-shadows" size={14} color="#92400E" />
+                    <Text style={st.understudyWarnText}>Understudy is in Slot 1 — tap it and press ▶ Move right to copy!</Text>
+                  </View>
+                )}
+                {understudyIdx > 0 && understudyTarget && (
+                  <View style={st.understudyLink} testID="preview-understudy-link">
+                    <Icon name="lorc/two-shadows" size={14} color="#0F766E" />
+                    <Text style={st.understudyLinkText}>Slot {understudyIdx + 1} Understudy ← COPIES {understudyTarget.name}</Text>
+                  </View>
+                )}
+
+                {/* [GP-21] Auto-Equip for Foe + Saved Presets strip */}
+                <View style={st.toolRow}>
+                  <TouchableOpacity
+                    testID="preview-auto-equip"
+                    onPress={handleAutoEquip}
+                    style={st.autoEquipBtn}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Auto-Equip for ${foe.name}`}
+                  >
+                    <Icon name="delapouite/sparkles" size={14} color={INK} />
+                    <Text style={st.autoEquipText} numberOfLines={1}>Auto-Equip for Foe</Text>
+                  </TouchableOpacity>
+                  {autoUndo && (
+                    <TouchableOpacity
+                      testID="preview-auto-equip-undo"
+                      onPress={() => {
+                        applySaveFallback(autoUndo.prevSave);
+                        setAutoUndo(null);
+                      }}
+                      style={st.undoBtn}
+                    >
+                      <Text style={st.undoText}>Undo</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {autoUndo && <Text style={st.autoNote}>{autoUndo.summary}</Text>}
+
+                {presets.some(Boolean) && (
+                  <View style={st.presetStrip} testID="preview-presets">
+                    {([0, 1, 2] as const).map(idx => {
+                      const p = presets[idx];
+                      if (!p) return null;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          testID={`preview-preset-${idx}`}
+                          onPress={() => handleApplyPreset(p)}
+                          style={st.presetChip}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={st.presetChipText} numberOfLines={1}>
+                            {p.name || DEFAULT_PRESET_NAMES[idx]} ({p.charms.length})
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* [GP-21] Compact Filter / Search / Sort strip (defaults to Fuses First) */}
+                <View style={st.filterBox} testID="preview-armory-filters">
+                  {save.armory.length >= 6 && (
+                    <View style={st.searchRow}>
+                      <Icon name="lorc/magnifying-glass" size={14} color={INK} />
+                      <TextInput
+                        testID="preview-armory-search"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholder="Filter weapons..."
+                        placeholderTextColor="rgba(56,56,56,0.5)"
+                        style={st.searchInput}
+                      />
+                    </View>
+                  )}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chipStrip}>
+                    {QUICK_FILTERS.map(f => (
+                      <TouchableOpacity
+                        key={f.id}
+                        testID={`preview-filter-${f.id}`}
+                        onPress={() => setQuickFilter(f.id)}
+                        style={[st.filterChip, quickFilter === f.id && st.filterChipOn]}
+                      >
+                        <Text style={st.filterChipText}>{f.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {SORT_MODES.map(m => (
+                      <TouchableOpacity
+                        key={m.id}
+                        testID={`preview-sort-${m.id}`}
+                        onPress={() => setSortMode(m.id)}
+                        style={[st.sortChip, sortMode === m.id && st.sortChipOn]}
+                      >
+                        <Text style={[st.sortChipText, sortMode === m.id && st.sortChipTextOn]}>{m.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chipStrip}>
+                    <TouchableOpacity
+                      testID="preview-role-all"
+                      onPress={() => setRoleFilter('all')}
+                      style={[st.roleChip, roleFilter === 'all' && st.roleChipOn]}
+                    >
+                      <Text style={[st.roleChipText, roleFilter === 'all' && st.roleChipTextOn]}>All Roles</Text>
+                    </TouchableOpacity>
+                    {WEAPON_ROLES.map(r => (
+                      <TouchableOpacity
+                        key={r.id}
+                        testID={`preview-role-${r.id}`}
+                        onPress={() => setRoleFilter(r.id)}
+                        style={[st.roleChip, roleFilter === r.id && st.roleChipOn]}
+                      >
+                        <Text style={[st.roleChipText, roleFilter === r.id && st.roleChipTextOn]}>{r.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+                  {filteredWeapons.map(w => {
+                    const id = w.id;
+                    const selected = charms.includes(id);
+                    const blocked = !selected && charmsFull;
+                    const wLevel = weaponLevel(save, id);
+                    const synergy = !selected ? charmSynergyWithEquipped(save, id) : null;
+                    return (
+                      <TouchableOpacity
+                        key={id}
+                        testID={`charm-${id}`}
+                        onPress={() => {
+                          setCharmTapCounts(prev => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+                          setFocusCharm(id);
+                          setSelectedSlot(null);
+                          onSelectCharm(id);
+                        }}
+                        style={[st.charm, selected && st.charmSel, blocked && { opacity: 0.5 }]}
+                        activeOpacity={0.85}
+                        accessibilityState={{ selected }}
+                      >
+                        <WeaponAvatar weapon={w} size={32} triggerKey={charmTapCounts[id]} />
+                        <Text style={[st.fighterName, { textAlign: 'center' }]} numberOfLines={2}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
+                        <View style={[st.kindDot, { backgroundColor: WEAPON_KINDS[weaponGuide(id).kind].color }]}>
+                          <Text style={st.kindDotText}>{WEAPON_KINDS[weaponGuide(id).kind].label.toUpperCase()}</Text>
+                        </View>
+                        {synergy && (
+                          <View style={st.fusesTag} testID={`preview-fuses-${id}`}>
+                            <Text style={st.fusesText}>✦ FUSES</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                {charmsFull && save.armory.length > charms.length && (
+                  <Text style={st.note}>Slots full. Tap an equipped weapon to swap it out.</Text>
+                )}
+
+                {/* [UI-20] Single focused WeaponExplainer (never stacks 6 explainers simultaneously) */}
+                {singleFocusedWeapon && (
+                  <View style={{ gap: 6 }} testID="preview-charm-guide">
+                    <WeaponExplainer
+                      key={singleFocusedWeapon.id}
+                      weapon={singleFocusedWeapon}
+                      build={builds[singleFocusedWeapon.id]}
+                      badge={charms.includes(singleFocusedWeapon.id) ? 'Equipped' : charmsFull ? 'Slots full' : 'Not equipped'}
+                      defaultOpen={focusCharm === singleFocusedWeapon.id}
+                    />
+                  </View>
+                )}
+              </>
+            )}
+
+            {/* Evolutions: which unlocked recipes the current weapons arm */}
+            {evolutionsOn && save.unlockedEvolutions.length > 0 && (
+              <View style={st.evoBox} testID="preview-evolutions">
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="lorc/crystal-shine" size={16} color={TONE.combo} />
+                  <Text style={st.evoHintTitle}>
+                    {armed.length > 0 ? `${armed.length} evolution${armed.length === 1 ? '' : 's'} armed` : 'No evolution armed'}
+                  </Text>
+                </View>
+                {armed.map(r => {
+                  const known = save.unlockedEvolutions.includes(r.id) || save.discoveredEvolutions.includes(r.id);
+                  return <ArmedEvolutionRow key={r.id} recipe={r} known={known} testID={`preview-recipe-${r.id}`} />;
+                })}
+                {armed.length > 0 ? (
+                  <Text style={st.evoHintSub} testID="preview-evo-likelihood">
+                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · {Number.isFinite(loadout.evolutionCap) ? `up to ${loadout.evolutionCap} evolutions this fight` : 'as many evolutions as you like'}. Match the Catalyst to evolve for 30 s.
+                  </Text>
+                ) : (() => {
+                  const armable = armableRecipesFromArmory(save);
+                  if (armable.length === 0 || !onArmRecipe) return null;
+                  const top = armable[0];
+                  const w0 = getArmoryWeapon(top.pair[0]);
+                  const w1 = getArmoryWeapon(top.pair[1]);
+                  return (
+                    <View style={{ gap: 6 }}>
+                      <Text style={st.evoHintSub}>
+                        Equip {w0?.name ?? top.pair[0]} + {w1?.name ?? top.pair[1]} to arm {top.known ? top.recipe.name : '??? Evolution'}.
+                      </Text>
+                      <Btn
+                        small
+                        testID="preview-arm-recipe"
+                        icon="lorc/fireball"
+                        label={`Arm ${top.known ? top.recipe.name : '??? Evolution'}`}
+                        onPress={() => onArmRecipe(top.recipe.id)}
+                      />
+                    </View>
+                  );
+                })()}
+              </View>
+            )}
+
             {/* Arcana slots */}
-            {gearOn && save.unlockedArcana.length > 0 && onSelectArcana && (
+            {save.unlockedArcana.length > 0 && onSelectArcana && (
               <>
                 <Text style={st.section}>
                   ARCANA <Text style={st.sectionHint}>{arcana.length}/{arcanaSlots(save)} · optional rule twists</Text>
@@ -753,32 +1156,48 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({ l
                 )}
               </>
             )}
-          </ScrollView>
-
-          <View style={st.footer}>
-            {lock ? (
-              <View style={st.locked}>
-                <Icon name="lorc/padlock" size={18} color={INK} />
-                <Text style={st.lockedText}>
-                  {lock.kind === 'previous'
-                    ? 'Earn a star on the previous level to unlock.'
-                    : lock.kind === 'branch'
-                      ? `${isFighterTrial(level) ? 'Fighter trial' : 'Elite path'}. Earn ${'★'.repeat(lock.need)} on ${lock.parentId} ${getLevel(lock.parentId).name} to open it.`
-                      : `Need ${lock.need} ★ total to enter ${biome.name} (you have ${lock.have}).`}
-                </Text>
-              </View>
-            ) : (
-              <Btn testID="preview-play" label={practice ? 'Practice' : best > 0 ? 'Play again' : 'Fight!'} icon={practice ? 'lorc/target-dummy' : 'lorc/crossed-swords'} onPress={() => onPlay(level)} />
-            )}
           </View>
+        )}
+      </ScrollView>
+
+      <View style={st.footer}>
+        {lock ? (
+          <View style={st.locked}>
+            <Icon name="lorc/padlock" size={18} color={INK} />
+            <Text style={st.lockedText}>
+              {lock.kind === 'previous'
+                ? 'Earn a star on the previous level to unlock.'
+                : lock.kind === 'branch'
+                  ? `${isFighterTrial(level) ? 'Fighter trial' : 'Elite path'}. Earn ${'★'.repeat(lock.need)} on ${lock.parentId} ${getLevel(lock.parentId).name} to open it.`
+                  : `Need ${lock.need} ★ total to enter ${biome.name} (you have ${lock.have}).`}
+            </Text>
+          </View>
+        ) : (
+          <View style={st.footerActions}>
+            {onTestLoadout && !practice && (
+              <Btn
+                testID="preview-test-loadout"
+                variant="secondary"
+                label="Test Loadout"
+                icon="lorc/target-dummy"
+                onPress={onTestLoadout}
+                style={{ flex: 0.9 }}
+              />
+            )}
+            <Btn
+              testID="preview-play"
+              label={practice ? 'Practice' : best > 0 ? 'Play again' : 'Fight!'}
+              icon={practice ? 'lorc/target-dummy' : 'lorc/crossed-swords'}
+              onPress={() => onPlay(level)}
+              style={{ flex: 1.3 }}
+            />
+          </View>
+        )}
+      </View>
     </>
   );
 };
 
-/**
- * The one thing this level teaches. New: a card with its picture (this IS the
- * lesson; the fight starts straight from the sheet). Seen before: one line.
- */
 const LessonCard: React.FC<{ mech: MechanicDef; isNew: boolean; onMore: () => void; onOpenCamp?: Props['onOpenCamp'] }> = ({ mech, isNew, onMore, onOpenCamp }) => (
   <TouchableOpacity testID="preview-lesson" onPress={onMore} activeOpacity={0.9} style={[st.lesson, isNew && st.lessonNew]} accessibilityRole="button" accessibilityLabel={`${mech.title}: ${mech.tagline} Tap to read more`}>
     <View style={st.lessonHead}>
@@ -791,7 +1210,6 @@ const LessonCard: React.FC<{ mech: MechanicDef; isNew: boolean; onMore: () => vo
     </View>
     <Text style={st.lessonText}>{mech.tagline}</Text>
     {isNew && mech.demo && <DemoView demo={mech.demo} light compact />}
-    {/* Something that is used at Camp can be used right now, before the fight that asks for it */}
     {mech.camp && onOpenCamp && (
       <Btn testID="preview-lesson-camp" small variant="secondary" icon="lorc/campfire" label={mech.camp.label} onPress={() => onOpenCamp(mech.camp!.tab)} />
     )}
@@ -806,7 +1224,6 @@ const Rule: React.FC<{ icon: IconName; text: string }> = ({ icon, text }) => (
 );
 
 const st = StyleSheet.create({
-  /** Above everything the screen under it stacks (the map's top bar has its own zIndex) */
   layer: { zIndex: 100, elevation: 100 },
   backdrop: { position: 'absolute', backgroundColor: 'rgba(18,18,18,0.55)' },
   overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
@@ -827,12 +1244,56 @@ const st = StyleSheet.create({
   foeName: { fontSize: 14, fontWeight: '700', color: INK, opacity: 0.8 },
   bubble: { alignSelf: 'flex-start', backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginLeft: 20 },
   bubbleText: { fontStyle: 'italic', color: INK, fontSize: 13 },
+  tabBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: COLORS.paperBeige, borderBottomWidth: 2, borderBottomColor: INK },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 38, borderRadius: 9, borderWidth: 2, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
+  tabBtnOn: { backgroundColor: COLORS.actionYellow, borderColor: INK, borderBottomWidth: 4 },
+  tabBtnText: { fontSize: 12, fontWeight: '900', letterSpacing: 1, color: INK },
   body: { padding: 16, gap: 12 },
-  coachRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: '#FFFBEB' },
-  coachText: { flex: 1, fontSize: 14, fontWeight: '800', color: INK, lineHeight: 19 },
-  mech: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: TONE.selected },
-  mechTitle: { fontSize: 16, fontWeight: '900', color: INK, marginTop: 2 },
-  mechTag: { fontSize: 13, color: INK },
+  summaryCard: { backgroundColor: COLORS.paperBeige, borderRadius: 12, borderWidth: 2, borderColor: INK, padding: 10, gap: 8 },
+  summaryHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  summaryTitle: { fontSize: 14, fontWeight: '900', color: INK, flexShrink: 1 },
+  summaryHint: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.65, flexShrink: 1 },
+  summaryCta: { backgroundColor: COLORS.actionYellow, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 9, paddingVertical: 5 },
+  summaryCtaText: { fontSize: 11, fontWeight: '900', color: INK, letterSpacing: 0.8 },
+  summaryPassives: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  summaryPassiveChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.canvasWhite, borderRadius: 6, borderWidth: 1, borderColor: '#C5BCB0', paddingHorizontal: 7, paddingVertical: 3 },
+  summaryPassiveText: { fontSize: 11, fontWeight: '800', color: INK, flexShrink: 1 },
+  summaryEvo: { fontSize: 11, fontWeight: '800', color: TONE.combo },
+  beltHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  slotSmall: { width: 34, height: 34 },
+  slotSelected: { borderColor: COLORS.actionYellow, borderWidth: 3, backgroundColor: '#FFFBEB' },
+  nudgeRow: { flexDirection: 'row', gap: 3 },
+  nudgeBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 4, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 5, paddingVertical: 1 },
+  nudgeBtnDisabled: { opacity: 0.35 },
+  nudgeText: { fontSize: 10, fontWeight: '900', color: INK },
+  understudyWarn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF3C7', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 9, paddingVertical: 5 },
+  understudyWarnText: { flex: 1, flexShrink: 1, fontSize: 11, fontWeight: '800', color: '#92400E' },
+  understudyLink: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#CCFBF1', borderRadius: 8, borderWidth: 1.5, borderColor: '#0F766E', paddingHorizontal: 9, paddingVertical: 5 },
+  understudyLinkText: { flex: 1, flexShrink: 1, fontSize: 11, fontWeight: '800', color: '#0F766E' },
+  toolRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  autoEquipBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
+  autoEquipText: { flexShrink: 1, fontSize: 12, fontWeight: '900', color: INK },
+  undoBtn: { backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 2, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
+  undoText: { fontSize: 12, fontWeight: '900', color: INK },
+  autoNote: { fontSize: 11, fontWeight: '800', color: '#0F766E' },
+  presetStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  presetChip: { backgroundColor: COLORS.paperBeige, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 9, paddingVertical: 4 },
+  presetChipText: { fontSize: 11, fontWeight: '800', color: INK },
+  filterBox: { backgroundColor: COLORS.paperBeige, borderRadius: 9, borderWidth: 1.5, borderColor: '#C5BCB0', padding: 7, gap: 6 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1, borderColor: '#C5BCB0', paddingHorizontal: 7, paddingVertical: 3 },
+  searchInput: { flex: 1, fontSize: 12, fontWeight: '600', color: INK, paddingVertical: 2 },
+  chipStrip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  filterChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
+  filterChipOn: { backgroundColor: COLORS.actionYellow },
+  filterChipText: { fontSize: 10.5, fontWeight: '800', color: INK },
+  sortChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1.5, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
+  sortChipOn: { backgroundColor: COLORS.logicTeal, borderColor: INK },
+  sortChipText: { fontSize: 10, fontWeight: '800', color: INK },
+  sortChipTextOn: { color: COLORS.canvasWhite },
+  roleChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#C5BCB0', backgroundColor: COLORS.canvasWhite },
+  roleChipOn: { backgroundColor: INK, borderColor: INK },
+  roleChipText: { fontSize: 10, fontWeight: '700', color: INK },
+  roleChipTextOn: { color: COLORS.canvasWhite, fontWeight: '900' },
   lesson: { gap: 8, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: TONE.spentEdge, backgroundColor: COLORS.paperBeige },
   lessonNew: { borderColor: INK, borderBottomWidth: 4, backgroundColor: '#FFFBEB' },
   lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -848,7 +1309,6 @@ const st = StyleSheet.create({
   rules: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   rule: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1.5, borderColor: INK },
   ruleText: { fontWeight: '800', fontSize: 13, color: INK },
-  ability: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFE9E7', borderRadius: 8, padding: 8, borderWidth: 1.5, borderColor: INK },
   abilityText: { flex: 1, color: INK, fontSize: 13 },
   goal: { gap: 6, padding: 10, borderRadius: 8, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
   goalDone: { backgroundColor: '#F4F1EC', borderColor: TONE.spentEdge },
@@ -878,12 +1338,7 @@ const st = StyleSheet.create({
   fusesText: { fontSize: 8, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 0.5 },
   trialNudge: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.actionYellow },
   evoBox: { gap: 6, backgroundColor: TONE.comboPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.combo, padding: 8 },
-  evoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   evoName: { fontSize: 12, fontWeight: '900', color: INK },
-  hazard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF3E0', borderRadius: 8, padding: 8, borderWidth: 1.5, borderColor: TONE.tradeoff },
-  passiveBox: { gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8 },
-  passiveRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  passiveText: { flex: 1, fontSize: 12, color: INK },
   passiveIcons: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   slotRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: TONE.spentEdge, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
@@ -892,9 +1347,6 @@ const st = StyleSheet.create({
   evoHintSub: { fontSize: 11, color: INK, opacity: 0.85 },
   arcanaItem: { width: 102, alignItems: 'center', justifyContent: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
   arcanaNum: { fontSize: 9, fontWeight: '900', letterSpacing: 1, color: TONE.arcana },
-  arcanaSummary: { backgroundColor: TONE.arcanaPale, borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 8, gap: 2 },
-  arcanaUp: { fontSize: 11, fontWeight: '800', color: TONE.upside },
-  arcanaDown: { fontSize: 11, fontWeight: '700', color: TONE.tradeoff },
   reliefCard: { gap: 6, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: '#0F766E', backgroundColor: '#F0FDFA' },
   reliefCardOn: { backgroundColor: '#CCFBF1', borderBottomWidth: 4 },
   reliefHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -920,6 +1372,7 @@ const st = StyleSheet.create({
   wagerBtnSub: { fontSize: 10, fontWeight: '700', color: INK, opacity: 0.8, textAlign: 'center' },
   cauldronSummary: { fontSize: 11, fontWeight: '700', color: '#78350F', lineHeight: 16 },
   footer: { padding: 14, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
+  footerActions: { flexDirection: 'row', gap: 8 },
   locked: { flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },
   lockedText: { color: INK, fontWeight: '700', flexShrink: 1 },
 });

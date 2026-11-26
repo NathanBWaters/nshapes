@@ -21,6 +21,7 @@ import { CAMPAIGN_FEATURES } from '../data/features';
 import { unlockHint, unlockSource } from '../data/rewards';
 import { buildAdaptiveEvolutionMechanic, evolutionsMechanicId } from '../lessons';
 import { armedRecipes, isMechanicKnown, recipeFamiliesHeld } from '../progress';
+import CritterGallery, { collectGalleryFoes } from './CritterGallery';
 import MechanicIntro from './MechanicIntro';
 import { Silhouette } from './rewards';
 import { INK, TONE } from './ui';
@@ -48,12 +49,13 @@ interface Props {
   onReplayWalkthrough?: () => void;
 }
 
-type GuideTab = 'mechanics' | 'fighters' | 'recipes';
+type GuideTab = 'mechanics' | 'fighters' | 'recipes' | 'critters';
 
 const TAB_META: Record<GuideTab, { icon: React.ComponentProps<typeof Icon>['name']; title: string }> = {
   mechanics: { icon: 'lorc/open-book', title: 'FIELD GUIDE' },
   fighters: { icon: 'lorc/tree-branch', title: 'FIGHTERS' },
   recipes: { icon: 'lorc/crystal-shine', title: 'RECIPE GUIDE' },
+  critters: { icon: 'lorc/cat', title: 'CRITTER GALLERY' },
 };
 
 const FieldGuide: React.FC<Props> = ({ save, onClose, onReplayWalkthrough }) => {
@@ -83,6 +85,10 @@ const FieldGuide: React.FC<Props> = ({ save, onClose, onReplayWalkthrough }) => 
   }
   const known = entries.filter(e => e.known).length;
   const unlockedRecipeCount = new Set([...save.unlockedEvolutions, ...save.discoveredEvolutions]).size;
+  const galleryFoes = collectGalleryFoes(save);
+  const discoveredCritters =
+    save.unlockedFighters.length + galleryFoes.filter(f => f.defeated).length;
+  const totalCritters = FIGHTERS.length + galleryFoes.length;
   const armed = armedRecipes(save);
   const hazardsSeen = {
     timeBombs: LEVELS.some(l => l.rules.hazards?.timeBombs && (save.plays[l.id] ?? 0) > 0),
@@ -103,7 +109,9 @@ const FieldGuide: React.FC<Props> = ({ save, onClose, onReplayWalkthrough }) => 
             ? `${known}/${entries.length}`
             : tab === 'fighters'
               ? `${save.unlockedFighters.length}/${FIGHTERS.length}`
-              : `${unlockedRecipeCount}/${EVOLUTION_RECIPES.length}`}
+              : tab === 'critters'
+                ? `${discoveredCritters}/${totalCritters}`
+                : `${unlockedRecipeCount}/${EVOLUTION_RECIPES.length}`}
         </Text>
       </View>
 
@@ -113,24 +121,32 @@ const FieldGuide: React.FC<Props> = ({ save, onClose, onReplayWalkthrough }) => 
           onPress={() => { sfx('click'); setTab('mechanics'); }}
           style={[st.tab, tab === 'mechanics' && st.tabOn]}
         >
-          <Icon name="lorc/open-book" size={16} color={INK} />
-          <Text style={st.tabText}>MECHANICS ({known}/{entries.length})</Text>
+          <Icon name="lorc/open-book" size={14} color={INK} />
+          <Text style={st.tabText} numberOfLines={1}>RULES</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID="guide-tab-fighters"
           onPress={() => { sfx('click'); setTab('fighters'); }}
           style={[st.tab, tab === 'fighters' && st.tabOn]}
         >
-          <Icon name="lorc/tree-branch" size={16} color={INK} />
-          <Text style={st.tabText}>FIGHTERS</Text>
+          <Icon name="lorc/tree-branch" size={14} color={INK} />
+          <Text style={st.tabText} numberOfLines={1}>FIGHTERS</Text>
         </TouchableOpacity>
         <TouchableOpacity
           testID="guide-tab-recipes"
           onPress={() => { sfx('click'); setTab('recipes'); }}
           style={[st.tab, tab === 'recipes' && st.tabOn]}
         >
-          <Icon name="lorc/crystal-shine" size={16} color={INK} />
-          <Text style={st.tabText}>RECIPES ({unlockedRecipeCount}/{EVOLUTION_RECIPES.length})</Text>
+          <Icon name="lorc/crystal-shine" size={14} color={INK} />
+          <Text style={st.tabText} numberOfLines={1}>RECIPES ({unlockedRecipeCount}/{EVOLUTION_RECIPES.length})</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          testID="guide-tab-critters"
+          onPress={() => { sfx('click'); setTab('critters'); }}
+          style={[st.tab, tab === 'critters' && st.tabOn]}
+        >
+          <Icon name="lorc/cat" size={14} color={INK} />
+          <Text style={st.tabText} numberOfLines={1}>CRITTERS</Text>
         </TouchableOpacity>
       </View>
 
@@ -301,6 +317,9 @@ const FieldGuide: React.FC<Props> = ({ save, onClose, onReplayWalkthrough }) => 
           })}
         </ScrollView>
       )}
+      {tab === 'critters' && (
+        <CritterGallery mode="gallery" save={save} bottomInset={insets.bottom} />
+      )}
       <MechanicIntro mechanic={open} onClose={() => setOpen(null)} cta="Close" quiz={false} dismissible />
     </View>
   );
@@ -312,10 +331,10 @@ const st = StyleSheet.create({
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
   count: { fontWeight: '900', color: INK },
-  tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 10, maxWidth: 620, width: '100%', alignSelf: 'center' },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 2, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
+  tabs: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingTop: 10, maxWidth: 620, width: '100%', alignSelf: 'center' },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 4, borderRadius: 8, borderWidth: 2, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
   tabOn: { backgroundColor: COLORS.actionYellow, borderColor: INK, borderBottomWidth: 4 },
-  tabText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: INK },
+  tabText: { flexShrink: 1, fontSize: 10, fontWeight: '900', letterSpacing: 0.6, color: INK },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 12, justifyContent: 'center', maxWidth: 620, alignSelf: 'center' },
   walkthroughCard: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.actionYellow, borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, padding: 12, minHeight: 56 },
   walkthroughIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.canvasWhite, borderWidth: 1.5, borderColor: INK, alignItems: 'center', justifyContent: 'center' },

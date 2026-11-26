@@ -28,6 +28,7 @@ import { BASE_BUILD, formatStat, weaponStatLines, type WeaponBuild } from '../da
 import { bracketParam } from '../data/weapons/schema';
 import type { ActiveWeaponCounter } from '../engine/fight';
 import { INK } from './ui';
+import WeaponDemoClip from './WeaponDemoClip';
 
 interface Props {
   weapon: Weapon;
@@ -117,6 +118,7 @@ const WeaponExplainer: React.FC<Props> = ({
 
       {open && (
         <View style={st.more} testID={`weapon-explainer-more-${weapon.id}`}>
+          <WeaponDemoClip weaponId={weapon.id} />
           <Row icon="lorc/crystal-shine" title={kind.label} color={kind.color}>{kind.blurb}</Row>
           {guide.look && (
             <View style={st.row}>

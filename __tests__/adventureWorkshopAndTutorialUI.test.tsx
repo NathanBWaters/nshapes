@@ -229,6 +229,7 @@ describe('Level preview loadout', () => {
     expect(view.getByTestId('preview-passives')).toBeTruthy();
     expect(view.getByText(/No evolution armed/)).toBeTruthy();
 
+    fireEvent.press(view.getByTestId('preview-tab-loadout'));
     fireEvent.press(view.getByTestId(`charm-${armory[0]}`));
     fireEvent.press(view.getByTestId(`charm-${armory[1]}`));
     expect(onCharm).toHaveBeenCalledTimes(2);

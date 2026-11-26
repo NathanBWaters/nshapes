@@ -17,15 +17,18 @@ import Icon, { type IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import { sfx } from '@/audio';
 import type { Card as CardType } from '@/types';
-import type { FightLogCard, FightLogEntry, PassiveId, RunState } from '../types';
+import type { AdventureSave, FightLogCard, FightLogEntry, PassiveId, RunState } from '../types';
 import { Btn, INK, TONE } from './ui';
 import { ARCANA } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
+import { LEVELS, PRACTICE_LEVELS } from '../data/levels';
 import { getPassive, PASSIVES } from '../data/passives';
 import { weaponGuide } from '../data/weaponGuide';
 import { formatPower } from '../data/weaponPower';
+import { replayMoveSnapshot, synthesizeHighlightSnapshot, type FightRecording } from '../engine/replay';
 import { getRecipe, getSkillNode } from '../engine/sources';
 import { buildReplayWeapons, fightReplayOf, type FightReplayData } from '../history';
+import HighlightStageModal from './HighlightStageModal';
 import {
   describeLines,
   entrySummary,
@@ -174,6 +177,9 @@ const toCard = (c: FightLogCard, i: number): CardType => ({
 interface Props {
   run?: RunState;
   replay?: FightReplayData;
+  /** Optional deterministic action tape & save for exact board reconstruction in Highlight Replay ([TP-13]) */
+  recording?: FightRecording;
+  save?: AdventureSave;
   visible: boolean;
   onClose: () => void;
 }
@@ -215,7 +221,7 @@ const explainRef = (
 
 type ChipKind = 'damage' | 'set' | 'triggered' | 'power' | 'coins' | 'xp' | 'hearts' | 'foeHp';
 
-const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
+const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, onClose }) => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const data = useMemo(() => replay ?? (run ? fightReplayOf(run) : null), [replay, run]);
@@ -236,6 +242,19 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
   const [openChip, setOpenChip] = useState<ChipKind | null>(null);
   const [openSeries, setOpenSeries] = useState<Series | null>(null);
   const [powerBannerOpen, setPowerBannerOpen] = useState(false);
+  const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
+
+  const highlightSnapshot = useMemo(() => {
+    if (highlightIndex === null || !data) return null;
+    if (recording && save) {
+      const level = [...LEVELS, ...PRACTICE_LEVELS].find(l => l.id === data.levelId);
+      if (level) {
+        const exact = replayMoveSnapshot(level, save, recording, highlightIndex);
+        if (exact) return exact;
+      }
+    }
+    return synthesizeHighlightSnapshot(data, highlightIndex, heldWeapons, run?.foeIcon);
+  }, [highlightIndex, data, recording, save, heldWeapons, run?.foeIcon]);
 
   useEffect(() => {
     setSelected(biggest);
@@ -501,6 +520,25 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
                 </View>
               )}
 
+              {log[biggest] && log[biggest].damage > 0 && (
+                <TouchableOpacity
+                  testID="replay-watch-biggest"
+                  onPress={() => {
+                    sfx('confirm');
+                    setHighlightIndex(biggest);
+                  }}
+                  style={st.highlightPill}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Watch biggest hit highlight (${log[biggest].damage} damage) in 0.5x slow motion`}
+                >
+                  <Icon name="lorc/bright-explosion" size={16} color={INK} />
+                  <Text style={st.highlightPillText} numberOfLines={1}>
+                    Watch Highlight (0.5×) · Biggest Hit {log[biggest].damage} dmg
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {hasAnyPower && (
                 <>
                   <TouchableOpacity
@@ -762,6 +800,24 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
                   <Text style={st.stepText}>▶</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* [TP-13] Slow-motion visual highlight shortcut on any inspected Set / damage move */}
+              {(entry.kind === 'set' || entry.damage > 0) && (
+                <TouchableOpacity
+                  testID="replay-watch-selected"
+                  onPress={() => {
+                    sfx('confirm');
+                    setHighlightIndex(sel);
+                  }}
+                  style={st.highlightPillSmall}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Watch this move highlight in 0.5x slow motion"
+                >
+                  <Icon name="lorc/bright-explosion" size={14} color={INK} />
+                  <Text style={st.highlightPillSmallText}>Watch Highlight (0.5×)</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Clickable matched cards with per-card damage & tags */}
               {entry.cards && (
@@ -1097,6 +1153,11 @@ const FightReplay: React.FC<Props> = ({ run, replay, visible, onClose }) => {
           </View>
         </ScrollView>
       </View>
+      <HighlightStageModal
+        visible={highlightIndex !== null}
+        snapshot={highlightSnapshot}
+        onClose={() => setHighlightIndex(null)}
+      />
     </Modal>
   );
 };
@@ -1164,6 +1225,34 @@ const st = StyleSheet.create({
   powerBannerTitle: { fontSize: 13, fontWeight: '900', color: INK },
   powerBannerSub: { fontSize: 11, color: INK, opacity: 0.78 },
   powerChevron: { fontSize: 11, fontWeight: '900', color: INK },
+  highlightPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    borderColor: INK,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  highlightPillText: { flexShrink: 1, fontSize: 12.5, fontWeight: '900', color: INK },
+  highlightPillSmall: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderBottomWidth: 3,
+    borderColor: INK,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  highlightPillSmallText: { fontSize: 11.5, fontWeight: '900', color: INK },
   panel: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 1.5, borderColor: INK, padding: 12, gap: 8 },
   panelTitle: { fontSize: 15, fontWeight: '900', color: INK },
   panelSub: { fontSize: 11, color: MUTED },
