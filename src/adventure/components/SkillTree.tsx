@@ -17,7 +17,14 @@ import type { CharacterName } from '@/types';
 import type { AdventureSave, PassiveDef, SkillNode, TreePos } from '../types';
 import { getFighter } from '../data/fighters';
 import { getPassive } from '../data/passives';
-import { getSkillNode, skillTreeOf, skillTreeRoots } from '../data/skillTrees';
+import {
+  ACTIVE_TREE_CAP,
+  ACTIVE_TREE_CAP_RATIO,
+  exclusiveConflictFor,
+  getSkillNode,
+  skillTreeOf,
+  skillTreeRoots,
+} from '../data/skillTrees';
 import {
   availableStars,
   maxStars,
@@ -48,13 +55,17 @@ interface Props {
   onBack: () => void;
 }
 
-const STATUS_LABEL: Record<NodeStatus, string> = {
+type TreeNodeStatus = NodeStatus | 'atCapacity' | 'exclusive';
+
+const STATUS_LABEL: Record<TreeNodeStatus, string> = {
   owned: 'owned',
   buyable: 'can buy',
   needsStars: 'not enough stars',
   needsLink: 'locked',
   sealed: 'sealed',
   fighterLocked: 'locked',
+  atCapacity: 'active capacity full',
+  exclusive: 'exclusive choice locked',
 };
 
 /**
@@ -92,7 +103,23 @@ const SkillTree: React.FC<Props> = ({ save, fighter, onChange, onBack }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = nodes.find(n => n.id === selectedId) ?? null;
   const spentHere = fighterStarsSpent(save, fighter);
-  const status = new Map(nodes.map(n => [n.id, nodeStatus(save, n.id)]));
+  const ownedForFighter = save.skillNodes[fighter] ?? [];
+  const capPct = Math.min(100, Math.round((spentHere / Math.max(1, ACTIVE_TREE_CAP)) * 100));
+  const status = new Map<string, TreeNodeStatus>(
+    nodes.map(n => {
+      const base = nodeStatus(save, n.id);
+      if (base === 'owned' || base === 'fighterLocked' || base === 'sealed' || base === 'needsLink') {
+        return [n.id, base];
+      }
+      if (exclusiveConflictFor(ownedForFighter, n.id)) {
+        return [n.id, 'exclusive'];
+      }
+      if (spentHere + n.cost > ACTIVE_TREE_CAP) {
+        return [n.id, 'atCapacity'];
+      }
+      return [n.id, base];
+    })
+  );
 
   const rows = Math.max(...nodes.map(n => n.pos.row), ...roots.map(r => r.pos.row)) + 1;
   const g = geometry(width, rows);
@@ -130,6 +157,15 @@ const SkillTree: React.FC<Props> = ({ save, fighter, onChange, onBack }) => {
 
       <View style={st.passives}>
         {def.passives.map(id => <PassiveCard key={id} passive={getPassive(id)} />)}
+      </View>
+      <View style={st.capacityBox} testID="skill-tree-capacity">
+        <View style={st.capacityHead}>
+          <Text style={st.capacityLabel}>ACTIVE CAPACITY ({Math.round(ACTIVE_TREE_CAP_RATIO * 100)}% BUILD CAP)</Text>
+          <Text style={st.capacityValue}>{spentHere} / {ACTIVE_TREE_CAP}★</Text>
+        </View>
+        <View style={st.capacityTrack}>
+          <View style={[st.capacityFill, { width: `${capPct}%`, backgroundColor: spentHere >= ACTIVE_TREE_CAP ? COLORS.impactRed : COLORS.logicTeal }]} />
+        </View>
       </View>
       {spentHere === 0 && availableStars(save, fighter) > 0 && (
         <View style={{ paddingHorizontal: 14, paddingTop: 8 }}>
@@ -246,14 +282,14 @@ const Legend: React.FC<{ color: string; label: string; diamond?: boolean }> = ({
 
 const MapNode: React.FC<{
   node: SkillNode;
-  status: NodeStatus;
+  status: TreeNodeStatus;
   selected: boolean;
   size: number;
   center: { x: number; y: number };
   onPress: () => void;
 }> = ({ node, status, selected, size, center, onPress }) => {
   const owned = status === 'owned';
-  const reachable = status === 'buyable' || status === 'needsStars';
+  const reachable = status === 'buyable' || status === 'needsStars' || status === 'atCapacity';
   const locked = !owned && !reachable;
   /** Capstones (5★+) are diamonds */
   const capstone = node.cost >= 5;
@@ -298,13 +334,15 @@ const MapNode: React.FC<{
 const NodeDetail: React.FC<{
   save: AdventureSave;
   node: SkillNode;
-  status: NodeStatus;
+  status: TreeNodeStatus;
   onBuy: () => void;
   onRefund: () => void;
   onClose: () => void;
 }> = ({ save, node, status, onBuy, onRefund, onClose }) => {
   const neighbours = [...node.roots.map(p => getPassive(p).name), ...node.links.map(id => getSkillNode(id)!.name)];
   const blockers = status === 'owned' ? refundBlockers(save, node.id) : [];
+  const exclusivePartner = node.exclusiveWith ? getSkillNode(node.exclusiveWith) : undefined;
+  const spentHere = fighterStarsSpent(save, node.fighter);
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={st.sheetWrap}>
@@ -321,6 +359,9 @@ const NodeDetail: React.FC<{
             </TouchableOpacity>
           </View>
           <Text style={st.detailText}>{node.text}</Text>
+          {exclusivePartner && (
+            <Text style={st.detailExclusive}>⇄ Mutually exclusive capstone choice with {exclusivePartner.name}</Text>
+          )}
           <Text style={st.detailLinks}>Links to: {neighbours.join(', ')}</Text>
           {status === 'owned' ? (
             <Text style={st.detailNote}>
@@ -328,6 +369,10 @@ const NodeDetail: React.FC<{
                 ? `Owned. Refund ${blockers.map(b => b.name).join(', ')} first: ${blockers.length === 1 ? 'it hangs' : 'they hang'} off this node.`
                 : 'Owned. It is on in every fight with this fighter.'}
             </Text>
+          ) : status === 'exclusive' && exclusivePartner ? (
+            <Text style={st.detailNote}>Locked by {exclusivePartner.name}. Refund {exclusivePartner.name} first to swap to this capstone (respecs are free).</Text>
+          ) : status === 'atCapacity' ? (
+            <Text style={st.detailNote}>Active capacity full ({spentHere}/{ACTIVE_TREE_CAP}★). Refund {spentHere + node.cost - ACTIVE_TREE_CAP}★ elsewhere to slot {node.name} — respecs are free.</Text>
           ) : status === 'needsLink' ? (
             <Text style={st.detailNote}>Buy a node it links to first.</Text>
           ) : status === 'sealed' ? (
@@ -387,7 +432,14 @@ const st = StyleSheet.create({
   detailMeta: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.7 },
   detailText: { fontSize: 14, color: INK, lineHeight: 20 },
   detailLinks: { fontSize: 11, color: INK, opacity: 0.75 },
+  detailExclusive: { fontSize: 11.5, fontWeight: '800', color: TONE.arcana },
   detailNote: { fontSize: 12, color: TONE.tradeoff, fontWeight: '700' },
+  capacityBox: { backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7, gap: 5 },
+  capacityHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  capacityLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 0.9, color: INK, opacity: 0.78 },
+  capacityValue: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  capacityTrack: { height: 7, borderRadius: 4, backgroundColor: '#E5DDD0', overflow: 'hidden', borderWidth: 1, borderColor: INK },
+  capacityFill: { height: '100%', borderRadius: 3 },
 });
 
 export default SkillTree;

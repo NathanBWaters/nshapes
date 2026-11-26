@@ -5,7 +5,7 @@
  * unless some armed recipe is idle); triggers per fight are capped.
  */
 import type { Card } from '@/types';
-import { addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, idleRecipes, mods, nextCatalystRecipe, refreshSources, signalGrowth, updateCards, type Draft } from './fight';
+import { addPower, addTime, arcana, dealDamage, emit, enqueue, foeMultiplier, idleRecipes, mods, nextCatalystRecipe, refreshSources, signalGrowth, updateCards, type Draft } from './fight';
 import { armedRecipesFor, EVOLUTION_RULES, getRecipe } from './sources';
 import { fireFinale, fireOpening } from '../rules/engine';
 
@@ -22,9 +22,8 @@ export const startEvolution = (d: Draft, id: string, slot?: number) => {
   const durationMs = Math.max(1000, EVOLUTION_RULES.durationMs + (mods(d).evolutionDurationMs ?? 0));
   d.activeEvolutions = [...d.activeEvolutions.filter(e => e.id !== id), { id, remainingMs: durationMs, durationMs }];
   d.evolutionsTriggered += 1;
-  // An evolution surges Power, outside the weapons' shared meter (unless global Power scaling is disabled)
-  const powerScale = d.powerScaling ?? 1;
-  if (powerScale > 0) d.power = (d.power ?? 0) + EVOLUTION_RULES.power * powerScale;
+  // An evolution surges Power (+1.50), cleanly feeding the C¹ Power multiplier
+  addPower(d, EVOLUTION_RULES.power);
   if (!d.forgedRecipes.includes(id)) d.forgedRecipes = [...d.forgedRecipes, id];
   refreshSources(d);
   emit(d, 'evolution_start', durationMs, recipe.name, slot === undefined ? undefined : { slots: [slot] });

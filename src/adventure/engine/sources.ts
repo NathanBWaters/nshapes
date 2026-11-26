@@ -24,7 +24,7 @@ export const EVOLUTION_RULES = {
   /** Starting an evolution hits the foe for this much */
   startDamage: 10,
   /** Starting an evolution adds this much Power (data/weaponPower.ts): combining weapons surges your scaling */
-  power: 2,
+  power: 1.5,
 } as const;
 
 export { getSkillNode };
@@ -118,6 +118,11 @@ export const combineModifiers = (list: (Modifiers | undefined)[]): Modifiers => 
         num[k] = Boolean(num[k]) || v;
       } else if (k === 'conditionalDamage') {
         out.conditionalDamage = [...(out.conditionalDamage ?? []), ...(v as NonNullable<Modifiers['conditionalDamage']>)];
+      } else if (k === 'conditionalMultiplier') {
+        out.conditionalMultiplier = [
+          ...(out.conditionalMultiplier ?? []),
+          ...(v as NonNullable<Modifiers['conditionalMultiplier']>),
+        ];
       } else if (k === 'weaponChanceScale') {
         const scale = { ...(out.weaponChanceScale ?? {}) };
         for (const [kind, f] of Object.entries(v as Record<WeaponTriggerKind, number>)) {
@@ -140,8 +145,12 @@ export const modifiersOf = (s: SourceInputs): Modifiers => combineModifiers(live
 export const evolutionLikelihoodFor = (labTier: number, mods: Modifiers, catalystChanceScale = 1): number =>
   Math.max(0, (EVOLUTION_RULES.baseLikelihood + EVOLUTION_RULES.labPerTier * labTier + (mods.evolutionLikelihood ?? 0)) * catalystChanceScale);
 
-/** Evolutions a fight allows (a practice fight has no limit). */
+/** Evolutions a fight allows (practice has no limit; Boss & 3+ wave encounters grant +2 cap). */
 export const evolutionCapFor = (level: LevelDef, mods: Modifiers, extraCap = 0): number =>
   level.rules.sandbox
     ? Infinity
-    : EVOLUTION_RULES.perFight + (level.rules.extraEvolutionCap ?? 0) + (mods.extraEvolutionsPerFight ?? 0) + extraCap;
+    : EVOLUTION_RULES.perFight +
+      (level.isBoss || level.foes.length >= 3 ? 2 : 0) +
+      (level.rules.extraEvolutionCap ?? 0) +
+      (mods.extraEvolutionsPerFight ?? 0) +
+      extraCap;

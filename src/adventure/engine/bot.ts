@@ -396,8 +396,13 @@ const submit = (s: RunState, picked: Card[], hinted = false): RunState => {
   const v = isValidCombination(picked, s.attributes);
   const graceUsed = !v.isValid && v.invalidAttributes.length === 1 && s.stats.graces > 0;
   let next: RunState;
-  if (v.isValid || graceUsed) {
-    next = runReducer(s, { type: 'MATCH', cards: picked, graceUsed, hinted, resolveWeapons: true });
+  if (v.isValid) {
+    next = runReducer(s, { type: 'MATCH', cards: picked, graceUsed: false, hinted, resolveWeapons: true });
+    const ids = next.replacing.length > 0 ? next.replacing : picked.map(c => c.id);
+    next = runReducer(next, { type: 'REPLACE', ids });
+  } else if (graceUsed) {
+    // Defensive Grace Save ([GP-04]): consumes 1 Grace, spares heart, cycles 3 cards with 0 base damage
+    next = runReducer(s, { type: 'GRACE_SAVE', cards: picked });
     const ids = next.replacing.length > 0 ? next.replacing : picked.map(c => c.id);
     next = runReducer(next, { type: 'REPLACE', ids });
   } else {
@@ -655,9 +660,9 @@ const playRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: nu
         }
       }
     }
-    // With a grace in hand a near miss is free, so a slow search ends in a bold guess
+    // Under [GP-04], Grace is a defensive cycle-save (0 base damage), so players only force near-misses when chasing a `graceSaves` ★★★ goal
     const graces = s.features.has('graces') ? s.stats.graces : 0;
-    const bold = !hinted && graces > 0 && (goals.includes('graceSaves') ? pace > 0.8 : slow && rng.next() < bot.boldness);
+    const bold = !hinted && graces > 0 && goals.includes('graceSaves') && pace > 0.8;
     if (bold) think *= 0.5;
     // A foe that punishes standing still (its card says "30s inactivity"): with the
     // deadline close, press the bulb (if allowed), and failing that, rush (and slip more often)

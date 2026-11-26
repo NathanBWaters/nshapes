@@ -22,7 +22,7 @@ import { resolveMatch } from '@/utils/matchResolution';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
 import { DEFAULT_PLAYER_STATS, canObtainWeapon } from '@/utils/gameDefinitions';
 import { createInitialRoundStats } from '@/game/roundStats';
-import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, BeltBadge, FeatureFlag, FightLogMathItem, LevelDef, RunEventType, RunState, SetFollowUpItem } from '../types';
+import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, BeltBadge, FeatureFlag, FightLogMathItem, LevelDef, RunEventType, RunReliefOptions, RunState, SetFollowUpItem } from '../types';
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
@@ -31,7 +31,7 @@ import { applyWeaponToStats, resolveWholeStats, startingLoadout, type LoadoutOpt
 import { getArmoryWeapon, understudyOf } from '../data/armory';
 import { ownerOfEvent } from '../data/weaponGuide';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
-import { damageMultiplier } from '../data/weaponPower';
+import { damageMultiplier, SKILL_FEAT_POWER } from '../data/weaponPower';
 import { weaponBuilds } from '../weaponLevels';
 import { createFoe } from '../data/foes';
 import { arcanaRules, getArcana } from '../data/arcana';
@@ -40,7 +40,7 @@ import { PARRY_RULES } from '../data/parry';
 import { challengeProgress } from './challenges';
 import { initParryState, resolveParryOnSet, tickParry } from './parry';
 import {
-  addCoins, addConnection, addHints, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, dealDamage, drawCard,
+  addCoins, addConnection, addPower, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, clearCardLocks, dealDamage, drawCard,
   emit, empowerBoard, enqueue, ensureBoardHasSet, finish, foeMultiplier, growBoard, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
   pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, signalGrowth, syncTraps, toDeckCard, touchable, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
@@ -70,6 +70,21 @@ export const baseCardReward = (c: Card): CardReward => ({
   experience: MATCH_REWARDS.baseExperience,
 });
 
+export const SACRIFICE_BASE_DAMAGE = 6;
+export const SACRIFICE_COOLDOWN_MS = 15000;
+
+/** Explicit Sacrifice / Redraw ([GP-05]) unlocks in World 2 from 2-6 onward (and in practice/sandbox). */
+export const isSacrificeUnlocked = (level: LevelDef): boolean => {
+  if (level.rules.sandbox) return true;
+  if (level.biome === 'canyon' || level.biome === 'peaks' || level.biome === 'summit') return true;
+  if (level.biome === 'woods') {
+    const ref = level.branchOf ?? level.id;
+    const match = /^2-(\d+)/.exec(ref);
+    return match ? Number(match[1]) >= 6 : false;
+  }
+  return false;
+};
+
 export type RunAction =
   /**
    * `hinted`: one of the picked cards was being pointed out (a hint or an auto-hint).
@@ -85,6 +100,10 @@ export type RunAction =
       graceUsed?: boolean;
       resolveWeapons?: boolean;
     }
+  /** Defensive Grace Save ([GP-04]): consumes 1 Grace, spares heart, resets chains, cycles 3 cards, 0 base damage */
+  | { type: 'GRACE_SAVE'; cards: Card[] }
+  /** Tactical Sacrifice / Redraw ([GP-05]): costs 1♥, sweeps up to 3 cards (incl. clogged), deals 6×Power shockwave */
+  | { type: 'SACRIFICE'; cardIds: string[] }
   | { type: 'INVALID'; cards: Card[] }
   | { type: 'REPLACE'; ids: string[] }
   | { type: 'BURN'; card: Card }
@@ -99,9 +118,9 @@ export type RunAction =
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const scaledFoeHp = (baseHp: number, arcanaIds: ArcanaId[]): number => {
-  const scale = arcanaRules(arcanaIds).foeHpScale;
-  return scale === undefined ? baseHp : Math.max(1, Math.round(baseHp * scale));
+const scaledFoeHp = (baseHp: number, arcanaIds: ArcanaId[], reliefScale = 1): number => {
+  const scale = (arcanaRules(arcanaIds).foeHpScale ?? 1) * reliefScale;
+  return scale === 1 ? baseHp : Math.max(1, Math.round(baseHp * scale));
 };
 
 const ENEMY_EVENT_MAP: Partial<Record<EnemyEvent['type'], RunEventType>> = {
@@ -267,7 +286,11 @@ const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damag
   d.lastDiffCount = diffCount;
   d.maxPurityChain = Math.max(d.maxPurityChain, d.purityChain);
   d.purityChainsTriggered += 1;
-  if (d.purityChain >= 3) d.threeStepPuritiesTriggered += 1;
+  if (d.purityChain >= 3) {
+    d.threeStepPuritiesTriggered += 1;
+    // Skill-feat Power surge ([GP-01]): 3+ step Purity chain rewards careful Set discipline
+    addPower(d, SKILL_FEAT_POWER.purityChain3);
+  }
   const damage = PURITY_DAMAGE[Math.min(d.purityChain, PURITY_DAMAGE.length - 1)];
   const coins = d.purityChain - 1;
   const reachedMax = diffCount === d.attributes.length;
@@ -341,7 +364,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const prevInAutoSet = d._setFold?.inAutoSet ?? false;
   if (opts.auto && d._setFold) d._setFold.inAutoSet = true;
   const graceUsed = rewards.some(r => r.effectType === 'grace');
-  if (!opts.auto) d.hintUsedThisSet = false;
+  if (!opts.auto) {
+    d.hintUsedThisSet = false;
+    d.mistakeRewardUsedThisSet = false;
+  }
   d.replacing = [...new Set([...d.replacing, ...cards.map(c => c.id)])];
 
   const simplifiedAttrs = d.simplified
@@ -438,11 +464,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       sourceRef: 'weapon:pinata',
     });
   }
-  // Fold Purity Chain & Traps Cleared into flat BEFORE multipliers!
+  // Fold Purity Chain & Traps Defused (Bomb Throw / Hot / Clutch Defuse + Snares) into flat BEFORE multipliers!
   if (purity.damage !== 0) {
     flatItems.push({ label: 'Purity chain', amount: purity.damage, note: `${purity.chain}-Set Purity streak` });
   }
-  if (traps.bonus !== 0) {
+  if (traps.items.length > 0) {
+    flatItems.push(...traps.items);
+  } else if (traps.bonus !== 0) {
     flatItems.push({ label: 'Traps cleared', amount: traps.bonus, note: 'cleared hazard cards in this Set' });
   }
   const sources = liveSources({
@@ -558,9 +586,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       : weaponRainbowMult * arcanaRainbowMult;
   const rainbowBoosted = rainbow && rainbowBaseMult > 1;
   const evoCount = d.activeEvolutions.length;
+  const stackEvos = d.stackEvolutionMultipliers !== false;
   const evoMult =
     evoCount > 0
-      ? d.stackEvolutionMultipliers
+      ? stackEvos
         ? Math.pow(EVOLUTION_RULES.setMultiplier, evoCount)
         : EVOLUTION_RULES.setMultiplier
       : 1;
@@ -620,7 +649,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     }
   }
   if (evoMult !== 1) {
-    const perEvo = d.stackEvolutionMultipliers
+    const perEvo = stackEvos
       ? EVOLUTION_RULES.setMultiplier
       : Math.pow(evoMult, 1 / evoCount);
     for (const evo of d.activeEvolutions) {
@@ -630,6 +659,21 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
         note: 'active Evolution multiplier',
         sourceRef: `evo:${evo.id}`,
       });
+    }
+  }
+  let conditionalMult = 1;
+  for (const { key, source } of sources) {
+    for (const cm of source.modifiers?.conditionalMultiplier ?? []) {
+      if (conditionsHold(d, cm.when) && cm.multiplier !== 1) {
+        conditionalMult *= cm.multiplier;
+        const info = describeSource(key);
+        multItems.push({
+          label: info.label,
+          amount: Math.round(cm.multiplier * 1000) / 1000,
+          note: info.defaultNote,
+          ...(info.sourceRef ? { sourceRef: info.sourceRef } : {}),
+        });
+      }
     }
   }
   if ((a.damageScale ?? 1) !== 1) {
@@ -655,7 +699,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     });
   }
   multItems.push(...tricks.multItems);
-  const totalMult = surgeMult * rainbowMult * (a.damageScale ?? 1) * enemyMult * setMult * parryMult * staggerMult;
+  const totalMult = surgeMult * rainbowMult * conditionalMult * (a.damageScale ?? 1) * enemyMult * setMult * parryMult * staggerMult;
   // Store the non-foe Set multiplier so synchronous same-Set rules, Twins, blasts, and burns inherit it!
   d._setMultiplier = enemyMult !== 0 ? totalMult / enemyMult : totalMult;
   const dmg = flat * totalMult;
@@ -864,7 +908,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   }
 
   if (rainbow) d.rainbowRefill = true;
-  if (!opts.auto) noteGrowth(d, { on: 'set', cards: matched, slots: gearSet.slots, rainbow, hinted });
+  if (!opts.auto) noteGrowth(d, { on: 'set', cards: matched, slots: gearSet.slots, rainbow, hinted, sinceLastMs });
   resolveCatalyst(d, matched);
 
   // Rule triggers (resolved by drain at the end of the action)
@@ -1066,6 +1110,8 @@ export interface CreateRunOptions {
   features?: Set<FeatureFlag>;
   /** Optional overrides used by Starfall Summit runs without affecting Adventure Mode */
   overrides?: RunOverrides;
+  /** Optional run-level relief / Tailwind / Cauldron Wager modifiers ([GP-10] / [GP-16]) */
+  relief?: RunReliefOptions;
   /** Opt-in lab telemetry: count firings & zero-op firings per rule key (zero overhead when omitted) */
   trackRuleFirings?: boolean;
 }
@@ -1075,10 +1121,17 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
   const rng = createRng(opts.seed);
   const foeRng = createRng((opts.seed ^ 0x2545f491) >>> 0);
   const ov = opts.overrides;
+  const relief = opts.relief;
   const loadout = startingLoadout(level, save, opts.features, () => rng.next(), ov);
   const features = loadout.features;
   const gear = features.has('gear');
-  const { stats, weapons, maxHearts, timer, bonusDamagePerMatch, coinBonusPercent } = loadout;
+  const { stats, weapons, maxHearts: rawMaxHearts, timer: rawTimer, bonusDamagePerMatch, coinBonusPercent } = loadout;
+  const maxHearts =
+    rawMaxHearts !== null ? Math.max(1, rawMaxHearts + (relief?.extraHearts ?? 0)) : null;
+  const timer =
+    rawTimer !== null && relief?.timerScale && relief.timerScale !== 1
+      ? Math.max(10, Math.round(rawTimer * relief.timerScale))
+      : rawTimer;
   const resolvedHearts =
     features.has('hearts') && maxHearts !== null
       ? ov?.startingHearts !== undefined
@@ -1094,14 +1147,19 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
   const first = createFoe(level.foes[0], foeRng.next);
   const rules = arcanaRules(arcanaIds);
   const untimedMoves = rules.untimedMoves;
-  const startingMoves =
+  const baseMoves =
     level.rules.moves !== undefined
       ? untimedMoves && !level.rules.timer
         ? Math.max(untimedMoves.min, level.rules.moves + untimedMoves.delta)
         : level.rules.moves
       : null;
-  const firstFoeHp = scaledFoeHp(level.foes[0].hp, arcanaIds);
-  const totalFoeHp = level.foes.reduce((sum, f) => sum + scaledFoeHp(f.hp, arcanaIds), 0);
+  const startingMoves =
+    baseMoves !== null && rawTimer === null && relief?.timerScale && relief.timerScale !== 1
+      ? Math.max(3, Math.round(baseMoves * relief.timerScale))
+      : baseMoves;
+  const reliefHpScale = relief?.foeHpScale ?? 1;
+  const firstFoeHp = scaledFoeHp(level.foes[0].hp, arcanaIds, reliefHpScale);
+  const totalFoeHp = level.foes.reduce((sum, f) => sum + scaledFoeHp(f.hp, arcanaIds, reliefHpScale), 0);
 
   const state: RunState = {
     level,
@@ -1137,9 +1195,17 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     growth: {},
     power: 0,
     ...(ov?.powerScaling !== undefined ? { powerScaling: ov.powerScaling } : {}),
-    ...(ov?.stackEvolutionMultipliers ? { stackEvolutionMultipliers: true } : {}),
+    stackEvolutionMultipliers: ov?.stackEvolutionMultipliers ?? true,
     ...(ov?.blankEvolutionRules ? { blankEvolutionRules: true } : {}),
     ...(opts.trackRuleFirings ? { ruleFirings: {}, ruleZeroOps: {} } : {}),
+    sacrificeCooldownMs: 0,
+    sacrificeUsedThisWave: false,
+    mistakeRewardUsedThisSet: false,
+    ...(relief ? { relief } : {}),
+    ...(relief?.tailwindActive ? { tailwindActive: true } : {}),
+    ...(relief?.cauldronWager
+      ? { cauldronWager: typeof relief.cauldronWager === 'number' ? relief.cauldronWager : 1 }
+      : {}),
     growthMemo: { lastSetColor: null, lastHintAtMs: -1, plantSet: false },
     elapsedMs: 0,
     lastMatchAtMs: 0,
@@ -1208,7 +1274,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     bonusCardsMatched: 0,
     levelUpsTaken: 0,
     shopBuys: 0,
-    parry: initParryState(level, level.foes[0]),
+    parry: initParryState(level, level.foes[0], relief?.parryWindupScale ?? 1),
     parriesLanded: 0,
     perfectParriesLanded: 0,
     lastSetIgnition: null,
@@ -1381,6 +1447,28 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
   };
 };
 
+/**
+ * Defensive Grace Save ([GP-04]): consumes 1 Grace, spares the heart, resets chains,
+ * cycles the 3 cards with 0 base Set damage, and queues `graceUsed` so defensive
+ * Grace-reaction rules (Second Chance, Grace Conduit, Judgement Beam, Badger 1-8,
+ * Chaos Conduit) fire cleanly without rolling offensive Set weapons.
+ */
+const applyGraceSave = (d: Draft, cards: Card[]) => {
+  const picked = cards.slice(0, 3).map(c => d.board.find(b => b.id === c.id) ?? c);
+  d.replacing = [...new Set([...d.replacing, ...picked.map(c => c.id)])];
+  d.purityChain = 0;
+  d.lastDiffCount = 0;
+  d.combo = 0;
+  d.bonusCombo = 0;
+  d.passive.hotStreak = false;
+  d.hintUsedThisSet = false;
+  d.roundStats.currentStreak = 0;
+  d.stats = { ...d.stats, graces: Math.max(0, d.stats.graces - 1) };
+  d.roundStats.gracesUsed += 1;
+  emit(d, 'grace');
+  enqueue(d, 'graceUsed');
+};
+
 // ─── Reducer ────────────────────────────────────────────────────────────────
 
 export const runReducer = (state: RunState, action: RunAction): RunState => {
@@ -1391,11 +1479,21 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
   if (ended && action.type !== 'REPLACE') return state;
 
   const d = begin(state, HOOKS);
+  let loggedAction: RunAction = action;
 
   switch (action.type) {
     case 'MATCH': {
       if (d.status !== 'playing') return state;
       const before = d.totalDamage;
+      const isGraceSave =
+        Boolean(action.graceUsed) || Boolean(action.rewards?.some(r => r.effectType === 'grace'));
+      if (isGraceSave) {
+        loggedAction = { type: 'GRACE_SAVE', cards: action.cards };
+        applyGraceSave(d, action.cards);
+        drain(d);
+        d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
+        break;
+      }
       let matchCards = action.cards;
       let matchRewards = action.rewards;
       let matchEffects = action.effects;
@@ -1407,7 +1505,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
           weapons: d.weapons,
           activeAttributes: d.attributes,
           connections: d.connections,
-          graceUsed: Boolean(action.graceUsed),
+          graceUsed: false,
           rng: d._weaponRng.next,
         });
         matchCards = resolved.cards;
@@ -1419,6 +1517,81 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d._setMultiplier = 1;
       d._setFold = null;
       finalizeTurnIgnition(d, before);
+      d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
+      break;
+    }
+
+    case 'GRACE_SAVE': {
+      if (d.status !== 'playing' || d.stats.graces <= 0) return state;
+      const before = d.totalDamage;
+      applyGraceSave(d, action.cards);
+      drain(d);
+      d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
+      break;
+    }
+
+    case 'SACRIFICE': {
+      if (d.status !== 'playing') return state;
+      if (d.hearts === null || d.hearts <= 1) return state;
+      const isTimed = d.timeLeft !== null;
+      if (isTimed ? (d.sacrificeCooldownMs ?? 0) > 0 : Boolean(d.sacrificeUsedThisWave)) return state;
+
+      const before = d.totalDamage;
+      const eligible = (c: Card) => !c.hasEvolutionItem && !d.replacing.includes(c.id);
+      const clogPriority = (c: Card): number => {
+        if (c.isDud) return 0;
+        if (c.locked || c.cursedUntil !== undefined || (c.frozen ?? 0) > 0) return 1;
+        if (c.isFaceDown) return 2;
+        if (c.thornAt !== undefined || c.snare || c.hasBomb || c.hasCountdown || c.fuseAt !== undefined) return 3;
+        return 4;
+      };
+
+      const chosenIndices: number[] = [];
+      const chosenSet = new Set<number>();
+      for (const id of action.cardIds) {
+        if (chosenIndices.length >= 3) break;
+        const idx = d.board.findIndex(c => c.id === id);
+        if (idx >= 0 && !chosenSet.has(idx) && eligible(d.board[idx])) {
+          chosenIndices.push(idx);
+          chosenSet.add(idx);
+        }
+      }
+      if (chosenIndices.length < 3) {
+        const rest = d.board
+          .map((c, i) => ({ c, i, prio: clogPriority(c) }))
+          .filter(x => !chosenSet.has(x.i) && eligible(x.c))
+          .sort((a, b) => a.prio - b.prio || a.i - b.i);
+        for (const item of rest) {
+          if (chosenIndices.length >= 3) break;
+          chosenIndices.push(item.i);
+          chosenSet.add(item.i);
+        }
+      }
+      if (chosenIndices.length === 0) return state;
+
+      // Intentional 1♥ sacrifice: bypasses Graces, Thick Hide, freeMistakes, Wave-1 Shield; triggers `hurt` synergies
+      hurt(d, 1, { bypassWaveShield: true });
+
+      const sweptCards = chosenIndices.map(i => d.board[i]);
+      const shockDmg = dealDamage(d, SACRIFICE_BASE_DAMAGE * foeMultiplier(d));
+      emit(d, 'hit', shockDmg, 'Sacrifice!', { slots: chosenIndices, cards: sweptCards });
+
+      const sweptIds = new Set(sweptCards.map(c => c.id));
+      if (d.timeBombIds.length) {
+        d.timeBombIds = d.timeBombIds.filter(id => !sweptIds.has(id));
+      }
+      returnToDeck(d, sweptCards);
+      refill(d, chosenIndices, { skipFoeDrawEffects: true, quiet: true });
+      updateCards(d, chosenIndices, clearCardLocks);
+      if (!hasAnySet(d.board, d.attributes)) {
+        const fixed = [...d.board];
+        ensureBoardHasSet(d, fixed, chosenIndices, { skipFoeDrawEffects: true });
+        d.board = fixed;
+      }
+
+      if (isTimed) d.sacrificeCooldownMs = SACRIFICE_COOLDOWN_MS;
+      d.sacrificeUsedThisWave = true;
+      drain(d);
       d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
       break;
     }
@@ -1460,6 +1633,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       }
       emitEnemyEvents(d, res.events);
       drain(d);
+      d.mistakeRewardUsedThisSet = true;
       break;
     }
 
@@ -1556,6 +1730,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       if (activeMs > 0) {
         d.elapsedMs += activeMs;
         if (d.arcanaBurnCooldownMs > 0) d.arcanaBurnCooldownMs = Math.max(0, d.arcanaBurnCooldownMs - activeMs);
+        if ((d.sacrificeCooldownMs ?? 0) > 0) d.sacrificeCooldownMs = Math.max(0, (d.sacrificeCooldownMs ?? 0) - activeMs);
         decayCombo(d);
         tickClock(d, activeMs);
         checkIdle(d);
@@ -1641,7 +1816,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.wave += 1;
       const def = d.level.foes[d.wave];
       const next = createFoe(def, d._foeRng.next);
-      const hp = scaledFoeHp(def.hp, d.arcana);
+      const hp = scaledFoeHp(def.hp, d.arcana, d.relief?.foeHpScale ?? 1);
       d.foe = next.foe;
       d.foeName = next.name;
       d.foeIcon = next.icon;
@@ -1649,12 +1824,14 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.foeMaxHp = hp;
       d.shopOptions = [];
       d.hintUsedThisSet = false;
+      d.mistakeRewardUsedThisSet = false;
+      d.sacrificeUsedThisWave = false;
       d.paidPinataIds = [];
       d.burnMults = {};
       // Links are for the wave, unless the Link Stone has grown (then they stay where they are)
       if (!(mods(d).keepLinks ?? 0)) d.connections = [];
       d.setsThisWave = 0;
-      d.parry = initParryState(d.level, def);
+      d.parry = initParryState(d.level, def, d.relief?.parryWindupScale ?? 1);
       d.status = 'playing';
       refreshSources(d);
       onWaveStartPassives(d);
@@ -1673,7 +1850,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
   syncTraps(d);
   syncGear(d);
   resolve(d);
-  recordLog(d, state, action);
+  recordLog(d, state, loggedAction);
   return finish(d, state);
 };
 
@@ -1738,13 +1915,23 @@ const tickClock = (d: Draft, ms: number) => {
 export const shopPrice = (w: Weapon): number => Math.round(w.price * 2);
 export const rerollCost = (s: RunState): number => 5 + s.rerolls * 5;
 
-/** ★ = survived, ★★ = every foe defeated, ★★★ = defeated + challenge. */
+/** ★ = survived, ★★ = every foe defeated, ★★★ = defeated + challenge (capped by relief.starCap when Tailwind is active). */
 export const computeStars = (s: RunState): number => {
   if (s.status !== 'won') return 0;
   const rule = s.level.starRule;
-  if (rule?.kind === 'accuracy') return s.mistakes <= rule.threeStarMax ? 3 : s.mistakes <= rule.twoStarMax ? 2 : 1;
-  if (s.endReason === 'survived') return 1;
-  return s.challengeMet ? 3 : 2;
+  const raw =
+    rule?.kind === 'accuracy'
+      ? s.mistakes <= rule.threeStarMax
+        ? 3
+        : s.mistakes <= rule.twoStarMax
+          ? 2
+          : 1
+      : s.endReason === 'survived'
+        ? 1
+        : s.challengeMet
+          ? 3
+          : 2;
+  return s.relief?.starCap !== undefined ? Math.min(s.relief.starCap, raw) : raw;
 };
 
 

@@ -12,15 +12,15 @@ import type { AttributeName, Card, PlayerStats, Weapon } from '@/types';
 import { getArmoryWeapon } from '../data/armory';
 import { HINTED_SET_MS, WEAPON_GROWTH, growthKey, growthStatBonus, type GrowthDef, type SetTest } from '../data/weaponGrowth';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
-import { powerLevelFactor, powerPer, powerShare, powerWatches } from '../data/weaponPower';
+import { POWER_YIELD, powerGainAtLevel, type PowerWatch } from '../data/weaponPower';
 import type { TrickKind, WeaponTriggerKind } from '../rules/types';
 import { applyEffect } from '../rules/engine';
 import type { RunState } from '../types';
-import { GRID_COLS, emit, heal, mods, refreshSources, setGrowthHook, type Draft, type FightEventKind } from './fight';
+import { GRID_COLS, addPower, emit, heal, mods, refreshSources, setGrowthHook, type Draft, type FightEventKind } from './fight';
 
 /** Something a weapon may be watching for. */
 export type GrowthEvent =
-  | { on: 'set'; cards: readonly Card[]; slots: readonly number[]; rainbow: boolean; hinted: boolean }
+  | { on: 'set'; cards: readonly Card[]; slots: readonly number[]; rainbow: boolean; hinted: boolean; sinceLastMs?: number }
   | { on: 'mistake'; cards: readonly Card[] }
   | { on: 'weapon'; kind: WeaponTriggerKind }
   | { on: 'trick'; kind: TrickKind }
@@ -118,19 +118,113 @@ export const setGrowthEnabled = (on: boolean) => {
   enabled = on;
 };
 
+/** Evaluate one weapon Power watch ([GP-01]), updating per-slot streak counters when needed. */
+const evalPowerWatch = (
+  d: Draft,
+  watch: PowerWatch,
+  effectiveId: string,
+  ownedId: string,
+  slot: number,
+  ev: GrowthEvent
+): boolean => {
+  switch (watch.on) {
+    case 'copyLeft':
+      return false;
+    case 'empoweredMatch':
+      return ev.on === 'set' && ev.cards.some(c => (c.bonusPoints ?? 0) > 0 || (c.charge ?? 0) > 0);
+    case 'quickSet':
+      return ev.on === 'set' && (ev.sinceLastMs ?? Infinity) <= watch.withinMs;
+    case 'unbrokenSets': {
+      const key = `p:${slot}:unbroken`;
+      if (ev.on === 'mistake') {
+        if (d.powerProgress?.[key]) d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
+        return false;
+      }
+      if (ev.on !== 'set') return false;
+      const next = (d.powerProgress?.[key] ?? 0) + 1;
+      if (next >= watch.every) {
+        d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
+        return true;
+      }
+      d.powerProgress = { ...(d.powerProgress ?? {}), [key]: next };
+      return false;
+    }
+    case 'lowHeartsSet':
+      return ev.on === 'set' && d.hearts !== null && d.hearts <= watch.maxHearts;
+    case 'fullHeartsStreak': {
+      if (ev.on !== 'set') return false;
+      const key = `p:${slot}:fullHp`;
+      const full = d.hearts !== null && d.maxHearts !== null && d.hearts >= d.maxHearts;
+      if (!full) {
+        if (d.powerProgress?.[key]) d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
+        return false;
+      }
+      const next = (d.powerProgress?.[key] ?? 0) + 1;
+      if (next >= watch.every) {
+        d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
+        return true;
+      }
+      d.powerProgress = { ...(d.powerProgress ?? {}), [key]: next };
+      return false;
+    }
+    case 'rainbowStreak': {
+      if (ev.on !== 'set') return false;
+      const key = `p:${slot}:rainbow`;
+      if (!ev.rainbow) {
+        if (d.powerProgress?.[key]) d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
+        return false;
+      }
+      const next = (d.powerProgress?.[key] ?? 0) + 1;
+      if (next >= watch.every) {
+        d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
+        return true;
+      }
+      d.powerProgress = { ...(d.powerProgress ?? {}), [key]: next };
+      return false;
+    }
+    case 'own':
+      // Each slot (including an Understudy copying a rule weapon) emits its own `own` signal on firing
+      return ev.on === 'own' && ev.weaponId === ownedId;
+    default:
+      return counts(d, { watch } as GrowthDef, effectiveId, ev) === true;
+  }
+};
+
 /** Tell every held weapon that something happened. */
 export const noteGrowth = (d: Draft, ev: GrowthEvent) => {
   if (!enabled) return;
   if (d.status !== 'playing' && d.status !== 'pick' && d.status !== 'pick_evolution' && d.status !== 'intermission') return;
+
+  // 1. Transparent weapon-authored Power yield ([GP-01]): no hidden belt dilution, Understudy copies left charm
+  if ((d.powerScaling ?? 1) > 0) {
+    const seenPower = new Set<string>();
+    d.weapons.forEach((w, slot) => {
+      let effectiveId = w.id;
+      let effectiveLevel = d.weaponBuilds[w.id]?.level ?? w.level ?? 1;
+      if (w.id === UNDERSTUDY_ID) {
+        const left = slot > 0 ? d.weapons[slot - 1] : undefined;
+        if (!left || left.id === UNDERSTUDY_ID) return;
+        effectiveId = left.id;
+        effectiveLevel = Math.max(effectiveLevel, d.weaponBuilds[left.id]?.level ?? left.level ?? 1);
+      } else {
+        if (seenPower.has(w.id)) return;
+        seenPower.add(w.id);
+      }
+      const def = POWER_YIELD[effectiveId];
+      if (!def) return;
+      let triggered = false;
+      for (const watch of def.watches) {
+        if (evalPowerWatch(d, watch, effectiveId, w.id, slot, ev)) triggered = true;
+      }
+      if (triggered) addPower(d, powerGainAtLevel(effectiveId, effectiveLevel));
+    });
+  }
+
+  // 2. Per-weapon in-fight growth tracks (data/weaponGrowth.ts)
   const seen = new Set<string>();
-  const share = powerShare(new Set(d.weapons.filter(w => powerWatches(w.id).length > 0).map(w => w.id)).size);
   d.weapons.forEach((w, slot) => {
     if (w.id === UNDERSTUDY_ID || seen.has(w.id)) return;
     seen.add(w.id);
-    // Power: every watch that happens adds the weapon's share, at any stack count (it never stops)
-    const powerScale = d.powerScaling ?? 1;
-    const hits = powerScale > 0 ? powerWatches(w.id).filter(watch => counts(d, { watch } as GrowthDef, w.id, ev) === true).length : 0;
-    if (hits > 0) d.power = (d.power ?? 0) + hits * share * powerPer(w.id) * powerLevelFactor(d.weaponBuilds[w.id]?.level ?? 1) * powerScale;
     (WEAPON_GROWTH[w.id] ?? []).forEach((def, index) => {
       const ok = counts(d, def, w.id, ev);
       if (ok === null) return;

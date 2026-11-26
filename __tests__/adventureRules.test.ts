@@ -2,19 +2,24 @@
  * The rule interpreter, evolutions, traps, challenges and Arcana stacking.
  * Rules are injected as test relics so these tests don't depend on content.
  */
-import { baseCardReward, runReducer } from '@/adventure/engine/run';
+import { baseCardReward, computeStars, createRun, isSacrificeUnlocked, runReducer, SACRIFICE_BASE_DAMAGE, SACRIFICE_COOLDOWN_MS } from '@/adventure/engine/run';
 import { allSets, countDifferentAttributes, hasAnySet, isRainbow } from '@/adventure/engine/sets';
 import { MAX_CHAIN_OCCURRENCES, MAX_FIRINGS_PER_ACTION } from '@/adventure/rules/engine';
 import { arcanaRules, combineArcana } from '@/adventure/data/arcana';
 import { challengeProgress, describeChallenge } from '@/adventure/engine/challenges';
 import { snareTarget } from '@/adventure/engine/fight';
+import { BOMB_DEFUSE_BASE_DAMAGE, BOMB_DEFUSE_CLUTCH_DAMAGE, BOMB_DEFUSE_HOT_DAMAGE } from '@/adventure/engine/hazards';
+import { ACTIVE_TREE_CAP, ACTIVE_TREE_CAP_RATIO, exclusiveConflictFor, SKILL_NODES, skillTreeOf, TREE_BUDGET } from '@/adventure/data/skillTrees';
 import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { FIGHTERS } from '@/adventure/data/fighters';
+import { getLevel } from '@/adventure/data/levels';
+import { createNewSave } from '@/adventure/progress';
+import { SKILL_FEAT_POWER, setPowerEnabled } from '@/adventure/data/weaponPower';
 import type { Card } from '@/types';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import type { ChallengeDef, RunState } from '@/adventure/types';
 import type { Rule } from '@/adventure/rules/types';
 import { eventsOf, findSet, miss, playSet, relic, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
-import { setPowerEnabled } from '@/adventure/data/weaponPower';
 
 const damageOf = (s: RunState, set?: Card[]) => {
   const before = s.foeHp;
@@ -257,13 +262,13 @@ describe('rule interpreter', () => {
     expect(s.board.filter(c => !s.replacing.includes(c.id)).some(c => (c.charge ?? 0) >= 2)).toBe(true);
   });
 
-  it('next-Set multipliers add up and cap at ×4; growBoard at MAX_BOARD overflows into empowerBoard and still fires weapon:growth', () => {
+  it('next-Set multipliers add up and cap at ×16; growBoard at MAX_BOARD overflows into empowerBoard and still fires weapon:growth', () => {
     const times = relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'nextSetMultiplier', times: 2 }] }]);
     let s = withWeapons(base(), times);
     s = miss(miss(s));
     expect(s.nextSetMultiplier).toBe(3);
-    s = miss(miss(s));
-    expect(s.nextSetMultiplier).toBe(4);
+    for (let i = 0; i < 20; i++) s = miss({ ...s, hearts: 5 });
+    expect(s.nextSetMultiplier).toBe(16);
 
     const grow = withWeapons(
       base(),
@@ -723,7 +728,7 @@ describe('unified add-then-multiply damage math', () => {
     expect(hpBefore - after.foeHp).toBe((3 + 3 + 4) * 2);
     const flatItems = after.log[after.log.length - 1].set?.flatItems ?? [];
     expect(flatItems).toContainEqual(expect.objectContaining({ label: 'Purity chain', amount: 3 }));
-    expect(flatItems).toContainEqual(expect.objectContaining({ label: 'Traps cleared', amount: 4 }));
+    expect(flatItems).toContainEqual(expect.objectContaining({ label: 'Snare Defused', amount: 4 }));
   });
 
   it('multiplies synchronous drain() rule hits by the Set multiplier, and resets to ×1 on non-Set actions', () => {
@@ -1036,5 +1041,307 @@ describe('Wave 2 rule verbs & conditions', () => {
     const after2 = miss(s2);
     expect(after2.xp - xpBefore).toBe(5);
     expect(after2.board.some(c => c.hasEvolutionItem)).toBe(true);
+  });
+});
+
+describe('Wave 2 core engine ([GP-02], [GP-03], [GP-04], [GP-05], [GP-06], [GP-08], [GP-13], Relief)', () => {
+  beforeEach(() => setPowerEnabled(false));
+  afterEach(() => setPowerEnabled(true));
+
+  const dummyLevel = (extra?: Parameters<typeof testLevel>[0]) =>
+    testLevel({ foes: [{ name: 'Dummy', hp: 500 }], rules: { timer: 120, boardSize: 12, ...extra?.rules }, ...extra });
+
+  it('[GP-03] stacks concurrent Evolution multipliers by default and grants +2 cap in Boss & 3-wave encounters', () => {
+    const phoenix = EVOLUTION_RECIPES[0];
+    const second = EVOLUTION_RECIPES[1];
+    let s = startFight({
+      save: { selectedFighter: 'Pelican' },
+      level: dummyLevel(),
+      features: ['hearts', 'gear', 'evolutions'],
+    });
+    expect(s.stackEvolutionMultipliers).toBe(true);
+    expect(s.evolutionCap).toBe(3);
+
+    // Boss & 3-wave levels automatically receive +2 evolution cap (total 5)
+    const bossRun = startFight({
+      save: { selectedFighter: 'Pelican' },
+      level: testLevel({ isBoss: true, foes: [{ name: 'Boss', hp: 500 }] }),
+      features: ['hearts', 'gear', 'evolutions'],
+    });
+    expect(bossRun.evolutionCap).toBe(5);
+
+    const threeWaveRun = startFight({
+      save: { selectedFighter: 'Pelican' },
+      level: testLevel({ foes: [{ name: 'W1', hp: 50 }, { name: 'W2', hp: 50 }, { name: 'W3', hp: 50 }] }),
+      features: ['hearts', 'gear', 'evolutions'],
+    });
+    expect(threeWaveRun.evolutionCap).toBe(5);
+
+    // Two concurrent Evolutions multiply cleanly: (3 base + 2 + 2) * (1.5 * 1.5) = 7 * 2.25 = 15.75 -> 16
+    s = {
+      ...s,
+      blankEvolutionRules: true,
+      activeEvolutions: [
+        { id: phoenix.id, remainingMs: 25000, durationMs: 30000 },
+        { id: second.id, remainingMs: 25000, durationMs: 30000 },
+      ],
+    };
+    const hpBefore = s.foeHp;
+    const after = playSet(s);
+    expect(hpBefore - after.foeHp).toBe(Math.round((3 + 4) * 2.25));
+  });
+
+  it('[GP-04] GRACE_SAVE cycles 3 cards with 0 base damage, resets chains, spares hearts, and fires defensive graceUsed rules', () => {
+    const s = withWeapons(
+      startFight({
+        save: { selectedFighter: 'Sly Fox' },
+        level: dummyLevel({ rules: { startingGraces: 2, timer: 120, boardSize: 12 } }),
+        features: ['hearts', 'gear', 'graces', 'purity'],
+      }),
+      relic([{ trigger: { on: 'graceUsed' }, effects: [{ do: 'damage', amount: 8 }, { do: 'shield', count: 1 }] }])
+    );
+    const primed: RunState = {
+      ...s,
+      combo: 4,
+      purityChain: 2,
+      lastDiffCount: 2,
+      passive: { ...s.passive, hotStreak: true },
+    };
+    const picked = primed.board.slice(0, 3);
+    const heartsBefore = primed.hearts!;
+    const hpBefore = primed.foeHp;
+    const saved = runReducer(primed, { type: 'GRACE_SAVE', cards: picked });
+
+    expect(saved.hearts).toBe(heartsBefore);
+    expect(saved.stats.graces).toBe(1);
+    expect(saved.roundStats.gracesUsed).toBe(1);
+    expect(saved.combo).toBe(0);
+    expect(saved.purityChain).toBe(0);
+    expect(saved.passive.hotStreak).toBe(false);
+    expect(saved.matches).toBe(0);
+    // Only the defensive graceUsed rule (8 dmg + 1 shield) fires — ZERO base Set damage!
+    expect(hpBefore - saved.foeHp).toBe(8);
+    expect(saved.freeMistakesLeft).toBe(1);
+    expect(eventsOf(saved, 'grace')).toHaveLength(1);
+    // Legacy MATCH with graceUsed: true routes through the exact same defensive save
+    const legacy = runReducer(primed, { type: 'MATCH', cards: picked, graceUsed: true, resolveWeapons: true });
+    expect(hpBefore - legacy.foeHp).toBe(8);
+    expect(legacy.stats.graces).toBe(1);
+  });
+
+  it('[GP-05] SACRIFICE costs 1♥ bypassing shields, deals 6×Power shockwave, clears clogged cards, respects cooldown & 1♥ guard', () => {
+    expect(isSacrificeUnlocked(getLevel('1-1'))).toBe(false);
+    expect(isSacrificeUnlocked(getLevel('2-5'))).toBe(false);
+    expect(isSacrificeUnlocked(getLevel('2-6'))).toBe(true);
+    expect(isSacrificeUnlocked(getLevel('3-1'))).toBe(true);
+
+    // Give Badger Thick Hide + freeMistakes + Graces + a `hurt` synergy relic
+    let s = withWeapons(
+      startFight({
+        save: { selectedFighter: 'Badger' },
+        level: dummyLevel({ rules: { hearts: 4, startingGraces: 2, timer: 120, boardSize: 12 } }),
+        features: ['hearts', 'gear', 'graces'],
+      }),
+      relic([{ trigger: { on: 'hurt' }, effects: [{ do: 'damage', amount: 5 }] }])
+    );
+    s = {
+      ...s,
+      freeMistakesLeft: 2,
+      waveShieldLeft: 1,
+      board: s.board.map((c, i) =>
+        i === 0
+          ? { ...c, isDud: true }
+          : i === 1
+            ? { ...c, locked: true }
+            : i === 2
+              ? { ...c, hasEvolutionItem: true }
+              : c
+      ),
+    };
+    const dudId = s.board[0].id;
+    const lockedId = s.board[1].id;
+    const catId = s.board[2].id;
+    const hpBefore = s.foeHp;
+
+    // Try sacrificing the dud, locked card, AND the Catalyst (Catalyst must be protected!)
+    const after = runReducer(s, { type: 'SACRIFICE', cardIds: [dudId, lockedId, catId] });
+    expect(after.hearts).toBe(3); // Bypassed Graces, Thick Hide, freeMistakes, and Wave-1 Shield!
+    expect(after.stats.graces).toBe(2);
+    expect(after.freeMistakesLeft).toBe(2);
+    expect(after.waveShieldLeft).toBe(1);
+    expect(hpBefore - after.foeHp).toBe(SACRIFICE_BASE_DAMAGE + 5); // 6 shockwave + 5 hurt synergy
+    expect(after.board.some(c => c.id === dudId)).toBe(false);
+    expect(after.board.some(c => c.id === lockedId)).toBe(false);
+    expect(after.board.some(c => c.id === catId && c.hasEvolutionItem)).toBe(true);
+    expect(hasAnySet(after.board, after.attributes)).toBe(true);
+    expect(after.sacrificeCooldownMs).toBe(SACRIFICE_COOLDOWN_MS);
+
+    // Blocked while cooling down
+    const blockedCd = runReducer(after, { type: 'SACRIFICE', cardIds: [] });
+    expect(blockedCd).toBe(after);
+
+    // Ready again after 15s tick, but blocked at 1♥ (cannot kill yourself)
+    const cooled = tick(after, SACRIFICE_COOLDOWN_MS, 1000);
+    expect(cooled.sacrificeCooldownMs).toBe(0);
+    const oneHeart: RunState = { ...cooled, hearts: 1 };
+    expect(runReducer(oneHeart, { type: 'SACRIFICE', cardIds: [] })).toBe(oneHeart);
+  });
+
+  it('[GP-06] Badger mistake-farm nodes only detonate on grudgeRelease and setup mistake nodes cap at once per Set', () => {
+    const badgerNodes = ['badger-0-2', 'badger-0-4', 'badger-0-8', 'badger-0-10', 'badger-1-10', 'badger-cap-1', 'badger-cap-2'];
+    let s = startFight({
+      save: {
+        selectedFighter: 'Badger',
+        skillNodes: { Badger: [...badgerNodes, 'badger-0-7', 'badger-1-2', 'badger-0-9'] },
+      },
+      level: dummyLevel({ rules: { hearts: 5, startingHints: 0, timer: 120, boardSize: 12 } }),
+      features: ['hearts', 'gear', 'coins', 'hints'],
+    });
+    const hp0 = s.foeHp;
+
+    // 1st mistake: ZERO damage from the 7 grudgeRelease nodes, stores 1 Grudge, grants 1 hint + 2 coins + ×2 once!
+    s = miss(s);
+    expect(s.foeHp).toBe(hp0);
+    expect(s.passive.grudge).toBe(1);
+    expect(s.stats.hints).toBe(1);
+    expect(s.coins).toBe(2);
+    expect(s.nextSetMultiplier).toBe(2);
+    expect(s.mistakeRewardUsedThisSet).toBe(true);
+
+    // 2nd mistake before any valid Set: stores 2nd Grudge, ZERO extra hint/coins/×2 (1-per-Set cap!)
+    s = miss(s);
+    expect(s.foeHp).toBe(hp0);
+    expect(s.passive.grudge).toBe(2);
+    expect(s.stats.hints).toBe(1);
+    expect(s.coins).toBe(2);
+    expect(s.nextSetMultiplier).toBe(2);
+
+    // Now land a valid Set: Grudge detonates! Snarl (+8), Rage Slam (+6×2 = +12), Grudge (+2×2), Payback (×2) all fire!
+    const hpBeforeSet = s.foeHp;
+    const afterSet = playSet(s);
+    expect(afterSet.passive.grudge).toBe(0);
+    expect(afterSet.mistakeRewardUsedThisSet).toBe(false);
+    expect(hpBeforeSet - afterSet.foeHp).toBeGreaterThanOrEqual((3 + 4 + 8 + 12) * 2);
+  });
+
+  it('[GP-08] Time Bomb defusal throws bomb at foe with fuse-proximity bonus (+4 / +8 / +14 + 0.25 Power)', () => {
+    setPowerEnabled(true);
+    const runBomb = (remainingSec: number) => {
+      let s = startFight({
+        save: { selectedFighter: 'Pelican', charms: [], armory: [] },
+        level: dummyLevel({ rules: { hazards: { timeBombs: { every: 99, seconds: 20 } }, boardSize: 12, timer: 120 } }),
+        features: ['hearts', 'gear'],
+      });
+      const set = findSet(s)!;
+      const bombId = set[0].id;
+      s = {
+        ...s,
+        timeBombIds: [bombId],
+        board: s.board.map(c =>
+          c.id === bombId
+            ? { ...c, hasCountdown: true, countdownTimer: remainingSec }
+            : { ...c, hasCountdown: false, countdownTimer: undefined }
+        ),
+      };
+      const hpBefore = s.foeHp;
+      const after = playSet(s, set);
+      return { after, dmg: hpBefore - after.foeHp };
+    };
+
+    const safe = runBomb(12);
+    expect(safe.dmg).toBe(3 + BOMB_DEFUSE_BASE_DAMAGE);
+    expect(safe.after.power).toBe(0);
+    expect(safe.after.log[safe.after.log.length - 1].set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Bomb Throw', amount: BOMB_DEFUSE_BASE_DAMAGE })
+    );
+
+    const hot = runBomb(6);
+    expect(hot.dmg).toBe(3 + BOMB_DEFUSE_HOT_DAMAGE);
+    expect(hot.after.power).toBe(0);
+    expect(hot.after.log[hot.after.log.length - 1].set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Hot Defuse!', amount: BOMB_DEFUSE_HOT_DAMAGE })
+    );
+
+    const clutch = runBomb(3);
+    // Clutch adds +0.25 Power right during trap resolution (multiplier 1.25×) onto (3 + 14) = 17 → 21!
+    expect(clutch.after.power).toBeCloseTo(SKILL_FEAT_POWER.clutchBomb, 4);
+    expect(clutch.dmg).toBe(Math.round((3 + BOMB_DEFUSE_CLUTCH_DAMAGE) * (1 + SKILL_FEAT_POWER.clutchBomb)));
+    expect(clutch.after.log[clutch.after.log.length - 1].set?.flatItems).toContainEqual(
+      expect.objectContaining({ label: 'Clutch Defuse!', amount: BOMB_DEFUSE_CLUTCH_DAMAGE })
+    );
+  });
+
+  it('[GP-13] enforces 65% Active Star Capacity, 2 exclusive capstone pairs per fighter, and role-pure trees (0 lasers)', () => {
+    expect(ACTIVE_TREE_CAP_RATIO).toBe(0.65);
+    expect(ACTIVE_TREE_CAP).toBe(Math.round(TREE_BUDGET * 0.65));
+
+    // Zero laser effects remain anywhere in any fighter's skill tree
+    for (const node of SKILL_NODES) {
+      for (const r of node.rules ?? []) {
+        for (const e of r.effects) {
+          expect({ node: node.id, do: e.do }).not.toEqual({ node: node.id, do: 'laser' });
+        }
+      }
+    }
+
+    // Zero explode effects on non-bruiser fighters (Fox, Penguin, Corgi, Pelican)
+    const nonExploders = new Set(['Sly Fox', 'Emperor Penguin', 'Corgi', 'Pelican']);
+    for (const node of SKILL_NODES.filter(n => nonExploders.has(n.fighter))) {
+      for (const r of node.rules ?? []) {
+        for (const e of r.effects) {
+          expect({ node: node.id, do: e.do }).not.toEqual({ node: node.id, do: 'explode' });
+        }
+      }
+    }
+
+    // Every fighter has 2 symmetric mutually exclusive pairs that never cut off reachability
+    for (const f of FIGHTERS) {
+      const tree = skillTreeOf(f.name);
+      const excl = tree.filter(n => n.exclusiveWith);
+      expect(excl).toHaveLength(4);
+      for (const n of excl) {
+        const partner = tree.find(x => x.id === n.exclusiveWith)!;
+        expect(partner.exclusiveWith).toBe(n.id);
+        expect(exclusiveConflictFor([partner.id], n.id)?.id).toBe(partner.id);
+      }
+    }
+
+    // Corgi Stampede conditionalMultiplier (×1.5 at 18+ cards) works in combat
+    let corgi = startFight({
+      save: { selectedFighter: 'Corgi', skillNodes: { Corgi: ['corgi-0-9'] } },
+      level: dummyLevel({ rules: { boardSize: 18, timer: 120 } }),
+      features: ['hearts', 'gear'],
+    });
+    expect(corgi.board.length).toBe(18);
+    const hpBefore = corgi.foeHp;
+    corgi = playSet(corgi);
+    expect(hpBefore - corgi.foeHp).toBe(Math.round(3 * 1.5));
+  });
+
+  it('applies RunReliefOptions cleanly (foeHpScale, extraHearts, timerScale, parryWindupScale, coinMultiplier, starCap)', () => {
+    const level = testLevel({
+      foes: [{ name: 'Tank', hp: 100, parry: { attackName: 'Slam', icon: 'lorc/sword-clash', counter: { kind: 'any' }, cooldownMs: 8000, windupMs: 10000, perfectWindowMs: 3500, penalty: 'heart' } }],
+      rules: { timer: 100, hearts: 3 },
+    });
+    const run = createRun(level, createNewSave(), {
+      seed: 1,
+      features: new Set(['hearts', 'gear', 'coins']),
+      relief: {
+        foeHpScale: 0.75,
+        extraHearts: 2,
+        timerScale: 1.2,
+        parryWindupScale: 1.3,
+        coinMultiplier: 2,
+        starCap: 1,
+        tailwindActive: true,
+      },
+    });
+    expect(run.foeHp).toBe(75);
+    expect(run.hearts).toBe(5);
+    expect(run.maxHearts).toBe(5);
+    expect(run.timeLeft).toBe(120);
+    expect(run.parry?.spec.windupMs).toBe(13000);
+    expect(run.tailwindActive).toBe(true);
+    expect(computeStars({ ...run, status: 'won', endReason: 'defeated', challengeMet: true })).toBe(1);
   });
 });

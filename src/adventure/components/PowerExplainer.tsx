@@ -9,7 +9,16 @@ import { WeaponAvatar } from '@/components/weapons';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { EVOLUTION_RULES } from '../engine/sources';
-import { NO_POWER, POWER_KNEE, formatPower, powerMultiplier, powerWatchPhrase } from '../data/weaponPower';
+import { UNDERSTUDY_ID } from '../data/adventureWeapons';
+import {
+  POWER_KNEE,
+  SKILL_FEAT_POWER,
+  formatPower,
+  formatPowerGain,
+  powerGainAtLevel,
+  powerMultiplier,
+  powerWatchPhrase,
+} from '../data/weaponPower';
 import { INK, TONE } from './ui';
 
 export interface PowerExplainerProps {
@@ -44,9 +53,28 @@ const PowerExplainer: React.FC<PowerExplainerProps> = ({
   const multLabel = points !== undefined ? formatPower(points) : fmtMult(multValue);
   const hot = multValue >= 5;
   const feeders = weapons
-    .map(w => ({ weapon: w, phrase: powerWatchPhrase(w.id) }))
-    .filter((x): x is { weapon: Weapon; phrase: string } => x.phrase !== null);
-  const nonFeeders = weapons.filter(w => NO_POWER.has(w.id));
+    .map((w, idx) => {
+      if (w.id === UNDERSTUDY_ID) {
+        const left = idx > 0 ? weapons[idx - 1] : undefined;
+        if (!left || left.id === UNDERSTUDY_ID) {
+          return { weapon: w, phrase: 'place beside a charm to copy its Power trigger', gain: null as string | null };
+        }
+        const effectiveLv = Math.max(w.level ?? 1, left.level ?? 1);
+        return {
+          weapon: w,
+          phrase: `${powerWatchPhrase(left.id) ?? left.name} (copied from ${left.name})`,
+          gain: formatPowerGain(powerGainAtLevel(left.id, effectiveLv)),
+        };
+      }
+      const phrase = powerWatchPhrase(w.id);
+      if (!phrase) return null;
+      return {
+        weapon: w,
+        phrase,
+        gain: formatPowerGain(powerGainAtLevel(w.id, w.level ?? 1)),
+      };
+    })
+    .filter((x): x is { weapon: Weapon; phrase: string; gain: string | null } => x !== null);
 
   return (
     <View style={[st.box, compact && st.boxCompact]} testID={testID}>
@@ -63,28 +91,23 @@ const PowerExplainer: React.FC<PowerExplainerProps> = ({
       {subtitle && <Text style={st.subtitle}>{subtitle}</Text>}
 
       <Text style={st.body}>
-        Power is your fight-wide damage multiplier. Every fight starts at ×1.0. Whenever your gear does its thing, Power climbs—and multiplies every point of damage you deal for the rest of the fight (Set hits, bonuses, and explosions).
+        Power is your fight-wide damage multiplier. Every fight starts at ×1.0. Charm triggers, skill feats, and Evolutions raise Power—multiplying all damage you deal in the simple BASE × MULT equation.
       </Text>
       <Text style={st.note}>
-        Early on, every +1 Power adds +1.0× to your damage (up to ×{1 + POWER_KNEE}), then climbs gently so huge builds stay fun and balanced. Unlike capped weapon effects, Power never stops climbing.
+        First {POWER_KNEE} Power adds +1.0× per point (up to ×{1 + POWER_KNEE}), then climbs smoothly as 2 + 2√(P − 2) forever. No penalty for a full charm belt, and upgrading a charm to Lv 5 doubles its Power yield (1.00× → 2.00×).
+      </Text>
+      <Text style={st.note}>
+        Skill feats: Perfect Parry {formatPowerGain(SKILL_FEAT_POWER.perfectParry)}, Counter Parry {formatPowerGain(SKILL_FEAT_POWER.counterParry)}, 3-step Purity {formatPowerGain(SKILL_FEAT_POWER.purityChain3)}, Clutch Bomb (&lt;5s) {formatPowerGain(SKILL_FEAT_POWER.clutchBomb)}, Evolution {formatPowerGain(EVOLUTION_RULES.power)}.
       </Text>
 
-      {(feeders.length > 0 || nonFeeders.length > 0 || evolutionsTriggered > 0) && (
+      {(feeders.length > 0 || evolutionsTriggered > 0) && (
         <View style={st.feedList}>
-          <Text style={st.feedHeader}>WHAT RAISED YOUR POWER</Text>
-          {feeders.map(({ weapon, phrase }) => (
+          <Text style={st.feedHeader}>WHAT RAISES YOUR POWER</Text>
+          {feeders.map(({ weapon, phrase, gain }) => (
             <View key={weapon.id} style={st.feedRow}>
               <WeaponAvatar weapon={weapon} size={18} />
               <Text style={st.feedText}>
-                <Text style={st.bold}>{weapon.name}</Text> (Lv.{weapon.level}) · feeds Power on {phrase}
-              </Text>
-            </View>
-          ))}
-          {nonFeeders.map(w => (
-            <View key={w.id} style={st.feedRow}>
-              <WeaponAvatar weapon={w} size={18} />
-              <Text style={st.feedText}>
-                <Text style={st.bold}>{w.name}</Text> · copies the weapon on its left, does not feed Power itself
+                <Text style={st.bold}>{weapon.name}</Text> (Lv.{weapon.level}) · {gain ? `${gain} Power on ` : ''}{phrase}
               </Text>
             </View>
           ))}
@@ -92,7 +115,7 @@ const PowerExplainer: React.FC<PowerExplainerProps> = ({
             <View style={st.feedRow}>
               <Icon name="lorc/crystal-shine" size={16} color={TONE.evoReady} />
               <Text style={st.feedText}>
-                <Text style={st.bold}>Evolution surge</Text> ×{evolutionsTriggered} · +{evolutionsTriggered * EVOLUTION_RULES.power} Power from fused weapons
+                <Text style={st.bold}>Evolution surge</Text> ×{evolutionsTriggered} · +{Math.round(evolutionsTriggered * EVOLUTION_RULES.power * 100) / 100} Power from fused weapons
               </Text>
             </View>
           )}
