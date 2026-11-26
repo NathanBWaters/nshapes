@@ -197,6 +197,7 @@ export const CUE_TO_NATIVE: Record<CueName, NativeCueKey> = {
 
 const INSTRUMENT_ROLE_STING: Record<InstrumentId, NativeCueKey> = {
   brass: 'sting-brass',
+  brassStab: 'sting-brass',
   horn: 'sting-brass',
   saw: 'sting-brass',
   bell: 'sting-bell',
@@ -588,6 +589,19 @@ class NativeAudioBridge {
 
   evolve(): void {
     this.playCueKey('evolve', 0, 0.95);
+  }
+
+  fighterCall(fighter: string, kind: 'cheer' | 'hurt' | 'signature'): void {
+    const map: Record<string, NativeCueKey> = {
+      'Orange Tabby': 'sting-wind',
+      'Sly Fox': 'sting-pluck',
+      Badger: 'sting-brass',
+      'Emperor Penguin': 'sting-bell',
+      Corgi: 'sting-mallet',
+      Pelican: 'select-2',
+    };
+    const key = map[fighter] ?? 'sting-mallet';
+    this.playCueKey(key, 0, kind === 'hurt' ? 0.62 : 0.72);
   }
 
   slowMoDefeat(): void {

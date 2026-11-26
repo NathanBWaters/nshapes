@@ -246,8 +246,14 @@ export const moodOf = (
 ): FightMood => {
   const timed = run.timeLeft !== null;
   const moves = !timed && run.movesLeft !== null;
+  // [AU-18]: Non-boss World 5 Summit fights use the dedicated 136 BPM 'summit' arrangement,
+  // reserving 'boss' strictly for boss encounters even if biome.music still points at 'boss'.
+  const arrangement =
+    !run.level.isBoss && run.level.biome === 'summit' && o.arrangement === 'boss'
+      ? 'summit'
+      : o.arrangement;
   return {
-    arrangement: o.arrangement,
+    arrangement,
     boss: Boolean(run.level.isBoss),
     status: run.status,
     paused: o.paused,

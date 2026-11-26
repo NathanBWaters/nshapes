@@ -1,170 +1,96 @@
 # Sound design: the adaptive score
 
-Adventure Mode's sound is one piece of music that the fight plays. Nothing is a
-recording: every note, drum and effect is synthesized live in `src/audio/`.
+Adventure Mode's sound is one piece of music that the fight plays. On web (and
+native builds with `react-native-audio-api`), every note, drum, biome bed and
+effect is synthesized live in `src/audio/`; native builds without live Web Audio
+fall back seamlessly to mastered `.m4a` loops & cues via `src/audio/nativeBridge.ts`.
 
-Three ideas hold it together.
+Four ideas hold it together.
 
-1. **Everything is in key.** The tune, a weapon's riff, a coin, a jackpot: all
-   are written in scale steps and resolved against the key and chord the band
-   is on at that moment. No sound can clash with the music, so sounds can pile
-   up (the casino feel) and still sound like one song.
-2. **Everything is on the beat.** Effects wait for the next 32nd note (at most
-   about 60 ms), so a chain of triggers is a rhythm, not a smear.
-3. **The music tells you the state of the fight.** You can play with your eyes
-   on the cards and still know your hearts, the clock, the foe and your streak.
+1. **Everything is in key — with one canonical signature hook.** The tune,
+   weapon riffs, fighter calls, coins, and jackpots are written in scale steps
+   and resolved against the active key and chord. The opening 2-bar `THEME`
+   hook (`E5–G5–C6–B5–G5–E5`) stays unmistakably Ionian across bright/neutral
+   worlds (`title`, `camp`, `map`, `meadow`, `canyon`, `peaks`, `summit`),
+   applying deliberate modal lead-flattening only in dark dramatic states
+   (`woods` Dorian, `boss` Aeolian, `story` abduction, and `lastHeart` danger).
+2. **Priority before loudness (Sakurai Ep. #032).** SFX flow through a 4-tier
+   priority bus (`S: 0 dB`, `A: -1 dB`, `B: -5 dB`, `C: -8 dB`) with SFX-to-SFX
+   ducking (`Tier S` ducks `B/C` `-9 dB` & music `-8 dB`; `Tier A` ducks `B/C`
+   `-4 dB`) and priority voice-stealing at `56` voices so KOs, parries, and
+   hurts never drop.
+3. **Strong attack, restrained decay (Sakurai Ep. #165).** Combat hits open
+   with a dry `<2 ms` `impactCrack` + tight `38–58 ms` `impactPunch` finishing
+   inside visual hitstop, `5 ms`-attack `brassStab`, plucked `s === 0` notes
+   honoring `o.dur`, a dedicated `0.35 s` SFX room (zero `echo` on SFX), and
+   24 immediate reactive cues (`4 ms` lookahead) while Set cascades stay locked
+   to the 32nd-note grid inside `band.stretch()`.
+4. **The music tells you the state of the fight.** You can play with your eyes
+   on the cards and still know your hearts, the clock, the foe, your streak,
+   and the top 2 urgent board threats.
 
-Try it all at **`/dev/sound`** (the sound studio): start the band, change the
-fight, tap a weapon, hold it to add it to the band, tap a recipe.
+Try it all at **`/dev/sound`** (the sound studio): toggle Monitor Mode
+(`Flat Stereo` / `Phone Sim 300–5kHz Mono` / `Low Vol -12 dB`), inspect live
+voices/stolen counts/per-tier meters, audition all 10 arrangements, 6 fighters,
+biome ambience, 64 weapons, and 208 evolution themes. See
+[sound-audition-checklist.md](./sound-audition-checklist.md) for the 4-environment
+real-hardware verification checklist.
 
 ## What you hear, and what it means
 
 | You hear | It means | Where |
 |---|---|---|
-| The tune turning minor, step by step | You are losing hearts (half gone: one step darker; last heart: two) | `director.ts` hearts → mode |
+| The tune turning minor, step by step | You are losing hearts (half gone: one step darker; last heart: two + lead modal flattening) | `director.ts` hearts → `mode`, `leadMode` |
 | A heartbeat, and the band muffled | One heart left | `heartbeat`, `filterHz` |
 | Tick-tock, then racing ticks and a faster band | The clock is in its last quarter (or 20 s), then its last 8 s. Untimed levels do the same on their last moves. | `clock` |
 | More of the band joining in | The foe is falling, you are deeper into the waves, you are on a streak | `intensity` → drums, arpeggio, pad, counter-melody |
-| The band thinning, then the tune dropping out | You have not made a Set for a while (patience grows with every trait beyond three) | `idleThinMs`, `idleQuietMs` |
+| The band softening gently (never dead) | You have not made a Set for 10–34 s (`leadGain` floors at `0.35`, filter at `9,500 Hz`) | `idleStartMs`, `idleThinMs`, `idleQuietMs` |
 | A drum roll and kettledrum under it all | The foe is under 20% HP: finish it | `finisher` |
-| The band getting faster | Your streak: +2% per Set, up to +10% | `comboTempo` |
-| Everything a key higher and brighter, new drums, bells | An evolution is live. Each recipe has its own theme. | evolutions → `lift`, mode, groove |
+| The band getting faster | Your streak (+2%/Set, up to +10%) & clock, capped at `maxTempo: 1.18` (~175 BPM boss peak) | `comboTempo`, `maxTempo` |
+| Everything a key higher and brighter, new drums, bells | An evolution is live. Each of the 208 recipes has its own theme. | evolutions → `lift`, mode, groove |
 | The evolution's layer cutting in and out | It ends in 5 seconds | `evolutionFading` |
 | A semitone up | The next wave | wave → `lift` |
 | Half speed, mellow vibes, a ride cymbal | Level-up pick or the shop: take your time | `lounge` |
 | Underwater | Paused, or a tip is waiting for you | `paused` |
 | Glass chords, no drums, half speed | Deep Freeze: the clock and the foe stand still | `frozen` |
-| Low brass leaning on a sour note, then landing | The foe did something (each move adds its own detail) | `foe…` cues |
-| A low choir a semitone off | A cursed card is on the board | `alerts.cursed` |
-| Cowbell on every 8th | The Hot Potato is about to jump | `alerts.potatoSoon` |
-| A constant shaker | A fuse is in its last seconds | `alerts.fuseHot` |
-| Rim clicks off the beat | A thorn card is about to bite | `alerts.thornSoon` |
-| A high glass ping twice a bar | The Glass Sword's window is nearly shut | `alerts.glassLow` |
-| A loud tick on every beat | A foe's bomb or countdown card is close | `alerts.bombSoon` |
+| Top 2 urgent board warnings (capped to 1 on last heart + racing clock) | Strict lethality order: `bombSoon` → `fuseHot` (8th-note shaker) → `potatoSoon` → `thornSoon` → `glassLow` (oct 5) → `cursed` | `director.ts` `capAlerts()` |
 
-Every world plays the same tune in the same key as the map (C), each in its
-own mode: Meadow major, Woods dorian, Canyon mixolydian, Peaks lydian, bosses
-minor (`WORLD_TONE`). Walking from the map into a fight never transposes the
-tune; only its colour changes. Key changes are kept for things that happen in
-a fight (a new wave, an evolution). Each mode swaps the one chord of the loop
-that would turn sour in it (`theory.ts` `PROGRESSIONS`).
+## Arrangements & Canonical `THEME` Motif
 
-## The casino layer
+Every world shares the map's home key (C), expanding all battle tracks to a
+**16-bar A–B form** (`THEME` + syncopated `THEME_BATTLE_B`) with a crisp 1-bar
+`INTRO_PICKUP` on `band.enterFight()`:
 
-| Moment | Sound |
-|---|---|
-| Tapping cards | The first, second and third card are the root, third and fifth of the current chord. A Set spells a chord. |
-| A Set lands | The chord strums, and the **streak ladder** rings: one rung higher for every Set in the combo (a five-note scale, so no rung is ever sour), up three octaves. Streak 3 adds a second bell, 5 a run of sparkles, 8 a cymbal and a choir. |
-| How hard it hit | Under 10 damage: a tap. 10+: brass. 25+: a sub-bass drop, a cymbal, and the music ducks under it. 50+ (MEGA): the whole orchestra and a shower of bells. |
-| What the Set set off | A **chain**: each effect one 32nd note later (blast, laser, heal, coins, a weapon's sting…). Five or more ends on the cash register. |
-| A near miss saved by a grace | A note that starts a semitone flat and is pulled up into the chord |
-| The streak ending | Two notes stepping down |
-| A trick weapon going wrong (off the rope, a shattered sword, a thorn that bit) | A plucked note with its sour neighbour, falling. Never the weapon's own sting. |
-| Level-up | A brass fanfare, then the three choices land like slot reels |
-| Buying / rerolling in the shop | The cash register / the reels spinning |
-| Results | Each star rings a step higher up the chord; then the coins count out, climbing the ladder |
-| A Catalyst appears | One note from outside the scale, which then resolves |
-| An evolution starts | A drum roll and a riser into the recipe's fanfare; the band lifts |
-| Winning / losing | A full cadence with kettledrums / the band falling apart downward |
+- **Screen tracks (`THEME` + calm `THEME_B`):** `title` (96 BPM Ionian kalimba/strings/vibes, drumless — also gently filtered for Free Play), `story` (88 BPM dusk Aeolian strings/celesta/timpani, brightening to Ionian on Beat 3 Hero), `camp` (98 BPM cozy vibes/harp/pizz + soft shaker), `map` (108 BPM Ionian).
+- **Battle tracks (16-bar A–B, smooth BPM curve):** `meadow` (118 BPM Ionian) → `woods` (122 BPM Dorian) → `canyon` (128 BPM Mixolydian) → `peaks` (124 BPM Lydian) → `summit` (136 BPM Mixolydian, celesta + heroic brass) → `boss` (148 BPM Aeolian).
+- **Procedural Biome Ambience (`src/audio/ambience.ts`):** Ultra-low-CPU looped beds (`meadowAir`, `woodlandBreeze`, `campfire`, `mountainWind`) at `-20 dB` (`chip.ambienceBus`), ducked `-12 dB` under Tier S/A hits, staying alive quietly if Music alone is muted and stopping completely on background or full mute.
 
-## Every weapon is a band member
+## Every weapon is a band member & every fighter has a voice
 
-`src/audio/voices.ts` gives each of the 63 weapons a **voice**: an instrument
-and a one-bar riff written in steps above the chord root (so any riff fits any
-bar, and any two riffs harmonise). Some also add a drum figure.
-
-- **Holding a weapon** puts its riff in the music. Two or three weapons take a
-  turn each bar, so over a few bars you hear your whole build.
-- **A weapon firing** plays its **sting** (the riff's notes as one quick run)
-  and turns its riff up for the next bars. Weapons that are doing the work are
-  the ones you hear.
-- **Picking or buying a weapon** plays its sting: a new member joins.
-- **Tapping a weapon in the Armory** plays its riff. So does its unlock screen.
-
-The voice follows the weapon's job: brass and big drums for damage, one clear
-solo instrument for each trick, an uneasy corner for the board gambles, wide
-slow instruments for the board, warm ones for hearts, glass and coins for
-insight, clocks for time, things that repeat for echoes. Each row in the table
-says why (Blast Powder: "Low brass and a kettledrum: every boom lands on the
-beat"; Mirror Shard: "A phrase and its mirror image"; Greedy Chest: "One more
-coin each time: the run grows as you wait").
-
-A weapon added later with no row still gets a voice, made from its id.
-
-## Every evolution is a duet
-
-An evolution's theme is made from its two weapons (`evolutionTheme`):
-
-- **Fanfare:** weapon one's sting, weapon two's answered a third higher, then
-  the octave, on the two weapons' own instruments over brass.
-- **While it is live:** both riffs play together an octave up (one doubled on
-  the supersaw), with a ring of bells and off-beat chord stabs.
-- **Key lift** of 2 to 7 semitones, **mode** one or two steps brighter, and one
-  of four drum grooves (four-on-the-floor, gallop, breakbeat, march), picked by
-  the recipe's id.
-
-All 204 recipes get a different theme (tested).
+- **`src/audio/voices.ts`** gives all **64** Armory weapons a handcrafted **voice** (instrument + 1-bar riff + Tier B sting at `0.55`).
+- **`src/audio/themes.ts`** derives a unique duet theme for all **208** evolution recipes (fanfare fired on `EvolutionCutIn` mount via `band.playCutInEvolve(id)` so the 90 ms riser lands on the exact slash-flash frame).
+- **`src/audio/fighterVoices.ts`** gives all **6** animal fighters (`Orange Tabby`, `Sly Fox`, `Badger`, `Emperor Penguin`, `Corgi`, `Pelican`) ultra-short (`60–130 ms`), scale-locked (`≤2,400 Hz`), Tier B `cheer` / `signature` / `hurt` timbres with a `1.8 s` per-fighter cooldown.
 
 ## How it is built
 
 ```
 src/audio/
-  chip.ts         the synth: oscillators, FM bells, filters, reverb, echo, limiter, ducking
-  instruments.ts  28 instruments and 22 drums, as data
-  theory.ts       modes, chord loops, scale steps → notes, the streak ladder (pure)
-  voices.ts       a voice for every weapon, a theme for every evolution (pure)
-  director.ts     fight state (FightMood) → how the band plays (Mix) (pure)
-  band.ts         the sequencer and the cue book
-  fightAudio.ts   RunState → FightMood; fight events → cues (pure mapping)
-  songs.ts        the tune and each world's arrangement, as text
-  index.ts        public API: music, band, sfx(), renderOffline()
+  chip.ts           Web Audio synth, 4-tier SFX bus, voice-stealing, 0.35s/1.7s room split, phone master bus, monitor mode
+  instruments.ts    29 instruments (incl. brassStab) and 24 drums (incl. impactCrack & impactPunch)
+  theory.ts         modes, chord loops, scale steps → notes, the streak ladder (pure)
+  voices.ts         64 weapon voices & 208 procedural evolution themes (pure)
+  fighterVoices.ts  6 distinct scale-locked animal fighter vocal signatures
+  director.ts       fight state (FightMood) → Mix, capAlerts, resolveLeadMode (pure)
+  band.ts           16-bar A-B sequencer, 24 immediate cues, 4-tier cue book, Kill-Cam & mount-sync APIs
+  ambience.ts       zero-timer procedural biome ambience bed wired to appLifecycle
+  fightAudio.ts     RunState → FightMood; fight events → cues (pure mapping)
+  songs.ts          INTRO_PICKUP, THEME, THEME_B, THEME_BATTLE_B & 10 arrangements
+  nativeBridge.ts   expo-av .m4a loop & cue bridge for native builds without Web Audio
+  index.ts          public API: music, band, ambience, sfx(), renderOffline()
 ```
 
-- **To change what a state sounds like,** edit `director.ts`. It is the only
-  place that decides.
-- **To add a fight event,** give it a row in `fightAudio.ts` `EVENT_CUE` (the
-  type checker insists) and, if it needs a new sound, a cue in `band.ts` `CUES`.
-- **To add a weapon,** add a row to `voices.ts`. If its effect has no rule
-  behind it, name the event it causes (`events`) or the callout it announces
-  itself with (`calls`) in `data/weaponGuide.ts`, so its sting plays when it fires.
-- **The chain steps with the picture.** The effects on screen
-  (`src/adventure/fx`, docs/fx-design.md) take a step exactly when the chain
-  does (`takesChainSlot`) and choose how many 32nd notes a step lasts
-  (`playSounds(sounds, stride)`): a short chain plays slower so it can be read.
-  Each sound is heard when its picture lands, never before: the stage marks
-  every event with `heardAfterMs` (a flight is a whole number of 32nd notes,
-  so it stays on the beat), `band.stretch` counts the whole chain from the
-  band's next note and returns how long that is, and the stage starts its
-  picture that much later, less one frame. In dev builds every fight cue is
-  logged to `window.__nshapesCueLog` (when it will be heard), which the motion
-  capture prints next to the frames.
-- **Run events carry `source`** (the rule key of the weapon, skill node or
-  evolution that caused them), which is how the band knows whose sting to play.
+## Checking it without speakers (and on real hardware)
 
-**The sound button on the map** turns the whole score on and off (music and
-effects together: in Adventure they are one thing).
-
-## Checking it without speakers
-
-- `npx jest __tests__/audioScore.test.ts`: the theory (no diminished chord in
-  any loop, the ladder only climbs), every weapon voiced and unique, every
-  recipe themed and unique, the director's rules, the event → cue mapping.
-- `/dev/sound` → **Check levels** renders a scripted fight through an
-  `OfflineAudioContext` and reports peak and RMS. The limiter keeps the peak
-  under 1.0.
-- In a dev build, `__nshapesAudio.renderOffline({ script: … })` renders any
-  scripted fight to an `AudioBuffer`; `__nshapesAudio.band.currentMix` is the
-  live mix.
-
-## Limits worth knowing
-
-- **Web only.** The synth needs Web Audio, so the score plays in the browser
-  and the installed web app. Native builds keep the old bundled samples and
-  have no music.
-- **Tuned by measurement, not by ear.** Levels, balance between layers and the
-  absence of clipping were measured from offline renders; the musical choices
-  follow theory. Nobody has listened to it on a phone speaker yet.
-- **Voices are capped** (56 at once, quiet layers dropped first) to protect
-  slow phones. A very busy evolution on an old phone may thin its bells.
-- Two trick payouts (Ice Block, Wild Card) raise no fight event, so their
-  weapons' stings play only when picked, not when they pay.
+- `npx jest __tests__/audioScore.test.ts`: theory, all 64 weapons & 208 recipes, 4-tier priority bus & voice stealing, `capAlerts`, `o.dur` pluck decay, 0.35 s SFX room / zero SFX echo, 24 immediate cues, 16-bar A–B & `INTRO_PICKUP`, Summit 136 BPM & `maxTempo: 1.18`, Ionian hook integrity, 6 fighter voices, biome ambience lifecycle, and MMKV-gated impact-synced haptics.
+- `/dev/sound` → **Check levels** renders a 16 s scripted fight offline and reports Stereo Peak, Mono-Sum Peak, Broadband RMS, and `300–5000 Hz` Phone-Band RMS.
+- Real-device verification checklist: [docs/sound-audition-checklist.md](./sound-audition-checklist.md).

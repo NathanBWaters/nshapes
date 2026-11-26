@@ -1,5 +1,5 @@
 /**
- * Public audio API: music arrangements + synthesized SFX.
+ * Public audio API: music arrangements, biome ambience + synthesized SFX.
  *
  *   music.play('woods')   — switches arrangement on the next bar line
  *   music.stop()
@@ -9,12 +9,14 @@
  */
 import { getIsAppActive, subscribeAppActive } from '@/utils/appLifecycle';
 import { registerAudioInspector } from '@/utils/perfWatchdog';
+import { ambience } from './ambience';
 import { band, CUE_NAMES } from './band';
-import { chip, noteToFreq } from './chip';
+import { chip, noteToFreq, type SfxTier, type Space } from './chip';
 import type { FightMood } from './director';
+import { FIGHTER_VOICE_IDS, FIGHTER_VOICE_META, type FighterCallKind, type FighterVoiceId } from './fighterVoices';
 import { note, type InstrumentId } from './instruments';
 import { audioFlags } from './settings';
-import { ARRANGEMENTS, JINGLES } from './songs';
+import { ARRANGEMENTS } from './songs';
 import { RECIPE_IDS } from './themes';
 import { WEAPON_VOICES } from './voices';
 
@@ -31,8 +33,11 @@ const setAudioSessionType = (type: 'playback' | 'ambient') => {
 const suspendIfSilent = () => {
   if (!audioFlags.music && !audioFlags.sfx) {
     band.halt();
+    ambience.sync();
     chip.suspend();
     setAudioSessionType('ambient');
+  } else {
+    ambience.sync();
   }
 };
 
@@ -43,6 +48,8 @@ export const setMusicEnabled = (on: boolean) => {
     suspendIfSilent();
   } else if (band.current) {
     band.play(band.current);
+  } else {
+    ambience.sync();
   }
 };
 let sfxSetting = true;
@@ -81,11 +88,14 @@ export const unlockAudio = () => {
   if (ctx.state !== 'running') {
     void Promise.resolve(ctx.resume())
       .then(() => {
-        if (getIsAppActive() && ctx.state === 'running' && band.current && audioFlags.music) {
-          band.play(band.current);
+        if (getIsAppActive() && ctx.state === 'running') {
+          if (band.current && audioFlags.music) band.play(band.current);
+          else ambience.sync();
         }
       })
       .catch(() => undefined);
+  } else {
+    ambience.sync();
   }
   try {
     // One silent sample — the classic iOS "unlock" nudge
@@ -102,7 +112,8 @@ const installGestureUnlock = () => {
   // keep Web Audio DSP or Band sequencers running (even on iOS 'playback' audioSession).
   subscribeAppActive((active) => {
     if (!active) {
-      band.halt();
+      band.halt(true);
+      ambience.sync();
       chip.suspend();
       setAudioSessionType('ambient');
       return;
@@ -113,8 +124,9 @@ const installGestureUnlock = () => {
       setAudioSessionType('playback');
       void Promise.resolve(ctx.resume())
         .then(() => {
-          if (getIsAppActive() && ctx.state === 'running' && audioFlags.music && band.current) {
-            band.play(band.current);
+          if (getIsAppActive() && ctx.state === 'running') {
+            if (audioFlags.music && band.current) band.play(band.current);
+            else ambience.sync();
           }
         })
         .catch(() => undefined);
@@ -139,26 +151,15 @@ const installGestureUnlock = () => {
   events.forEach(e => document.addEventListener(e, handler, { capture: true, passive: true }));
 };
 
-// ─── Music ─────────────────────────────────────────────────────────────────
+// ─── Music & Ambience ──────────────────────────────────────────────────────
 
 /** The band plays the music (src/audio/band.ts). `music.play('woods')` switches arrangement on the next bar line. */
 export const music = band;
-export { band };
+export { ambience, band, FIGHTER_VOICE_IDS, FIGHTER_VOICE_META };
 export type { CueName } from './band';
 export type { FightMood, Mix } from './director';
-
-const playJingle = (name: keyof typeof JINGLES, bus: 'music' | 'sfx' = 'sfx') => {
-  const j = JINGLES[name];
-  const sd = 60 / j.bpm / 2;
-  let t = (nowOverride ?? chip.now) + 0.02;
-  for (const [n, steps] of j.notes) {
-    if (n !== '.') {
-      note('brass', noteToFreq(n, -12), t, sd * steps * 0.95, { vol: 1, bus });
-      note(name === 'defeat' ? 'vibes' : 'bell', noteToFreq(n), t, sd * steps * 0.95 + 0.3, { vol: 0.8, bus });
-    }
-    t += sd * steps;
-  }
-};
+export type { AmbienceBiome, AmbienceKind } from './ambience';
+export type { FighterCallKind, FighterVoiceId };
 
 // ─── SFX ───────────────────────────────────────────────────────────────────
 
@@ -181,53 +182,58 @@ export const sfx = (name: SfxName) => {
   lastPlayed[name] = now;
   const t = now + 0.005;
   const T = (freq: number, at: number, dur: number, o: Partial<Parameters<typeof chip.tone>[0]> = {}) =>
-    chip.tone({ voice: 'pulse1', freq, at, dur, vol: 0.5, duty: 0.25, bus: 'sfx', ...o });
+    chip.tone({ voice: 'pulse1', freq, at, dur, vol: 0.5, duty: 0.25, bus: 'sfx', tier: 'B', ...o });
 
-  const I = (inst: InstrumentId, n: string, dt: number, dur: number, vol: number) => note(inst, noteToFreq(n), t + dt, dur, { vol, bus: 'sfx' });
+  const I = (inst: InstrumentId, n: string, dt: number, dur: number, vol: number, tier: SfxTier = 'B', space?: Space) =>
+    note(inst, noteToFreq(n), t + dt, dur, { vol, bus: 'sfx', tier, space });
 
   switch (name) {
-    // Menus are played on the same instruments as the fights, in the map's key (C)
-    case 'click': I('kalimba', 'G5', 0, 0.12, 0.6); break;
-    case 'deselect': I('kalimba', 'E5', 0, 0.12, 0.5); break;
-    case 'deal': chip.noise({ at: t, dur: 0.05, vol: 0.18, short: false, filter: 5000, bus: 'sfx' }); break;
-    case 'match': ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => I('harp', n, i * 0.04, 0.5, 0.8)); I('bell', 'C6', 0, 0.6, 0.8); break;
-    case 'invalid': T(220, t, 0.12, { duty: 0.5, slideTo: 140 }); T(233, t + 0.1, 0.16, { duty: 0.5, slideTo: 110 }); break;
+    // Menus are played dry in Tier C on the same instruments as the fights, in the map's key (C)
+    case 'click': I('kalimba', 'G5', 0, 0.1, 0.42, 'C', 'dry'); break;
+    case 'deselect': I('kalimba', 'E5', 0, 0.1, 0.36, 'C', 'dry'); break;
+    case 'deal': chip.noise({ at: t, dur: 0.05, vol: 0.18, short: false, filter: 5000, bus: 'sfx', tier: 'C', space: 'dry' }); break;
+    case 'match': ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => I('harp', n, i * 0.04, 0.38, 0.72, 'A')); I('bell', 'C6', 0, 0.5, 0.78, 'A'); break;
+    case 'invalid': T(220, t, 0.12, { duty: 0.5, slideTo: 140, tier: 'A', space: 'dry' }); T(233, t + 0.1, 0.16, { duty: 0.5, slideTo: 110, tier: 'A', space: 'dry' }); break;
     case 'grace': T(noteToFreq('E6'), t, 0.06, { duty: 0.5 }); T(noteToFreq('B5'), t + 0.06, 0.12, { duty: 0.5 }); break;
-    case 'heart': ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => I('harp', n, i * 0.05, 0.6, 0.9)); break;
-    case 'hint': I('celesta', 'G5', 0, 0.3, 0.9); I('celesta', 'C6', 0.07, 0.5, 0.9); break;
+    case 'heart': ['C5', 'E5', 'G5', 'C6'].forEach((n, i) => I('harp', n, i * 0.05, 0.45, 0.8)); break;
+    case 'hint': I('celesta', 'G5', 0, 0.25, 0.8); I('celesta', 'C6', 0.07, 0.4, 0.8); break;
     case 'graceGain': T(noteToFreq('G5'), t, 0.05); T(noteToFreq('D6'), t + 0.05, 0.1); break;
-    case 'coin': I('glock', 'G6', 0, 0.2, 0.9); I('glock', 'C7', 0.06, 0.35, 0.9); break;
-    case 'explosion': chip.noise({ at: t, dur: 0.45, vol: 0.8, filter: 1800, sweepTo: 120, bus: 'sfx' }); break;
+    case 'coin': I('glock', 'G6', 0, 0.18, 0.65); I('glock', 'C7', 0.06, 0.28, 0.65); break;
+    case 'explosion': chip.noise({ at: t, dur: 0.32, vol: 0.78, filter: 1600, sweepTo: 140, bus: 'sfx', tier: 'A', space: 'sfxRoom' }); break;
     case 'laser': T(2200, t, 0.18, { duty: 0.125, slideTo: 300 }); break;
     case 'ricochet': [1800, 2400, 1600].forEach((f, i) => T(f, t + i * 0.05, 0.04, { duty: 0.125, vol: 0.3 })); break;
-    case 'confirm': I('kalimba', 'C5', 0, 0.15, 0.8); I('kalimba', 'G5', 0.06, 0.2, 0.8); break;
-    case 'back': I('kalimba', 'G5', 0, 0.15, 0.7); I('kalimba', 'C5', 0.06, 0.2, 0.7); break;
-    case 'whoosh': chip.noise({ at: t, dur: 0.25, vol: 0.3, filter: 600, sweepTo: 5000, bus: 'sfx' }); break;
+    case 'confirm': I('kalimba', 'C5', 0, 0.12, 0.55, 'C', 'dry'); I('kalimba', 'G5', 0.06, 0.16, 0.55, 'C', 'dry'); break;
+    case 'back': I('kalimba', 'G5', 0, 0.12, 0.45, 'C', 'dry'); I('kalimba', 'C5', 0.06, 0.14, 0.45, 'C', 'dry'); break;
+    case 'whoosh': chip.noise({ at: t, dur: 0.25, vol: 0.3, filter: 600, sweepTo: 5000, bus: 'sfx', tier: 'B' }); break;
     case 'hit':
-      chip.noise({ at: t, dur: 0.12, vol: 0.55, filter: 1200, sweepTo: 300, bus: 'sfx' });
-      T(330, t, 0.1, { duty: 0.5, slideTo: 110, voice: 'pulse2', vol: 0.4 });
+      chip.noise({ at: t, dur: 0.12, vol: 0.55, filter: 1200, sweepTo: 300, bus: 'sfx', tier: 'A', space: 'dry' });
+      T(330, t, 0.1, { duty: 0.5, slideTo: 110, voice: 'pulse2', vol: 0.4, tier: 'A', space: 'dry' });
       break;
     case 'rainbow':
       ['C6', 'D6', 'E6', 'G6', 'A6', 'C7'].forEach((n, i) => T(noteToFreq(n), t + i * 0.035, 0.08, { duty: 0.125, vol: 0.4 }));
-      chip.noise({ at: t, dur: 0.2, vol: 0.4, filter: 1500, sweepTo: 200, bus: 'sfx' });
+      chip.noise({ at: t, dur: 0.2, vol: 0.4, filter: 1500, sweepTo: 200, bus: 'sfx', tier: 'B' });
       break;
-    case 'hurt': T(180, t, 0.25, { duty: 0.5, slideTo: 60, vol: 0.6 }); chip.noise({ at: t, dur: 0.2, vol: 0.4, filter: 500, bus: 'sfx' }); break;
-    case 'levelup': playJingle('levelup'); break;
-    case 'star1': I('bell', 'E6', 0, 0.8, 1); break;
-    case 'star2': I('bell', 'G6', 0, 0.8, 1); break;
-    case 'star3': I('bell', 'C7', 0, 1, 1); I('bell', 'C6', 0, 1, 0.8); break;
-    case 'unlock': playJingle('unlock'); break;
-    case 'victory': playJingle('victory'); break;
-    case 'gameOver': playJingle('defeat'); break;
+    case 'hurt':
+      T(180, t, 0.25, { duty: 0.5, slideTo: 60, vol: 0.6, tier: 'S', space: 'dry' });
+      chip.noise({ at: t, dur: 0.2, vol: 0.4, filter: 500, bus: 'sfx', tier: 'S', space: 'dry' });
+      break;
+    // [AU-17]: Legacy jingles consolidated into canonical band cues & finales
+    case 'levelup': band.cue('levelUp'); break;
+    case 'star1': I('bell', 'E6', 0, 0.6, 0.9, 'A'); break;
+    case 'star2': I('bell', 'G6', 0, 0.6, 0.9, 'A'); break;
+    case 'star3': I('bell', 'C7', 0, 0.9, 1, 'A', 'hall'); I('bell', 'C6', 0, 0.9, 0.8, 'A', 'hall'); break;
+    case 'unlock': band.cue('weaponGet'); break;
+    case 'victory': band.finale(true); break;
+    case 'gameOver': band.finale(false); break;
     case 'foeDefeated':
-      chip.noise({ at: t, dur: 0.6, vol: 0.7, filter: 2500, sweepTo: 80, bus: 'sfx' });
-      ['G5', 'E5', 'C5', 'G4'].forEach((n, i) => T(noteToFreq(n), t + 0.05 + i * 0.07, 0.1, { duty: 0.5, voice: 'pulse2', vol: 0.35 }));
+      chip.noise({ at: t, dur: 0.5, vol: 0.7, filter: 2500, sweepTo: 80, bus: 'sfx', tier: 'S' });
+      ['G5', 'E5', 'C5', 'G4'].forEach((n, i) => T(noteToFreq(n), t + 0.05 + i * 0.07, 0.1, { duty: 0.5, voice: 'pulse2', vol: 0.35, tier: 'S' }));
       break;
-    case 'wave': ['C5', 'C5', 'G5'].forEach((n, i) => T(noteToFreq(n), t + i * 0.1, 0.08, { duty: 0.125 })); break;
-    case 'tick': T(1000, t, 0.02, { duty: 0.5, vol: 0.25 }); break;
+    case 'wave': ['C5', 'C5', 'G5'].forEach((n, i) => T(noteToFreq(n), t + i * 0.1, 0.08, { duty: 0.125, tier: 'A' })); break;
+    case 'tick': T(1000, t, 0.02, { duty: 0.5, vol: 0.25, tier: 'C', space: 'dry' }); break;
     case 'freeze':
       ['B6', 'G6', 'E6', 'B5', 'G5'].forEach((n, i) => T(noteToFreq(n), t + i * 0.05, 0.25, { duty: 0.125, vol: 0.3, vibrato: 0.02 }));
-      chip.noise({ at: t, dur: 0.5, vol: 0.25, short: true, filter: 9000, sweepTo: 3000, bus: 'sfx' });
+      chip.noise({ at: t, dur: 0.5, vol: 0.25, short: true, filter: 9000, sweepTo: 3000, bus: 'sfx', tier: 'B' });
       break;
   }
 };
@@ -278,12 +284,31 @@ let nowOverride: number | null = null;
 const withNow = (t: number, fn: () => void) => {
   nowOverride = t;
   lastPlayed = {};
-  try { fn(); } finally { nowOverride = null; }
+  try {
+    band.atTime(t, fn);
+  } finally {
+    nowOverride = null;
+  }
 };
 
 installGestureUnlock();
 
 // Dev handle for poking the synth from the browser console: __nshapesAudio.sfx('rainbow')
 if (typeof __DEV__ !== 'undefined' && __DEV__ && typeof window !== 'undefined') {
-  (window as unknown as Record<string, unknown>).__nshapesAudio = { chip, music, band, sfx, renderOffline, setSfxEnabled, setSfxOverride, setMusicEnabled, audioFlags, CUE_NAMES, WEAPON_VOICES, RECIPE_IDS };
+  (window as unknown as Record<string, unknown>).__nshapesAudio = {
+    chip,
+    music,
+    band,
+    ambience,
+    sfx,
+    renderOffline,
+    setSfxEnabled,
+    setSfxOverride,
+    setMusicEnabled,
+    audioFlags,
+    CUE_NAMES,
+    WEAPON_VOICES,
+    RECIPE_IDS,
+    FIGHTER_VOICE_IDS,
+  };
 }

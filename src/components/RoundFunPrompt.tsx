@@ -4,11 +4,11 @@
  * or updates historical battle records from Camp -> History.
  */
 import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { sfx } from '@/audio';
 import { COLORS } from '@/utils/colors';
+import { triggerHaptic } from '@/utils/haptics';
 import {
   NEGATIVE_FUN_TAGS,
   POSITIVE_FUN_TAGS,
@@ -29,15 +29,6 @@ interface Props {
   testIDPrefix?: string;
 }
 
-const triggerHaptic = () => {
-  if (Platform.OS === 'web') return;
-  try {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  } catch {
-    /* haptics optional outside native devices */
-  }
-};
-
 const RoundFunPrompt: React.FC<Props> = ({
   rating,
   tags = [],
@@ -48,7 +39,7 @@ const RoundFunPrompt: React.FC<Props> = ({
 }) => {
   const handleVote = (next: FunRating) => {
     sfx('click');
-    triggerHaptic();
+    void triggerHaptic('light');
     if (rating === next) {
       onChange(null, []);
       return;
@@ -59,7 +50,7 @@ const RoundFunPrompt: React.FC<Props> = ({
 
   const handleTag = (tagId: FunTag) => {
     sfx('click');
-    triggerHaptic();
+    void triggerHaptic('light');
     const activeRating: FunRating = rating ?? (POSITIVE_IDS.has(tagId) ? 'up' : 'down');
     const exists = tags.includes(tagId);
     const nextTags = exists ? tags.filter(t => t !== tagId) : [...tags, tagId];

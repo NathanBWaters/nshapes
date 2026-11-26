@@ -7,6 +7,15 @@
  *
  * No audio files: every note and effect is synthesized live, following
  * poteto's approach. On platforms without Web Audio, everything is a no-op.
+ *
+ * Mastering & Routing:
+ *   - 4-Tier SFX priority bus (S / A / B / C) with SFX-to-SFX ducking ([AU-04])
+ *   - Priority voice-stealing at MAX_VOICES (56) so Tier S/A cues never drop ([AU-04])
+ *   - Plucked (s === 0) envelopes honor o.dur ([AU-09])
+ *   - Dedicated 0.35 s SFX room split from a single shared 1.7 s hall convolver;
+ *     zero echo delay bus on SFX ([AU-10])
+ *   - Octave pitch folding & FM Nyquist guard ([AU-14])
+ *   - Phone-speaker-safe master bus + studio monitor simulation ([AU-15], [AU-16])
  */
 
 import { Platform } from 'react-native';
@@ -15,8 +24,14 @@ import { getIsAppActive } from '@/utils/appLifecycle';
 export type Duty = 0.125 | 0.25 | 0.5 | 0.75;
 export type Voice = 'pulse1' | 'pulse2' | 'wave' | 'noise';
 export type Bus = 'music' | 'sfx';
-/** How much room a sound sits in: dry, a small room, a hall, or a tempo echo */
-export type Space = 'dry' | 'room' | 'hall' | 'echo';
+/** How much room a sound sits in: dry, a small room, a tight 0.35 s SFX room, a hall, or a tempo echo */
+export type Space = 'dry' | 'room' | 'sfxRoom' | 'hall' | 'echo';
+/** Sakurai Ep. #032 SFX priority hierarchy: S (KO/parry/hurt) > A (hits/parry/blast) > B (stings/coins) > C (UI taps) */
+export type SfxTier = 'S' | 'A' | 'B' | 'C';
+/** Voice-stealing priority: 0 = soft/Tier C, 1 = music/Tier B, 2 = Tier A, 3 = Tier S */
+export type VoicePriority = 0 | 1 | 2 | 3;
+/** Audition-only studio monitor mode ([AU-16]): production always runs 'flat'. */
+export type MonitorMode = 'flat' | 'phone' | 'lowVol';
 
 /**
  * An instrument, as data (src/audio/instruments.ts). Every patch is a few
@@ -32,7 +47,7 @@ export interface Patch {
   partials?: [number, number][];
   /** FM bell tone: modulator ratio, depth (× carrier frequency) and how fast the depth fades (s) */
   fm?: { ratio: number; index: number; decay: number };
-  /** Attack (s), decay (s), sustain (0..1) and release (s). Sustain 0 = a plucked note that ignores `dur`. */
+  /** Attack (s), decay (s), sustain (0..1) and release (s). Sustain 0 = plucked note whose decay honors `min(p.d, o.dur)`. */
   a: number;
   d: number;
   s: number;
@@ -44,11 +59,40 @@ export interface Patch {
   space?: Space;
 }
 
-const SPACES: Space[] = ['dry', 'room', 'hall', 'echo'];
-/** [reverb send, echo send] per space */
-const SENDS: Record<Space, [number, number]> = { dry: [0, 0], room: [0.16, 0], hall: [0.42, 0.06], echo: [0.2, 0.34] };
-/** More voices than this at once and quiet layers are skipped (phones) */
-const MAX_VOICES = 56;
+const MUSIC_SPACES: Space[] = ['dry', 'room', 'hall', 'echo'];
+const SFX_TIERS: SfxTier[] = ['S', 'A', 'B', 'C'];
+/** [reverb send, echo send] per space on the music bus */
+const MUSIC_SENDS: Record<Space, [number, number]> = {
+  dry: [0, 0],
+  room: [0.16, 0],
+  sfxRoom: [0.16, 0],
+  hall: [0.42, 0.06],
+  echo: [0.2, 0.34],
+};
+/** More voices than this at once and lower-priority voices are stolen cleanly (phones) */
+export const MAX_VOICES = 56;
+
+/** 4-Tier SFX bus linear gains (0 dB, -1 dB, -5 dB, -8 dB) ([AU-04]). */
+export const SFX_BUS_GAIN = 0.6;
+export const SFX_TIER_GAINS: Record<SfxTier, number> = {
+  S: 1.0,
+  A: 0.89,
+  B: 0.56,
+  C: 0.4,
+};
+export const SFX_TIER_PRIORITY: Record<SfxTier, VoicePriority> = {
+  S: 3,
+  A: 2,
+  B: 1,
+  C: 0,
+};
+/** Reverb impulse lengths (s): tight 0.35 s SFX room vs single shared 1.7 s hall ([AU-10]). */
+export const REVERB_SECONDS = {
+  hall: 1.7,
+  sfxRoom: 0.35,
+} as const;
+/** Low-priority biome ambience base gain (-20 dB) ([AU-20]). */
+export const AMBIENCE_BUS_GAIN = 0.1;
 
 /** Emergency ceiling for raw oscillator pitch (Hz) — prevents aliasing and shrieks. */
 export const MAX_OSC_FREQ_HZ = 4200;
@@ -100,6 +144,25 @@ export const makeSoftClipCurve = (
 const SOFT_CLIP_CURVE = makeSoftClipCurve();
 
 type Ctx = BaseAudioContext;
+
+interface TrackedVoice {
+  at: number;
+  end: number;
+  priority: VoicePriority;
+  gain: GainNode | null;
+  sources: AudioScheduledSourceNode[];
+}
+
+export interface ChipDiagnostics {
+  activeVoices: number;
+  maxVoices: number;
+  stolenVoices: number;
+  voiceCount: number;
+  monitorMode: MonitorMode;
+  rms: number;
+  peak: number;
+  tiers: Record<SfxTier, { count: number; recent: boolean }>;
+}
 
 interface NativeAudioManagerLike {
   setSystemOptions?: (opts: {
@@ -176,23 +239,66 @@ export const noteToFreq = (note: string, transpose = 0): number => {
   return 440 * Math.pow(2, (midi - 69) / 12);
 };
 
+/** Resolve effective SFX space: clamp patch-default hall/echo to sfxRoom, keep Tier C dry, allow explicit 'hall'. */
+export const resolveSpace = (bus: Bus | undefined, explicitSpace: Space | undefined, patchSpace: Space | undefined, tier?: SfxTier): Space => {
+  if (bus === 'sfx') {
+    if (tier === 'C') return explicitSpace === 'hall' ? 'sfxRoom' : 'dry';
+    if (explicitSpace !== undefined) {
+      if (explicitSpace === 'echo' || explicitSpace === 'room') return 'sfxRoom';
+      return explicitSpace;
+    }
+    if (patchSpace === 'hall' || patchSpace === 'echo' || patchSpace === 'room' || patchSpace === 'sfxRoom') return 'sfxRoom';
+    return 'dry';
+  }
+  const chosen = explicitSpace ?? patchSpace ?? 'dry';
+  return chosen === 'sfxRoom' ? 'room' : chosen;
+};
+
 export class Chip {
   ctx: Ctx | null = null;
   private live: AudioContext | null = null;
   master: GainNode | null = null;
   musicBus: GainNode | null = null;
   sfxBus: GainNode | null = null;
+  /** Low-priority biome ambience bus (-20 dB base, ducked -12 dB under Tier S/A SFX) ([AU-20]). */
+  ambienceBus: GainNode | null = null;
+  /** 4 priority sub-buses feeding sfxBus (S/A direct, B/C via sfxDuckGain) ([AU-04]). */
+  sfxTiers: Partial<Record<SfxTier, GainNode>> = {};
+  /** GainNode sitting in front of Tier B & C SFX for SFX-to-SFX ducking ([AU-04]). */
+  sfxDuckGain: GainNode | null = null;
+  private ambienceDuckGain: GainNode | null = null;
   private pulseWaves = new Map<Duty, PeriodicWave>();
   private waveVoice: PeriodicWave | null = null;
   private noiseLong: AudioBuffer | null = null;
   private noiseShort: AudioBuffer | null = null;
-  private inputs: Record<Bus, Partial<Record<Space, GainNode>>> = { music: {}, sfx: {} };
+  private musicInputs: Partial<Record<Space, GainNode>> = {};
+  private sfxInputs: Record<SfxTier, Partial<Record<Space, GainNode>>> = { S: {}, A: {}, B: {}, C: {} };
   private musicFilter: BiquadFilterNode | null = null;
   private duckGain: GainNode | null = null;
   private echoes: DelayNode[] = [];
-  private ends: number[] = [];
+  private monitorHp: BiquadFilterNode | null = null;
+  private monitorLp: BiquadFilterNode | null = null;
+  private monitorGain: GainNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private analyserBuf: Float32Array<ArrayBuffer> | null = null;
+  private _monitorMode: MonitorMode = 'flat';
+  private voices: TrackedVoice[] = [];
+  private tierStats: Record<SfxTier, { count: number; lastAt: number }> = {
+    S: { count: 0, lastAt: -Infinity },
+    A: { count: 0, lastAt: -Infinity },
+    B: { count: 0, lastAt: -Infinity },
+    C: { count: 0, lastAt: -Infinity },
+  };
   /** Voices started since the context was wired (for tests and the sound studio) */
   voiceCount = 0;
+  /** Lower-priority voices cleanly stolen under heavy load ([AU-04]) */
+  stolenVoices = 0;
+  /** Convolver impulse lengths wired on the current context (for diagnostics & tests) */
+  reverbConfig: { hallSeconds: number; sfxRoomSeconds: number; sfxEchoEnabled: boolean } = {
+    hallSeconds: REVERB_SECONDS.hall,
+    sfxRoomSeconds: REVERB_SECONDS.sfxRoom,
+    sfxEchoEnabled: false,
+  };
 
   /** The real (speaker) context, if created. */
   get liveContext(): AudioContext | null {
@@ -201,6 +307,92 @@ export class Chip {
 
   get available(): boolean {
     return getAudioContextCtor() !== null;
+  }
+
+  get monitorMode(): MonitorMode {
+    return this._monitorMode;
+  }
+
+  /** Audition-only studio monitor mode ('flat' | 'phone' | 'lowVol') ([AU-16]). */
+  setMonitorMode(mode: MonitorMode): void {
+    this._monitorMode = mode;
+    this.applyMonitorMode();
+  }
+
+  private applyMonitorMode(): void {
+    if (!this.monitorHp || !this.monitorLp || !this.monitorGain) return;
+    if (this._monitorMode === 'phone') {
+      this.monitorHp.type = 'highpass';
+      this.monitorHp.frequency.value = 300;
+      this.monitorHp.Q.value = 0.707;
+      this.monitorLp.type = 'lowpass';
+      this.monitorLp.frequency.value = 5000;
+      this.monitorLp.Q.value = 0.707;
+      this.monitorGain.gain.value = 1;
+      try {
+        this.monitorGain.channelCount = 1;
+        this.monitorGain.channelCountMode = 'explicit';
+        this.monitorGain.channelInterpretation = 'speakers';
+      } catch {
+        /* mock or minimal AudioNode */
+      }
+    } else if (this._monitorMode === 'lowVol') {
+      this.monitorHp.type = 'allpass';
+      this.monitorLp.type = 'allpass';
+      this.monitorGain.gain.value = Math.pow(10, -12 / 20);
+      try {
+        this.monitorGain.channelCount = 2;
+        this.monitorGain.channelCountMode = 'max';
+      } catch {
+        /* ignore */
+      }
+    } else {
+      this.monitorHp.type = 'allpass';
+      this.monitorLp.type = 'allpass';
+      this.monitorGain.gain.value = 1;
+      try {
+        this.monitorGain.channelCount = 2;
+        this.monitorGain.channelCountMode = 'max';
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  /** Live studio diagnostics: polyphony, stolen voices, tier activity & real-time RMS/peak ([AU-16]). */
+  getDiagnostics(): ChipDiagnostics {
+    const now = this.now;
+    let rms = 0;
+    let peak = 0;
+    if (this.analyser && this.analyserBuf && typeof this.analyser.getFloatTimeDomainData === 'function') {
+      try {
+        this.analyser.getFloatTimeDomainData(this.analyserBuf);
+        let sum = 0;
+        for (let i = 0; i < this.analyserBuf.length; i++) {
+          const v = Math.abs(this.analyserBuf[i]);
+          if (v > peak) peak = v;
+          sum += v * v;
+        }
+        rms = Math.sqrt(sum / this.analyserBuf.length);
+      } catch {
+        /* ignore analyser read errors */
+      }
+    }
+    return {
+      activeVoices: this.activeVoices,
+      maxVoices: MAX_VOICES,
+      stolenVoices: this.stolenVoices,
+      voiceCount: this.voiceCount,
+      monitorMode: this._monitorMode,
+      rms,
+      peak,
+      tiers: {
+        S: { count: this.tierStats.S.count, recent: now - this.tierStats.S.lastAt < 0.75 },
+        A: { count: this.tierStats.A.count, recent: now - this.tierStats.A.lastAt < 0.75 },
+        B: { count: this.tierStats.B.count, recent: now - this.tierStats.B.lastAt < 0.75 },
+        C: { count: this.tierStats.C.count, recent: now - this.tierStats.C.lastAt < 0.75 },
+      },
+    };
   }
 
   /** Create the context lazily (must happen after a user gesture on the web). */
@@ -247,22 +439,76 @@ export class Chip {
    */
   useContext(ctx: Ctx): () => void {
     const prev = {
-      ctx: this.ctx, master: this.master, musicBus: this.musicBus, sfxBus: this.sfxBus, pulse: new Map(this.pulseWaves), wave: this.waveVoice,
-      nl: this.noiseLong, ns: this.noiseShort, inputs: this.inputs, filter: this.musicFilter, duck: this.duckGain, echoes: this.echoes, ends: this.ends,
+      ctx: this.ctx,
+      master: this.master,
+      musicBus: this.musicBus,
+      sfxBus: this.sfxBus,
+      ambienceBus: this.ambienceBus,
+      ambienceDuckGain: this.ambienceDuckGain,
+      sfxTiers: this.sfxTiers,
+      sfxDuckGain: this.sfxDuckGain,
+      pulse: new Map(this.pulseWaves),
+      wave: this.waveVoice,
+      nl: this.noiseLong,
+      ns: this.noiseShort,
+      musicInputs: this.musicInputs,
+      sfxInputs: this.sfxInputs,
+      filter: this.musicFilter,
+      duck: this.duckGain,
+      echoes: this.echoes,
+      monitorHp: this.monitorHp,
+      monitorLp: this.monitorLp,
+      monitorGain: this.monitorGain,
+      analyser: this.analyser,
+      analyserBuf: this.analyserBuf,
+      voices: this.voices,
+      voiceCount: this.voiceCount,
+      stolenVoices: this.stolenVoices,
+      tierStats: this.tierStats,
     };
     this.pulseWaves = new Map();
     this.wire(ctx);
     return () => {
-      this.ctx = prev.ctx; this.master = prev.master; this.musicBus = prev.musicBus; this.sfxBus = prev.sfxBus;
-      this.pulseWaves = prev.pulse; this.waveVoice = prev.wave; this.noiseLong = prev.nl; this.noiseShort = prev.ns;
-      this.inputs = prev.inputs; this.musicFilter = prev.filter; this.duckGain = prev.duck; this.echoes = prev.echoes; this.ends = prev.ends;
+      this.ctx = prev.ctx;
+      this.master = prev.master;
+      this.musicBus = prev.musicBus;
+      this.sfxBus = prev.sfxBus;
+      this.ambienceBus = prev.ambienceBus;
+      this.ambienceDuckGain = prev.ambienceDuckGain;
+      this.sfxTiers = prev.sfxTiers;
+      this.sfxDuckGain = prev.sfxDuckGain;
+      this.pulseWaves = prev.pulse;
+      this.waveVoice = prev.wave;
+      this.noiseLong = prev.nl;
+      this.noiseShort = prev.ns;
+      this.musicInputs = prev.musicInputs;
+      this.sfxInputs = prev.sfxInputs;
+      this.musicFilter = prev.filter;
+      this.duckGain = prev.duck;
+      this.echoes = prev.echoes;
+      this.monitorHp = prev.monitorHp;
+      this.monitorLp = prev.monitorLp;
+      this.monitorGain = prev.monitorGain;
+      this.analyser = prev.analyser;
+      this.analyserBuf = prev.analyserBuf;
+      this.voices = prev.voices;
+      this.voiceCount = prev.voiceCount;
+      this.stolenVoices = prev.stolenVoices;
+      this.tierStats = prev.tierStats;
     };
   }
 
   private wire(ctx: Ctx) {
     this.ctx = ctx;
-    this.ends = [];
+    this.voices = [];
     this.voiceCount = 0;
+    this.stolenVoices = 0;
+    this.tierStats = {
+      S: { count: 0, lastAt: -Infinity },
+      A: { count: 0, lastAt: -Infinity },
+      B: { count: 0, lastAt: -Infinity },
+      C: { count: 0, lastAt: -Infinity },
+    };
     this.master = ctx.createGain();
     this.master.gain.value = MASTER_BUS.gain;
     // Phone-speaker-safe master bus ([AU-15]):
@@ -280,6 +526,8 @@ export class Chip {
     lp.type = 'lowpass';
     lp.frequency.value = MASTER_BUS.lpfHz;
     const postEq = this.master.connect(hpf).connect(presence).connect(lp);
+
+    let postMaster: AudioNode = postEq;
     // Browser Web Audio provides DynamicsCompressorNode; native react-native-audio-api
     // uses a soft-clipping WaveShaperNode fallback when createDynamicsCompressor is absent.
     if (typeof ctx.createDynamicsCompressor === 'function') {
@@ -295,19 +543,42 @@ export class Chip {
         shaper.curve = SOFT_CLIP_CURVE;
         const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent ?? '');
         shaper.oversample = isMobile ? 'none' : '2x';
-        postLimiter.connect(shaper).connect(ctx.destination);
+        postMaster = postLimiter.connect(shaper);
       } else {
-        postLimiter.connect(ctx.destination);
+        postMaster = postLimiter;
       }
     } else if (typeof ctx.createWaveShaper === 'function') {
       const shaper = ctx.createWaveShaper();
       shaper.curve = makeSoftClipCurve(256, 1.35);
       shaper.oversample = 'none';
       this.master.gain.value = 0.82;
-      postEq.connect(shaper).connect(ctx.destination);
+      postMaster = postEq.connect(shaper);
     } else {
       this.master.gain.value = 0.78;
-      postEq.connect(ctx.destination);
+      postMaster = postEq;
+    }
+
+    // Studio monitor simulation stage (unity/allpass bypass in 'flat' mode) ([AU-16])
+    this.monitorHp = ctx.createBiquadFilter();
+    this.monitorLp = ctx.createBiquadFilter();
+    this.monitorGain = ctx.createGain();
+    this.applyMonitorMode();
+    postMaster.connect(this.monitorHp).connect(this.monitorLp).connect(this.monitorGain).connect(ctx.destination);
+
+    if (typeof ctx.createAnalyser === 'function') {
+      try {
+        const an = ctx.createAnalyser();
+        an.fftSize = 1024;
+        this.monitorGain.connect(an);
+        this.analyser = an;
+        this.analyserBuf = new Float32Array(an.fftSize);
+      } catch {
+        this.analyser = null;
+        this.analyserBuf = null;
+      }
+    } else {
+      this.analyser = null;
+      this.analyserBuf = null;
     }
 
     // Music: bus → filter (muffles when paused or hurt) → duck (dips under big hits) → master
@@ -319,87 +590,227 @@ export class Chip {
     this.musicFilter.Q.value = 0.5;
     this.duckGain = ctx.createGain();
     this.musicBus.connect(this.musicFilter).connect(this.duckGain).connect(this.master);
-    this.sfxBus = ctx.createGain();
-    this.sfxBus.gain.value = 0.55;
-    this.sfxBus.connect(this.master);
 
-    // Space: each bus has its own reverb and echo, returning INTO the bus, so
-    // muffling, ducking or muting the music also muffles its room
-    const tail = this.impulse(ctx, 1.7);
-    this.inputs = { music: {}, sfx: {} };
-    this.echoes = [];
-    for (const bus of ['music', 'sfx'] as Bus[]) {
-      const out = bus === 'music' ? this.musicBus : this.sfxBus;
-      const reverb = ctx.createConvolver();
-      reverb.buffer = tail;
-      const reverbOut = ctx.createGain();
-      reverbOut.gain.value = 0.7;
-      reverb.connect(reverbOut).connect(out);
-      const echo = ctx.createDelay(1.5);
-      echo.delayTime.value = 0.28;
-      const feedback = ctx.createGain();
-      feedback.gain.value = 0.36;
-      const echoTone = ctx.createBiquadFilter();
-      echoTone.type = 'lowpass';
-      echoTone.frequency.value = 3200;
-      echo.connect(echoTone).connect(feedback).connect(echo);
-      echoTone.connect(out);
-      this.echoes.push(echo);
-      for (const space of SPACES) {
-        if (space === 'dry') { this.inputs[bus][space] = out; continue; }
-        const g = ctx.createGain();
-        g.connect(out);
-        const [rev, ech] = SENDS[space];
-        if (rev) { const s = ctx.createGain(); s.gain.value = rev; g.connect(s).connect(reverb); }
-        if (ech) { const s = ctx.createGain(); s.gain.value = ech; g.connect(s).connect(echo); }
-        this.inputs[bus][space] = g;
-      }
+    // 4-Tier SFX priority bus ([AU-04]): S (0 dB) & A (-1 dB) direct to sfxBus; B (-5 dB) & C (-8 dB) through sfxDuckGain
+    this.sfxBus = ctx.createGain();
+    this.sfxBus.gain.value = SFX_BUS_GAIN;
+    this.sfxBus.connect(this.master);
+    this.sfxDuckGain = ctx.createGain();
+    this.sfxDuckGain.gain.value = 1;
+    this.sfxDuckGain.connect(this.sfxBus);
+    this.sfxTiers = {};
+    for (const tier of SFX_TIERS) {
+      const tg = ctx.createGain();
+      tg.gain.value = SFX_TIER_GAINS[tier];
+      tg.connect(tier === 'S' || tier === 'A' ? this.sfxBus : this.sfxDuckGain);
+      this.sfxTiers[tier] = tg;
     }
+
+    // Ambience bus (-20 dB base, ducked -12 dB under Tier S/A SFX) ([AU-20])
+    this.ambienceBus = ctx.createGain();
+    this.ambienceBus.gain.value = AMBIENCE_BUS_GAIN;
+    this.ambienceDuckGain = ctx.createGain();
+    this.ambienceDuckGain.gain.value = 1;
+    this.ambienceBus.connect(this.ambienceDuckGain).connect(this.master);
+
+    // Space split ([AU-10]):
+    //   1. Single shared 1.7 s hall convolver (music pads + rare ceremonial explicit-hall SFX)
+    //   2. Dedicated tight 0.35 s SFX room convolver (reverbOut = 0.45, faster HF damping)
+    //   3. Tempo echo delay exclusively on musicBus (zero echo loop on SFX)
+    const hallTail = this.impulse(ctx, REVERB_SECONDS.hall, false);
+    const hallReverb = ctx.createConvolver();
+    hallReverb.buffer = hallTail;
+    const hallOut = ctx.createGain();
+    hallOut.gain.value = 0.7;
+    hallReverb.connect(hallOut).connect(this.master);
+
+    const sfxRoomTail = this.impulse(ctx, REVERB_SECONDS.sfxRoom, true);
+    const sfxRoomReverb = ctx.createConvolver();
+    sfxRoomReverb.buffer = sfxRoomTail;
+    const sfxRoomOut = ctx.createGain();
+    sfxRoomOut.gain.value = 0.45;
+    sfxRoomReverb.connect(sfxRoomOut).connect(this.sfxBus);
+
+    const musicEcho = ctx.createDelay(1.5);
+    musicEcho.delayTime.value = 0.28;
+    const feedback = ctx.createGain();
+    feedback.gain.value = 0.36;
+    const echoTone = ctx.createBiquadFilter();
+    echoTone.type = 'lowpass';
+    echoTone.frequency.value = 3200;
+    musicEcho.connect(echoTone).connect(feedback).connect(musicEcho);
+    echoTone.connect(this.musicBus);
+    this.echoes = [musicEcho];
+
+    this.musicInputs = {};
+    for (const space of MUSIC_SPACES) {
+      if (space === 'dry') {
+        this.musicInputs[space] = this.musicBus;
+        continue;
+      }
+      const g = ctx.createGain();
+      g.connect(this.musicBus);
+      const [rev, ech] = MUSIC_SENDS[space];
+      if (rev) {
+        const s = ctx.createGain();
+        // Scale by music bus nominal level (0.32) since shared hall returns to master
+        s.gain.value = rev * 0.32;
+        g.connect(s).connect(hallReverb);
+      }
+      if (ech) {
+        const s = ctx.createGain();
+        s.gain.value = ech;
+        g.connect(s).connect(musicEcho);
+      }
+      this.musicInputs[space] = g;
+    }
+    this.musicInputs.sfxRoom = this.musicInputs.room;
+
+    this.sfxInputs = { S: {}, A: {}, B: {}, C: {} };
+    for (const tier of SFX_TIERS) {
+      const tierOut = this.sfxTiers[tier]!;
+      this.sfxInputs[tier].dry = tierOut;
+      if (tier === 'C') {
+        // Tier C UI cues stay strictly dry unless explicitly elevated
+        this.sfxInputs[tier].sfxRoom = tierOut;
+        this.sfxInputs[tier].room = tierOut;
+        this.sfxInputs[tier].echo = tierOut;
+        this.sfxInputs[tier].hall = tierOut;
+        continue;
+      }
+      const roomIn = ctx.createGain();
+      roomIn.connect(tierOut);
+      const roomSend = ctx.createGain();
+      roomSend.gain.value = 0.18 * SFX_TIER_GAINS[tier];
+      roomIn.connect(roomSend).connect(sfxRoomReverb);
+      this.sfxInputs[tier].sfxRoom = roomIn;
+      this.sfxInputs[tier].room = roomIn;
+      this.sfxInputs[tier].echo = roomIn;
+
+      const hallIn = ctx.createGain();
+      hallIn.connect(tierOut);
+      const hallSend = ctx.createGain();
+      hallSend.gain.value = 0.38 * SFX_BUS_GAIN * SFX_TIER_GAINS[tier];
+      hallIn.connect(hallSend).connect(hallReverb);
+      this.sfxInputs[tier].hall = hallIn;
+    }
+
+    this.reverbConfig = {
+      hallSeconds: REVERB_SECONDS.hall,
+      sfxRoomSeconds: REVERB_SECONDS.sfxRoom,
+      sfxEchoEnabled: false,
+    };
+
     this.buildWaves(ctx);
   }
 
-  /** A reverb tail made of decaying noise: darker as it fades, like a room */
-  private impulse(ctx: Ctx, seconds: number): AudioBuffer {
-    const len = Math.floor(ctx.sampleRate * seconds);
+  /** A reverb tail made of decaying noise: darker as it fades, like a room. */
+  private impulse(ctx: Ctx, seconds: number, fastDamp = false): AudioBuffer {
+    const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
     const channels = Math.min(2, ctx.destination.channelCount || 1);
     const buf = ctx.createBuffer(channels, len, ctx.sampleRate);
-    let seed = 0x2f6e2b1;
+    let seed = fastDamp ? 0x51a7c3d : 0x2f6e2b1;
     const rand = () => {
       seed = (seed * 1664525 + 1013904223) >>> 0;
       return seed / 0x80000000 - 1;
     };
+    const fadeIn = fastDamp ? 140 : 400;
+    const exp = fastDamp ? 3.5 : 2.6;
     for (let c = 0; c < channels; c++) {
       const data = buf.getChannelData(c);
       let smooth = 0;
       for (let i = 0; i < len; i++) {
         const k = i / len;
-        const damp = 0.25 + 0.7 * k; // high frequencies die first
+        const damp = fastDamp ? 0.45 + 0.5 * k : 0.25 + 0.7 * k; // high frequencies die first
         smooth = smooth * damp + rand() * (1 - damp);
-        data[i] = smooth * Math.pow(1 - k, 2.6) * (i < 400 ? i / 400 : 1);
+        data[i] = smooth * Math.pow(1 - k, exp) * (i < fadeIn ? i / fadeIn : 1);
       }
     }
     return buf;
   }
 
-  private input(bus: Bus | undefined, space: Space | undefined): GainNode | null {
-    return this.inputs[bus ?? 'music'][space ?? 'dry'] ?? (bus === 'sfx' ? this.sfxBus : this.musicBus);
+  private input(bus: Bus | undefined, space: Space | undefined, tier?: SfxTier): GainNode | null {
+    if (bus === 'sfx') {
+      const t = tier ?? 'B';
+      const s = space ?? 'dry';
+      return this.sfxInputs[t][s] ?? this.sfxTiers[t] ?? this.sfxBus;
+    }
+    const s = space === 'sfxRoom' ? 'room' : space ?? 'dry';
+    return this.musicInputs[s] ?? this.musicBus;
   }
 
-  /** May another voice start at `at`? Quiet layers pass `soft` and are dropped first when the chip is busy. */
-  private admit(at: number, end: number, soft?: boolean): boolean {
-    // Voices still sounding when this one starts (works live and when rendering offline)
-    if (this.ends.length > 24) this.ends = this.ends.filter(e => e > at);
-    if (soft && this.ends.length >= MAX_VOICES) return false;
-    if (this.ends.length >= MAX_VOICES * 2) return false;
-    this.ends.push(end);
+  /**
+   * Reserve a voice slot at `at..end` with priority voice-stealing ([AU-04]).
+   * When active >= MAX_VOICES (56), steals the oldest lowest-priority voice
+   * (3 ms ramp down + stop at +4 ms) instead of dropping Tier S/A cues.
+   */
+  private reserveVoice(
+    at: number,
+    end: number,
+    priority: VoicePriority,
+    soft?: boolean,
+    sfxTier?: SfxTier
+  ): TrackedVoice | null {
+    // Prune voices finished before `at`
+    if (this.voices.length > 16) this.voices = this.voices.filter(v => v.end > at);
+    if (this.voices.length >= MAX_VOICES) {
+      if (soft && priority === 0) return null;
+      // Search for oldest lowest-priority steal candidate
+      let victimIdx = -1;
+      for (let i = 0; i < this.voices.length; i++) {
+        const v = this.voices[i];
+        const canSteal = priority >= 2 ? v.priority <= priority : v.priority < priority;
+        if (!canSteal) continue;
+        if (
+          victimIdx === -1 ||
+          v.priority < this.voices[victimIdx].priority ||
+          (v.priority === this.voices[victimIdx].priority && v.at < this.voices[victimIdx].at)
+        ) {
+          victimIdx = i;
+        }
+      }
+      if (victimIdx !== -1) {
+        const victim = this.voices.splice(victimIdx, 1)[0];
+        this.stealVoice(victim, at);
+      } else if (this.voices.length >= MAX_VOICES * 2 || priority < 2) {
+        return null;
+      }
+    }
+    const entry: TrackedVoice = { at, end, priority, gain: null, sources: [] };
+    this.voices.push(entry);
     this.voiceCount += 1;
-    return true;
+    if (sfxTier) {
+      this.tierStats[sfxTier].count += 1;
+      this.tierStats[sfxTier].lastAt = at;
+    }
+    return entry;
+  }
+
+  private stealVoice(victim: TrackedVoice, at: number) {
+    this.stolenVoices += 1;
+    if (victim.gain) {
+      try {
+        const g = victim.gain.gain;
+        g.cancelScheduledValues(at);
+        g.setValueAtTime(Math.max(0.0001, g.value || 0.0001), at);
+        g.linearRampToValueAtTime(0.0001, at + 0.003);
+      } catch {
+        /* ignore mock AudioParam limitations */
+      }
+    }
+    for (const src of victim.sources) {
+      try {
+        src.stop(at + 0.004);
+      } catch {
+        /* already stopped */
+      }
+    }
   }
 
   /** Voices sounding or scheduled right now */
   get activeVoices(): number {
     const now = this.now;
-    return this.ends.filter(e => e > now).length;
+    return this.voices.filter(v => v.end > now).length;
   }
 
   /** Close or open the music's low-pass (pause, danger, the shop) over `glide` seconds. */
@@ -420,10 +831,32 @@ export class Chip {
     const g = this.duckGain.gain;
     g.cancelScheduledValues(at);
     g.setTargetAtTime(Math.max(0.05, 1 - depth), at, 0.012);
-    g.setTargetAtTime(1, at + 0.07, release / 3);
+    g.setTargetAtTime(1, at + 0.07, Math.max(0.02, release / 3));
   }
 
-  /** Echo repeats on the beat: call when the tempo changes. */
+  /**
+   * Dip Tier B & C SFX (plus low-priority biome ambience -12 dB) under Tier S / A hits ([AU-04], [AU-20]).
+   * Tier S passes depth ~0.65 (-9 dB on B/C); Tier A passes depth ~0.37 (-4 dB on B/C).
+   */
+  duckSfx(depth: number, at: number, release = 0.35) {
+    if (!this.ctx) return;
+    const clamped = Math.max(0, Math.min(0.85, depth));
+    if (this.sfxDuckGain) {
+      const g = this.sfxDuckGain.gain;
+      g.cancelScheduledValues(at);
+      g.setTargetAtTime(Math.max(0.15, 1 - clamped), at, 0.008);
+      g.setTargetAtTime(1, at + 0.05, Math.max(0.02, release / 3));
+    }
+    if (this.ambienceDuckGain) {
+      const ag = this.ambienceDuckGain.gain;
+      ag.cancelScheduledValues(at);
+      // Ambience sits at lowest priority: dips up to -12 dB (0.25) under Tier S/A cues
+      ag.setTargetAtTime(Math.max(0.25, 1 - clamped * 1.15), at, 0.01);
+      ag.setTargetAtTime(1, at + 0.08, Math.max(0.04, release / 2.5));
+    }
+  }
+
+  /** Echo repeats on the beat (music bus only): call when the tempo changes. */
   setEchoTime(seconds: number) {
     if (!this.ctx) return;
     for (const echo of this.echoes) echo.delayTime.setTargetAtTime(Math.max(0.05, Math.min(1.4, seconds)), this.now, 0.05);
@@ -498,21 +931,28 @@ export class Chip {
     vibrato?: number;
     bus?: Bus;
     space?: Space;
+    tier?: SfxTier;
+    priority?: VoicePriority;
     pan?: number;
     soft?: boolean;
     decay?: number; // 0..1, how much the envelope falls over the note
   }) {
     const ctx = this.ctx;
     if (!ctx || !opts.freq) return;
-    const bus = this.input(opts.bus, opts.space);
+    const sfxTier = opts.bus === 'sfx' ? (opts.tier ?? 'B') : undefined;
+    const space = resolveSpace(opts.bus, opts.space, undefined, sfxTier);
+    const bus = this.input(opts.bus, space, sfxTier);
     if (!bus) return;
-    if (!this.admit(opts.at, opts.at + opts.dur, opts.soft)) return;
+    const priority: VoicePriority = opts.priority ?? (sfxTier ? SFX_TIER_PRIORITY[sfxTier] : opts.soft ? 0 : 1);
+    const slot = this.reserveVoice(opts.at, opts.at + opts.dur, priority, opts.soft, sfxTier);
+    if (!slot) return;
     const osc = ctx.createOscillator();
     const wave = opts.voice === 'wave' ? this.waveVoice : this.pulseWaves.get(opts.duty ?? 0.5);
     if (wave) osc.setPeriodicWave(wave);
     const freq = Math.min(opts.freq, MAX_OSC_FREQ_HZ);
     osc.frequency.setValueAtTime(freq, opts.at);
     if (opts.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.min(MAX_OSC_FREQ_HZ, Math.max(20, opts.slideTo)), opts.at + opts.dur);
+    const sources: AudioScheduledSourceNode[] = [osc];
     if (opts.vibrato) {
       const lfo = ctx.createOscillator();
       const lfoGain = ctx.createGain();
@@ -521,6 +961,7 @@ export class Chip {
       lfo.connect(lfoGain).connect(osc.frequency);
       lfo.start(opts.at + Math.min(0.12, opts.dur / 2));
       lfo.stop(opts.at + opts.dur + 0.05);
+      sources.push(lfo);
     }
     const g = ctx.createGain();
     const v = (opts.vol ?? 0.5) * (opts.voice === 'wave' ? 0.9 : 0.35);
@@ -533,6 +974,8 @@ export class Chip {
     this.out(ctx, g, bus, opts.pan);
     osc.start(opts.at);
     osc.stop(opts.at + opts.dur + 0.02);
+    slot.gain = g;
+    slot.sources = sources;
   }
 
   private out(ctx: Ctx, node: AudioNode, dest: AudioNode, pan?: number) {
@@ -544,23 +987,44 @@ export class Chip {
   }
 
   /** Play one note of an instrument patch. */
-  play(p: Patch, o: { freq: number; at: number; dur: number; vol?: number; pan?: number; bus?: Bus; space?: Space; slideTo?: number; soft?: boolean }) {
+  play(
+    p: Patch,
+    o: {
+      freq: number;
+      at: number;
+      dur: number;
+      vol?: number;
+      pan?: number;
+      bus?: Bus;
+      space?: Space;
+      tier?: SfxTier;
+      priority?: VoicePriority;
+      slideTo?: number;
+      soft?: boolean;
+    }
+  ) {
     const ctx = this.ctx;
     if (!ctx || !o.freq || !isFinite(o.freq)) return;
-    const dest = this.input(o.bus, o.space ?? p.space);
+    const sfxTier = o.bus === 'sfx' ? (o.tier ?? 'B') : undefined;
+    const space = resolveSpace(o.bus, o.space, p.space, sfxTier);
+    const dest = this.input(o.bus, space, sfxTier);
     if (!dest) return;
     const freq = Math.min(o.freq, MAX_OSC_FREQ_HZ);
     const plucked = p.s === 0;
-    const hold = plucked ? p.d : Math.max(p.a, o.dur);
+    // [AU-09]: honor o.dur for plucked (s === 0) notes so short taps/coins end crisply without smearing chains
+    const decay = plucked ? (o.dur > 0 ? Math.min(p.d, o.dur) : p.d) : p.d;
+    const hold = plucked ? decay : Math.max(p.a, o.dur);
     const releaseAt = o.at + hold;
-    const end = releaseAt + (plucked ? p.d * 0.6 : p.r) + 0.03;
-    if (!this.admit(o.at, end, o.soft)) return;
+    const end = plucked ? o.at + p.a + decay * 1.15 + 0.025 : releaseAt + p.r + 0.03;
+    const priority: VoicePriority = o.priority ?? (sfxTier ? SFX_TIER_PRIORITY[sfxTier] : o.soft ? 0 : 1);
+    const slot = this.reserveVoice(o.at, end, priority, o.soft, sfxTier);
+    if (!slot) return;
     const peak = Math.max(0.0001, (o.vol ?? 1) * p.vol);
 
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, o.at);
     g.gain.linearRampToValueAtTime(peak, o.at + p.a);
-    g.gain.setTargetAtTime(plucked ? 0.0001 : peak * p.s, o.at + p.a, Math.max(0.005, p.d / 3.5));
+    g.gain.setTargetAtTime(plucked ? 0.0001 : peak * p.s, o.at + p.a, Math.max(0.005, decay / 3.5));
     if (!plucked) g.gain.setTargetAtTime(0.0001, releaseAt, Math.max(0.005, p.r / 4));
 
     const sources: OscillatorNode[] = [];
@@ -572,7 +1036,7 @@ export class Chip {
         if (wave) osc.setPeriodicWave(wave);
       } else osc.type = p.osc;
       osc.frequency.setValueAtTime(f, o.at);
-      if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, (o.slideTo * f) / freq), o.at + Math.max(0.02, o.dur));
+      if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, (o.slideTo * f) / freq), o.at + Math.max(0.015, o.dur));
       if (detune) osc.detune.value = detune;
       if (gain === 1) osc.connect(pre);
       else {
@@ -631,7 +1095,7 @@ export class Chip {
       f.Q.value = p.lp.q ?? 0.7;
       if (p.lp.env) {
         f.frequency.setValueAtTime(Math.min(16000, base * (1 + p.lp.env)), o.at);
-        f.frequency.setTargetAtTime(base, o.at, Math.max(0.01, (p.lp.decay ?? p.d) / 3));
+        f.frequency.setTargetAtTime(base, o.at, Math.max(0.01, (p.lp.decay ?? decay) / 3));
       } else f.frequency.value = base;
       pre.connect(f).connect(g);
     } else pre.connect(g);
@@ -640,10 +1104,22 @@ export class Chip {
       src.start(o.at);
       src.stop(end);
     }
+    slot.gain = g;
+    slot.sources = sources;
   }
 
   noise(opts: {
-    at: number; dur: number; vol?: number; short?: boolean; bus?: Bus; space?: Space; pan?: number; filter?: number; sweepTo?: number;
+    at: number;
+    dur: number;
+    vol?: number;
+    short?: boolean;
+    bus?: Bus;
+    space?: Space;
+    tier?: SfxTier;
+    priority?: VoicePriority;
+    pan?: number;
+    filter?: number;
+    sweepTo?: number;
     /** bandpass (default), or everything above / below `filter` */
     type?: 'bandpass' | 'highpass' | 'lowpass';
     /** Fade in over this many seconds (risers) instead of starting at full */
@@ -652,9 +1128,13 @@ export class Chip {
   }) {
     const ctx = this.ctx;
     const buf = opts.short ? this.noiseShort : this.noiseLong;
-    const bus = this.input(opts.bus, opts.space);
+    const sfxTier = opts.bus === 'sfx' ? (opts.tier ?? 'B') : undefined;
+    const space = resolveSpace(opts.bus, opts.space, undefined, sfxTier);
+    const bus = this.input(opts.bus, space, sfxTier);
     if (!ctx || !buf || !bus) return;
-    if (!this.admit(opts.at, opts.at + opts.dur, opts.soft)) return;
+    const priority: VoicePriority = opts.priority ?? (sfxTier ? SFX_TIER_PRIORITY[sfxTier] : opts.soft ? 0 : 1);
+    const slot = this.reserveVoice(opts.at, opts.at + opts.dur, priority, opts.soft, sfxTier);
+    if (!slot) return;
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.loop = true;
@@ -677,6 +1157,8 @@ export class Chip {
     this.out(ctx, g, bus, opts.pan);
     src.start(opts.at, Math.random() * 0.5);
     src.stop(opts.at + opts.dur + 0.02);
+    slot.gain = g;
+    slot.sources = [src];
   }
 }
 

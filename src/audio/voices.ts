@@ -10,7 +10,7 @@
  *
  * An evolution's THEME is made from its two weapons: both stings as one
  * fanfare, both riffs together an octave up on the power instrument, a key
- * lift and a brighter mode. 204 recipes, 204 themes, nothing hand-recorded.
+ * lift and a brighter mode. 208 recipes, 208 themes, nothing hand-recorded.
  *
  * Pure data and pure functions. __tests__/audioVoices.test.ts checks every
  * Armory weapon has a voice and no two weapons or recipes sound the same.

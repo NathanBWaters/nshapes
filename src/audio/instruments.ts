@@ -6,11 +6,11 @@
  * A drum is a small function, because drums are noise and pitch drops rather
  * than notes. Nothing here is a recording.
  */
-import { chip, type Bus, type Patch } from './chip';
+import { chip, type Bus, type Patch, type SfxTier, type Space } from './chip';
 
 export type InstrumentId =
   | 'chip' | 'chipSoft' | 'bell' | 'glock' | 'celesta' | 'musicbox' | 'kalimba' | 'marimba' | 'vibes' | 'steel'
-  | 'pluck' | 'harp' | 'pizz' | 'banjo' | 'clav' | 'brass' | 'horn' | 'strings' | 'choir' | 'organ'
+  | 'pluck' | 'harp' | 'pizz' | 'banjo' | 'clav' | 'brass' | 'brassStab' | 'horn' | 'strings' | 'choir' | 'organ'
   | 'glass' | 'flute' | 'whistle' | 'accordion' | 'saw' | 'theremin' | 'sub' | 'toy';
 
 export const INSTRUMENTS: Record<InstrumentId, Patch> = {
@@ -35,8 +35,9 @@ export const INSTRUMENTS: Record<InstrumentId, Patch> = {
   banjo: { osc: 'pulse', duty: 0.25, lp: { hz: 3, track: true, env: 4, decay: 0.07 }, a: 0.001, d: 0.3, s: 0, r: 0.05, vol: 0.17, space: 'room' },
   clav: { osc: 'pulse', duty: 0.125, lp: { hz: 4, track: true, env: 3, decay: 0.05, q: 2 }, a: 0.001, d: 0.15, s: 0, r: 0.03, vol: 0.18 },
 
-  // The orchestra: brass, strings, voices
+  // The orchestra: brass, fast hit-stab brass ([AU-09]), strings, voices
   brass: { osc: 'sawtooth', detune: 9, lp: { hz: 2.5, track: true, env: 2.2, decay: 0.18 }, a: 0.03, d: 0.2, s: 0.75, r: 0.09, vol: 0.14, space: 'room' },
+  brassStab: { osc: 'sawtooth', detune: 7, lp: { hz: 3.2, track: true, env: 2.8, decay: 0.09 }, a: 0.005, d: 0.14, s: 0.55, r: 0.06, vol: 0.16, space: 'sfxRoom' },
   horn: { osc: 'triangle', partials: [[2, 0.35], [3, 0.12]], lp: { hz: 1500 }, a: 0.05, d: 0.2, s: 0.8, r: 0.12, vol: 0.2, space: 'hall' },
   strings: { osc: 'sawtooth', detune: 13, lp: { hz: 2300 }, vibrato: 0.003, a: 0.11, d: 0.3, s: 0.8, r: 0.3, vol: 0.13, space: 'hall' },
   choir: { osc: 'triangle', detune: 10, partials: [[2, 0.25]], lp: { hz: 1100 }, vibrato: 0.005, a: 0.14, d: 0.3, s: 0.85, r: 0.35, vol: 0.18, space: 'hall' },
@@ -58,15 +59,17 @@ export const INSTRUMENTS: Record<InstrumentId, Patch> = {
 export const INSTRUMENT_NAMES: Record<InstrumentId, string> = {
   chip: 'Chip lead', chipSoft: 'Chip blip', bell: 'Bell', glock: 'Glockenspiel', celesta: 'Celesta', musicbox: 'Music box',
   kalimba: 'Kalimba', marimba: 'Marimba', vibes: 'Vibraphone', steel: 'Steel drum', pluck: 'Plucked synth', harp: 'Harp',
-  pizz: 'Pizzicato strings', banjo: 'Banjo', clav: 'Clavinet', brass: 'Brass', horn: 'French horn', strings: 'Strings',
-  choir: 'Choir', organ: 'Organ', glass: 'Glass harmonica', flute: 'Flute', whistle: 'Whistle', accordion: 'Accordion',
-  saw: 'Supersaw', theremin: 'Theremin', sub: 'Sub bass', toy: 'Toy piano',
+  pizz: 'Pizzicato strings', banjo: 'Banjo', clav: 'Clavinet', brass: 'Brass', brassStab: 'Brass stab', horn: 'French horn',
+  strings: 'Strings', choir: 'Choir', organ: 'Organ', glass: 'Glass harmonica', flute: 'Flute', whistle: 'Whistle',
+  accordion: 'Accordion', saw: 'Supersaw', theremin: 'Theremin', sub: 'Sub bass', toy: 'Toy piano',
 };
 
 export interface NoteOpts {
   vol?: number;
   pan?: number;
   bus?: Bus;
+  space?: Space;
+  tier?: SfxTier;
   soft?: boolean;
   slideTo?: number;
 }
@@ -79,91 +82,141 @@ export const note = (inst: InstrumentId, freq: number, at: number, dur: number, 
 
 export type DrumId =
   | 'kick' | 'snare' | 'hat' | 'openHat' | 'clap' | 'shaker' | 'tamb' | 'cowbell' | 'woodblock' | 'woodblockLo'
-  | 'rim' | 'sleigh' | 'tick' | 'crash' | 'ride' | 'timpani' | 'taiko' | 'tom' | 'crackle' | 'thud' | 'chain' | 'anvil';
+  | 'rim' | 'sleigh' | 'tick' | 'crash' | 'ride' | 'timpani' | 'taiko' | 'tom' | 'crackle' | 'thud' | 'chain' | 'anvil'
+  | 'impactCrack' | 'impactPunch';
 
-type Hit = (at: number, vol: number, bus: Bus, pan?: number, soft?: boolean) => void;
+type Hit = (at: number, vol: number, bus: Bus, pan?: number, soft?: boolean, tier?: SfxTier, space?: Space) => void;
 
 const SINE: Patch = { osc: 'sine', a: 0.001, d: 0.2, s: 0, r: 0.02, vol: 1 };
 /** Warm low-end body with 2nd & 3rd harmonics so phone speakers hear kicks/drops via missing-fundamental ([AU-15]). */
 const WARM_BASS: Patch = { osc: 'sine', partials: [[2, 0.32], [3, 0.14]], lp: { hz: 520 }, a: 0.001, d: 0.2, s: 0, r: 0.02, vol: 1 };
-const drop = (from: number, to: number, d: number, vol: number): Hit => (at, v, bus, pan, soft) =>
-  chip.play({ ...SINE, d }, { freq: from, slideTo: to, at, dur: d * 0.7, vol: vol * v, bus, pan, soft });
-const warmDrop = (from: number, to: number, d: number, vol: number): Hit => (at, v, bus, pan, soft) =>
-  chip.play({ ...WARM_BASS, d }, { freq: from, slideTo: to, at, dur: d * 0.7, vol: vol * v, bus, pan, soft });
+/** Dry sub-2ms transient slap for Sakurai Ep. #165 hitstop onset ([AU-08]). */
+const CRACK_SLAP: Patch = { osc: 'triangle', a: 0.0005, d: 0.022, s: 0, r: 0.005, vol: 0.9, space: 'dry' };
+/** Dry tight punch body (42-58 ms) with 2nd harmonic for phone clarity inside hitstop ([AU-08]). */
+const PUNCH_BODY: Patch = { osc: 'triangle', partials: [[2, 0.35]], lp: { hz: 920 }, a: 0.001, d: 0.05, s: 0, r: 0.008, vol: 0.95, space: 'dry' };
+
+const drop = (from: number, to: number, d: number, vol: number): Hit => (at, v, bus, pan, soft, tier, space) =>
+  chip.play({ ...SINE, d }, { freq: from, slideTo: to, at, dur: d, vol: vol * v, bus, pan, soft, tier, space });
+const warmDrop = (from: number, to: number, d: number, vol: number): Hit => (at, v, bus, pan, soft, tier, space) =>
+  chip.play({ ...WARM_BASS, d }, { freq: from, slideTo: to, at, dur: d, vol: vol * v, bus, pan, soft, tier, space });
+
+/** Dry <2 ms transient crack + tight 30-58 ms hitstop punch helper ([AU-08]). */
+export const impactPunch = (
+  at: number,
+  vol = 1,
+  opts: { durMs?: number; bus?: Bus; pan?: number; tier?: SfxTier; soft?: boolean } = {}
+) => {
+  const durSec = Math.max(0.028, Math.min(0.06, (opts.durMs ?? 48) / 1000));
+  chip.play(
+    { ...PUNCH_BODY, d: durSec },
+    {
+      freq: 240,
+      slideTo: 72,
+      at,
+      dur: durSec,
+      vol,
+      bus: opts.bus ?? 'sfx',
+      space: 'dry',
+      pan: opts.pan,
+      tier: opts.tier,
+      soft: opts.soft,
+    }
+  );
+};
 
 export const DRUMS: Record<DrumId, Hit> = {
-  kick: (at, v, bus, pan, soft) => {
-    warmDrop(155, 44, 0.16, 0.85)(at, v, bus, pan, soft);
-    chip.noise({ at, dur: 0.02, vol: 0.3 * v, filter: 3500, bus, soft });
+  /** Dry <1 ms attack crisp snap (3200-6200 Hz) + 950->280 Hz percussive slap ([AU-08]). */
+  impactCrack: (at, v, bus, pan, soft, tier) => {
+    chip.noise({ at, dur: 0.02, vol: 0.72 * v, short: true, filter: 3400, sweepTo: 6200, type: 'highpass', bus, space: 'dry', pan, soft, tier });
+    chip.play(CRACK_SLAP, { freq: 950, slideTo: 280, at, dur: 0.022, vol: 0.85 * v, bus, space: 'dry', pan, soft, tier });
   },
-  snare: (at, v, bus, pan, soft) => {
-    chip.noise({ at, dur: 0.13, vol: 0.62 * v, filter: 2400, bus, pan, soft });
-    drop(210, 150, 0.07, 0.3)(at, v, bus, pan, soft);
+  /** Dry 48 ms hitstop-bounded punch body (240->72 Hz triangle + 2nd harmonic) ([AU-08]). */
+  impactPunch: (at, v, bus, pan, soft, tier) => {
+    impactPunch(at, v, { durMs: 48, bus, pan, soft, tier });
   },
-  hat: (at, v, bus, pan, soft) => chip.noise({ at, dur: 0.035, vol: 0.26 * v, short: true, filter: 8500, type: 'highpass', bus, pan, soft }),
-  openHat: (at, v, bus, pan, soft) => chip.noise({ at, dur: 0.16, vol: 0.24 * v, short: true, filter: 7500, type: 'highpass', bus, pan, soft }),
-  clap: (at, v, bus, pan, soft) => {
-    for (const dt of [0, 0.011, 0.023]) chip.noise({ at: at + dt, dur: dt === 0.023 ? 0.14 : 0.02, vol: 0.5 * v, filter: 1500, bus, pan, space: 'room', soft });
+  kick: (at, v, bus, pan, soft, tier) => {
+    warmDrop(155, 44, 0.16, 0.85)(at, v, bus, pan, soft, tier, 'dry');
+    chip.noise({ at, dur: 0.02, vol: 0.3 * v, filter: 3500, bus, space: 'dry', soft, tier });
   },
-  shaker: (at, v, bus, pan, soft) => chip.noise({ at, dur: 0.05, vol: 0.2 * v, filter: 6200, type: 'highpass', attack: 0.012, bus, pan, soft }),
-  tamb: (at, v, bus, pan, soft) => {
-    chip.noise({ at, dur: 0.09, vol: 0.24 * v, short: true, filter: 9000, type: 'highpass', bus, pan, soft });
-    chip.noise({ at: at + 0.03, dur: 0.05, vol: 0.14 * v, short: true, filter: 10000, type: 'highpass', bus, pan, soft });
+  snare: (at, v, bus, pan, soft, tier) => {
+    chip.noise({ at, dur: 0.13, vol: 0.62 * v, filter: 2400, bus, pan, soft, tier });
+    drop(210, 150, 0.07, 0.3)(at, v, bus, pan, soft, tier);
   },
-  cowbell: (at, v, bus, pan, soft) => {
-    for (const f of [540, 806]) chip.tone({ voice: 'pulse2', duty: 0.5, freq: f, at, dur: 0.11, vol: 0.34 * v, decay: 0.95, bus, pan, soft });
+  hat: (at, v, bus, pan, soft, tier) => chip.noise({ at, dur: 0.035, vol: 0.26 * v, short: true, filter: 8500, type: 'highpass', bus, pan, soft, tier }),
+  openHat: (at, v, bus, pan, soft, tier) => chip.noise({ at, dur: 0.16, vol: 0.24 * v, short: true, filter: 7500, type: 'highpass', bus, pan, soft, tier }),
+  clap: (at, v, bus, pan, soft, tier) => {
+    for (const dt of [0, 0.011, 0.023]) chip.noise({ at: at + dt, dur: dt === 0.023 ? 0.14 : 0.02, vol: 0.5 * v, filter: 1500, bus, pan, space: bus === 'sfx' ? 'sfxRoom' : 'room', soft, tier });
   },
-  woodblock: (at, v, bus, pan, soft) => chip.play({ ...SINE, d: 0.05, fm: { ratio: 2.4, index: 1.2, decay: 0.02 } }, { freq: 1150, at, dur: 0.04, vol: 0.5 * v, bus, pan, soft }),
-  woodblockLo: (at, v, bus, pan, soft) => chip.play({ ...SINE, d: 0.06, fm: { ratio: 2.4, index: 1.2, decay: 0.02 } }, { freq: 760, at, dur: 0.04, vol: 0.5 * v, bus, pan, soft }),
-  rim: (at, v, bus, pan, soft) => {
-    chip.play({ ...SINE, d: 0.03 }, { freq: 1700, at, dur: 0.02, vol: 0.4 * v, bus, pan, soft });
-    chip.noise({ at, dur: 0.02, vol: 0.3 * v, filter: 4200, bus, pan, soft });
+  shaker: (at, v, bus, pan, soft, tier) => chip.noise({ at, dur: 0.05, vol: 0.2 * v, filter: 6200, type: 'highpass', attack: 0.012, bus, pan, soft, tier }),
+  tamb: (at, v, bus, pan, soft, tier) => {
+    chip.noise({ at, dur: 0.09, vol: 0.24 * v, short: true, filter: 9000, type: 'highpass', bus, pan, soft, tier });
+    chip.noise({ at: at + 0.03, dur: 0.05, vol: 0.14 * v, short: true, filter: 10000, type: 'highpass', bus, pan, soft, tier });
   },
-  sleigh: (at, v, bus, pan, soft) => {
-    for (const [f, dt] of [[3100, 0], [3650, 0.012], [4100, 0.02]] as const) chip.play({ ...SINE, d: 0.09 }, { freq: f, at: at + dt, dur: 0.05, vol: 0.12 * v, bus, pan, space: 'room', soft });
+  cowbell: (at, v, bus, pan, soft, tier) => {
+    for (const f of [540, 806]) chip.tone({ voice: 'pulse2', duty: 0.5, freq: f, at, dur: 0.11, vol: 0.34 * v, decay: 0.95, bus, pan, soft, tier });
   },
-  tick: (at, v, bus, pan, soft) => chip.play({ ...SINE, d: 0.022 }, { freq: 2100, at, dur: 0.015, vol: 0.34 * v, bus, pan, soft }),
-  crash: (at, v, bus, pan) => chip.noise({ at, dur: 1.3, vol: 0.44 * v, short: true, filter: 5200, type: 'highpass', bus, pan, space: 'hall' }),
-  ride: (at, v, bus, pan, soft) => chip.noise({ at, dur: 0.3, vol: 0.16 * v, short: true, filter: 9500, type: 'highpass', bus, pan, soft }),
-  timpani: (at, v, bus, pan, soft) => {
-    warmDrop(98, 82, 0.55, 0.8)(at, v, bus, pan, soft);
-    chip.noise({ at, dur: 0.06, vol: 0.3 * v, filter: 700, bus, space: 'hall', soft });
+  woodblock: (at, v, bus, pan, soft, tier) => chip.play({ ...SINE, d: 0.05, fm: { ratio: 2.4, index: 1.2, decay: 0.02 } }, { freq: 1150, at, dur: 0.04, vol: 0.5 * v, bus, space: 'dry', pan, soft, tier }),
+  woodblockLo: (at, v, bus, pan, soft, tier) => chip.play({ ...SINE, d: 0.06, fm: { ratio: 2.4, index: 1.2, decay: 0.02 } }, { freq: 760, at, dur: 0.04, vol: 0.5 * v, bus, space: 'dry', pan, soft, tier }),
+  rim: (at, v, bus, pan, soft, tier) => {
+    chip.play({ ...SINE, d: 0.03 }, { freq: 1700, at, dur: 0.02, vol: 0.4 * v, bus, space: 'dry', pan, soft, tier });
+    chip.noise({ at, dur: 0.02, vol: 0.3 * v, filter: 4200, bus, space: 'dry', pan, soft, tier });
   },
-  taiko: (at, v, bus, pan, soft) => {
-    warmDrop(120, 58, 0.32, 0.9)(at, v, bus, pan, soft);
-    chip.noise({ at, dur: 0.09, vol: 0.5 * v, filter: 900, type: 'lowpass', bus, pan, space: 'room', soft });
+  sleigh: (at, v, bus, pan, soft, tier) => {
+    for (const [f, dt] of [[3100, 0], [3650, 0.012], [4100, 0.02]] as const) chip.play({ ...SINE, d: 0.09 }, { freq: f, at: at + dt, dur: 0.05, vol: 0.12 * v, bus, pan, space: bus === 'sfx' ? 'sfxRoom' : 'room', soft, tier });
   },
-  tom: (at, v, bus, pan, soft) => drop(190, 110, 0.2, 0.6)(at, v, bus, pan, soft),
-  crackle: (at, v, bus, pan, soft) => {
-    for (let i = 0; i < 4; i++) chip.noise({ at: at + i * 0.027 + (i % 2) * 0.008, dur: 0.018, vol: 0.34 * v, short: true, filter: 3000 + i * 1300, bus, pan, soft });
+  tick: (at, v, bus, pan, soft, tier) => chip.play({ ...SINE, d: 0.022 }, { freq: 2100, at, dur: 0.015, vol: 0.34 * v, bus, space: 'dry', pan, soft, tier }),
+  crash: (at, v, bus, pan, soft, tier, space) =>
+    chip.noise({ at, dur: bus === 'sfx' && space !== 'hall' ? 0.72 : 1.3, vol: 0.44 * v, short: true, filter: 5200, type: 'highpass', bus, pan, soft, tier, space: space ?? (bus === 'sfx' ? 'sfxRoom' : 'hall') }),
+  ride: (at, v, bus, pan, soft, tier) => chip.noise({ at, dur: 0.3, vol: 0.16 * v, short: true, filter: 9500, type: 'highpass', bus, pan, soft, tier }),
+  timpani: (at, v, bus, pan, soft, tier, space) => {
+    warmDrop(98, 82, 0.55, 0.8)(at, v, bus, pan, soft, tier, space ?? (bus === 'sfx' ? 'sfxRoom' : 'hall'));
+    chip.noise({ at, dur: 0.06, vol: 0.3 * v, filter: 700, bus, space: space ?? (bus === 'sfx' ? 'sfxRoom' : 'hall'), soft, tier });
   },
-  thud: (at, v, bus, pan, soft) => {
-    warmDrop(90, 38, 0.24, 0.9)(at, v, bus, pan, soft);
-    chip.noise({ at, dur: 0.1, vol: 0.4 * v, filter: 420, type: 'lowpass', bus, soft });
+  taiko: (at, v, bus, pan, soft, tier, space) => {
+    warmDrop(120, 58, 0.32, 0.9)(at, v, bus, pan, soft, tier, space ?? (bus === 'sfx' ? 'sfxRoom' : 'room'));
+    chip.noise({ at, dur: 0.09, vol: 0.5 * v, filter: 900, type: 'lowpass', bus, pan, space: space ?? (bus === 'sfx' ? 'sfxRoom' : 'room'), soft, tier });
   },
-  chain: (at, v, bus, pan, soft) => {
-    for (const [f, dt] of [[2300, 0], [3100, 0.03], [2700, 0.055]] as const) chip.play({ ...SINE, d: 0.05, fm: { ratio: 3.3, index: 2, decay: 0.03 } }, { freq: f, at: at + dt, dur: 0.03, vol: 0.2 * v, bus, pan, soft });
+  tom: (at, v, bus, pan, soft, tier) => drop(190, 110, 0.2, 0.6)(at, v, bus, pan, soft, tier),
+  crackle: (at, v, bus, pan, soft, tier) => {
+    for (let i = 0; i < 4; i++) chip.noise({ at: at + i * 0.027 + (i % 2) * 0.008, dur: 0.018, vol: 0.34 * v, short: true, filter: 3000 + i * 1300, bus, pan, soft, tier });
   },
-  anvil: (at, v, bus, pan, soft) => chip.play({ ...SINE, d: 0.4, fm: { ratio: 5.1, index: 3, decay: 0.2 } }, { freq: 980, at, dur: 0.2, vol: 0.3 * v, bus, pan, space: 'room', soft }),
+  thud: (at, v, bus, pan, soft, tier) => {
+    warmDrop(90, 38, 0.24, 0.9)(at, v, bus, pan, soft, tier, 'dry');
+    chip.noise({ at, dur: 0.1, vol: 0.4 * v, filter: 420, type: 'lowpass', bus, space: 'dry', soft, tier });
+  },
+  chain: (at, v, bus, pan, soft, tier) => {
+    for (const [f, dt] of [[2300, 0], [3100, 0.03], [2700, 0.055]] as const) chip.play({ ...SINE, d: 0.05, fm: { ratio: 3.3, index: 2, decay: 0.03 } }, { freq: f, at: at + dt, dur: 0.03, vol: 0.2 * v, bus, pan, soft, tier });
+  },
+  anvil: (at, v, bus, pan, soft, tier, space) =>
+    chip.play({ ...SINE, d: 0.4, fm: { ratio: 5.1, index: 3, decay: 0.2 } }, { freq: 980, at, dur: 0.2, vol: 0.3 * v, bus, pan, space: space ?? (bus === 'sfx' ? 'sfxRoom' : 'room'), soft, tier }),
 };
 
 /** Hit one drum. */
-export const drum = (id: DrumId, at: number, vol = 1, bus: Bus = 'music', pan?: number, soft?: boolean) => DRUMS[id](at, vol, bus, pan, soft);
+export const drum = (
+  id: DrumId,
+  at: number,
+  vol = 1,
+  bus: Bus = 'music',
+  pan?: number,
+  soft?: boolean,
+  tier?: SfxTier,
+  space?: Space
+) => DRUMS[id](at, vol, bus, pan, soft, tier, space);
 
 // ─── Movie-trailer one-shots ────────────────────────────────────────────────
 
 /** A rising sweep that lands at `at + dur`: something big is about to happen. */
-export const riser = (at: number, dur: number, vol = 1, bus: Bus = 'sfx') => {
-  chip.noise({ at, dur: dur + 0.04, vol: 0.5 * vol, filter: 500, sweepTo: 9000, attack: dur, bus, space: 'room' });
-  chip.play(INSTRUMENTS.saw, { freq: 110, slideTo: 880, at, dur, vol: 0.5 * vol, bus });
+export const riser = (at: number, dur: number, vol = 1, bus: Bus = 'sfx', tier?: SfxTier) => {
+  chip.noise({ at, dur: dur + 0.04, vol: 0.5 * vol, filter: 500, sweepTo: 9000, attack: dur, bus, space: bus === 'sfx' ? 'sfxRoom' : 'room', tier });
+  chip.play(INSTRUMENTS.saw, { freq: 110, slideTo: 880, at, dur, vol: 0.5 * vol, bus, space: bus === 'sfx' ? 'sfxRoom' : 'echo', tier });
 };
 
 /** The opposite: the power drains away. */
-export const downlifter = (at: number, dur: number, vol = 1, bus: Bus = 'sfx') => {
-  chip.noise({ at, dur, vol: 0.4 * vol, filter: 7000, sweepTo: 250, bus, space: 'room' });
-  chip.play({ ...SINE, d: dur }, { freq: 440, slideTo: 55, at, dur, vol: 0.3 * vol, bus });
+export const downlifter = (at: number, dur: number, vol = 1, bus: Bus = 'sfx', tier?: SfxTier) => {
+  chip.noise({ at, dur, vol: 0.4 * vol, filter: 7000, sweepTo: 250, bus, space: bus === 'sfx' ? 'sfxRoom' : 'room', tier });
+  chip.play({ ...SINE, d: dur }, { freq: 440, slideTo: 55, at, dur, vol: 0.3 * vol, bus, tier });
 };
 
 /** A sub-bass drop under a huge hit. */
-export const subDrop = (at: number, vol = 1, bus: Bus = 'sfx') =>
-  chip.play({ ...WARM_BASS, d: 0.7 }, { freq: 110, slideTo: 30, at, dur: 0.5, vol: 0.85 * vol, bus });
+export const subDrop = (at: number, vol = 1, bus: Bus = 'sfx', tier?: SfxTier) =>
+  chip.play({ ...WARM_BASS, d: 0.7 }, { freq: 110, slideTo: 30, at, dur: 0.7, vol: 0.85 * vol, bus, space: 'dry', tier });

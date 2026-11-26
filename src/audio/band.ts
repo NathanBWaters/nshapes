@@ -1,34 +1,61 @@
 /**
  * The band: the live score of a fight.
  *
- * One sequencer plays the tune in layers (lead, bass, drums, arpeggio, pad,
- * counter-melody), a riff for each weapon you hold, a duet for each evolution,
- * and warning figures for what is on the board. The director
- * (src/audio/director.ts) says which layers play; this file plays them.
+ * One sequencer plays the tune in 16-bar A-B form (plus 1-bar INTRO_PICKUP on
+ * fight entry), layers (lead, bass, drums, arpeggio, pad, counter-melody), a
+ * riff for each weapon you hold, a duet for each evolution, and capped warning
+ * figures for what is on the board. The director (src/audio/director.ts) says
+ * which layers play; this file plays them.
  *
- * Every effect ("cue") is music too. A cue is written in scale steps, waits
- * for the next 32nd-note of the song and is pitched to the chord playing at
- * that moment. A Set rings one rung higher for every Set in the streak; three
- * card taps spell the chord the Set then strums; a chain of weapon effects
- * climbs the scale like a slot machine paying out.
+ * Every effect ("cue") is music too, prioritized across 4 tiers (S / A / B / C):
+ *   - Reactive, parry, hurt, tally & UI cues fire immediately (4 ms lookahead)
+ *     while staying 100% scale-locked to the active bar ([AU-11]).
+ *   - Rhythmic Set cascades align to the 32nd-note grid inside band.stretch().
+ *   - Hit cues open with dry <2 ms impactCrack + tight 40-58 ms impactPunch
+ *     finishing inside visual hitstop ([AU-08], [AU-09], [AU-10]).
  *
- * With music switched off the sequencer stops, and cues still play (in the
- * world's home key). With sound effects off, cues are silent.
+ * With music switched off the sequencer stops, cues still play (in the world's
+ * home key), and quiet procedural biome ambience stays alive until SFX is also
+ * muted or the app backgrounds ([AU-20]).
  */
 import { getIsAppActive } from '@/utils/appLifecycle';
 import { registerInterval } from '@/utils/perfWatchdog';
-import { chip, foldFreq } from './chip';
+import { ambience } from './ambience';
+import { chip, foldFreq, type SfxTier, type Space } from './chip';
 import { direct, restingMix, worldTone, type FightMood, type Mix } from './director';
-import { DRUMS, INSTRUMENTS, downlifter, drum, note, riser, subDrop, type DrumId, type InstrumentId } from './instruments';
+import { FIGHTER_CALL_COOLDOWN_MS, playFighterVoice, type FighterCallKind } from './fighterVoices';
+import {
+  DRUMS,
+  INSTRUMENTS,
+  downlifter,
+  drum,
+  impactPunch,
+  note,
+  riser,
+  subDrop,
+  type DrumId,
+  type InstrumentId,
+} from './instruments';
 import { nativeBridge } from './nativeBridge';
 import { audioFlags } from './settings';
-import { ARRANGEMENTS, THEME, THEME_B, type Arrangement } from './songs';
+import { ARRANGEMENTS, INTRO_PICKUP, THEME, THEME_B, THEME_BATTLE_B, type Arrangement } from './songs';
 import { themeOf } from './themes';
-import { chordRoot, degreeToFreq, isMinor, ladderDegree, ladderRung, nextGridTime, parseNote, strum, type ModeName } from './theory';
+import { chordRoot, degreeToFreq, isMinor, ladderDegree, ladderRung, nextGridTime, parseNote, type ModeName } from './theory';
 import { riffNotes, stingOf, weaponVoice, type EvolutionGroove, type WeaponVoice } from './voices';
 
 /** The instrument that doubles the tune in each world once the band fills in */
-const WORLD_COLOUR: Record<string, InstrumentId> = { map: 'celesta', meadow: 'glock', woods: 'flute', canyon: 'banjo', peaks: 'celesta', boss: 'brass' };
+const WORLD_COLOUR: Record<string, InstrumentId> = {
+  title: 'kalimba',
+  story: 'celesta',
+  camp: 'harp',
+  map: 'celesta',
+  meadow: 'glock',
+  woods: 'flute',
+  canyon: 'banjo',
+  peaks: 'celesta',
+  summit: 'celesta',
+  boss: 'brass',
+};
 
 const BASS_STEP: Record<string, number> = { R: 0, '3': 2, '5': 4, '7': 6, '8': 7 };
 
@@ -44,6 +71,9 @@ const LOUNGE_DRUMS = 'k...h..hs...h..h';
 /** A weapon riff's level in the music, and how much louder it gets while the weapon is firing */
 const RIFF_VOL = 1.2;
 const RIFF_HEAT = 0.8;
+
+/** Monotonic gain scaling for Set payout tiers 0..3 (-5 dB, -2 dB, 0 dB, +1 dB) ([AU-04]). */
+export const PAYOUT_TIER_GAIN = [0.56, 0.79, 1.0, 1.12] as const;
 
 /** Dev builds only: when each fight sound will be heard, on the page's own clock. The motion capture times sound against the picture with it. */
 interface CueLogEntry { name: string; t: number }
@@ -67,6 +97,106 @@ export type CueName =
   | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter' | 'slowMoDefeat' | 'storyClimax'
   | 'keyFound' | 'friendRescued';
 
+/**
+ * 24 immediate reactive, parry, tally, kill-cam & UI cues ([AU-11]).
+ * Fire with 4 ms lookahead instead of waiting for a 32nd-note grid boundary,
+ * while staying 100% scale-locked to the active chord & mode.
+ */
+export const IMMEDIATE_CUES: ReadonlySet<CueName> = new Set<CueName>([
+  'tap', 'back', 'slowMoDefeat', 'star', 'starSwoosh', 'rankSeal', 'storyClimax', 'keyFound', 'friendRescued',
+  'mistake', 'hurt', 'parryWarn', 'parry', 'perfectParry', 'foeStrike', 'hint',
+  'multStep', 'multSlam', 'register', 'weaponGet', 'reelSpin', 'reelStop',
+  'killCamRiser', 'killCamShatter',
+]);
+
+/** Explicit 4-tier priority assignment for every cue ([AU-04]). */
+export const CUE_TIER: Record<CueName, SfxTier> = {
+  // Tier S (0 dB, ducks Tier B/C -9 dB & music -8 dB)
+  slowMoDefeat: 'S',
+  foeDefeated: 'S',
+  perfectParry: 'S',
+  hurt: 'S',
+  foeStrike: 'S',
+  parryWarn: 'S',
+  killCamRiser: 'S',
+  killCamShatter: 'S',
+
+  // Tier A (-1 dB, ducks Tier B/C -4 dB & music -3 to -7 dB)
+  parry: 'A',
+  blast: 'A',
+  mistake: 'A',
+  levelUp: 'A',
+  star: 'A',
+  rankSeal: 'A',
+  friendRescued: 'A',
+  bigHit: 'A',
+  wave: 'A',
+  toll: 'A',
+  trapSprung: 'A',
+  storyClimax: 'A',
+
+  // Tier B (-5 dB, never ducks higher tiers)
+  heal: 'B',
+  graceSave: 'B',
+  coins: 'B',
+  foeRegen: 'B',
+  foeMove: 'B',
+  foeDud: 'B',
+  foeHide: 'B',
+  foeFuse: 'B',
+  foeShuffle: 'B',
+  foeSteal: 'B',
+  foeGrowl: 'B',
+  fire: 'B',
+  hint: 'B',
+  timeGain: 'B',
+  nineLives: 'B',
+  hotStreak: 'B',
+  grudge: 'B',
+  shield: 'B',
+  patience: 'B',
+  freeze: 'B',
+  redeal: 'B',
+  scoop: 'B',
+  fetch: 'B',
+  phew: 'B',
+  ding: 'B',
+  laser: 'B',
+  ricochet: 'B',
+  doubled: 'B',
+  charged: 'B',
+  warDrum: 'B',
+  clarity: 'B',
+  clarityEnd: 'B',
+  pinata: 'B',
+  pinataBreak: 'B',
+  link: 'B',
+  purity: 'B',
+  rainbow: 'B',
+  catalyst: 'B',
+  trapSet: 'B',
+  trapDefused: 'B',
+  burn: 'B',
+  overkill: 'B',
+  streakLost: 'B',
+  sour: 'B',
+  register: 'B',
+  starSwoosh: 'B',
+  coinRoll: 'B',
+  weaponGet: 'B',
+  multStep: 'B',
+  multSlam: 'B',
+  keyFound: 'B',
+
+  // Tier C (-8 dB, dry, stolen first)
+  tap: 'C',
+  back: 'C',
+  armed: 'C',
+  twinkle: 'C',
+  reelSpin: 'C',
+  reelStop: 'C',
+};
+
 export interface CueOpts {
   /** How big the thing is (damage, coins, a count): scales the cue */
   amount?: number;
@@ -86,6 +216,9 @@ interface CueCtx {
   root: number;
   amount: number;
   slot: number;
+  tier: SfxTier;
+  /** True when a heavy T2/T3 payout just landed within 120 ms (prevents double subDrop on multSlam) */
+  suppressSlamSub?: boolean;
 }
 
 const SFX = 'sfx' as const;
@@ -97,6 +230,7 @@ class Band {
   private arrName = 'map';
   private pending: string | null = null;
   private step = 0;
+  private introStepsLeft = 0;
   private nextTime = 0;
   private bpm = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -110,6 +244,9 @@ class Band {
   private spot: string[] = [];
   private clockOverride: number | null = null;
   private lastCueAt: Partial<Record<string, number>> = {};
+  private lastHeavyPayoutAt = -Infinity;
+  private lastFighterCallAt = new Map<string, number>();
+  private storyHeroMode = false;
   /** Expedition 33 slow-mo time-dilation factor (1 = normal, <1 = tempo + pitch dragging down into hit-stop) */
   private slowMo = 1;
   private slowMoTimer: ReturnType<typeof setTimeout> | null = null;
@@ -128,20 +265,40 @@ class Band {
     return this.clockOverride ?? chip.now;
   }
 
+  /** Execute `fn` with a temporary clock override (used by offline SFX reels in index.ts). */
+  atTime(t: number, fn: () => void): void {
+    const prev = this.clockOverride;
+    this.clockOverride = t;
+    this.lastCueAt = {};
+    try {
+      fn();
+    } finally {
+      this.clockOverride = prev;
+    }
+  }
+
   // ─── Transport ────────────────────────────────────────────────────────────
 
   play(name: string) {
     const known = ARRANGEMENTS[name] ? name : 'map';
     this.current = known;
     this.clearSlowMo();
+    if (known !== 'story') this.storyHeroMode = false;
     if (!this.mood) this.mix = restingMix(known);
-    if (!audioFlags.music) return;
     if (this.useNative) {
+      if (!audioFlags.music) return;
       nativeBridge.setMusicLevel(this.mix.level);
       nativeBridge.playMusic(known);
       return;
     }
+    if (!audioFlags.music) {
+      // [AU-20]: Even when Music is OFF, keep quiet biome ambience alive if SFX is ON
+      if (audioFlags.sfx && chip.ensure()) ambience.setBiome(known);
+      else ambience.stop();
+      return;
+    }
     if (!chip.ensure()) return;
+    ambience.setBiome(known);
     if (this.timer && this.arr) {
       if (this.arrName !== known) this.pending = known; // swap on the next bar line
       return;
@@ -158,25 +315,68 @@ class Band {
     this.timer = setInterval(() => this.schedule(), 25);
   }
 
+  /**
+   * Semantic helper for non-battle screens ([AU-20]):
+   *   - title: warm drumless kalimba/strings/vibes (96 BPM)
+   *   - freeplay: gentle lounge continuation of title (level 0.65, 4.2 kHz filter)
+   *   - story: dusk Aeolian strings + celesta + timpani (88 BPM)
+   *   - storyHero: Beat 3 Hero brightening to Ionian
+   *   - camp: cozy campfire vibes + harp + pizz + soft shaker (98 BPM)
+   *   - map: adventure map theme (108 BPM)
+   */
+  playScreenMusic(screen: 'title' | 'freeplay' | 'story' | 'storyHero' | 'camp' | 'map') {
+    this.mood = null;
+    if (screen === 'freeplay') {
+      this.storyHeroMode = false;
+      this.play('title');
+      this.mix = { ...restingMix('title'), level: 0.65, filterHz: 4200, lounge: true };
+      this.applyMixToChip(0.45);
+      return;
+    }
+    if (screen === 'storyHero') {
+      this.storyHeroMode = true;
+      this.play('story');
+      this.mix = { ...restingMix('story'), mode: 'ionian', leadMode: 'ionian', level: 0.92 };
+      this.applyMixToChip(0.45);
+      return;
+    }
+    this.storyHeroMode = false;
+    this.play(screen);
+  }
+
+  /** Brighten the StoryIntro arrangement from dusk Aeolian to triumphant Ionian on Beat 3 ([AU-20]). */
+  setStoryHeroMode(hero: boolean) {
+    this.storyHeroMode = hero;
+    if (this.current === 'story' && !this.mood) {
+      const mode: ModeName = hero ? 'ionian' : 'aeolian';
+      this.mix = { ...restingMix('story'), mode, leadMode: mode, level: hero ? 0.92 : 0.85 };
+      this.applyMixToChip(0.45);
+    }
+  }
+
   /** Stop and forget the song (leaving a screen). */
   stop() {
     this.halt();
+    ambience.stop();
     if (this.useNative) nativeBridge.stopMusic();
     this.current = null;
     this.mood = null;
+    this.storyHeroMode = false;
+    this.introStepsLeft = 0;
     this.heat.clear();
   }
 
   /** Silence playback but remember the song (music toggled off, autoplay blocked). */
-  halt() {
+  halt(keepNativeHandle = false) {
     this.clearSlowMo();
-    if (this.useNative) nativeBridge.haltMusic();
+    if (this.useNative && !keepNativeHandle) nativeBridge.haltMusic();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.stopIntervalTrack?.();
     this.stopIntervalTrack = null;
     this.arr = null;
     this.pending = null;
+    ambience.sync();
   }
 
   private clearSlowMo() {
@@ -203,8 +403,8 @@ class Band {
   }
 
   private setArrangement(name: string) {
-    this.arr = ARRANGEMENTS[name];
-    this.arrName = name;
+    this.arr = ARRANGEMENTS[name] ?? ARRANGEMENTS.map;
+    this.arrName = ARRANGEMENTS[name] ? name : 'map';
   }
 
   /** One 32nd note right now, in ms: the grid every cue lands on. The effects on screen step to the same grid. */
@@ -229,6 +429,15 @@ class Band {
 
   private advance() {
     if (!this.arr) return;
+    if (this.introStepsLeft > 0) {
+      const target = this.arr.bpm * this.mix.tempo;
+      if (!this.bpm) this.bpm = target;
+      const introIdx = INTRO_PICKUP.length - this.introStepsLeft;
+      this.playIntroPickupStep(this.arr, introIdx, this.nextTime);
+      this.nextTime += this.stepDur();
+      this.introStepsLeft -= 1;
+      return;
+    }
     if (this.step % 16 === 0 && this.pending) {
       this.setArrangement(this.pending);
       this.pending = null;
@@ -255,13 +464,38 @@ class Band {
     this.step += 1;
   }
 
+  /** Crisp 1-bar INTRO_PICKUP launching fresh battle entries straight into Bar 0 ([AU-17]). */
+  private playIntroPickupStep(a: Arrangement, s16: number, t: number) {
+    const sd = this.stepDur();
+    const { mode, key } = this.tone();
+    const leadMode = this.mix.leadMode;
+    const tok = INTRO_PICKUP[s16];
+    const lead = tok && tok !== '-' && tok !== '.' ? parseNote(tok) : null;
+    if (lead) {
+      let len = 1;
+      while (INTRO_PICKUP[s16 + len] === '-' && s16 + len < 16) len++;
+      const semis = a.leadOctave / 12;
+      const freq = foldFreq(degreeToFreq(leadMode, key, lead.degree, lead.octave + semis), 2600);
+      chip.tone({ voice: 'pulse1', freq, at: t, dur: sd * len * 0.92, vol: a.leadVol * 0.9, duty: a.leadDuty });
+    }
+    if (s16 === 4 || s16 === 12) {
+      const bassF = foldFreq(degreeToFreq(mode, key, 4, a.bassOctave), 2600);
+      chip.tone({ voice: 'wave', freq: bassF, at: t, dur: sd * 2.5, vol: 0.5, decay: 0.5 });
+    }
+    if (s16 === 8 || s16 === 10 || s16 >= 12) {
+      drum(s16 >= 12 ? 'snare' : 'tom', t, 0.45 + (s16 - 8) * 0.07);
+    }
+  }
+
   // ─── The fight ────────────────────────────────────────────────────────────
 
-  /** Start following a fight. Call `setMood` whenever the fight changes. */
+  /** Start following a fight. Plays a crisp 1-bar INTRO_PICKUP once before Bar 0 ([AU-17]). */
   enterFight(mood: FightMood) {
     this.mood = null;
     this.heat.clear();
     this.turn = 0;
+    this.step = 0;
+    this.introStepsLeft = ARRANGEMENTS[mood.arrangement]?.style === 'battle' ? INTRO_PICKUP.length : 0;
     this.setMood(mood);
     this.play(mood.arrangement);
   }
@@ -270,6 +504,7 @@ class Band {
   leaveFight() {
     this.clearSlowMo();
     this.mood = null;
+    this.introStepsLeft = 0;
     this.heat.clear();
     this.mix = restingMix(this.current ?? 'map');
     this.applied = { filterHz: -1, level: -1, echo: -1 };
@@ -285,13 +520,10 @@ class Band {
     const cooling = !mood.paused && this.applied.filterHz > 0 && (this.mix.filterHz < this.applied.filterHz || this.mix.level < this.applied.level);
     this.applyMixToChip(cooling ? 1.8 : 0.35);
     if (!prev) return;
-    for (const id of mood.evolutions) if (!prev.evolutions.includes(id)) this.evolve(id);
+    // [AU-13]: Do NOT fire evolve() or reelStop prematurely during React render in setMood();
+    // EvolutionCutIn calls band.playCutInEvolve(id) and WeaponPick calls band.playWeaponPickReelStop() on mount!
     for (const id of prev.evolutions) if (!mood.evolutions.includes(id)) this.devolve();
     if (prev.combo >= 3 && mood.combo === 0 && mood.status === 'playing') this.cue('streakLost');
-    // Level-up or evolution choice: choices land like the reels of a slot machine
-    if (prev.status !== 'pick' && prev.status !== 'pick_evolution' && (mood.status === 'pick' || mood.status === 'pick_evolution')) {
-      [0, 1, 2].forEach(i => this.cue('reelStop', { slot: 8 + i * 4 }));
-    }
   }
 
   /** The mix the band is following right now (the sound studio shows it). */
@@ -313,14 +545,14 @@ class Band {
     this.applied = { filterHz: this.mix.filterHz, level: this.mix.level, echo };
   }
 
-  /** A weapon fired: play its sting and bring its riff forward for the next bars. */
+  /** A weapon fired: play its Tier B sting and bring its riff forward for the next bars. */
   fire(weaponId: string, slot = 0, afterMs = 0) {
     this.heat.set(weaponId, Math.min(1, (this.heat.get(weaponId) ?? 0) + 0.5));
     if (this.useNative) {
       if (audioFlags.sfx) nativeBridge.fireWeapon(weaponId, slot, afterMs);
       return;
     }
-    const c = this.cueCtx(slot, false, afterMs);
+    const c = this.cueCtx(slot, false, afterMs, 'B');
     if (!c) return;
     logCue(`sting:${weaponId}`, c.t, this.now);
     const v = weaponVoice(weaponId);
@@ -337,18 +569,52 @@ class Band {
 
   private playSting(v: WeaponVoice, c: CueCtx, vol: number) {
     const octave = Math.min(6, v.octave + (v.octave <= 3 ? 1 : 0));
+    // [AU-04]: Weapon stings live in Tier B (0.55 voice / 0.48 drum) so they accent without masking Tier S/A impacts
     stingOf(v).forEach((s, i) =>
-      note(v.inst, foldFreq(degreeToFreq(c.mode, c.key, c.root + s, octave), 2600), c.t + i * c.g, c.g * 3, { vol: 1.15 * vol, pan: v.pan, bus: SFX })
+      note(v.inst, foldFreq(degreeToFreq(c.mode, c.key, c.root + s, octave), 2600), c.t + i * c.g, c.g * 3, {
+        vol: 0.55 * vol,
+        pan: v.pan,
+        bus: SFX,
+        tier: 'B',
+      })
     );
-    if (v.drum) drum(v.drum, c.t, 0.8 * vol, SFX, v.pan);
+    if (v.drum) drum(v.drum, c.t, 0.48 * vol, SFX, v.pan, false, 'B');
+  }
+
+  /**
+   * Play a fighter's short (60-130 ms) scale-locked Tier B signature voice ([AU-07]).
+   * Enforces a 1.8 s per-fighter cooldown so rapid chains never spam vocal cues.
+   */
+  fighterCall(fighter: string, kind: FighterCallKind = 'signature', opts: { bypassCooldown?: boolean } = {}): boolean {
+    if (!audioFlags.sfx) return false;
+    if (this.useNative) {
+      const nowMs = Date.now();
+      const prevMs = this.lastFighterCallAt.get(fighter) ?? -Infinity;
+      if (!opts.bypassCooldown && nowMs - prevMs < FIGHTER_CALL_COOLDOWN_MS) return false;
+      this.lastFighterCallAt.set(fighter, nowMs);
+      nativeBridge.fighterCall(fighter, kind);
+      return true;
+    }
+    const c = this.cueCtx(0, true, 0, 'B');
+    if (!c) return false;
+    const prevSec = this.lastFighterCallAt.get(fighter) ?? -Infinity;
+    if (!opts.bypassCooldown && c.t - prevSec < FIGHTER_CALL_COOLDOWN_MS / 1000) return false;
+    const played = playFighterVoice(fighter, kind, c);
+    if (played) {
+      this.lastFighterCallAt.set(fighter, c.t);
+      logCue(`fighter:${fighter}:${kind}`, c.t, this.now);
+    }
+    return played;
   }
 
   // ─── One 16th note of the score ───────────────────────────────────────────
 
-  private tone(): { mode: ModeName; key: number } {
+  private tone(): { mode: ModeName; leadMode: ModeName; key: number } {
     // A lift that would push the tune too high comes back down an octave: still a new key, never shrill
     const key = worldTone(this.arrName).key + this.mix.lift;
-    return { mode: this.mix.mode, key: key > 7 ? key - 12 : key };
+    const mode: ModeName = this.arrName === 'story' && this.storyHeroMode && !this.mood ? 'ionian' : this.mix.mode;
+    const leadMode: ModeName = this.arrName === 'story' && this.storyHeroMode && !this.mood ? 'ionian' : this.mix.leadMode;
+    return { mode, leadMode, key: key > 7 ? key - 12 : key };
   }
 
   private playStep(a: Arrangement, step: number, t: number) {
@@ -356,18 +622,21 @@ class Band {
     const sd = this.stepDur();
     const bar = Math.floor(step / 16);
     const s16 = step % 16;
-    const { mode, key } = this.tone();
+    const { mode, leadMode, key } = this.tone();
     const root = chordRoot(mode, bar);
     // During slow-mo knockout, pitch-bend the music bed downward (~3.5 semitones) as time dilates
     const pitchScale = this.slowMo < 0.99 ? 0.72 + 0.28 * this.slowMo : 1;
-    const f = (degree: number, octave: number) => foldFreq(degreeToFreq(mode, key, degree, octave) * pitchScale, 2600);
+    const f = (degree: number, octave: number, m: ModeName = mode) =>
+      foldFreq(degreeToFreq(m, key, degree, octave) * pitchScale, 2600);
     const evo = mix.evolutions.length > 0 ? themeOf(mix.evolutions[0]) : null;
     const flicker = mix.evolutionFading && s16 % 8 >= 4;
 
     if (s16 === 0) this.startBar(bar);
 
-    // Lead: the tune, on the chip, doubled by the world's colour once the band fills in
-    const section = a.useB && bar % 16 >= 8 ? THEME_B : THEME;
+    // Lead: 16-bar A-B form ([AU-17]); canonical Ionian signature hook preserved across bright/neutral worlds ([AU-19])
+    const inB = Boolean(a.useB && bar % 16 >= 8);
+    const bSection = a.sectionB === 'battle' ? THEME_BATTLE_B : THEME_B;
+    const section = inB ? bSection : THEME;
     const idx = (bar % 8) * 16 + s16;
     const tok = section[idx];
     const lead = tok && tok !== '-' && tok !== '.' ? parseNote(tok) : null;
@@ -378,14 +647,41 @@ class Band {
       while (section[idx + len] === '-' && s16 + len < 16) len++;
       const dur = sd * len * 0.95;
       const semis = a.leadOctave / 12;
-      const freq = f(lead.degree, lead.octave + semis);
-      if (mix.lounge) note('vibes', freq, t, dur, { vol: 0.9 * leadEnv });
-      else {
+      // Preserve opening 2-bar signature hook purely in `leadMode` (Ionian on bright/neutral worlds);
+      // on bars 2-7 / B-section, conform only an altered modal chord tone (lydian #4 on bar 2, mixolydian b7 on bar 3)
+      // to `mode` so the chord and melody never clash by a semitone.
+      const isHookBar = !inB && bar % 8 < 2;
+      const barInLoop = bar % 4;
+      const needsChordToneConform =
+        !isHookBar &&
+        leadMode === 'ionian' &&
+        ((mode === 'lydian' && barInLoop === 2 && lead.degree === 3) ||
+          (mode === 'mixolydian' && barInLoop === 3 && lead.degree === 6));
+      const activeLeadMode = needsChordToneConform ? mode : leadMode;
+      const freq = f(lead.degree, lead.octave + semis, activeLeadMode);
+
+      if (mix.lounge || a.style === 'camp') {
+        note('vibes', freq, t, dur, { vol: 0.9 * leadEnv });
+      } else if (a.style === 'title') {
+        note('kalimba', freq, t, dur, { vol: 0.85 * leadEnv });
+        if (s16 % 4 === 0) note('vibes', foldFreq(freq * 0.5, 2600), t, dur * 1.4, { vol: 0.36 * leadEnv, soft: true });
+      } else if (a.style === 'story') {
+        note('celesta', freq, t, dur * 1.15, { vol: 0.72 * leadEnv });
+        note('strings', foldFreq(freq * 0.5, 2600), t, dur * 1.3, { vol: 0.45 * leadEnv, soft: true });
+      } else {
         chip.tone({ voice: 'pulse1', freq, at: t, dur, vol: a.leadVol * leadEnv, duty: a.leadDuty, vibrato: len > 2 ? a.leadVibrato : 0 });
         // [AU-14]: avoid pushing high-register leads (e.g. peaks leadOctave: 12) up into D8 shrieks
         const colourMult = this.arrName === 'boss' ? 0.5 : freq > 1300 ? 1 : 2;
-        if (colourEnv > 0.05) note(WORLD_COLOUR[this.arrName] ?? 'glock', foldFreq(freq * colourMult, 2600), t, dur, { vol: 0.45 * colourEnv * leadEnv, soft: true });
-        if (this.env.counter > 0.05) note('flute', f(lead.degree - 2, lead.octave + semis), t, dur, { vol: 0.5 * this.env.counter * leadEnv, pan: -0.3, soft: true });
+        if (colourEnv > 0.05) {
+          note(WORLD_COLOUR[this.arrName] ?? 'glock', foldFreq(freq * colourMult, 2600), t, dur, { vol: 0.45 * colourEnv * leadEnv, soft: true });
+          // [AU-18]: Summit layers heroic brass doubling alongside celesta at high intensity
+          if (this.arrName === 'summit' && colourEnv > 0.55) {
+            note('brass', foldFreq(freq * 0.5, 2600), t, dur, { vol: 0.34 * colourEnv * leadEnv, soft: true });
+          }
+        }
+        if (this.env.counter > 0.05) {
+          note('flute', f(lead.degree - 2, lead.octave + semis, mode), t, dur, { vol: 0.5 * this.env.counter * leadEnv, pan: -0.3, soft: true });
+        }
       }
     }
 
@@ -396,8 +692,25 @@ class Band {
       let len = 1;
       while (!mix.lounge && a.bass[s16 + len] === '-') len++;
       const freq = f(root + (BASS_STEP[b] ?? 0), a.bassOctave);
-      chip.tone({ voice: 'wave', freq, at: t, dur: sd * len * 0.9, vol: 0.55, decay: 0.5 });
-      if (subEnv > 0.05 && b === 'R') note('sub', freq / (freq > 90 ? 2 : 1), t, sd * 1.5, { vol: 0.5 * subEnv, soft: true });
+      if (a.style === 'camp') {
+        note('pizz', freq, t, sd * len * 0.9, { vol: 0.65, soft: true });
+      } else if (a.style === 'title' || a.style === 'story') {
+        note('strings', freq, t, sd * len * 0.95, { vol: 0.5, soft: true });
+      } else {
+        chip.tone({ voice: 'wave', freq, at: t, dur: sd * len * 0.9, vol: 0.55, decay: 0.5 });
+        if (subEnv > 0.05 && b === 'R') note('sub', freq / (freq > 90 ? 2 : 1), t, sd * 1.5, { vol: 0.5 * subEnv, soft: true });
+      }
+    }
+
+    // Story low timpani swell on phrase downbeats ([AU-20])
+    if (a.style === 'story' && s16 === 0 && bar % 4 === 0 && !mix.frozen) {
+      drum('timpani', t, 0.52, 'music', 0, true);
+    }
+
+    // Camp gentle harp roll ([AU-20])
+    if (a.style === 'camp' && s16 % 4 === 0 && !mix.frozen) {
+      const harpStep = [0, 2, 4, 7][(s16 / 4) % 4];
+      note('harp', f(root + harpStep, 4), t, sd * 3.5, { vol: 0.42, pan: s16 % 8 === 0 ? -0.3 : 0.3, soft: true });
     }
 
     // Arpeggio
@@ -416,7 +729,7 @@ class Band {
     // Drums
     this.playDrums(a, s16, bar, t, evo && !flicker ? GROOVES[evo.groove] : null);
 
-    // What the fight is telling you
+    // What the fight is telling you (alerts capped to top 2 threats by director.ts [AU-05])
     if (mix.heartbeat && (s16 === 0 || s16 === 3 || s16 === 8 || s16 === 11)) drum('thud', t, s16 % 8 === 0 ? 0.9 : 0.55);
     if (mix.clock === 1 && s16 % 4 === 0) drum(s16 % 8 === 0 ? 'woodblock' : 'woodblockLo', t, 0.7);
     if (mix.clock === 2 && s16 % 2 === 0) drum(s16 % 4 === 0 ? 'woodblock' : 'woodblockLo', t, 0.9);
@@ -427,9 +740,11 @@ class Band {
     const al = mix.alerts;
     if (al.cursed > 0 && s16 === 0) chip.play(INSTRUMENTS.choir, { freq: f(root, 2) * 1.0595, at: t, dur: sd * 14, vol: 0.5, soft: true });
     if (al.potatoSoon && s16 % 2 === 0) drum('cowbell', t, 0.45, 'music', 0.5);
-    if (al.fuseHot > 0) drum('shaker', t, 0.7, 'music', -0.5);
+    // [AU-05]: 8th-note shaker cadence (down from every 16th at 0.7) to prevent high-freq clutter
+    if (al.fuseHot > 0 && s16 % 2 === 0) drum('shaker', t, 0.42, 'music', -0.5, true);
     if (al.thornSoon && s16 % 4 === 3) drum('rim', t, 0.8, 'music', 0.4);
-    if (al.glassLow && (s16 === 6 || s16 === 14)) note('glass', f(7, 6), t, sd * 2, { vol: 0.7 });
+    // [AU-05]: Fold glassLow down to octave 5 (<= 2,600 Hz)
+    if (al.glassLow && (s16 === 6 || s16 === 14)) note('glass', f(7, 5), t, sd * 2, { vol: 0.6, soft: true });
     if (al.bombSoon && s16 % 4 === 0) drum('tick', t, 1);
 
     // Your build: weapon riffs taking turns
@@ -460,6 +775,11 @@ class Band {
   private playDrums(a: Arrangement, s16: number, bar: number, t: number, groove: string | null) {
     const lvl = this.env.drums;
     if (lvl <= 0.08) return;
+    if (a.style === 'camp' && !groove) {
+      // Cozy camp uses only a soft brushed shaker
+      if (a.drums[s16] === 'h') drum('shaker', t, 0.45 * Math.min(1, lvl), 'music', 0.2, true);
+      return;
+    }
     const d = groove ? groove[s16] : this.mix.lounge ? LOUNGE_DRUMS[s16] : a.drums[s16];
     // Smooth blends across drum tiers: 0→1 basic groove, 1→2 full hats/snare, 2→3 driving claps & off-beat hats
     const base = Math.min(1, lvl);
@@ -500,19 +820,20 @@ class Band {
   // ─── Cues ─────────────────────────────────────────────────────────────────
 
   /** When and in what harmony the next cue lands; null when effects are off or there is no audio. */
-  private cueCtx(slot = 0, immediate = false, afterMs = 0): CueCtx | null {
+  private cueCtx(slot = 0, immediate = false, afterMs = 0, tier: SfxTier = 'B'): CueCtx | null {
     if (!audioFlags.sfx) return null;
     if (!chip.ensure()) return null;
     const { mode, key } = this.tone();
     const running = this.timer !== null || this.clockOverride !== null;
     const sd = running && this.bpm ? this.stepDur() : 60 / 120 / 4;
     const g = sd / 2;
-    const earliest = this.now + 0.012;
-    // Inside a stretch of beats (`stretch`), every cue counts from the note its pictures land on
+    // [AU-11]: 4 ms lookahead for immediate cues (down from 12 ms), 12 ms for rhythmic grid cascades
+    const earliest = this.now + (immediate ? 0.004 : 0.012);
+    // Inside a stretch of beats (`stretch`), every non-immediate cue counts from the note its pictures land on
     const t0 = !immediate && this.stretchT0 !== null ? this.stretchT0 : running && !immediate ? nextGridTime(earliest, this.nextTime, g) : earliest;
     const t = t0 + slot * g + Math.max(0, afterMs) / 1000;
     const stepAt = running ? this.step + Math.floor((t - this.nextTime) / sd + 1e-6) : 0;
-    return { t, g, mode, key, root: running ? chordRoot(mode, Math.floor(stepAt / 16)) : 0, amount: 0, slot };
+    return { t, g, mode, key, root: running ? chordRoot(mode, Math.floor(stepAt / 16)) : 0, amount: 0, slot, tier };
   }
 
   private stretchT0: number | null = null;
@@ -543,17 +864,17 @@ class Band {
     return (t0 - now) * 1000;
   }
 
-  /** A card was tapped: the first, second and third card are the root, third and fifth of the chord. */
+  /** A card was tapped: dry Tier C root/third/fifth of the current chord ([AU-04], [AU-10]). */
   select(count: number) {
     if (this.useNative) {
       if (audioFlags.sfx) nativeBridge.select(count);
       return;
     }
-    const c = this.cueCtx(0, true);
+    const c = this.cueCtx(0, true, 0, 'C');
     if (!c) return;
     const i = Math.max(0, Math.min(2, count - 1));
-    note('kalimba', foldFreq(degreeToFreq(c.mode, c.key, c.root + i * 2, 5), 2600), c.t, 0.2, { vol: 0.9, bus: SFX });
-    drum('tick', c.t, 0.25, SFX);
+    note('kalimba', foldFreq(degreeToFreq(c.mode, c.key, c.root + i * 2, 5), 2600), c.t, 0.14, { vol: 0.45, bus: SFX, tier: 'C', space: 'dry' });
+    drum('tick', c.t, 0.22, SFX, undefined, false, 'C', 'dry');
   }
 
   deselect() {
@@ -561,69 +882,116 @@ class Band {
       if (audioFlags.sfx) nativeBridge.deselect();
       return;
     }
-    const c = this.cueCtx(0, true);
+    const c = this.cueCtx(0, true, 0, 'C');
     if (!c) return;
-    note('kalimba', foldFreq(degreeToFreq(c.mode, c.key, c.root, 4), 2600), c.t, 0.15, { vol: 0.6, bus: SFX });
+    note('kalimba', foldFreq(degreeToFreq(c.mode, c.key, c.root, 4), 2600), c.t, 0.12, { vol: 0.35, bus: SFX, tier: 'C', space: 'dry' });
   }
 
   /**
-   * A Set landed. The chord strums, the streak ladder rings one rung higher
-   * for every Set in the combo, and the hit's size picks its weight:
-   * 0 a tap, 1 a thump, 2 a slam with a sub drop, 3 the whole orchestra.
+   * A Set landed (Tier A, monotonic T0..T3 gain, <=18 voices even on MEGA+Rainbow).
+   * Opens with dry <2 ms impactCrack + tight 38-58 ms impactPunch finishing inside
+   * hitstop, then blooms into tucked musical chimes & fast-attack brassStab ([AU-04], [AU-08], [AU-09]).
    */
   payout(o: { combo: number; tier: number; rainbow?: boolean; afterMs?: number }) {
     if (this.useNative) {
       if (audioFlags.sfx) nativeBridge.payout(o);
       return;
     }
-    const c = this.cueCtx(0, false, o.afterMs);
+    const tier = Math.max(0, Math.min(3, Math.round(o.tier)));
+    const c = this.cueCtx(0, false, o.afterMs, 'A');
     if (!c) return;
     logCue('payout', c.t, this.now);
+    const scale = PAYOUT_TIER_GAIN[tier];
     const f = (degree: number, octave: number) => foldFreq(degreeToFreq(c.mode, c.key, degree, octave), 2600);
     const N = (inst: InstrumentId, degree: number, octave: number, dt: number, dur: number, vol = 1, pan?: number) =>
-      note(inst, f(degree, octave), c.t + dt, dur, { vol, pan, bus: SFX });
+      note(inst, f(degree, octave), c.t + dt, dur, { vol: vol * scale, pan, bus: SFX, tier: 'A', space: 'sfxRoom' });
 
-    strum(c.root).forEach((d, i) => N('harp', d, 4, i * c.g * 0.5, 0.5, 0.75));
+    // Layer 1: dry <2 ms impact crack + hitstop-bounded punch body (3 voices)
+    const punchDurMs = [38, 46, 52, 58][tier];
+    drum('impactCrack', c.t, scale, SFX, undefined, false, 'A', 'dry');
+    impactPunch(c.t, scale, { durMs: punchDurMs, bus: SFX, tier: 'A' });
+
+    // Layer 2: tucked musical reward chime (4-6 dB behind the dry transient so impact hits first)
+    const harpChord = o.rainbow ? [c.root, c.root + 4] : [c.root, c.root + 2, c.root + 4];
+    harpChord.forEach((d, i) => N('harp', d, 4, 0.008 + i * c.g * 0.45, 0.32, 0.46));
 
     const rung = ladderRung(o.combo);
-    N('bell', ladderDegree(c.mode, rung), 5, 0, 0.8, 1);
-    if (o.combo >= 3) N('glock', ladderDegree(c.mode, rung + 2), 5, c.g, 0.4, 0.7);
-    if (o.combo >= 5) [1, 2, 3, 4].forEach(i => N('glock', ladderDegree(c.mode, rung + i), 6, (i + 1) * c.g, 0.3, 0.55, i % 2 ? 0.5 : -0.5));
-    if (o.combo >= 8) {
-      drum('crash', c.t, 0.5, SFX);
-      strum(c.root).forEach(d => N('choir', d, 4, 0, c.g * 12, 0.7));
+    N('bell', ladderDegree(c.mode, rung), 5, 0.006, 0.45, 0.62);
+    if (o.combo >= 3 && !o.rainbow) {
+      N('glock', ladderDegree(c.mode, rung + 2), 5, c.g, 0.28, 0.48);
+    }
+    if (o.combo >= 5 && !o.rainbow && tier < 3) {
+      [1, 3].forEach((step, idx) =>
+        N('glock', ladderDegree(c.mode, rung + step), 6, (idx + 1.5) * c.g, 0.22, 0.42, idx % 2 ? 0.5 : -0.5)
+      );
+    }
+    if (o.combo >= 8 && tier < 2) {
+      drum('crash', c.t, 0.42 * scale, SFX, undefined, false, 'A', 'sfxRoom');
     }
 
-    drum('kick', c.t, 0.5 + o.tier * 0.15, SFX);
-    if (o.tier >= 1) for (const d of [0, 4]) N('brass', c.root + d, 3, 0, c.g * 3, 0.8);
-    if (o.tier >= 2) {
-      subDrop(c.t, 0.7 + (o.tier - 2) * 0.3);
-      drum('crash', c.t, 0.6, SFX);
+    // Layer 3: fast 5 ms brassStab & sub/duck escalation by tier
+    if (tier === 1) {
+      for (const d of [0, 4]) N('brassStab', c.root + d, 3, 0, c.g * 3, 0.85);
+      chip.duck(0.25, c.t, 0.3);
+      chip.duckSfx(0.28, c.t, 0.25);
+    } else if (tier === 2) {
+      this.lastHeavyPayoutAt = c.t;
+      subDrop(c.t, 0.72 * scale, SFX, 'A');
+      drum('crash', c.t, 0.52 * scale, SFX, undefined, false, 'A', 'sfxRoom');
+      for (const d of [0, 4]) N('brassStab', c.root + d, 3, 0, c.g * 3.5, 0.92);
       chip.duck(0.45, c.t, 0.6);
+      chip.duckSfx(0.37, c.t, 0.45);
+    } else if (tier >= 3) {
+      this.lastHeavyPayoutAt = c.t;
+      subDrop(c.t, 0.9 * scale, SFX, 'A');
+      drum('crash', c.t, 0.62 * scale, SFX, undefined, false, 'A', 'sfxRoom');
+      for (const d of [0, 2, 4]) N('brassStab', c.root + d, 3, 0, c.g * 6, 0.92);
+      for (const d of [0, 4]) N('strings', c.root + d, 4, 0.015, c.g * 8, 0.65);
+      if (!o.rainbow) {
+        [6, 4, 2].forEach((offset, idx) =>
+          N('glock', ladderDegree(c.mode, rung + offset), 6, (idx + 1.5) * c.g, 0.26, 0.52, idx % 2 ? 0.55 : -0.55)
+        );
+      }
+      chip.duck(0.65, c.t, 0.95);
+      chip.duckSfx(0.45, c.t, 0.65);
     }
-    if (o.tier >= 3) {
-      for (const oct of [3, 4, 5]) strum(c.root).forEach(d => N(oct === 4 ? 'strings' : 'brass', d, oct, 0, c.g * 10, 0.75));
-      for (let i = 0; i < 8; i++) N('glock', ladderDegree(c.mode, rung + 7 - i), 6, (i + 2) * c.g, 0.35, 0.7, i % 2 ? 0.6 : -0.6);
-      chip.duck(0.7, c.t, 1.1);
+
+    // Compact 4-voice Rainbow shimmer (keeps MEGA + Rainbow strictly <= 18 total voices)
+    if (o.rainbow) {
+      [0, 4, 7].forEach((d, i) =>
+        note('glock', f(c.root + d, 5), c.t + (i + 1) * c.g * 0.6, 0.28, {
+          vol: 0.58 * scale,
+          bus: SFX,
+          tier: 'A',
+          space: 'sfxRoom',
+          pan: -0.6 + i * 0.6,
+        })
+      );
+      chip.noise({ at: c.t, dur: 0.34, vol: 0.22 * scale, short: true, filter: 5000, sweepTo: 9800, bus: SFX, tier: 'A', space: 'sfxRoom' });
     }
-    if (o.rainbow) this.run(CUES.rainbow, c);
   }
 
-  /** Play a named cue on the next 32nd note, in key. */
+  /** Play a named cue (immediate for all 24 IMMEDIATE_CUES, 32nd-note grid for rhythmic cascades). */
   cue(name: CueName, o: CueOpts = {}) {
     if (this.useNative) {
       if (audioFlags.sfx) nativeBridge.cue(name, o);
       return;
     }
-    const immediate = name === 'tap' || name === 'back' || name === 'slowMoDefeat' || name === 'star' || name === 'starSwoosh' || name === 'rankSeal' || name === 'storyClimax' || name === 'keyFound' || name === 'friendRescued';
-    const c = this.cueCtx(o.slot ?? 0, immediate, o.afterMs);
+    const immediate = IMMEDIATE_CUES.has(name);
+    const tier = CUE_TIER[name];
+    const c = this.cueCtx(o.slot ?? 0, immediate, o.afterMs, tier);
     if (!c) return;
-    // The same cue twice inside a 32nd is one sound, not two
-    const last = this.lastCueAt[name];
-    if (last !== undefined && Math.abs(c.t - last) < 0.02 && name !== 'reelStop' && name !== 'starSwoosh') return;
-    this.lastCueAt[name] = c.t;
+    // [AU-11]: Key multStep dedupe by step amount with 10 ms floor so rapid Balatro tallies never drop
+    const dedupeKey = name === 'multStep' ? `${name}:${Math.round(o.amount ?? 0)}` : name;
+    const dedupeWindow = name === 'multStep' ? 0.01 : 0.02;
+    const last = this.lastCueAt[dedupeKey];
+    if (last !== undefined && Math.abs(c.t - last) < dedupeWindow && name !== 'reelStop' && name !== 'starSwoosh') return;
+    this.lastCueAt[dedupeKey] = c.t;
     logCue(name, c.t, this.now);
     c.amount = o.amount ?? 0;
+    if (name === 'multSlam') {
+      c.suppressSlamSub = Math.abs(c.t - this.lastHeavyPayoutAt) < 0.12;
+    }
     this.run(CUES[name], c);
   }
 
@@ -631,31 +999,81 @@ class Band {
     fn(c);
   }
 
-  /** An evolution begins: a riser into the recipe's own fanfare. The band lifts a key (the director does that). */
-  evolve(recipeId: string) {
+  /**
+   * An evolution begins (Tier S): a riser into the recipe's own fanfare.
+   * Pass `{ immediate: true, leadMs: 90 }` from EvolutionCutIn mount so the riser fills
+   * 0-90 ms and crash + subDrop + duet fanfare hit the exact 90 ms slash-flash frame ([AU-13]).
+   */
+  evolve(recipeId: string, opts: { immediate?: boolean; leadMs?: number } = {}) {
     if (this.useNative) {
       if (audioFlags.sfx) nativeBridge.evolve();
       return;
     }
-    const c = this.cueCtx();
+    const c = this.cueCtx(0, Boolean(opts.immediate), 0, 'S');
     if (!c) return;
     const theme = themeOf(recipeId);
-    const lead = c.g * 4; // half a beat of drum roll and riser
-    riser(c.t, lead, 0.8);
-    for (let i = 0; i < 4; i++) drum('snare', c.t + i * c.g, 0.4 + i * 0.15, SFX);
+    const lead = opts.leadMs !== undefined ? Math.max(0, opts.leadMs) / 1000 : c.g * 4;
+    if (lead > 0.015) {
+      riser(c.t, lead, 0.8, SFX, 'S');
+      const rollSteps = Math.max(2, Math.min(4, Math.round(lead / Math.max(0.022, c.g))));
+      for (let i = 0; i < rollSteps; i++) {
+        drum('snare', c.t + (i * lead) / rollSteps, 0.4 + i * 0.15, SFX, undefined, false, 'S');
+      }
+    }
     const t = c.t + lead;
-    drum('crash', t, 0.9, SFX);
-    subDrop(t, 0.8);
-    chip.duck(0.5, t, 0.8);
+    drum('impactCrack', t, 0.95, SFX, undefined, false, 'S', 'dry');
+    drum('crash', t, 0.9, SFX, undefined, false, 'S', 'sfxRoom');
+    subDrop(t, 0.82, SFX, 'S');
+    chip.duck(0.55, t, 0.8);
+    chip.duckSfx(0.65, t, 0.65);
     const key = c.key + theme.lift;
     theme.fanfare.forEach((s, i) => {
       const last = i === theme.fanfare.length - 1;
       const freq = foldFreq(degreeToFreq(c.mode, key, s, 4), 2600);
       const dur = last ? c.g * 12 : c.g * 2.4;
-      note(theme.insts[i < theme.fanfare.length / 2 ? 0 : 1], freq, t + i * c.g * 2, dur, { vol: 1.1, bus: SFX, pan: i % 2 ? 0.3 : -0.3 });
-      note('brass', freq, t + i * c.g * 2, dur, { vol: 0.7, bus: SFX });
-      if (last) for (const d of [2, 4]) note('strings', foldFreq(degreeToFreq(c.mode, key, s - 7 + d, 4), 2600), t + i * c.g * 2, dur, { vol: 0.9, bus: SFX });
+      note(theme.insts[i < theme.fanfare.length / 2 ? 0 : 1], freq, t + i * c.g * 2, dur, {
+        vol: 1.0,
+        bus: SFX,
+        tier: 'S',
+        space: last ? 'hall' : 'sfxRoom',
+        pan: i % 2 ? 0.3 : -0.3,
+      });
+      note('brass', freq, t + i * c.g * 2, dur, { vol: 0.72, bus: SFX, tier: 'S', space: 'sfxRoom' });
+      if (last) {
+        for (const d of [2, 4]) {
+          note('strings', foldFreq(degreeToFreq(c.mode, key, s - 7 + d, 4), 2600), t + i * c.g * 2, dur, {
+            vol: 0.85,
+            bus: SFX,
+            tier: 'S',
+            space: 'hall',
+          });
+        }
+      }
     });
+  }
+
+  /** Mount-synced EvolutionCutIn fanfare: 90 ms riser into slash-flash (0 ms when reducedMotion) ([AU-13]). */
+  playCutInEvolve(recipeId: string, opts: { reducedMotion?: boolean; leadMs?: number } = {}) {
+    const leadMs = opts.leadMs ?? (opts.reducedMotion ? 0 : 90);
+    this.evolve(recipeId, { immediate: true, leadMs });
+  }
+
+  /** Mount-synced WeaponPick / EvolutionPick slot-reel stops at 0 / 75 / 150 ms ([AU-13]). */
+  playWeaponPickReelStop(count = 3, staggerMs = 75) {
+    const n = Math.max(1, Math.min(6, Math.round(count)));
+    for (let i = 0; i < n; i++) {
+      this.cue('reelStop', { slot: 0, amount: i, afterMs: i * staggerMs });
+    }
+  }
+
+  /** Kill-Cam anticipation riser for lethal card flight (Tier S, immediate) ([AU-06]). */
+  playKillCamRiser(afterMs = 0) {
+    this.cue('killCamRiser', { afterMs });
+  }
+
+  /** Kill-Cam golden slash shatter (+48 ms into boss/elite/perfect KO impact) (Tier S, immediate) ([AU-06]). */
+  playKillCamShatter(afterMs = 0) {
+    this.cue('killCamShatter', { afterMs });
   }
 
   /** The evolution ends: the power drains away. */
@@ -664,34 +1082,47 @@ class Band {
       if (audioFlags.sfx) nativeBridge.cue('clarityEnd');
       return;
     }
-    const c = this.cueCtx();
+    const c = this.cueCtx(0, false, 0, 'B');
     if (!c) return;
-    downlifter(c.t, c.g * 12, 0.7);
-    [7, 4, 2, 0].forEach((s, i) => note('vibes', foldFreq(degreeToFreq(c.mode, c.key, c.root + s, 5), 2600), c.t + i * c.g * 2, 0.6, { vol: 0.7, bus: SFX }));
+    downlifter(c.t, c.g * 12, 0.65, SFX, 'B');
+    [7, 4, 2, 0].forEach((s, i) =>
+      note('vibes', foldFreq(degreeToFreq(c.mode, c.key, c.root + s, 5), 2600), c.t + i * c.g * 2, 0.45, {
+        vol: 0.62,
+        bus: SFX,
+        tier: 'B',
+        space: 'sfxRoom',
+      })
+    );
   }
 
-  /** Audition a weapon outside a fight (Armory, unlock screen): its riff for one bar, then its sting. */
+  /** Audition a weapon outside a fight (Armory, unlock screen): its riff for one bar. */
   audition(weaponId: string) {
     if (this.useNative) {
       if (audioFlags.sfx) nativeBridge.fireWeapon(weaponId);
       return;
     }
-    const c = this.cueCtx(0, true);
+    const c = this.cueCtx(0, true, 0, 'B');
     if (!c) return;
     const v = weaponVoice(weaponId);
     const sd = c.g * 2;
     for (const [s, at, len] of riffNotes(v.riff)) {
-      note(v.inst, foldFreq(degreeToFreq(c.mode, c.key, c.root + s, v.octave), 2600), c.t + at * sd, sd * len * 0.92, { vol: 1.2, pan: v.pan, bus: SFX });
+      note(v.inst, foldFreq(degreeToFreq(c.mode, c.key, c.root + s, v.octave), 2600), c.t + at * sd, sd * len * 0.92, {
+        vol: 0.9,
+        pan: v.pan,
+        bus: SFX,
+        tier: 'B',
+        space: 'sfxRoom',
+      });
     }
     if (v.beat) [...v.beat].forEach((ch, i) => {
       const id: DrumId | undefined = ch === 'x' ? v.drum : ch === 'o' ? v.drum2 : undefined;
-      if (id) DRUMS[id](c.t + i * sd, 0.8, SFX, v.pan);
+      if (id) DRUMS[id](c.t + i * sd, 0.65, SFX, v.pan, false, 'B');
     });
   }
 
   /** Audition an evolution's fanfare (Recipe Guide, unlock screen). */
   auditionEvolution(recipeId: string) {
-    this.evolve(recipeId);
+    this.evolve(recipeId, { immediate: true });
   }
 
   /**
@@ -707,7 +1138,7 @@ class Band {
       }
       return;
     }
-    const c = this.cueCtx(0, true);
+    const c = this.cueCtx(0, true, 0, 'B');
     if (!c) return;
     const total = Math.max(1, opts.totalSteps);
     const ratio = Math.max(0, Math.min(1, opts.step / Math.max(1, total - 1)));
@@ -722,15 +1153,24 @@ class Band {
       const motif = stingOf(v).slice(0, 2);
       motif.forEach((s, i) => {
         const freq = foldFreq(degreeToFreq(c.mode, c.key, c.root + s + Math.floor(opts.step / 2), oct), 2600);
-        note(v.inst, freq, c.t + i * c.g * 0.9, c.g * 2.8, { vol: vol * 0.95, pan: v.pan, bus: SFX });
+        note(v.inst, freq, c.t + i * c.g * 0.9, c.g * 2.8, { vol: vol * 0.85, pan: v.pan, bus: SFX, tier: 'B' });
       });
-      if (v.drum) drum(v.drum, c.t, 0.45 + ratio * 0.35, SFX, v.pan);
-      // Delicate ascending celesta shimmer linking each weapon voice into one musical crescendo
-      note('celesta', foldFreq(degreeToFreq(c.mode, c.key, deg, 6), 2600), c.t + c.g * 0.5, 0.28, { vol: 0.35 + ratio * 0.22, pan, bus: SFX });
+      if (v.drum) drum(v.drum, c.t, 0.42 + ratio * 0.28, SFX, v.pan, false, 'B');
+      note('celesta', foldFreq(degreeToFreq(c.mode, c.key, deg, 6), 2600), c.t + c.g * 0.5, 0.24, {
+        vol: 0.35 + ratio * 0.22,
+        pan,
+        bus: SFX,
+        tier: 'B',
+      });
     } else {
-      note('marimba', foldFreq(degreeToFreq(c.mode, c.key, deg, 5), 2600), c.t, 0.22, { vol: vol * 0.85, pan, bus: SFX });
-      note('celesta', foldFreq(degreeToFreq(c.mode, c.key, deg + 4, 6), 2600), c.t + c.g * 0.6, 0.3, { vol: 0.42 + ratio * 0.25, pan: -pan, bus: SFX });
-      drum(ratio > 0.65 ? 'woodblock' : 'shaker', c.t, 0.4 + ratio * 0.25, SFX, pan);
+      note('marimba', foldFreq(degreeToFreq(c.mode, c.key, deg, 5), 2600), c.t, 0.22, { vol: vol * 0.8, pan, bus: SFX, tier: 'B' });
+      note('celesta', foldFreq(degreeToFreq(c.mode, c.key, deg + 4, 6), 2600), c.t + c.g * 0.6, 0.26, {
+        vol: 0.42 + ratio * 0.25,
+        pan: -pan,
+        bus: SFX,
+        tier: 'B',
+      });
+      drum(ratio > 0.65 ? 'woodblock' : 'shaker', c.t, 0.4 + ratio * 0.25, SFX, pan, false, 'B');
     }
   }
 
@@ -758,7 +1198,7 @@ class Band {
     }, 420);
   }
 
-  /** The fight is over: the band stops on a cadence (won) or falls apart (lost). */
+  /** The fight is over (Tier S ceremonial hall opt-in): the band stops on a cadence (won) or falls apart (lost). */
   finale(won: boolean) {
     if (this.useNative) {
       this.halt();
@@ -767,32 +1207,38 @@ class Band {
       if (audioFlags.sfx) nativeBridge.finale(won);
       return;
     }
-    const c = this.cueCtx();
+    const c = this.cueCtx(0, true, 0, 'S');
     this.halt();
     this.mood = null;
+    this.introStepsLeft = 0;
     this.heat.clear();
     // Re-open the music filter cleanly after slow-mo muffling so the results screen arrives crisp
     chip.setMusicFilter(18000, 0.16);
     chip.setMusicLevel(1, 0.22);
     this.applied = { filterHz: -1, level: -1, echo: -1 };
     if (!c) return;
+    chip.duckSfx(0.65, c.t, 0.9);
     const f = (degree: number, octave: number) => foldFreq(degreeToFreq(won ? c.mode : 'aeolian', c.key, degree, octave), 2600);
     const beat = c.g * 8;
     if (won) {
-      // V … I, then the top of the chord: "ta-da-daaa"
-      drum('crash', c.t, 0.9, SFX);
-      drum('timpani', c.t, 1, SFX);
-      for (const d of [4, 6, 8]) note('brass', f(d, 3), c.t, beat * 0.45, { vol: 1, bus: SFX });
+      // V … I, then the top of the chord: "ta-da-daaa" (explicit ceremonial 'hall' opt-in [AU-10])
+      drum('crash', c.t, 0.9, SFX, undefined, false, 'S', 'hall');
+      drum('timpani', c.t, 1, SFX, undefined, false, 'S', 'hall');
+      for (const d of [4, 6, 8]) note('brass', f(d, 3), c.t, beat * 0.45, { vol: 1, bus: SFX, tier: 'S', space: 'hall' });
       for (const d of [0, 2, 4, 7]) {
-        note('brass', f(d, 3), c.t + beat * 0.5, beat * 2.4, { vol: 1, bus: SFX });
-        note('strings', f(d, 4), c.t + beat * 0.5, beat * 2.6, { vol: 1.1, bus: SFX });
+        note('brass', f(d, 3), c.t + beat * 0.5, beat * 2.4, { vol: 1, bus: SFX, tier: 'S', space: 'hall' });
+        note('strings', f(d, 4), c.t + beat * 0.5, beat * 2.6, { vol: 1.05, bus: SFX, tier: 'S', space: 'hall' });
       }
-      drum('timpani', c.t + beat * 0.5, 1, SFX);
-      [0, 2, 4, 7, 9, 11, 14].forEach((d, i) => note('glock', f(d, 5), c.t + beat * 0.5 + i * c.g, 0.5, { vol: 0.8, bus: SFX, pan: i % 2 ? 0.5 : -0.5 }));
+      drum('timpani', c.t + beat * 0.5, 1, SFX, undefined, false, 'S', 'hall');
+      [0, 2, 4, 7, 9, 11, 14].forEach((d, i) =>
+        note('glock', f(d, 5), c.t + beat * 0.5 + i * c.g, 0.48, { vol: 0.78, bus: SFX, tier: 'S', space: 'hall', pan: i % 2 ? 0.5 : -0.5 })
+      );
     } else {
-      downlifter(c.t, beat * 1.5, 0.8);
-      [4, 3, 2, 0].forEach((d, i) => note('brass', f(d, 3), c.t + i * beat * 0.45, i === 3 ? beat * 2 : beat * 0.42, { vol: 1, bus: SFX }));
-      drum('thud', c.t + beat * 1.35, 1, SFX);
+      downlifter(c.t, beat * 1.5, 0.8, SFX, 'S');
+      [4, 3, 2, 0].forEach((d, i) =>
+        note('brass', f(d, 3), c.t + i * beat * 0.45, i === 3 ? beat * 2 : beat * 0.42, { vol: 1, bus: SFX, tier: 'S', space: 'hall' })
+      );
+      drum('thud', c.t + beat * 1.35, 1, SFX, undefined, false, 'S', 'dry');
     }
   }
 
@@ -802,6 +1248,7 @@ class Band {
   renderPassage(plan: { arrangement: string; bars: number }[], t0: number): number {
     this.nextTime = t0;
     this.step = 0;
+    this.introStepsLeft = 0;
     for (const part of plan) {
       this.setArrangement(part.arrangement);
       if (!this.mood) this.mix = restingMix(part.arrangement);
@@ -822,6 +1269,7 @@ class Band {
     const first = queue.find(e => e.mood)?.mood;
     this.nextTime = t0;
     this.step = 0;
+    this.introStepsLeft = 0;
     this.mood = null;
     this.applied = { filterHz: -1, level: -1, echo: -1 };
     this.setArrangement(first?.arrangement ?? 'meadow');
@@ -855,367 +1303,403 @@ class Band {
 
 const fq = (c: CueCtx, degree: number, octave: number) => foldFreq(degreeToFreq(c.mode, c.key, degree, octave), 2600);
 /** A note `degree` steps above the chord root */
-const N = (c: CueCtx, inst: InstrumentId, degree: number, octave: number, dt = 0, dur = 0.3, vol = 1, pan?: number) =>
-  note(inst, fq(c, c.root + degree, octave), c.t + dt, dur, { vol, pan, bus: SFX });
+const N = (c: CueCtx, inst: InstrumentId, degree: number, octave: number, dt = 0, dur = 0.3, vol = 1, pan?: number, space?: Space) =>
+  note(inst, fq(c, c.root + degree, octave), c.t + dt, dur, { vol, pan, bus: SFX, tier: c.tier, space });
 /** The same, pushed `semis` semitones out of the scale: a note that is wrong on purpose */
-const X = (c: CueCtx, inst: InstrumentId, degree: number, octave: number, semis: number, dt = 0, dur = 0.3, vol = 1) =>
-  note(inst, foldFreq(fq(c, c.root + degree, octave) * Math.pow(2, semis / 12), 2600), c.t + dt, dur, { vol, bus: SFX });
-const D = (c: CueCtx, id: DrumId, dt = 0, vol = 1, pan?: number) => drum(id, c.t + dt, vol, SFX, pan);
-const runUp = (c: CueCtx, inst: InstrumentId, degrees: number[], octave: number, gap = 1, dur = 0.3, vol = 1) =>
-  degrees.forEach((d, i) => N(c, inst, d, octave, i * c.g * gap, dur, vol, i % 2 ? 0.4 : -0.4));
-const whoosh = (c: CueCtx, up: boolean, dur = 0.25, vol = 0.5) =>
-  chip.noise({ at: c.t, dur, vol, filter: up ? 600 : 5000, sweepTo: up ? 5000 : 500, bus: SFX, space: 'room' });
+const X = (c: CueCtx, inst: InstrumentId, degree: number, octave: number, semis: number, dt = 0, dur = 0.3, vol = 1, space?: Space) =>
+  note(inst, foldFreq(fq(c, c.root + degree, octave) * Math.pow(2, semis / 12), 2600), c.t + dt, dur, { vol, bus: SFX, tier: c.tier, space });
+const D = (c: CueCtx, id: DrumId, dt = 0, vol = 1, pan?: number, space?: Space) =>
+  drum(id, c.t + dt, vol, SFX, pan, false, c.tier, space);
+const runUp = (c: CueCtx, inst: InstrumentId, degrees: number[], octave: number, gap = 1, dur = 0.3, vol = 1, space?: Space) =>
+  degrees.forEach((d, i) => N(c, inst, d, octave, i * c.g * gap, dur, vol, i % 2 ? 0.4 : -0.4, space));
+const whoosh = (c: CueCtx, up: boolean, dur = 0.25, vol = 0.5, space: Space = 'sfxRoom') =>
+  chip.noise({ at: c.t, dur, vol, filter: up ? 600 : 5000, sweepTo: up ? 5000 : 500, bus: SFX, tier: c.tier, space });
 /** A rung of the streak ladder, from the tonic (not the chord) */
-const rung = (c: CueCtx, r: number, octave: number, dt = 0, dur = 0.25, vol = 0.8, pan?: number) =>
-  note('glock', fq(c, ladderDegree(c.mode, r), octave), c.t + dt, dur, { vol, pan, bus: SFX });
+const rung = (c: CueCtx, r: number, octave: number, dt = 0, dur = 0.22, vol = 0.6, pan?: number) =>
+  note('glock', fq(c, ladderDegree(c.mode, r), octave), c.t + dt, dur, { vol, pan, bus: SFX, tier: c.tier, space: 'sfxRoom' });
 /** The foe's voice: low brass leaning on a note a tritone away, then landing. You learn to dread it. */
-const foe = (c: CueCtx, vol = 1) => {
-  X(c, 'brass', 0, 2, 6, 0, c.g * 3, vol);
-  N(c, 'brass', 0, 2, c.g * 4, c.g * 5, vol);
+const foe = (c: CueCtx, vol = 0.85) => {
+  X(c, 'brassStab', 0, 2, 6, 0, c.g * 3, vol);
+  N(c, 'brassStab', 0, 2, c.g * 4, c.g * 5, vol);
 };
 const bigHit = (c: CueCtx) => {
-  D(c, 'kick', 0, 1);
-  subDrop(c.t, 0.8);
-  D(c, 'crash', 0, 0.6);
-  for (const d of [0, 4, 7]) N(c, 'brass', d, 3, 0, c.g * 5, 0.9);
-  chip.duck(0.5, c.t, 0.7);
+  D(c, 'impactCrack', 0, 1, undefined, 'dry');
+  impactPunch(c.t, 0.95, { durMs: 52, bus: SFX, tier: c.tier });
+  subDrop(c.t, 0.8, SFX, c.tier);
+  D(c, 'crash', 0, 0.55);
+  for (const d of [0, 4, 7]) N(c, 'brassStab', d, 3, 0, c.g * 5, 0.9);
+  chip.duck(0.5, c.t, 0.65);
+  chip.duckSfx(0.37, c.t, 0.45);
 };
 
 const CUES: Record<CueName, (c: CueCtx) => void> = {
   // Hearts
-  heal: c => runUp(c, 'harp', [0, 2, 4, 7, 9], 4, 1, 0.7, 0.95),
+  heal: c => runUp(c, 'harp', [0, 2, 4, 7, 9], 4, 1, 0.5, 0.8),
   hurt: c => {
+    D(c, 'impactCrack', 0, 0.9, undefined, 'dry');
+    impactPunch(c.t, 0.95, { durMs: 54, bus: SFX, tier: c.tier });
     D(c, 'thud');
-    N(c, 'brass', 0, 2, 0, 0.32);
-    X(c, 'brass', 0, 2, 1, 0, 0.32);
+    N(c, 'brassStab', 0, 2, 0, 0.28, 1);
+    X(c, 'brassStab', 0, 2, 1, 0, 0.28, 1);
     chip.duck(0.6, c.t, 0.9);
+    chip.duckSfx(0.65, c.t, 0.65);
   },
   mistake: c => {
-    N(c, 'clav', 0, 3, 0, 0.14);
-    X(c, 'clav', 0, 3, 1, 0, 0.14);
-    D(c, 'rim', 0, 0.8);
+    N(c, 'clav', 0, 3, 0, 0.14, 0.95, undefined, 'dry');
+    X(c, 'clav', 0, 3, 1, 0, 0.14, 0.95, 'dry');
+    D(c, 'rim', 0, 0.85, undefined, 'dry');
     chip.duck(0.3, c.t, 0.4);
+    chip.duckSfx(0.37, c.t, 0.28);
   },
   // The near miss: a note that starts a semitone flat and is pulled up into the chord
   graceSave: c => {
-    X(c, 'vibes', 2, 5, -1, 0, 0.14, 0.9);
-    N(c, 'vibes', 2, 5, c.g * 2, 0.6, 1);
-    D(c, 'tamb', c.g * 2, 0.4);
+    X(c, 'vibes', 2, 5, -1, 0, 0.14, 0.8);
+    N(c, 'vibes', 2, 5, c.g * 2, 0.45, 0.88);
+    D(c, 'tamb', c.g * 2, 0.38);
   },
   phew: c => {
-    N(c, 'whistle', 4, 5, 0, c.g * 2, 0.7);
-    N(c, 'whistle', 2, 5, c.g * 2, c.g * 3, 0.7);
+    N(c, 'whistle', 4, 5, 0, c.g * 2, 0.65);
+    N(c, 'whistle', 2, 5, c.g * 2, c.g * 3, 0.65);
   },
   nineLives: c => {
-    note('theremin', fq(c, c.root, 4), c.t, 0.35, { vol: 1, bus: SFX, slideTo: fq(c, c.root + 7, 4) });
-    runUp(c, 'harp', [0, 2, 4, 7, 9, 11], 4, 1, 0.6, 0.8);
+    note('theremin', fq(c, c.root, 4), c.t, 0.35, { vol: 0.85, bus: SFX, tier: c.tier, slideTo: fq(c, c.root + 7, 4) });
+    runUp(c, 'harp', [0, 2, 4, 7, 9, 11], 4, 1, 0.45, 0.72);
   },
   shield: c => {
     D(c, 'thud', 0, 0.6);
-    N(c, 'steel', 4, 5, 0, 0.4, 0.9);
+    N(c, 'steel', 4, 5, 0, 0.32, 0.82);
   },
 
-  // Money
+  // Money (Tier B: controlled gain so coins never mask hits [AU-04])
   coins: c => {
     const n = Math.max(1, Math.min(6, Math.ceil(c.amount / 2)));
-    for (let i = 0; i < n; i++) rung(c, c.slot + i, 6, i * c.g, 0.2, 1, i % 2 ? 0.5 : -0.5);
+    for (let i = 0; i < n; i++) rung(c, c.slot + i, 6, i * c.g, 0.18, 0.58, i % 2 ? 0.5 : -0.5);
   },
   overkill: c => {
-    for (let i = 0; i < 8; i++) rung(c, i, 6, i * c.g * 0.5, 0.2, 0.7, i % 2 ? 0.6 : -0.6);
-    CUES.register({ ...c, t: c.t + c.g * 4 });
+    for (let i = 0; i < 6; i++) rung(c, i, 6, i * c.g * 0.5, 0.18, 0.58, i % 2 ? 0.6 : -0.6);
+    CUES.register({ ...c, t: c.t + c.g * 3 });
   },
   register: c => {
-    D(c, 'tick', 0, 1);
-    D(c, 'anvil', c.g, 0.5);
-    N(c, 'bell', 4, 6, c.g, 0.5, 0.9);
-    N(c, 'bell', 7, 6, c.g * 2, 0.8, 0.9);
+    D(c, 'tick', 0, 0.85);
+    D(c, 'anvil', c.g, 0.45);
+    N(c, 'bell', 4, 6, c.g, 0.36, 0.75);
+    N(c, 'bell', 7, 6, c.g * 2, 0.55, 0.78);
   },
   coinRoll: c => {
-    const n = Math.max(3, Math.min(24, c.amount));
-    for (let i = 0; i < n; i++) rung(c, Math.floor((i / n) * 12), 6, i * 0.045, 0.1, 0.5, i % 2 ? 0.4 : -0.4);
-    N(c, 'bell', 7, 6, n * 0.045, 0.9, 1);
+    const n = Math.max(3, Math.min(20, c.amount));
+    for (let i = 0; i < n; i++) rung(c, Math.floor((i / n) * 12), 6, i * 0.045, 0.1, 0.46, i % 2 ? 0.4 : -0.4);
+    N(c, 'bell', 7, 6, n * 0.045, 0.6, 0.82);
   },
   fetch: c => {
-    N(c, 'pizz', 4, 4, 0, 0.15);
-    N(c, 'pizz', 7, 4, c.g * 2, 0.15);
-    rung(c, 4, 6, c.g * 3);
+    N(c, 'pizz', 4, 4, 0, 0.14, 0.78);
+    N(c, 'pizz', 7, 4, c.g * 2, 0.14, 0.78);
+    rung(c, 4, 6, c.g * 3, 0.18, 0.58);
   },
 
   // Growing
   levelUp: c => {
     [0, 2, 4, 7].forEach((d, i) => {
-      note('brass', fq(c, d, 4), c.t + i * c.g * 2, c.g * 2.2, { vol: 1, bus: SFX });
-      note('bell', fq(c, d, 5), c.t + i * c.g * 2, 0.5, { vol: 0.7, bus: SFX });
+      note('brass', fq(c, d, 4), c.t + i * c.g * 2, c.g * 2.2, { vol: 0.95, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+      note('bell', fq(c, d, 5), c.t + i * c.g * 2, 0.42, { vol: 0.68, bus: SFX, tier: c.tier, space: 'sfxRoom' });
     });
-    for (const d of [7, 9, 11]) note('brass', fq(c, d, 4), c.t + c.g * 8, c.g * 9, { vol: 0.9, bus: SFX });
-    drum('crash', c.t + c.g * 8, 0.7, SFX);
+    for (const d of [7, 9, 11]) note('brass', fq(c, d, 4), c.t + c.g * 8, c.g * 9, { vol: 0.9, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    drum('crash', c.t + c.g * 8, 0.65, SFX, undefined, false, c.tier, 'sfxRoom');
+    chip.duck(0.45, c.t, 0.7);
+    chip.duckSfx(0.37, c.t, 0.55);
   },
   weaponGet: c => {
-    runUp(c, 'celesta', [0, 2, 4, 7], 5, 1, 0.4, 0.9);
-    D(c, 'tamb', c.g * 4, 0.8);
+    runUp(c, 'celesta', [0, 2, 4, 7], 5, 1, 0.34, 0.78);
+    D(c, 'tamb', c.g * 4, 0.68);
   },
   reelStop: c => {
-    D(c, 'woodblockLo', 0, 1);
-    N(c, 'marimba', [0, 2, 4][c.slot % 3], 4, 0, 0.25, 0.9);
+    const idx = Math.max(0, Math.round(c.amount || c.slot));
+    D(c, 'woodblockLo', 0, 0.85, undefined, 'dry');
+    N(c, 'marimba', [0, 2, 4][idx % 3], 4, 0, 0.18, 0.72, undefined, 'dry');
   },
   reelSpin: c => {
-    for (let i = 0; i < 12; i++) D(c, i % 2 ? 'woodblock' : 'woodblockLo', i * 0.05, 0.35 + i * 0.03);
-    [0, 2, 4].forEach((d, i) => N(c, 'marimba', d, 4, 0.6 + i * 0.12, 0.25, 1));
+    for (let i = 0; i < 10; i++) D(c, i % 2 ? 'woodblock' : 'woodblockLo', i * 0.048, 0.32 + i * 0.025, undefined, 'dry');
+    [0, 2, 4].forEach((d, i) => N(c, 'marimba', d, 4, 0.5 + i * 0.11, 0.2, 0.78, undefined, 'dry'));
   },
   // Angry Birds–inspired flying star swoosh: brisk rising air sweep + subtle glint before the stamp
   starSwoosh: c => {
     const step = Math.max(1, Math.min(3, Math.round(c.amount) || 1));
     const baseHz = 440 + (step - 1) * 140;
-    chip.noise({ at: c.t, dur: 0.19, vol: 0.34 + step * 0.05, filter: baseHz, sweepTo: baseHz * 6.5, attack: 0.09, bus: SFX, space: 'room' });
+    chip.noise({ at: c.t, dur: 0.19, vol: 0.34 + step * 0.05, filter: baseHz, sweepTo: baseHz * 6.5, attack: 0.09, bus: SFX, tier: c.tier, space: 'sfxRoom' });
     const startDeg = [0, 2, 4][step - 1];
-    note('whistle', fq(c, startDeg, 5), c.t, 0.16, { vol: 0.28, bus: SFX, slideTo: fq(c, startDeg + 4, 5) });
+    note('whistle', fq(c, startDeg, 5), c.t, 0.16, { vol: 0.28, bus: SFX, tier: c.tier, space: 'sfxRoom', slideTo: fq(c, startDeg + 4, 5) });
   },
-  // Angry Birds–inspired giant star stamp: heavy physical thwack + ascending triad chime + sparkle trail + 3★ climax fanfare
+  // Angry Birds–inspired giant star stamp: heavy physical thwack + ascending triad chime + 3★ ceremonial hall climax
   star: c => {
     const top = Math.max(1, Math.min(3, Math.round(c.amount) || 1));
-    // Layer 1: tactile rubber/wood stamp thud that grows heavier with each star
+    D(c, 'impactCrack', 0, 0.75 + (top - 1) * 0.12, undefined, 'dry');
     D(c, 'taiko', 0, 0.75 + (top - 1) * 0.12);
     D(c, 'thud', 0, 0.65 + (top - 1) * 0.16);
     D(c, 'woodblock', 0, 0.68);
-    // Layer 2: ascending major triad chime (Do → Mi → Sol + High Do)
     const deg = [0, 2, 4][top - 1];
-    N(c, 'bell', deg, 6, 0, 1.0, 1.0);
-    N(c, 'glock', deg, 6, 0.014, 0.55, 0.85);
-    N(c, 'brass', deg, 4, 0, 0.36, 0.88);
-    // Layer 3: celebratory shimmer (and on 3★, booming subDrop + full orchestral resolution + harp glissando!)
+    const space: Space = top >= 3 ? 'hall' : 'sfxRoom';
+    N(c, 'bell', deg, 6, 0, top >= 3 ? 1.0 : 0.65, 0.95, undefined, space);
+    N(c, 'glock', deg, 6, 0.014, 0.42, 0.8, undefined, space);
+    N(c, 'brassStab', deg, 4, 0, 0.34, 0.88, undefined, space);
+    chip.duck(0.35, c.t, 0.55);
+    chip.duckSfx(0.37, c.t, 0.45);
     if (top === 1) {
-      runUp(c, 'celesta', [0, 4], 6, 0.7, 0.35, 0.55);
+      runUp(c, 'celesta', [0, 4], 6, 0.7, 0.28, 0.52);
     } else if (top === 2) {
-      runUp(c, 'celesta', [2, 4, 7], 6, 0.65, 0.4, 0.65);
-      D(c, 'tamb', 0.02, 0.5);
+      runUp(c, 'celesta', [2, 4, 7], 6, 0.65, 0.32, 0.62);
+      D(c, 'tamb', 0.02, 0.48);
     } else {
-      subDrop(c.t, 0.9, SFX);
-      D(c, 'crash', 0, 0.78);
-      D(c, 'timpani', 0.01, 0.9);
-      N(c, 'bell', 7, 6, 0.02, 1.35, 1.05);
+      // Ceremonial 3★ climax explicitly opts into 1.7 s hall ([AU-10])
+      subDrop(c.t, 0.9, SFX, c.tier);
+      D(c, 'crash', 0, 0.78, undefined, 'hall');
+      D(c, 'timpani', 0.01, 0.9, undefined, 'hall');
+      N(c, 'bell', 7, 6, 0.02, 1.15, 1.0, undefined, 'hall');
       for (const d of [0, 2, 4, 7]) {
-        N(c, 'brass', d, 4, 0, 0.85, 0.82);
-        N(c, 'strings', d, 4, 0.02, 1.45, 1.05);
-        N(c, 'choir', d, 4, 0.05, 1.35, 0.72);
+        N(c, 'brass', d, 4, 0, 0.85, 0.82, undefined, 'hall');
+        N(c, 'strings', d, 4, 0.02, 1.4, 1.0, undefined, 'hall');
+        N(c, 'choir', d, 4, 0.05, 1.3, 0.68, undefined, 'hall');
       }
       [0, 2, 4, 7, 9, 11].forEach((d, i) =>
-        note('harp', fq(c, d, 5), c.t + 0.03 + i * 0.038, 0.7, { vol: 0.75, bus: SFX, pan: i % 2 ? 0.55 : -0.55 })
+        note('harp', fq(c, d, 5), c.t + 0.03 + i * 0.038, 0.62, { vol: 0.72, bus: SFX, tier: c.tier, space: 'hall', pan: i % 2 ? 0.55 : -0.55 })
       );
     }
   },
   // Performance seal wax-stamp impact on the Victory Card
   rankSeal: c => {
-    D(c, 'woodblockLo', 0, 0.85);
-    D(c, 'thud', 0, 0.7);
-    N(c, 'bell', 7, 5, 0.01, 0.65, 0.75);
+    D(c, 'impactCrack', 0, 0.72, undefined, 'dry');
+    D(c, 'woodblockLo', 0, 0.85, undefined, 'dry');
+    D(c, 'thud', 0, 0.7, undefined, 'dry');
+    N(c, 'bell', 7, 5, 0.01, 0.55, 0.75);
+    chip.duckSfx(0.37, c.t, 0.3);
   },
 
   // The foe
   foeDefeated: c => {
+    D(c, 'impactCrack', 0, 1, undefined, 'dry');
+    impactPunch(c.t, 1, { durMs: 56, bus: SFX, tier: c.tier });
     D(c, 'crash', 0, 0.9);
     D(c, 'timpani', 0, 1);
-    whoosh(c, false, 0.6, 0.6);
+    whoosh(c, false, 0.5, 0.55);
     const beat = c.g * 8;
-    for (const d of [4, 6, 8]) note('brass', fq(c, d, 3), c.t, beat * 0.45, { vol: 0.9, bus: SFX });
-    for (const d of [0, 2, 4, 7]) note('brass', fq(c, d, 3), c.t + beat * 0.5, beat * 1.2, { vol: 0.9, bus: SFX });
+    for (const d of [4, 6, 8]) note('brassStab', fq(c, d, 3), c.t, beat * 0.45, { vol: 0.95, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    for (const d of [0, 2, 4, 7]) note('brass', fq(c, d, 3), c.t + beat * 0.5, beat * 1.2, { vol: 0.95, bus: SFX, tier: c.tier, space: 'sfxRoom' });
     chip.duck(0.6, c.t, 0.9);
+    chip.duckSfx(0.65, c.t, 0.7);
   },
   wave: c => {
     D(c, 'taiko', 0, 1);
     D(c, 'taiko', c.g * 4, 0.8);
     D(c, 'taiko', c.g * 6, 1);
-    N(c, 'horn', 4, 3, 0, c.g * 4, 1);
-    N(c, 'horn', 7, 3, c.g * 4, c.g * 8, 1);
+    N(c, 'horn', 4, 3, 0, c.g * 4, 0.95);
+    N(c, 'horn', 7, 3, c.g * 4, c.g * 8, 0.95);
   },
   foeRegen: c => {
-    N(c, 'horn', 0, 2, 0, c.g * 3, 0.9);
-    N(c, 'horn', 2, 2, c.g * 3, c.g * 4, 0.9);
+    N(c, 'horn', 0, 2, 0, c.g * 3, 0.85);
+    N(c, 'horn', 2, 2, c.g * 3, c.g * 4, 0.85);
   },
   foeMove: c => foe(c),
   foeDud: c => {
     foe(c, 0.8);
-    D(c, 'thud', c.g * 4, 0.8);
+    D(c, 'thud', c.g * 4, 0.75);
   },
   foeHide: c => {
     foe(c, 0.8);
-    whoosh(c, false, 0.3, 0.4);
+    whoosh(c, false, 0.28, 0.38);
   },
   foeFuse: c => {
     foe(c, 0.8);
-    for (let i = 0; i < 4; i++) D(c, 'tick', i * c.g * (1 - i * 0.15), 0.9);
+    for (let i = 0; i < 4; i++) D(c, 'tick', i * c.g * (1 - i * 0.15), 0.82);
   },
   foeShuffle: c => {
     foe(c, 0.8);
-    whoosh(c, true, 0.3, 0.5);
-    for (let i = 0; i < 4; i++) D(c, 'shaker', i * c.g, 0.8);
+    whoosh(c, true, 0.28, 0.45);
+    for (let i = 0; i < 4; i++) D(c, 'shaker', i * c.g, 0.72);
   },
   foeSteal: c => {
     foe(c, 0.8);
-    runUp(c, 'toy', [7, 5, 4, 2], 5, 1, 0.12, 0.9);
-    for (let i = 0; i < 4; i++) D(c, 'woodblock', i * c.g, 0.6);
+    runUp(c, 'toy', [7, 5, 4, 2], 5, 1, 0.12, 0.8);
+    for (let i = 0; i < 4; i++) D(c, 'woodblock', i * c.g, 0.55);
   },
   foeGrowl: c => {
-    X(c, 'brass', 0, 1, 6, 0, c.g * 10, 1);
-    X(c, 'brass', 0, 2, 0, 0, c.g * 10, 0.6);
+    X(c, 'brassStab', 0, 1, 6, 0, c.g * 10, 0.9);
+    X(c, 'brassStab', 0, 2, 0, 0, c.g * 10, 0.55);
   },
   toll: c => {
-    note('bell', fq(c, 0, 3), c.t, 1.6, { vol: 1.2, bus: SFX });
-    note('bell', fq(c, 0, 2), c.t, 1.6, { vol: 1, bus: SFX });
+    note('bell', fq(c, 0, 3), c.t, 1.1, { vol: 1.0, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    note('bell', fq(c, 0, 2), c.t, 1.1, { vol: 0.9, bus: SFX, tier: c.tier, space: 'sfxRoom' });
   },
 
-  // Fighters
+  // Fighters (Tier B calibrated per [AU-04])
   hotStreak: c => {
-    runUp(c, 'brass', [0, 2, 4], 4, 2, c.g * 2.6, 1.7);
-    for (let i = 0; i < 6; i++) D(c, 'shaker', i * c.g, 0.6 + i * 0.1);
+    runUp(c, 'brassStab', [0, 2, 4], 4, 2, c.g * 2.6, 0.9);
+    for (let i = 0; i < 5; i++) D(c, 'shaker', i * c.g, 0.5 + i * 0.08);
   },
   bigHit,
-  grudge: c => N(c, 'saw', 0, 2, 0, 0.28, 1.5),
-  patience: c => [0, 2, 4].forEach((d, i) => N(c, 'celesta', d, 5, i * c.g * 0.5, 0.8, 0.7)),
+  grudge: c => N(c, 'saw', 0, 2, 0, 0.26, 0.78, undefined, 'sfxRoom'),
+  patience: c => [0, 2, 4].forEach((d, i) => N(c, 'celesta', d, 5, i * c.g * 0.5, 0.5, 0.65)),
   freeze: c => {
-    runUp(c, 'celesta', [9, 7, 4, 2, 0], 6, 1, 0.5, 0.8);
-    chip.noise({ at: c.t, dur: 0.6, vol: 0.25, short: true, filter: 9000, sweepTo: 3000, bus: SFX, space: 'hall' });
+    runUp(c, 'celesta', [9, 7, 4, 2, 0], 6, 1, 0.42, 0.75);
+    chip.noise({ at: c.t, dur: 0.45, vol: 0.22, short: true, filter: 9000, sweepTo: 3000, bus: SFX, tier: c.tier, space: 'sfxRoom' });
   },
   redeal: c => {
-    whoosh(c, true, 0.3, 0.5);
-    runUp(c, 'marimba', [0, 2, 4, 7, 9, 11, 14], 4, 0.5, 0.15, 0.9);
+    whoosh(c, true, 0.28, 0.45);
+    runUp(c, 'marimba', [0, 2, 4, 7, 9, 11, 14], 4, 0.5, 0.14, 0.8);
   },
   scoop: c => {
-    note('sub', fq(c, c.root + 7, 3), c.t, 0.18, { vol: 1, bus: SFX, slideTo: fq(c, c.root, 3) });
-    N(c, 'marimba', 7, 4, c.g * 3, 0.2, 1);
+    note('sub', fq(c, c.root + 7, 3), c.t, 0.18, { vol: 0.85, bus: SFX, tier: c.tier, slideTo: fq(c, c.root, 3) });
+    N(c, 'marimba', 7, 4, c.g * 3, 0.18, 0.85);
   },
-  twinkle: c => N(c, 'celesta', 7, 6, 0, 0.3, 0.6),
+  twinkle: c => N(c, 'celesta', 7, 6, 0, 0.22, 0.5, undefined, 'dry'),
 
   // Weapons
   fire: c => {
-    D(c, 'crackle', 0, 0.9);
-    N(c, 'banjo', 4, 5, 0, 0.12, 0.6);
+    D(c, 'crackle', 0, 0.8);
+    N(c, 'banjo', 4, 5, 0, 0.12, 0.55);
   },
   hint: c => {
-    N(c, 'celesta', 4, 5, 0, 0.3, 0.9);
-    N(c, 'celesta', 7, 5, c.g * 2, 0.5, 0.9);
+    N(c, 'celesta', 4, 5, 0, 0.25, 0.8);
+    N(c, 'celesta', 7, 5, c.g * 2, 0.36, 0.82);
   },
   timeGain: c => {
-    runUp(c, 'toy', [0, 2, 4, 7], 5, 1, 0.12, 0.9);
-    D(c, 'woodblockLo', 0, 0.8);
-    D(c, 'woodblock', c.g * 2, 0.8);
+    runUp(c, 'toy', [0, 2, 4, 7], 5, 1, 0.12, 0.8);
+    D(c, 'woodblockLo', 0, 0.7);
+    D(c, 'woodblock', c.g * 2, 0.7);
   },
-  ding: c => rung(c, c.slot, 6, 0, 0.3, 1),
+  ding: c => rung(c, c.slot, 6, 0, 0.22, 0.55),
+  // [AU-09]: 2-stage detonation — dry flash-onset crack+punch at t=0, brassStab + tight low-mid rumble at +14 ms
   blast: c => {
-    D(c, 'kick', 0, 1);
-    D(c, 'timpani', 0, 0.8);
-    chip.noise({ at: c.t, dur: 0.45, vol: 0.7, filter: 1800, sweepTo: 120, bus: SFX, space: 'room' });
-    N(c, 'brass', 0, 2, 0, 0.25, 0.9);
+    D(c, 'impactCrack', 0, 1, undefined, 'dry');
+    impactPunch(c.t, 0.95, { durMs: 55, bus: SFX, tier: c.tier });
+    N(c, 'brassStab', 0, 2, 0.014, 0.22, 0.92, undefined, 'sfxRoom');
+    chip.noise({ at: c.t + 0.014, dur: 0.28, vol: 0.65, filter: 1600, sweepTo: 140, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    chip.duck(0.35, c.t, 0.4);
+    chip.duckSfx(0.37, c.t, 0.32);
   },
+  // [AU-04] & [AU-10]: laser calibrated to 0.85 Tier B and routed to sfxRoom (zero echo bounce!)
   laser: c => {
-    note('saw', fq(c, c.root + 7, 5), c.t, 0.22, { vol: 1.7, bus: SFX, slideTo: fq(c, c.root, 3) });
-    chip.noise({ at: c.t, dur: 0.12, vol: 0.2, short: true, filter: 7000, bus: SFX });
+    note('saw', fq(c, c.root + 7, 5), c.t, 0.22, { vol: 0.85, bus: SFX, tier: c.tier, space: 'sfxRoom', slideTo: fq(c, c.root, 3) });
+    chip.noise({ at: c.t, dur: 0.1, vol: 0.2, short: true, filter: 7000, bus: SFX, tier: c.tier, space: 'dry' });
   },
-  ricochet: c => [7, 4, 9].forEach((d, i) => N(c, 'steel', d, 5, i * c.g, 0.25, 0.9, [-0.7, 0.7, -0.3][i])),
+  ricochet: c => [7, 4, 9].forEach((d, i) => N(c, 'steel', d, 5, i * c.g, 0.22, 0.78, [-0.7, 0.7, -0.3][i])),
   doubled: c => {
-    N(c, 'bell', 4, 5, 0, 0.3, 0.9);
-    N(c, 'bell', 4, 6, c.g, 0.6, 1);
+    N(c, 'bell', 4, 5, 0, 0.24, 0.78);
+    N(c, 'bell', 4, 6, c.g, 0.42, 0.82);
   },
-  armed: c => N(c, 'clav', 4, 4, 0, 0.08, 0.6),
+  armed: c => N(c, 'clav', 4, 4, 0, 0.08, 0.5, undefined, 'dry'),
   charged: c => {
-    runUp(c, 'saw', [0, 4, 7], 4, 1, 0.18, 1.4);
-    chip.noise({ at: c.t, dur: 0.3, vol: 0.2, short: true, filter: 4000, sweepTo: 9000, bus: SFX });
+    runUp(c, 'saw', [0, 4, 7], 4, 1, 0.18, 0.85, 'sfxRoom');
+    chip.noise({ at: c.t, dur: 0.26, vol: 0.2, short: true, filter: 4000, sweepTo: 9000, bus: SFX, tier: c.tier, space: 'sfxRoom' });
   },
   warDrum: c => {
-    D(c, 'taiko', 0, 1);
-    D(c, 'taiko', c.g * 2, 0.8);
-    D(c, 'taiko', c.g * 3, 1);
-    N(c, 'horn', 0, 3, 0, c.g * 3, 0.9);
-    N(c, 'horn', 4, 3, c.g * 3, c.g * 5, 0.9);
+    D(c, 'taiko', 0, 0.9);
+    D(c, 'taiko', c.g * 2, 0.72);
+    D(c, 'taiko', c.g * 3, 0.9);
+    N(c, 'horn', 0, 3, 0, c.g * 3, 0.8);
+    N(c, 'horn', 4, 3, c.g * 3, c.g * 5, 0.8);
   },
   clarity: c => {
-    runUp(c, 'bell', [9, 7, 4], 5, 2, 0.6, 0.8);
-    whoosh(c, true, 0.3, 0.3);
+    runUp(c, 'bell', [9, 7, 4], 5, 2, 0.45, 0.72);
+    whoosh(c, true, 0.28, 0.28);
   },
-  clarityEnd: c => runUp(c, 'bell', [4, 2], 5, 2, 0.4, 0.5),
+  clarityEnd: c => runUp(c, 'bell', [4, 2], 5, 2, 0.32, 0.48),
   pinata: c => {
-    for (let i = 0; i < 3; i++) D(c, 'shaker', i * c.g, 0.9);
-    N(c, 'toy', 4, 5, c.g * 3, 0.2, 0.9);
+    for (let i = 0; i < 3; i++) D(c, 'shaker', i * c.g, 0.78);
+    N(c, 'toy', 4, 5, c.g * 3, 0.18, 0.8);
   },
   pinataBreak: c => {
-    chip.noise({ at: c.t, dur: 0.08, vol: 0.8, filter: 2500, bus: SFX });
-    for (let i = 0; i < 8; i++) rung(c, i, 6, (i + 1) * c.g * 0.5, 0.2, 0.7, i % 2 ? 0.6 : -0.6);
+    D(c, 'impactCrack', 0, 0.85, undefined, 'dry');
+    chip.noise({ at: c.t, dur: 0.08, vol: 0.72, filter: 2500, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    for (let i = 0; i < 6; i++) rung(c, i, 6, (i + 1) * c.g * 0.5, 0.18, 0.6, i % 2 ? 0.6 : -0.6);
   },
   link: c => {
-    N(c, 'pizz', 0, 5, 0, 0.15, 0.9);
-    N(c, 'pizz', 4, 5, c.g, 0.15, 0.9);
+    N(c, 'pizz', 0, 5, 0, 0.14, 0.78);
+    N(c, 'pizz', 4, 5, c.g, 0.14, 0.78);
   },
   purity: c => {
     const n = Math.max(2, Math.min(4, Math.round(c.amount) || 2));
-    for (let i = 0; i < n; i++) N(c, 'organ', i * 2, 4, i * c.g, 0.4, 0.9);
+    for (let i = 0; i < n; i++) N(c, 'organ', i * 2, 4, i * c.g, 0.34, 0.78);
   },
   rainbow: c => {
-    for (let i = 0; i < 12; i++) note('glock', fq(c, i, 5), c.t + i * c.g * 0.5, 0.3, { vol: 0.7, bus: SFX, pan: -0.8 + (i / 11) * 1.6 });
-    chip.noise({ at: c.t, dur: 0.5, vol: 0.25, short: true, filter: 5000, sweepTo: 11000, bus: SFX, space: 'hall' });
-    for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, c.g * 6, c.g * 10, 0.8);
+    for (let i = 0; i < 8; i++) note('glock', fq(c, i, 5), c.t + i * c.g * 0.5, 0.26, { vol: 0.65, bus: SFX, tier: c.tier, space: 'sfxRoom', pan: -0.7 + (i / 7) * 1.4 });
+    chip.noise({ at: c.t, dur: 0.42, vol: 0.22, short: true, filter: 5000, sweepTo: 10000, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, c.g * 5, c.g * 8, 0.7);
   },
   // Something special appeared: one note from outside the scale, then it resolves
   catalyst: c => {
-    note('bell', foldFreq(fq(c, 0, 6) * Math.pow(2, 6 / 12), 2600), c.t, 0.5, { vol: 0.8, bus: SFX });
-    note('bell', fq(c, 4, 6), c.t + c.g * 3, 0.9, { vol: 0.9, bus: SFX });
-    note('sub', fq(c, 0, 2), c.t, 0.4, { vol: 0.7, bus: SFX });
+    note('bell', foldFreq(fq(c, 0, 6) * Math.pow(2, 6 / 12), 2600), c.t, 0.42, { vol: 0.75, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    note('bell', fq(c, 4, 6), c.t + c.g * 3, 0.65, { vol: 0.82, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    note('sub', fq(c, 0, 2), c.t, 0.36, { vol: 0.68, bus: SFX, tier: c.tier, space: 'dry' });
   },
   trapSet: c => {
-    X(c, 'pizz', 0, 3, 1, 0, 0.15, 0.9);
-    D(c, 'tick', c.g, 0.8);
+    X(c, 'pizz', 0, 3, 1, 0, 0.14, 0.8);
+    D(c, 'tick', c.g, 0.72);
   },
   trapDefused: c => {
-    D(c, 'rim', 0, 0.9);
-    N(c, 'celesta', 0, 5, c.g, 0.3, 0.9);
-    N(c, 'celesta', 2, 5, c.g * 3, 0.5, 0.9);
+    D(c, 'rim', 0, 0.82);
+    N(c, 'celesta', 0, 5, c.g, 0.25, 0.8);
+    N(c, 'celesta', 2, 5, c.g * 3, 0.4, 0.82);
   },
   trapSprung: c => {
-    D(c, 'snare', 0, 1);
-    X(c, 'brass', 0, 2, 1, 0, 0.25, 0.9);
-    N(c, 'brass', 0, 2, 0, 0.25, 0.9);
+    D(c, 'impactCrack', 0, 0.88, undefined, 'dry');
+    D(c, 'snare', 0, 0.95);
+    X(c, 'brassStab', 0, 2, 1, 0, 0.24, 0.9);
+    N(c, 'brassStab', 0, 2, 0, 0.24, 0.9);
   },
   burn: c => {
-    whoosh(c, true, 0.5, 0.6);
-    D(c, 'crackle', 0.1, 0.9);
-    for (const d of [0, 2, 4]) N(c, 'choir', d, 4, 0, c.g * 8, 0.8);
+    whoosh(c, true, 0.42, 0.55);
+    D(c, 'crackle', 0.1, 0.82);
+    for (const d of [0, 2, 4]) N(c, 'choir', d, 4, 0, c.g * 8, 0.72);
   },
 
   // The streak ends: a gentle, warm two-note exhale so cooling down never feels jarring
   streakLost: c => {
-    note('vibes', fq(c, isMinor(c.mode) ? 3 : 2, 4), c.t, 0.32, { vol: 0.42, bus: SFX });
-    note('vibes', fq(c, 0, 4), c.t + c.g * 3, 0.65, { vol: 0.36, bus: SFX });
+    note('vibes', fq(c, isMinor(c.mode) ? 3 : 2, 4), c.t, 0.28, { vol: 0.42, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    note('vibes', fq(c, 0, 4), c.t + c.g * 3, 0.5, { vol: 0.36, bus: SFX, tier: c.tier, space: 'sfxRoom' });
   },
 
   // Your own gear went wrong: a plucked note with its sour neighbour, falling
   sour: c => {
-    X(c, 'pizz', 2, 4, -1, 0, 0.18, 0.9);
-    N(c, 'pizz', 0, 4, c.g * 2, 0.22, 0.9);
-    D(c, 'rim', 0, 0.5);
+    X(c, 'pizz', 2, 4, -1, 0, 0.16, 0.8);
+    N(c, 'pizz', 0, 4, c.g * 2, 0.2, 0.8);
+    D(c, 'rim', 0, 0.48);
   },
 
-  // Set-Parrying
+  // Set-Parrying (Tier S warn / perfectParry / foeStrike; Tier A parry [AU-04], [AU-08], [AU-11])
   parryWarn: c => {
-    D(c, 'rim', 0, 0.75);
-    N(c, 'steel', 7, 5, 0, 0.16, 0.75);
-    N(c, 'bell', 7, 6, c.g, 0.22, 0.6);
+    D(c, 'rim', 0, 0.82, undefined, 'dry');
+    N(c, 'steel', 7, 5, 0, 0.16, 0.82);
+    N(c, 'bell', 7, 6, c.g, 0.22, 0.68);
+    chip.duck(0.3, c.t, 0.25);
+    chip.duckSfx(0.65, c.t, 0.25);
   },
   parry: c => {
+    D(c, 'impactCrack', 0, 0.9, undefined, 'dry');
+    impactPunch(c.t, 0.82, { durMs: 44, bus: SFX, tier: c.tier });
     D(c, 'anvil', 0, 0.9);
-    N(c, 'steel', 4, 5, 0, 0.22, 0.95);
-    N(c, 'bell', 7, 5, c.g, 0.45, 0.95);
+    N(c, 'steel', 4, 5, 0, 0.22, 0.92);
+    N(c, 'bell', 7, 5, c.g, 0.38, 0.9);
+    chip.duck(0.35, c.t, 0.3);
+    chip.duckSfx(0.37, c.t, 0.28);
   },
   perfectParry: c => {
+    D(c, 'impactCrack', 0, 1, undefined, 'dry');
+    impactPunch(c.t, 0.95, { durMs: 50, bus: SFX, tier: c.tier });
     D(c, 'anvil', 0, 1);
-    D(c, 'crash', 0, 0.75);
-    N(c, 'bell', 7, 6, 0, 0.8, 1);
-    N(c, 'bell', 11, 6, c.g, 0.7, 0.9);
-    for (const d of [0, 4, 7]) N(c, 'brass', d, 4, c.g * 2, 0.45, 0.85);
-    chip.duck(0.45, c.t, 0.35);
+    D(c, 'crash', 0, 0.72);
+    N(c, 'bell', 7, 6, 0, 0.65, 1);
+    N(c, 'bell', 11, 6, c.g, 0.58, 0.9);
+    for (const d of [0, 4, 7]) N(c, 'brassStab', d, 4, c.g * 1.5, 0.38, 0.95);
+    chip.duck(0.55, c.t, 0.45);
+    chip.duckSfx(0.65, c.t, 0.4);
   },
   foeStrike: c => {
-    D(c, 'timpani', 0, 1);
+    D(c, 'impactCrack', 0, 0.95, undefined, 'dry');
+    impactPunch(c.t, 1, { durMs: 56, bus: SFX, tier: c.tier });
+    D(c, 'timpani', 0, 0.95);
     D(c, 'thud', c.g, 0.95);
-    X(c, 'brass', 0, 2, 1, 0, 0.32, 1);
-    N(c, 'brass', 0, 2, 0, 0.32, 0.9);
+    X(c, 'brassStab', 0, 2, 1, 0, 0.28, 1);
+    N(c, 'brassStab', 0, 2, 0, 0.28, 0.95);
+    chip.duck(0.55, c.t, 0.6);
+    chip.duckSfx(0.65, c.t, 0.5);
   },
 
   // Live Multiplier Ignition & Lethal Kill-Cam
@@ -1223,61 +1707,76 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     // Pitch climbs by `amount` (or legacy `slot`), while callers pass `slot: 0` on visual frames to avoid double-offsetting timing
     const step = Math.min(12, Math.max(0, Math.round(c.amount || c.slot)));
     const hot = step >= 4;
-    N(c, hot ? 'bell' : 'celesta', step, hot ? 6 : 5, 0, 0.22, 0.72);
-    D(c, hot ? 'tick' : 'woodblock', 0, 0.38);
+    N(c, hot ? 'bell' : 'celesta', step, hot ? 6 : 5, 0, 0.18, 0.68);
+    D(c, hot ? 'tick' : 'woodblock', 0, 0.36, undefined, 'dry');
   },
   multSlam: c => {
     const tier = Math.max(0, Math.min(3, Math.round(c.amount)));
-    D(c, tier >= 2 ? 'timpani' : 'kick', 0, 0.85 + tier * 0.05);
+    D(c, 'impactCrack', 0, 0.75 + tier * 0.08, undefined, 'dry');
+    D(c, tier >= 2 ? 'timpani' : 'kick', 0, 0.8 + tier * 0.05);
+    // [AU-04]: Suppress redundant subDrop/crash when a heavy payout T2-T3 already landed within 120 ms
+    if (tier >= 2 && !c.suppressSlamSub) {
+      subDrop(c.t, 0.8, SFX, c.tier);
+    }
     if (tier >= 2) {
-      subDrop(c.t, 0.85, SFX);
-      for (const d of [0, 4, 7]) N(c, 'brass', d, 4, 0, 0.38, 0.8);
+      for (const d of [0, 4, 7]) N(c, 'brassStab', d, 4, 0, 0.34, 0.85);
     }
     if (tier >= 3) {
-      D(c, 'crash', 0, 0.7);
-      runUp(c, 'bell', [4, 7, 9, 11], 6, 0.5, 0.45, 0.85);
+      if (!c.suppressSlamSub) D(c, 'crash', 0, 0.65);
+      runUp(c, 'bell', [4, 7, 9, 11], 6, 0.5, 0.36, 0.8);
     } else {
-      N(c, 'bell', 7, 5, 0, 0.35, 0.85);
+      N(c, 'bell', 7, 5, 0, 0.3, 0.8);
+    }
+    if (tier >= 1 && !c.suppressSlamSub) {
+      chip.duck(0.3, c.t, 0.35);
     }
   },
   killCamRiser: c => {
     for (let i = 0; i < 6; i++) D(c, 'timpani', i * 0.048, 0.45 + i * 0.09);
-    riser(c.t, 0.32, 0.5, SFX);
+    riser(c.t, 0.32, 0.55, SFX, c.tier);
     chip.duck(0.55, c.t, 0.38);
+    chip.duckSfx(0.65, c.t, 0.38);
   },
   killCamShatter: c => {
-    D(c, 'crash', 0, 1);
-    D(c, 'anvil', 0, 0.8);
-    subDrop(c.t, 1, SFX);
-    runUp(c, 'glock', [0, 2, 4, 7, 9, 11, 14], 6, 0.5, 0.45, 0.9);
+    D(c, 'impactCrack', 0, 1, undefined, 'dry');
+    D(c, 'crash', 0, 1, undefined, 'hall');
+    D(c, 'anvil', 0, 0.85, undefined, 'sfxRoom');
+    subDrop(c.t, 1, SFX, c.tier);
+    // [AU-06] & [AU-14]: Fold octave-6 glock shimmer strictly <= 2,600 Hz
+    runUp(c, 'glock', [0, 2, 4, 7, 9, 11, 14], 5, 0.5, 0.38, 0.88, 'sfxRoom');
+    chip.duck(0.65, c.t, 0.75);
+    chip.duckSfx(0.65, c.t, 0.65);
   },
-  // Expedition 33 slow-mo finishing blow: deep sub-bass drop + downward pitch-sagging harmonic resonance + slow-mo vacuum whoosh
+  // Expedition 33 slow-mo finishing blow (Tier S, explicit ceremonial 'hall' opt-in [AU-10])
   slowMoDefeat: c => {
     const emphasis = Math.max(0, Math.min(2, Math.round(c.amount)));
+    D(c, 'impactCrack', 0, 1, undefined, 'dry');
     // Chest-thumping time-stop bass drop (with warm 2nd/3rd harmonics for phone speakers [AU-15])
-    chip.play({ osc: 'sine', partials: [[2, 0.3], [3, 0.14]], lp: { hz: 520 }, a: 0.002, d: 0.95, s: 0, r: 0.08, vol: 0.95 }, { freq: 122, slideTo: 26, at: c.t, dur: 0.85, vol: 1.0, bus: SFX });
-    D(c, 'taiko', 0, 1.0);
-    D(c, 'timpani', 0.015, 0.9);
-    if (emphasis >= 1) D(c, 'anvil', 0, emphasis >= 2 ? 0.95 : 0.72);
-    // Air-vacuum slow-motion whoosh sweeping from bright edge into hushed hall stillness
-    chip.noise({ at: c.t, dur: 0.72, vol: 0.52, filter: 5600, sweepTo: 180, bus: SFX, space: 'hall' });
-    // Pitch-dragging metallic bell + horn + glass chord (sags -3 semitones as time freezes!)
+    chip.play(
+      { osc: 'sine', partials: [[2, 0.3], [3, 0.14]], lp: { hz: 520 }, a: 0.002, d: 0.95, s: 0, r: 0.08, vol: 0.95 },
+      { freq: 122, slideTo: 26, at: c.t, dur: 0.95, vol: 1.0, bus: SFX, tier: c.tier, space: 'dry' }
+    );
+    D(c, 'taiko', 0, 1.0, undefined, 'hall');
+    D(c, 'timpani', 0.015, 0.9, undefined, 'hall');
+    if (emphasis >= 1) D(c, 'anvil', 0, emphasis >= 2 ? 0.95 : 0.72, undefined, 'hall');
+    chip.noise({ at: c.t, dur: 0.72, vol: 0.52, filter: 5600, sweepTo: 180, bus: SFX, tier: c.tier, space: 'hall' });
     const sag = 0.84;
     const bellF = fq(c, 7, 5);
     const hornF = fq(c, 0, 3);
     const glassF = fq(c, 4, 6);
-    note('bell', bellF, c.t, 0.68, { vol: 0.92, bus: SFX, slideTo: bellF * sag });
-    note('horn', hornF, c.t + 0.01, 0.75, { vol: 0.88, bus: SFX, slideTo: hornF * sag });
-    note('glass', glassF, c.t + 0.02, 0.82, { vol: 0.65, bus: SFX, slideTo: glassF * 0.89 });
+    note('bell', bellF, c.t, 0.68, { vol: 0.92, bus: SFX, tier: c.tier, space: 'hall', slideTo: bellF * sag });
+    note('horn', hornF, c.t + 0.01, 0.75, { vol: 0.88, bus: SFX, tier: c.tier, space: 'hall', slideTo: hornF * sag });
+    note('glass', glassF, c.t + 0.02, 0.82, { vol: 0.65, bus: SFX, tier: c.tier, space: 'hall', slideTo: glassF * 0.89 });
+    chip.duckSfx(0.65, c.t, 0.85);
   },
   // Resolution chord when the 3-second Battle Damage Story crescendo crowns the MVP item
   storyClimax: c => {
     D(c, 'taiko', 0, 0.72);
     D(c, 'tamb', 0.02, 0.55);
-    N(c, 'bell', 7, 6, 0, 0.95, 0.88);
+    N(c, 'bell', 7, 6, 0, 0.75, 0.88);
     for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, 0, 0.9, 0.68);
     [0, 2, 4, 7].forEach((d, i) =>
-      note('glock', fq(c, d, 6), c.t + i * 0.032, 0.42, { vol: 0.58, bus: SFX, pan: i % 2 ? 0.45 : -0.45 })
+      note('glock', fq(c, d, 6), c.t + i * 0.032, 0.34, { vol: 0.58, bus: SFX, tier: c.tier, space: 'sfxRoom', pan: i % 2 ? 0.45 : -0.45 })
     );
   },
 
@@ -1286,31 +1785,34 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     D(c, 'tick', 0, 0.7);
     D(c, 'anvil', 0.015, 0.48);
     [0, 4, 7, 11].forEach((d, i) =>
-      note('celesta', fq(c, d, 6), c.t + i * 0.042, 0.36, { vol: 0.78, bus: SFX, pan: i % 2 ? 0.35 : -0.35 })
+      note('celesta', fq(c, d, 6), c.t + i * 0.042, 0.3, { vol: 0.74, bus: SFX, tier: c.tier, space: 'sfxRoom', pan: i % 2 ? 0.35 : -0.35 })
     );
-    N(c, 'bell', 7, 6, 0.09, 0.62, 0.85);
+    N(c, 'bell', 7, 6, 0.09, 0.52, 0.82);
   },
 
-  // Cage bars snap open and a caged friend leaps free!
+  // Cage bars snap open and a caged friend leaps free! (Ceremonial hall opt-in [AU-10])
   friendRescued: c => {
-    D(c, 'anvil', 0, 0.88);
-    D(c, 'taiko', 0.015, 0.85);
-    D(c, 'crash', 0.04, 0.65);
+    D(c, 'impactCrack', 0, 0.88, undefined, 'dry');
+    D(c, 'anvil', 0, 0.88, undefined, 'hall');
+    D(c, 'taiko', 0.015, 0.85, undefined, 'hall');
+    D(c, 'crash', 0.04, 0.65, undefined, 'hall');
     [0, 2, 4, 7].forEach((d, i) => {
-      note('brass', fq(c, d, 4), c.t + 0.03 + i * 0.068, i === 3 ? 0.85 : 0.2, { vol: 0.86, bus: SFX });
-      note('bell', fq(c, d, 6), c.t + 0.03 + i * 0.068, 0.55, { vol: 0.75, bus: SFX, pan: i % 2 ? 0.45 : -0.45 });
+      note('brass', fq(c, d, 4), c.t + 0.03 + i * 0.068, i === 3 ? 0.85 : 0.2, { vol: 0.86, bus: SFX, tier: c.tier, space: 'hall' });
+      note('bell', fq(c, d, 6), c.t + 0.03 + i * 0.068, 0.55, { vol: 0.75, bus: SFX, tier: c.tier, space: 'hall', pan: i % 2 ? 0.45 : -0.45 });
     });
     [0, 2, 4, 7, 9, 11].forEach((d, i) =>
-      note('harp', fq(c, d, 5), c.t + 0.12 + i * 0.04, 0.68, { vol: 0.68, bus: SFX, pan: i % 2 ? -0.5 : 0.5 })
+      note('harp', fq(c, d, 5), c.t + 0.12 + i * 0.04, 0.68, { vol: 0.68, bus: SFX, tier: c.tier, space: 'hall', pan: i % 2 ? -0.5 : 0.5 })
     );
-    for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, 0.24, 1.05, 0.74);
+    for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, 0.24, 1.05, 0.74, undefined, 'hall');
+    chip.duck(0.5, c.t, 0.8);
+    chip.duckSfx(0.37, c.t, 0.65);
   },
 
-  // Menus
-  tap: c => note('kalimba', fq(c, 4, 5), c.t, 0.12, { vol: 0.6, bus: SFX }),
+  // Menus (Tier C, dry, low-level UI feedback [AU-04], [AU-10])
+  tap: c => note('kalimba', fq(c, 4, 5), c.t, 0.1, { vol: 0.42, bus: SFX, tier: 'C', space: 'dry' }),
   back: c => {
-    note('kalimba', fq(c, 4, 5), c.t, 0.12, { vol: 0.6, bus: SFX });
-    note('kalimba', fq(c, 0, 5), c.t + 0.06, 0.15, { vol: 0.6, bus: SFX });
+    note('kalimba', fq(c, 4, 5), c.t, 0.1, { vol: 0.42, bus: SFX, tier: 'C', space: 'dry' });
+    note('kalimba', fq(c, 0, 5), c.t + 0.06, 0.12, { vol: 0.42, bus: SFX, tier: 'C', space: 'dry' });
   },
 };
 

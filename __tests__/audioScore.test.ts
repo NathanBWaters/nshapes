@@ -7,10 +7,25 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Platform } from 'react-native';
 import { EVENT_CUE, HIT_SIZES, JACKPOT_CHAIN, MAX_CHAIN, alertsOf, hitSize, moodOf, soundsFor, type FightSound } from '@/audio/fightAudio';
-import { band, CUE_NAMES } from '@/audio/band';
-import { chip, foldFreq, makeSoftClipCurve, MASTER_BUS, MAX_OSC_FREQ_HZ, SOFT_CLIP_CEILING } from '@/audio/chip';
-import { DIRECTOR, NO_ALERTS, direct, restingMix, worldTone, type FightMood } from '@/audio/director';
+import { ambience, biomeToAmbienceKind } from '@/audio/ambience';
+import { band, CUE_NAMES, CUE_TIER, IMMEDIATE_CUES, PAYOUT_TIER_GAIN } from '@/audio/band';
+import {
+  chip,
+  foldFreq,
+  makeSoftClipCurve,
+  MASTER_BUS,
+  MAX_OSC_FREQ_HZ,
+  MAX_VOICES,
+  REVERB_SECONDS,
+  resolveSpace,
+  SFX_BUS_GAIN,
+  SFX_TIER_GAINS,
+  SOFT_CLIP_CEILING,
+} from '@/audio/chip';
+import { DIRECTOR, NO_ALERTS, capAlerts, direct, resolveLeadMode, restingMix, worldTone, type FightMood } from '@/audio/director';
+import { FIGHTER_VOICE_IDS, FIGHTER_VOICE_META } from '@/audio/fighterVoices';
 import { DRUMS, INSTRUMENTS, subDrop } from '@/audio/instruments';
+import { setMusicEnabled, setSfxEnabled } from '@/audio';
 import {
   __setNativeAudioForTests,
   CUE_TO_NATIVE,
@@ -24,7 +39,8 @@ import {
   type NativeSoundHandle,
 } from '@/audio/nativeBridge';
 import { audioFlags } from '@/audio/settings';
-import { ARRANGEMENTS, THEME, THEME_B } from '@/audio/songs';
+import * as songsMod from '@/audio/songs';
+import { ARRANGEMENTS, INTRO_PICKUP, THEME, THEME_B, THEME_BATTLE_B } from '@/audio/songs';
 import { themeOf } from '@/audio/themes';
 import {
   BRIGHTNESS, MODES, PROGRESSIONS, chordRoot, degreeToMidi, degreeToSemis, hashOf, isMinor, ladderDegree, ladderRung, LADDER_TOP,
@@ -40,8 +56,19 @@ import { getArmoryWeapon } from '@/adventure/data/armory';
 import { createMaxedSave } from '@/adventure/progress';
 import type { RunEvent, RunEventType } from '@/adventure/types';
 import { __setAppActiveForTests } from '@/utils/appLifecycle';
+import {
+  __setHapticsModuleForTests,
+  selectionHaptic,
+  triggerHaptic,
+  triggerHurtHaptic,
+  triggerImpactHaptic,
+  triggerKoHaptic,
+  triggerParryHaptic,
+  triggerStarStampHaptic,
+} from '@/utils/haptics';
+import { HapticsStorage } from '@/utils/hapticsStorage';
 import { MusicStorage, SettingsStorage, SoundStorage, storage } from '@/utils/storage';
-import { playSet, startFight, tick, withWeapons } from './testUtils/adventureFight';
+import { playSet, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
 
 const mood = (over: Partial<FightMood> = {}): FightMood => ({
   arrangement: 'meadow', boss: false, status: 'playing', paused: false, hearts: 4, maxHearts: 4, timeLeft: 120, timeTotal: 120,
@@ -101,10 +128,14 @@ describe('theory', () => {
   });
 
   it('the tune is written in notes the theory can read', () => {
-    for (const tok of [...THEME, ...THEME_B]) {
+    for (const tok of [...INTRO_PICKUP, ...THEME, ...THEME_B, ...THEME_BATTLE_B]) {
       if (tok === '-' || tok === '.') continue;
       expect({ tok, parsed: parseNote(tok) !== null }).toEqual({ tok, parsed: true });
     }
+    expect(INTRO_PICKUP).toHaveLength(16);
+    expect(THEME).toHaveLength(128);
+    expect(THEME_B).toHaveLength(128);
+    expect(THEME_BATTLE_B).toHaveLength(128);
     expect(parseNote('E5')).toEqual({ degree: 2, octave: 5 });
   });
 
@@ -320,24 +351,24 @@ describe('the director', () => {
     expect(direct(mood({ combo: 50, timeLeft: 3, hotStreak: true, evolutions: ['x'] })).tempo).toBeLessThanOrEqual(DIRECTOR.maxTempo);
   });
 
-  it('the band thins out gradually when the player has not made a Set, softening lead & highs before resting', () => {
+  it('the band thins out gradually when the player has not made a Set, flooring lead at 0.35 and filter at 9500 Hz ([AU-18])', () => {
     const active = direct(mood({ foeHp: 0.6, weapons: ['magnet', 'rust'] }));
     const early = direct(mood({ foeHp: 0.6, idleMs: DIRECTOR.idleStartMs + 2000, weapons: ['magnet', 'rust'] }));
     const thin = direct(mood({ foeHp: 0.6, idleMs: DIRECTOR.idleThinMs, weapons: ['magnet', 'rust'] }));
     const midFade = direct(mood({ foeHp: 0.6, idleMs: (DIRECTOR.idleThinMs + DIRECTOR.idleQuietMs) / 2, weapons: ['magnet', 'rust'] }));
     const quiet = direct(mood({ foeHp: 0.6, idleMs: DIRECTOR.idleQuietMs, weapons: ['magnet', 'rust'] }));
-    // Continuous smooth monotonic descent rather than sharp cliffs
+    // Continuous smooth monotonic descent without silencing melody dead or going underwater
     expect(early.intensity).toBeLessThan(active.intensity);
     expect(thin.intensity).toBeLessThan(early.intensity);
     expect(midFade.intensity).toBeLessThan(thin.intensity);
     expect(quiet.intensity).toBeLessThan(midFade.intensity);
-    expect(midFade.leadGain).toBeGreaterThan(0);
+    expect(midFade.leadGain).toBeGreaterThan(DIRECTOR.idleLeadFloor);
     expect(midFade.leadGain).toBeLessThan(thin.leadGain);
-    expect(quiet.leadGain).toBe(0);
+    expect(quiet.leadGain).toBe(DIRECTOR.idleLeadFloor);
     expect(midFade.filterHz).toBeLessThan(active.filterHz);
-    expect(quiet.filterHz).toBeLessThan(midFade.filterHz);
+    expect(quiet.filterHz).toBe(DIRECTOR.idleFilterFloorHz);
     expect(quiet.level).toBeLessThan(active.level);
-    expect([active.lead, thin.lead, quiet.lead]).toEqual([true, true, false]);
+    expect([active.lead, thin.lead, quiet.lead]).toEqual([true, true, true]);
     expect(quiet.spotlights).toBe(1);
   });
 
@@ -1047,6 +1078,590 @@ describe('[AU-14] & [AU-15] pitch folding, FM Nyquist safety & phone-speaker mas
     for (const v of Object.values(WEAPON_VOICES)) {
       expect(v.pan).toBeGreaterThanOrEqual(-1);
       expect(v.pan).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+// ─── Wave 3 Audio Mastery ([AU-04..AU-11, AU-13, AU-16..AU-21]) ────────────
+
+describe('Wave 3 Audio Mastery: 4-tier priority, transients, room split, immediate cues, 16-bar music, ambience & haptics', () => {
+  const createAudioSpyCtx = (sampleRate = 44100) => {
+    const convolvers: { buffer: { length: number } | null }[] = [];
+    const delays: { delayTime: { value: number } }[] = [];
+    const filters: { type: string; frequency: { value: number }; Q: { value: number }; gain: { value: number } }[] = [];
+    const oscStarts: { startAt: number; stopAt: number; freq: number }[] = [];
+    const oscStopCalls: { stopAt?: number }[] = [];
+    const bufSources: { loop: boolean; start: jest.Mock; stop: jest.Mock }[] = [];
+
+    const makeParam = (initial = 0) => {
+      const p = {
+        value: initial,
+        setValueAtTime: jest.fn((v: number) => { p.value = v; }),
+        linearRampToValueAtTime: jest.fn(),
+        exponentialRampToValueAtTime: jest.fn(),
+        setTargetAtTime: jest.fn(),
+        cancelScheduledValues: jest.fn(),
+      };
+      return p;
+    };
+
+    const ctx: Record<string, any> = {
+      sampleRate,
+      currentTime: 1.0,
+      state: 'running',
+      destination: { channelCount: 2, connect: jest.fn() },
+      createGain: jest.fn(() => ({
+        gain: makeParam(1),
+        channelCount: 2,
+        channelCountMode: 'max',
+        channelInterpretation: 'speakers',
+        connect: jest.fn((d: unknown) => d),
+        disconnect: jest.fn(),
+      })),
+      createBiquadFilter: jest.fn(() => {
+        const f = {
+          type: 'lowpass',
+          frequency: makeParam(350),
+          Q: makeParam(1),
+          gain: makeParam(0),
+          connect: jest.fn((d: unknown) => d),
+          disconnect: jest.fn(),
+        };
+        filters.push(f);
+        return f;
+      }),
+      createDynamicsCompressor: jest.fn(() => ({
+        threshold: makeParam(-24),
+        knee: makeParam(30),
+        ratio: makeParam(12),
+        attack: makeParam(0.003),
+        release: makeParam(0.25),
+        connect: jest.fn((d: unknown) => d),
+      })),
+      createWaveShaper: jest.fn(() => ({ curve: null, oversample: 'none', connect: jest.fn((d: unknown) => d) })),
+      createConvolver: jest.fn(() => {
+        const c = { buffer: null as { length: number } | null, connect: jest.fn((d: unknown) => d) };
+        convolvers.push(c);
+        return c;
+      }),
+      createDelay: jest.fn(() => {
+        const d = { delayTime: makeParam(0), connect: jest.fn((dest: unknown) => dest) };
+        delays.push(d);
+        return d;
+      }),
+      createStereoPanner: jest.fn(() => ({ pan: makeParam(0), connect: jest.fn((d: unknown) => d) })),
+      createPeriodicWave: jest.fn(() => ({})),
+      createBuffer: jest.fn((_ch: number, len: number) => ({
+        length: len,
+        getChannelData: () => new Float32Array(len),
+      })),
+      createBufferSource: jest.fn(() => {
+        const s = {
+          buffer: null,
+          loop: false,
+          start: jest.fn(),
+          stop: jest.fn(),
+          connect: jest.fn((d: unknown) => d),
+          disconnect: jest.fn(),
+        };
+        bufSources.push(s);
+        return s;
+      }),
+      createOscillator: jest.fn(() => {
+        const entry = { startAt: 0, stopAt: 0, freq: 440 };
+        const freq = makeParam(440);
+        const origSet = freq.setValueAtTime;
+        freq.setValueAtTime = jest.fn((v: number) => {
+          entry.freq = v;
+          origSet(v);
+        });
+        return {
+          type: 'sine',
+          frequency: freq,
+          detune: makeParam(0),
+          setPeriodicWave: jest.fn(),
+          start: jest.fn((at = 0) => {
+            entry.startAt = at;
+            oscStarts.push(entry);
+          }),
+          stop: jest.fn((at?: number) => {
+            entry.stopAt = at ?? 0;
+            oscStopCalls.push({ stopAt: at });
+          }),
+          connect: jest.fn((d: unknown) => d),
+          disconnect: jest.fn(),
+        };
+      }),
+    };
+
+    return { ctx: ctx as unknown as BaseAudioContext, convolvers, delays, filters, oscStarts, oscStopCalls, bufSources };
+  };
+
+  afterEach(() => {
+    ambience.stop();
+    band.stop();
+    chip.setMonitorMode('flat');
+    __setAppActiveForTests(true);
+    __setHapticsModuleForTests(null);
+    audioFlags.music = true;
+    audioFlags.sfx = true;
+    storage.clearAll();
+  });
+
+  it('[AU-04] wires 4-tier SFX priority bus (S/A/B/C), SFX-to-SFX ducking, <=18 MEGA+Rainbow voices, and priority voice-stealing', () => {
+    const mock = createAudioSpyCtx(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      // Exact bus gain calibration
+      expect(chip.sfxBus?.gain.value).toBeCloseTo(SFX_BUS_GAIN, 4);
+      expect(chip.sfxTiers.S?.gain.value).toBeCloseTo(SFX_TIER_GAINS.S, 4);
+      expect(chip.sfxTiers.A?.gain.value).toBeCloseTo(SFX_TIER_GAINS.A, 4);
+      expect(chip.sfxTiers.B?.gain.value).toBeCloseTo(SFX_TIER_GAINS.B, 4);
+      expect(chip.sfxTiers.C?.gain.value).toBeCloseTo(SFX_TIER_GAINS.C, 4);
+      expect(chip.sfxDuckGain).not.toBeNull();
+
+      // Every cue has an explicit priority tier and monotonic payout gains
+      for (const name of CUE_NAMES) expect(['S', 'A', 'B', 'C']).toContain(CUE_TIER[name]);
+      expect(PAYOUT_TIER_GAIN[0]).toBeLessThan(PAYOUT_TIER_GAIN[1]);
+      expect(PAYOUT_TIER_GAIN[1]).toBeLessThan(PAYOUT_TIER_GAIN[2]);
+      expect(PAYOUT_TIER_GAIN[2]).toBeLessThan(PAYOUT_TIER_GAIN[3]);
+
+      // Tier S & A trigger music + SFX-to-SFX ducking
+      const duckSpy = jest.spyOn(chip, 'duck');
+      const duckSfxSpy = jest.spyOn(chip, 'duckSfx');
+      band.cue('parryWarn');
+      band.cue('parry');
+      band.cue('foeStrike');
+      band.cue('blast');
+      band.cue('levelUp');
+      expect(duckSpy.mock.calls.length).toBeGreaterThanOrEqual(5);
+      expect(duckSfxSpy.mock.calls.length).toBeGreaterThanOrEqual(5);
+      duckSpy.mockRestore();
+      duckSfxSpy.mockRestore();
+
+      // MEGA + Rainbow payout voice budget stays <= 18 voices (down from ~45)
+      const beforeMega = chip.voiceCount;
+      band.payout({ combo: 12, tier: 3, rainbow: true });
+      const megaVoices = chip.voiceCount - beforeMega;
+      expect(megaVoices).toBeGreaterThan(6);
+      expect(megaVoices).toBeLessThanOrEqual(18);
+
+      // Redundant multSlam subDrop/crash suppressed within 120 ms of heavy T3 payout
+      const beforeSuppressed = chip.voiceCount;
+      band.cue('multSlam', { amount: 3 });
+      const suppressedVoices = chip.voiceCount - beforeSuppressed;
+      band.atTime(5.0, () => {
+        const beforeFull = chip.voiceCount;
+        band.cue('multSlam', { amount: 3 });
+        const fullVoices = chip.voiceCount - beforeFull;
+        expect(suppressedVoices).toBeLessThan(fullVoices);
+      });
+
+      // Voice-stealing: fill MAX_VOICES (56) with Tier C voices, then fire Tier S hurt — steals oldest Tier C instead of dropping!
+      const mockSteal = createAudioSpyCtx(44100);
+      const restoreSteal = chip.useContext(mockSteal.ctx);
+      try {
+        for (let i = 0; i < MAX_VOICES; i++) {
+          chip.play(INSTRUMENTS.kalimba, { freq: 440, at: 1.0 + i * 0.0001, dur: 2.0, bus: 'sfx', tier: 'C', space: 'dry' });
+        }
+        expect(chip.activeVoices).toBe(MAX_VOICES);
+        const beforeS = chip.voiceCount;
+        chip.play(INSTRUMENTS.brassStab, { freq: 220, at: 1.05, dur: 0.3, bus: 'sfx', tier: 'S' });
+        expect(chip.voiceCount).toBe(beforeS + 1);
+        expect(chip.stolenVoices).toBeGreaterThanOrEqual(1);
+      } finally {
+        restoreSteal();
+      }
+    } finally {
+      restore();
+    }
+  });
+
+  it('[AU-05] caps concurrent board alerts to top 2 threats (1 on lastHeart + racing clock) in lethality order', () => {
+    const allSix = {
+      cursed: 3,
+      potatoSoon: true,
+      fuseHot: 2,
+      thornSoon: true,
+      glassLow: true,
+      bombSoon: true,
+    };
+    const top2 = capAlerts(allSix, 2);
+    expect(top2).toEqual({
+      bombSoon: true,
+      fuseHot: 2,
+      potatoSoon: false,
+      thornSoon: false,
+      glassLow: false,
+      cursed: 0,
+    });
+
+    const withoutTop2 = capAlerts({ ...allSix, bombSoon: false, fuseHot: 0 }, 2);
+    expect(withoutTop2).toEqual({
+      bombSoon: false,
+      fuseHot: 0,
+      potatoSoon: true,
+      thornSoon: true,
+      glassLow: false,
+      cursed: 0,
+    });
+
+    const crisis = direct(mood({ hearts: 1, maxHearts: 4, timeLeft: 5, timeTotal: 120, alerts: allSix }));
+    expect(crisis.heartbeat).toBe(true);
+    expect(crisis.clock).toBe(2);
+    expect(crisis.alerts).toEqual({
+      bombSoon: true,
+      fuseHot: 0,
+      potatoSoon: false,
+      thornSoon: false,
+      glassLow: false,
+      cursed: 0,
+    });
+  });
+
+  it('[AU-06] exposes Tier S immediate playKillCamRiser & playKillCamShatter with <=2600 Hz glock folding', () => {
+    expect(CUE_TIER.killCamRiser).toBe('S');
+    expect(CUE_TIER.killCamShatter).toBe('S');
+    expect(IMMEDIATE_CUES.has('killCamRiser')).toBe(true);
+    expect(IMMEDIATE_CUES.has('killCamShatter')).toBe(true);
+
+    const mock = createAudioSpyCtx(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      const playSpy = jest.spyOn(chip, 'play');
+      band.playKillCamRiser();
+      band.playKillCamShatter();
+      expect(playSpy.mock.calls.length).toBeGreaterThan(5);
+      for (const [, opts] of playSpy.mock.calls) {
+        expect(opts.freq).toBeLessThanOrEqual(2600);
+        expect(opts.tier).toBe('S');
+      }
+      playSpy.mockRestore();
+    } finally {
+      restore();
+    }
+  });
+
+  it('[AU-07] synthesizes 6 distinct scale-locked fighter voices <=2400 Hz with 1.8 s per-fighter cooldown', () => {
+    expect(FIGHTER_VOICE_IDS).toHaveLength(6);
+    const signatures = new Set(FIGHTER_VOICE_IDS.map(f => `${FIGHTER_VOICE_META[f].primaryInst}+${FIGHTER_VOICE_META[f].secondary}`));
+    expect(signatures.size).toBe(6);
+
+    const mock = createAudioSpyCtx(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      const playSpy = jest.spyOn(chip, 'play');
+      for (const fighter of FIGHTER_VOICE_IDS) {
+        expect(band.fighterCall(fighter, 'signature', { bypassCooldown: true })).toBe(true);
+        expect(band.fighterCall(fighter, 'cheer', { bypassCooldown: true })).toBe(true);
+        expect(band.fighterCall(fighter, 'hurt', { bypassCooldown: true })).toBe(true);
+      }
+      for (const [, opts] of playSpy.mock.calls) {
+        expect(opts.freq).toBeLessThanOrEqual(2400);
+        expect(opts.tier).toBe('B');
+      }
+      playSpy.mockRestore();
+
+      // Cooldown blocks rapid duplicate calls for same fighter inside 1.8 s, allows another fighter immediately, then re-allows after 1.8 s
+      band.atTime(10.0, () => {
+        expect(band.fighterCall('Orange Tabby', 'signature')).toBe(true);
+        expect(band.fighterCall('Orange Tabby', 'cheer')).toBe(false);
+        expect(band.fighterCall('Sly Fox', 'signature')).toBe(true);
+      });
+      band.atTime(12.0, () => {
+        expect(band.fighterCall('Orange Tabby', 'cheer')).toBe(true);
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  it('[AU-08] [AU-09] [AU-10] delivers dry hitstop transients, brassStab 5ms attack, plucked o.dur decay, 0.35s SFX room & zero SFX echo', () => {
+    expect(INSTRUMENTS.brassStab.a).toBe(0.005);
+    expect(INSTRUMENTS.brassStab.space).toBe('sfxRoom');
+    expect(typeof DRUMS.impactCrack).toBe('function');
+    expect(typeof DRUMS.impactPunch).toBe('function');
+
+    const mock = createAudioSpyCtx(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      // [AU-10]: Single 1.7s Hall convolver + dedicated 0.35s SFX Room convolver + ONLY 1 DelayNode (music echo only)
+      expect(mock.convolvers).toHaveLength(2);
+      const lengths = mock.convolvers.map(c => c.buffer?.length ?? 0).sort((a, b) => a - b);
+      expect(lengths[0]).toBe(Math.floor(44100 * REVERB_SECONDS.sfxRoom));
+      expect(lengths[1]).toBe(Math.floor(44100 * REVERB_SECONDS.hall));
+      expect(mock.delays).toHaveLength(1);
+      expect(chip.reverbConfig.sfxEchoEnabled).toBe(false);
+
+      // Space clamping rules
+      expect(resolveSpace('sfx', undefined, 'hall', 'B')).toBe('sfxRoom');
+      expect(resolveSpace('sfx', undefined, 'echo', 'B')).toBe('sfxRoom');
+      expect(resolveSpace('sfx', 'echo', 'echo', 'A')).toBe('sfxRoom');
+      expect(resolveSpace('sfx', 'hall', 'hall', 'S')).toBe('hall');
+      expect(resolveSpace('sfx', undefined, 'room', 'C')).toBe('dry');
+
+      // [AU-09]: Plucked (s === 0) bell (d: 1.1s) with o.dur = 0.15s ends crisply around 0.20s instead of 1.76s
+      mock.oscStarts.length = 0;
+      chip.play(INSTRUMENTS.bell, { freq: 880, at: 2.0, dur: 0.15, bus: 'sfx', tier: 'B' });
+      expect(mock.oscStarts.length).toBeGreaterThan(0);
+      for (const osc of mock.oscStarts) {
+        expect(osc.stopAt - osc.startAt).toBeLessThan(0.25);
+      }
+
+      // [AU-08]: Dry impactCrack & impactPunch finish inside hitstop (<85 ms total stop time)
+      mock.oscStarts.length = 0;
+      DRUMS.impactCrack(3.0, 1, 'sfx', undefined, false, 'A');
+      DRUMS.impactPunch(3.0, 1, 'sfx', undefined, false, 'A');
+      expect(mock.oscStarts.length).toBeGreaterThanOrEqual(2);
+      for (const osc of mock.oscStarts) {
+        expect(osc.stopAt - osc.startAt).toBeLessThan(0.09);
+      }
+    } finally {
+      restore();
+    }
+  });
+
+  it('[AU-11] & [AU-13] fires all 24 reactive cues immediately (4ms lookahead), preserves fast multStep tallies, and removes premature setMood evolve/reelStop', () => {
+    const expectedImmediate: (typeof CUE_NAMES)[number][] = [
+      'tap', 'back', 'slowMoDefeat', 'star', 'starSwoosh', 'rankSeal', 'storyClimax', 'keyFound', 'friendRescued',
+      'mistake', 'hurt', 'parryWarn', 'parry', 'perfectParry', 'foeStrike', 'hint',
+      'multStep', 'multSlam', 'register', 'weaponGet', 'reelSpin', 'reelStop', 'killCamRiser', 'killCamShatter',
+    ];
+    for (const name of expectedImmediate) expect(IMMEDIATE_CUES.has(name)).toBe(true);
+    expect(IMMEDIATE_CUES.size).toBe(24);
+
+    const mock = createAudioSpyCtx(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      // Immediate cues use 4 ms lookahead instead of snapping to a distant 32nd-note grid
+      const playSpy = jest.spyOn(chip, 'play');
+      band.atTime(2.0, () => {
+        band.cue('mistake');
+        expect(playSpy.mock.calls.length).toBeGreaterThan(0);
+        expect(playSpy.mock.calls[0][1].at).toBeCloseTo(2.004, 3);
+      });
+
+      // Rapid accelerating multStep calls (different amounts) are never silently dropped
+      playSpy.mockClear();
+      for (let step = 1; step <= 6; step++) {
+        band.atTime(3.0 + step * 0.012, () => {
+          band.cue('multStep', { slot: 0, amount: step });
+        });
+      }
+      expect(playSpy.mock.calls.length).toBeGreaterThanOrEqual(6);
+
+      // [AU-13]: setMood() must NOT prematurely call evolve() or reelStop
+      const evolveSpy = jest.spyOn(band, 'evolve');
+      const cueSpy = jest.spyOn(band, 'cue');
+      band.setMood(mood());
+      band.setMood(mood({ evolutions: [EVOLUTION_RECIPES[0].id], status: 'pick' }));
+      expect(evolveSpy).not.toHaveBeenCalled();
+      expect(cueSpy).not.toHaveBeenCalledWith('reelStop', expect.anything());
+
+      // Mount-synced APIs fire cleanly on demand
+      playSpy.mockClear();
+      band.playCutInEvolve(EVOLUTION_RECIPES[0].id);
+      expect(evolveSpy).toHaveBeenCalledWith(EVOLUTION_RECIPES[0].id, { immediate: true, leadMs: 90 });
+
+      cueSpy.mockClear();
+      band.playWeaponPickReelStop();
+      expect(cueSpy).toHaveBeenCalledTimes(3);
+      expect(cueSpy).toHaveBeenNthCalledWith(1, 'reelStop', { slot: 0, amount: 0, afterMs: 0 });
+      expect(cueSpy).toHaveBeenNthCalledWith(2, 'reelStop', { slot: 0, amount: 1, afterMs: 75 });
+      expect(cueSpy).toHaveBeenNthCalledWith(3, 'reelStop', { slot: 0, amount: 2, afterMs: 150 });
+
+      playSpy.mockRestore();
+      evolveSpy.mockRestore();
+      cueSpy.mockRestore();
+    } finally {
+      restore();
+    }
+  });
+
+  it('[AU-16] configures Phone Sim 300-5kHz Mono & Low Vol -12 dB monitor modes, reports live diagnostics & ships audition checklist', () => {
+    const mock = createAudioSpyCtx(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      chip.setMonitorMode('phone');
+      expect(chip.monitorMode).toBe('phone');
+      expect(mock.filters.some(f => f.type === 'highpass' && f.frequency.value === 300)).toBe(true);
+      expect(mock.filters.some(f => f.type === 'lowpass' && f.frequency.value === 5000)).toBe(true);
+
+      chip.setMonitorMode('lowVol');
+      expect(chip.monitorMode).toBe('lowVol');
+
+      chip.setMonitorMode('flat');
+      const diag = chip.getDiagnostics();
+      expect(diag.maxVoices).toBe(MAX_VOICES);
+      expect(diag.monitorMode).toBe('flat');
+      expect(diag.tiers.S.count).toBeGreaterThanOrEqual(0);
+    } finally {
+      restore();
+    }
+
+    const checklistPath = path.resolve(__dirname, '..', 'docs', 'sound-audition-checklist.md');
+    expect(fs.existsSync(checklistPath)).toBe(true);
+    const text = fs.readFileSync(checklistPath, 'utf8');
+    expect(text).toContain('Environment A');
+    expect(text).toContain('Environment B');
+    expect(text).toContain('Environment C');
+    expect(text).toContain('Environment D');
+  });
+
+  it('[AU-17] [AU-18] [AU-19] [AU-20] cleans dead songs exports, ships 16-bar A-B + 136 BPM Summit + maxTempo 1.18 + Ionian hook + biome ambience', () => {
+    // [AU-17]: Dead CHORDS & JINGLES removed
+    expect('CHORDS' in songsMod).toBe(false);
+    expect('JINGLES' in songsMod).toBe(false);
+
+    // Every battle arrangement uses 16-bar A-B battle form; smooth BPM progression
+    expect(ARRANGEMENTS.meadow.bpm).toBe(118);
+    expect(ARRANGEMENTS.woods.bpm).toBe(122);
+    expect(ARRANGEMENTS.canyon.bpm).toBe(128);
+    expect(ARRANGEMENTS.peaks.bpm).toBe(124);
+    expect(ARRANGEMENTS.summit.bpm).toBe(136);
+    expect(ARRANGEMENTS.boss.bpm).toBe(148);
+    for (const k of ['meadow', 'woods', 'canyon', 'peaks', 'summit', 'boss']) {
+      expect(ARRANGEMENTS[k].useB).toBe(true);
+      expect(ARRANGEMENTS[k].sectionB).toBe('battle');
+    }
+
+    // [AU-18]: maxTempo 1.18 caps peak boss <= 175 BPM and non-boss World 5 resolves to 'summit'
+    expect(DIRECTOR.maxTempo).toBe(1.18);
+    expect(ARRANGEMENTS.boss.bpm * DIRECTOR.maxTempo).toBeLessThan(175);
+    expect(worldTone('summit').mode).toBe('mixolydian');
+    const summitRun = startFight({ level: testLevel({ id: '5-1', biome: 'summit', isBoss: false }) });
+    const summitMood = moodOf(summitRun, { arrangement: 'boss', paused: false, timeTotal: summitRun.timeLeft });
+    expect(summitMood.arrangement).toBe('summit');
+
+    // [AU-19]: Canonical Ionian THEME hook preserved on bright/neutral worlds; dark states flatten deliberately
+    for (const bright of ['title', 'camp', 'map', 'meadow', 'canyon', 'peaks', 'summit']) {
+      expect(resolveLeadMode(bright, 'mixolydian', false)).toBe('ionian');
+      expect(resolveLeadMode(bright, 'lydian', false)).toBe('ionian');
+      expect(resolveLeadMode(bright, 'dorian', true)).toBe('dorian'); // lastHeart danger flattens!
+    }
+    expect(resolveLeadMode('woods', 'dorian', false)).toBe('dorian');
+    expect(resolveLeadMode('boss', 'aeolian', false)).toBe('aeolian');
+    expect(resolveLeadMode('story', 'aeolian', false)).toBe('aeolian');
+
+    // [AU-20]: Non-battle screen tracks + biome ambience lifecycle
+    expect(ARRANGEMENTS.title.bpm).toBe(96);
+    expect(ARRANGEMENTS.story.bpm).toBe(88);
+    expect(ARRANGEMENTS.camp.bpm).toBe(98);
+    expect(restingMix('title').drums).toBe(0);
+    expect(restingMix('story').drums).toBe(0);
+    expect(biomeToAmbienceKind('camp')).toBe('campfire');
+    expect(biomeToAmbienceKind('summit')).toBe('mountainWind');
+    expect(biomeToAmbienceKind('woods')).toBe('woodlandBreeze');
+    expect(biomeToAmbienceKind('meadow')).toBe('meadowAir');
+
+    const mock = createAudioSpyCtx(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      // [AU-17]: 16-bar battle passage plays both A-section (THEME) and B-section (THEME_BATTLE_B)
+      const beforePassage = chip.voiceCount;
+      band.renderPassage([{ arrangement: 'summit', bars: 16 }], 0.05);
+      expect(chip.voiceCount - beforePassage).toBeGreaterThan(80);
+
+      ambience.setBiome('camp');
+      expect(ambience.isPlaying).toBe(true);
+      expect(ambience.activeKind).toBe('campfire');
+
+      // Muting Music alone keeps biome ambience softly alive while SFX is ON
+      setMusicEnabled(false);
+      expect(ambience.isPlaying).toBe(true);
+
+      // Backgrounding immediately stops ambience
+      __setAppActiveForTests(false);
+      expect(ambience.isPlaying).toBe(false);
+      __setAppActiveForTests(true);
+      expect(ambience.isPlaying).toBe(true);
+
+      // Muting BOTH Music & SFX stops ambience completely
+      setSfxEnabled(false);
+      expect(ambience.isPlaying).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  it('[AU-21] gates scaled impact, parry, hurt, KO & star-stamp haptics by MMKV HapticsStorage and routes RoundFunPrompt cleanly', async () => {
+    jest.useFakeTimers();
+    const origOs = Platform.OS;
+    const impactAsync = jest.fn(async (_style: unknown) => undefined);
+    const notificationAsync = jest.fn(async (_type: unknown) => undefined);
+    const selectionAsync = jest.fn(async () => undefined);
+    const mockHaptics = {
+      ImpactFeedbackStyle: { Light: 'L', Medium: 'M', Heavy: 'H' },
+      NotificationFeedbackType: { Success: 'S', Error: 'E', Warning: 'W' },
+      impactAsync,
+      notificationAsync,
+      selectionAsync,
+    };
+
+    try {
+      Platform.OS = 'ios';
+      __setHapticsModuleForTests(mockHaptics);
+      expect(HapticsStorage.get()).toBe(true);
+
+      const seen: boolean[] = [];
+      const unsub = HapticsStorage.subscribe(v => seen.push(v));
+
+      await triggerImpactHaptic(0);
+      await triggerImpactHaptic(1);
+      await triggerImpactHaptic(2);
+      await triggerImpactHaptic(3);
+      expect(impactAsync.mock.calls.map(c => c[0])).toEqual(['L', 'M', 'H', 'H']);
+
+      await triggerParryHaptic(false);
+      await triggerParryHaptic(true);
+      await triggerHurtHaptic();
+      expect(impactAsync).toHaveBeenLastCalledWith('M');
+      expect(notificationAsync.mock.calls.map(c => c[0])).toEqual(['S', 'E']);
+
+      impactAsync.mockClear();
+      notificationAsync.mockClear();
+      await triggerKoHaptic(true);
+      expect(impactAsync).toHaveBeenCalledWith('H');
+      jest.advanceTimersByTime(100);
+      expect(notificationAsync).toHaveBeenCalledWith('S');
+
+      impactAsync.mockClear();
+      notificationAsync.mockClear();
+      await triggerStarStampHaptic(0);
+      await triggerStarStampHaptic(1);
+      await triggerStarStampHaptic(2);
+      jest.advanceTimersByTime(80);
+      expect(impactAsync.mock.calls.map(c => c[0])).toEqual(['M', 'M', 'H']);
+      expect(notificationAsync).toHaveBeenCalledWith('S');
+
+      // Disabling HapticsStorage silences every haptic trigger
+      impactAsync.mockClear();
+      notificationAsync.mockClear();
+      selectionAsync.mockClear();
+      HapticsStorage.set(false);
+      expect(seen).toEqual([false]);
+      expect(HapticsStorage.get()).toBe(false);
+
+      await triggerHaptic('heavy');
+      await selectionHaptic();
+      await triggerImpactHaptic(3);
+      await triggerParryHaptic(true);
+      await triggerHurtHaptic();
+      await triggerKoHaptic(true);
+      await triggerStarStampHaptic(2);
+      jest.advanceTimersByTime(200);
+      expect(impactAsync).not.toHaveBeenCalled();
+      expect(notificationAsync).not.toHaveBeenCalled();
+      expect(selectionAsync).not.toHaveBeenCalled();
+      unsub();
+
+      // RoundFunPrompt must route through @/utils/haptics instead of importing expo-haptics directly
+      const promptSrc = fs.readFileSync(path.resolve(__dirname, '..', 'src', 'components', 'RoundFunPrompt.tsx'), 'utf8');
+      expect(promptSrc).not.toContain("from 'expo-haptics'");
+      expect(promptSrc).toContain("from '@/utils/haptics'");
+    } finally {
+      Platform.OS = origOs;
+      jest.useRealTimers();
     }
   });
 });
