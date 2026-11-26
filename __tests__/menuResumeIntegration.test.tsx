@@ -318,8 +318,8 @@ describe('Main Menu ↔ Game Mode Resume Integration', () => {
   it('Cross-mode switching: Main Menu ↔ Adventure Mode ↔ Main Menu ↔ Starfall Summit keeps both saves intact', async () => {
     const advSave = {
       ...createNewSave(),
-      stars: { '1-1': 3, '1-2': 3 },
-      plays: { '1-1': 1, '1-2': 1 },
+      stars: { '1-1': 3, '1-2': 3, '1-10': 1 },
+      plays: { '1-1': 1, '1-2': 1, '1-10': 1 },
       coins: 77,
       coinsUnlocked: true,
     };

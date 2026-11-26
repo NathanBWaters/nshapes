@@ -6,8 +6,9 @@ import { playSound } from '@/utils/sounds';
 import Icon, { IconName } from './Icon';
 import { FighterAvatar } from './fighters';
 import { CHARACTERS } from '@/utils/gameDefinitions';
-import { SavedGameStorage } from '@/utils/storage';
+import { LabsStorage } from '@/utils/freePlayStorage';
 import { loadAdventureSave } from '@/adventure/save';
+import { SUMMIT_UNLOCK_LEVEL_ID, isSummitUnlocked } from '@/adventure/data/features';
 import { getFrontierLevel, totalStars } from '@/adventure/progress';
 import { levelFoe } from '@/adventure/data/foes';
 import { STORY_TAGLINE } from '@/adventure/data/story';
@@ -21,10 +22,10 @@ interface MainMenuProps {
   onSelectAdventure: () => void;
   onSelectSpire?: () => void;
   onSelectPrism?: () => void;
+  /** When true (e.g. `?labs=1` or Labs opt-in), shows experimental Prism Deck entry */
+  showPrismLabs?: boolean;
   onSelectFreeplay: () => void;
-  onSelectTutorial: () => void;
   onSelectOptions: () => void;
-  onResumeGame?: () => void;
 }
 
 function MenuButton({
@@ -34,31 +35,26 @@ function MenuButton({
   title,
   subtitle,
   badge,
+  disabled = false,
   accessibilityLabel,
 }: {
-  onPress: () => void;
-  variant: 'resume' | 'adventure' | 'spire' | 'prism' | 'freeplay' | 'tutorial' | 'options';
+  onPress?: () => void;
+  variant: 'adventure' | 'spire' | 'spire_locked' | 'prism' | 'freeplay' | 'options';
   icon: IconName;
   title: string;
   subtitle: string;
   badge?: string;
+  disabled?: boolean;
   accessibilityLabel?: string;
 }) {
   const handlePress = () => {
+    if (disabled || !onPress) return;
     triggerHaptic('light');
     playSound('click');
     onPress();
   };
 
   const variantStyles = {
-    resume: {
-      button: styles.resumeButton,
-      iconBg: COLORS.paperBeige,
-      iconColor: COLORS.slateCharcoal,
-      textColor: COLORS.canvasWhite,
-      badgeBg: COLORS.deepOnyx,
-      badgeColor: COLORS.actionYellow,
-    },
     adventure: {
       button: styles.adventureButton,
       iconBg: COLORS.paperBeige,
@@ -74,6 +70,14 @@ function MenuButton({
       textColor: COLORS.canvasWhite,
       badgeBg: COLORS.deepOnyx,
       badgeColor: COLORS.actionYellow,
+    },
+    spire_locked: {
+      button: styles.spireLockedButton,
+      iconBg: '#E6E0D6',
+      iconColor: '#6B655D',
+      textColor: COLORS.slateCharcoal,
+      badgeBg: '#DDD6CA',
+      badgeColor: COLORS.slateCharcoal,
     },
     prism: {
       button: styles.prismButton,
@@ -91,14 +95,6 @@ function MenuButton({
       badgeBg: COLORS.deepOnyx,
       badgeColor: COLORS.actionYellow,
     },
-    tutorial: {
-      button: styles.tutorialButton,
-      iconBg: 'rgba(255,255,255,0.2)',
-      iconColor: COLORS.canvasWhite,
-      textColor: COLORS.canvasWhite,
-      badgeBg: COLORS.deepOnyx,
-      badgeColor: COLORS.actionYellow,
-    },
     options: {
       button: styles.optionsButton,
       iconBg: COLORS.paperBeige,
@@ -110,17 +106,21 @@ function MenuButton({
   };
 
   const v = variantStyles[variant];
+  const testIdVariant = variant === 'spire_locked' ? 'spire' : variant;
 
   return (
     <Pressable
       onPress={handlePress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
       accessibilityLabel={accessibilityLabel ?? title}
-      testID={`menu-${variant}`}
+      testID={`menu-${testIdVariant}`}
       style={({ pressed }) => [
         styles.menuButton,
         v.button,
-        pressed && styles.menuButtonPressed,
-        Platform.OS === 'web' && { cursor: 'pointer' as any },
+        !disabled && pressed && styles.menuButtonPressed,
+        Platform.OS === 'web' && !disabled && { cursor: 'pointer' as any },
       ]}
     >
       <View
@@ -128,6 +128,7 @@ function MenuButton({
           styles.buttonIconContainer,
           { backgroundColor: v.iconBg },
           variant === 'prism' && styles.prismIconContainer,
+          variant === 'spire_locked' && styles.lockedIconContainer,
         ]}
       >
         <Icon name={icon} size={26} color={v.iconColor} />
@@ -144,7 +145,7 @@ function MenuButton({
         <Text
           style={[
             styles.menuButtonSubtext,
-            { color: v.textColor, opacity: variant === 'tutorial' || variant === 'prism' ? 0.88 : 0.72 },
+            { color: v.textColor, opacity: variant === 'prism' ? 0.88 : 0.74 },
           ]}
         >
           {subtitle}
@@ -158,60 +159,103 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectAdventure,
   onSelectSpire,
   onSelectPrism,
+  showPrismLabs = false,
   onSelectFreeplay,
-  onSelectTutorial,
   onSelectOptions,
-  onResumeGame,
 }) => {
-  const hasSavedGame = SavedGameStorage.hasSavedGame();
-  const savedGame = hasSavedGame ? SavedGameStorage.load() : null;
-  const [mascotIndex, setMascotIndex] = React.useState(0);
+  const adventureSave = React.useMemo(() => {
+    try {
+      return loadAdventureSave();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const initialMascotIdx = React.useMemo(() => {
+    const idx = adventureSave
+      ? CHARACTERS.findIndex(c => c.name === adventureSave.selectedFighter)
+      : -1;
+    return idx >= 0 ? idx : 0;
+  }, [adventureSave]);
+
+  const [mascotIndex, setMascotIndex] = React.useState(initialMascotIdx);
 
   // The Adventure button says where you are: a first invitation, or the foe that is waiting for you
   const adventure = React.useMemo(() => {
+    if (!adventureSave) {
+      return { title: 'Adventure', subtitle: 'Free your caged friends · Map, foes & stars', isFresh: false };
+    }
     try {
-      const save = loadAdventureSave();
-      const stars = totalStars(save);
-      if (stars === 0 && Object.keys(save.plays).length === 0) {
+      const stars = totalStars(adventureSave);
+      if (stars === 0 && Object.keys(adventureSave.plays).length === 0) {
         return { title: 'Play', subtitle: STORY_TAGLINE, isFresh: true };
       }
-      const next = getFrontierLevel(save);
-      return { title: 'Continue', subtitle: `${next.id} · ${levelFoe(next).name} is waiting   ★ ${stars}`, isFresh: false };
+      const next = getFrontierLevel(adventureSave);
+      return {
+        title: 'Continue',
+        subtitle: `${next.id} · ${levelFoe(next).name} is waiting   ★ ${stars}`,
+        isFresh: false,
+      };
     } catch {
       return { title: 'Adventure', subtitle: 'Free your caged friends · Map, foes & stars', isFresh: false };
     }
-  }, []);
+  }, [adventureSave]);
 
   const spire = React.useMemo(() => {
     try {
       const active = loadSpireRun();
-      if (active && active.phase !== 'defeat' && active.phase !== 'victory') {
+      const hasActiveRun = Boolean(active && active.phase !== 'defeat' && active.phase !== 'victory');
+      const meta = loadSpireMeta();
+      const unlocked = isSummitUnlocked(
+        adventureSave ?? { stars: {} },
+        meta,
+        hasActiveRun
+      );
+      if (!unlocked) {
+        return {
+          unlocked: false,
+          title: 'Starfall Summit',
+          subtitle: `Unlocks after ${SUMMIT_UNLOCK_LEVEL_ID} · World 1 Boss`,
+          badge: 'LOCKED',
+        };
+      }
+      if (hasActiveRun && active) {
         const actLabel = active.endless ? `Endless A${active.act}` : `Act ${active.act}`;
         return {
+          unlocked: true,
           title: 'Starfall Summit',
           subtitle: `Resume ${actLabel} · Floor ${active.floor} · ♥ ${active.hearts}/${active.maxHearts}`,
           badge: 'LIVE RUN',
         };
       }
-      const meta = loadSpireMeta();
       if (meta.totalRuns > 0) {
         return {
+          unlocked: true,
           title: 'Starfall Summit',
           subtitle: `Roguelike Climb · Best Fl ${meta.bestFloor} · ${meta.victories} Win${meta.victories === 1 ? '' : 's'}`,
           badge: meta.highestAscensionUnlocked > 0 ? `A${meta.highestAscensionUnlocked}` : 'ROGUELIKE',
         };
       }
+      return {
+        unlocked: true,
+        title: 'Starfall Summit',
+        subtitle: 'Climb where the star fell · 3-Act Roguelike & Endless',
+        badge: 'ROGUELIKE',
+      };
     } catch {
-      // ignore storage errors
+      return {
+        unlocked: false,
+        title: 'Starfall Summit',
+        subtitle: `Unlocks after ${SUMMIT_UNLOCK_LEVEL_ID} · World 1 Boss`,
+        badge: 'LOCKED',
+      };
     }
-    return {
-      title: 'Starfall Summit',
-      subtitle: 'Climb where the star fell · 3-Act Roguelike & Endless',
-      badge: 'ROGUELIKE',
-    };
-  }, []);
+  }, [adventureSave]);
+
+  const prismVisible = Boolean(onSelectPrism && LabsStorage.isEnabled(showPrismLabs));
 
   const prism = React.useMemo(() => {
+    if (!prismVisible) return null;
     try {
       const active = loadPrismRun();
       if (active && active.phase !== 'defeat' && active.phase !== 'victory') {
@@ -227,7 +271,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
         return {
           title: 'Prism Deck',
           subtitle: `Turn-Based Combo Roguelike · Best A${meta.bestAnte} · ${meta.victories} Win${meta.victories === 1 ? '' : 's'}`,
-          badge: 'TURN-BASED',
+          badge: 'LABS',
         };
       }
     } catch {
@@ -236,13 +280,11 @@ const MainMenu: React.FC<MainMenuProps> = ({
     return {
       title: 'Prism Deck',
       subtitle: 'Turn-Based Combo Roguelike · Daily & Endless',
-      badge: 'TURN-BASED',
+      badge: 'LABS',
     };
-  }, []);
+  }, [prismVisible]);
 
-  const mascotCharacter = savedGame?.characterName
-    ? CHARACTERS.find(c => c.name === savedGame.characterName) ?? CHARACTERS[0]
-    : CHARACTERS[mascotIndex % CHARACTERS.length];
+  const mascotCharacter = CHARACTERS[mascotIndex % CHARACTERS.length];
 
   return (
     <View style={styles.container}>
@@ -258,7 +300,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
             size={56}
             interactive
             onPet={(type) => {
-              if (type === 'dizzy_joy' && !savedGame) {
+              if (type === 'dizzy_joy') {
                 setMascotIndex(i => (i + 1) % CHARACTERS.length);
               }
             }}
@@ -269,15 +311,6 @@ const MainMenu: React.FC<MainMenuProps> = ({
         </View>
 
         <View style={styles.menuSection}>
-          {hasSavedGame && onResumeGame && savedGame && (
-            <MenuButton
-              onPress={onResumeGame}
-              variant="resume"
-              icon="lorc/return-arrow"
-              title="Resume Game"
-              subtitle={`Round ${savedGame.round} - ${savedGame.characterName}`}
-            />
-          )}
           <MenuButton
             onPress={onSelectAdventure}
             variant="adventure"
@@ -287,18 +320,25 @@ const MainMenu: React.FC<MainMenuProps> = ({
             badge={adventure.isFresh ? 'START HERE' : undefined}
             accessibilityLabel={`Adventure: ${adventure.title}`}
           />
+
           {onSelectSpire && (
             <MenuButton
-              onPress={onSelectSpire}
-              variant="spire"
-              icon="lorc/mountaintop"
+              onPress={spire.unlocked ? onSelectSpire : undefined}
+              disabled={!spire.unlocked}
+              variant={spire.unlocked ? 'spire' : 'spire_locked'}
+              icon={spire.unlocked ? 'lorc/mountaintop' : 'lorc/padlock'}
               title={spire.title}
               subtitle={spire.subtitle}
               badge={spire.badge}
-              accessibilityLabel={`Starfall Summit: ${spire.subtitle}`}
+              accessibilityLabel={
+                spire.unlocked
+                  ? `Starfall Summit: ${spire.subtitle}`
+                  : `Starfall Summit locked: ${spire.subtitle}`
+              }
             />
           )}
-          {onSelectPrism && (
+
+          {prismVisible && prism && onSelectPrism && (
             <MenuButton
               onPress={onSelectPrism}
               variant="prism"
@@ -309,56 +349,37 @@ const MainMenu: React.FC<MainMenuProps> = ({
               accessibilityLabel={`Prism Deck: ${prism.subtitle}`}
             />
           )}
+
           <MenuButton
             onPress={onSelectFreeplay}
             variant="freeplay"
             icon="lorc/archery-target"
             title="Free Play"
-            subtitle="No timer, practice mode"
+            subtitle="1-tap practice · No clock, no hearts"
           />
-          {/* Tutorial and Options side by side - smaller buttons */}
-          <View style={styles.secondaryButtonsRow}>
-            <Pressable
-              onPress={() => {
-                triggerHaptic('light');
-                playSound('click');
-                onSelectTutorial();
-              }}
-              accessibilityLabel="Tutorial"
-              testID="menu-tutorial"
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                styles.tutorialButtonSmall,
-                pressed && styles.menuButtonPressed,
-                Platform.OS === 'web' && { cursor: 'pointer' as any },
-              ]}
-            >
-              <Icon name="lorc/open-book" size={18} color={COLORS.canvasWhite} />
-              <Text style={styles.secondaryButtonText}>Tutorial</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                triggerHaptic('light');
-                playSound('click');
-                onSelectOptions();
-              }}
-              accessibilityLabel="Options"
-              testID="menu-options"
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                styles.optionsButtonSmall,
-                pressed && styles.menuButtonPressed,
-                Platform.OS === 'web' && { cursor: 'pointer' as any },
-              ]}
-            >
-              <Icon name="lorc/gear-hammer" size={18} color={COLORS.slateCharcoal} />
-              <Text style={[styles.secondaryButtonText, { color: COLORS.slateCharcoal }]}>Options</Text>
-            </Pressable>
-          </View>
+
+          <Pressable
+            onPress={() => {
+              triggerHaptic('light');
+              playSound('click');
+              onSelectOptions();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Options"
+            testID="menu-options"
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              styles.optionsButtonSmall,
+              pressed && styles.menuButtonPressed,
+              Platform.OS === 'web' && { cursor: 'pointer' as any },
+            ]}
+          >
+            <Icon name="lorc/gear-hammer" size={18} color={COLORS.slateCharcoal} />
+            <Text style={[styles.secondaryButtonText, { color: COLORS.slateCharcoal }]}>Options</Text>
+          </Pressable>
         </View>
 
         <View style={styles.bottomSection}>
-          {/* Discord Section - Even smaller */}
           <Pressable
             onPress={() => {
               triggerHaptic('light');
@@ -443,15 +464,20 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.985 }],
     opacity: 0.92,
   },
-  resumeButton: {
-    backgroundColor: COLORS.logicTeal,
-  },
   adventureButton: {
     backgroundColor: COLORS.actionYellow,
   },
   spireButton: {
     backgroundColor: COLORS.logicTeal,
     borderColor: COLORS.slateCharcoal,
+  },
+  spireLockedButton: {
+    backgroundColor: '#EDE7DC',
+    borderColor: '#9E968A',
+    borderStyle: 'dashed',
+  },
+  lockedIconContainer: {
+    borderColor: '#9E968A',
   },
   prismButton: {
     backgroundColor: '#0F3D2E',
@@ -462,10 +488,6 @@ const styles = StyleSheet.create({
   },
   freeplayButton: {
     backgroundColor: COLORS.canvasWhite,
-  },
-  tutorialButton: {
-    backgroundColor: COLORS.tutorialBlue,
-    borderColor: COLORS.slateCharcoal,
   },
   optionsButton: {
     backgroundColor: COLORS.paperBeige,
@@ -519,13 +541,7 @@ const styles = StyleSheet.create({
     opacity: 0.72,
     flexShrink: 1,
   },
-  // Secondary buttons row (Tutorial & Options side by side)
-  secondaryButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
   secondaryButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -533,12 +549,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
     paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 14,
     gap: 6,
     minHeight: 44,
-  },
-  tutorialButtonSmall: {
-    backgroundColor: COLORS.tutorialBlue,
   },
   optionsButtonSmall: {
     backgroundColor: COLORS.paperBeige,

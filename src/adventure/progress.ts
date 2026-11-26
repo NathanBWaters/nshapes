@@ -29,10 +29,12 @@ import { LEGACY_WEAPON_RARITY, WEAPONS } from '@/utils/gameDefinitions';
 import { SKILL_NODES, skillTreeOf, CAMPAIGN_STARS } from './data/skillTrees';
 import { BOUNTIES } from './data/bounties';
 import { EVOLUTION_RECIPES } from './data/evolutions';
-import { CAMPAIGN_FEATURES, FEATURES } from './data/features';
+import { CAMPAIGN_FEATURES, FEATURES, SUMMIT_UNLOCK_LEVEL_ID, isSummitUnlocked } from './data/features';
 import { starRewards, unlockablesOf } from './data/rewards';
 import { inFamily, newRecipesArmedBy } from './engine/sources';
 import { tuningSpent, weaponLevel } from './weaponLevels';
+
+export { SUMMIT_UNLOCK_LEVEL_ID, isSummitUnlocked };
 
 /**
  * The shape of a brand-new save. Loading fills anything a stored save lacks
@@ -534,7 +536,9 @@ export type Unlock =
   | { kind: 'evolution'; id: string; star: number; firstEvolution: boolean }
   | { kind: 'feature'; feature: UnlockableFeature; star: number }
   /** A secret side path opened on the map (`star` = the stars on its parent that opened it) */
-  | { kind: 'path'; levelId: string; star: number };
+  | { kind: 'path'; levelId: string; star: number }
+  /** Starfall Summit roguelike mode unlocked upon clearing SUMMIT_UNLOCK_LEVEL_ID */
+  | { kind: 'summit'; star: number };
 
 export interface ResultApplication {
   save: AdventureSave;
@@ -714,6 +718,15 @@ export const applyLevelResult = (
       next = unlockFeature(next, f.id);
       unlocks.push({ kind: 'feature', feature: f.id, star: 1 });
     }
+  }
+
+  // Starfall Summit opens on the first clear of the milestone boss (default 1-10)
+  if (
+    level.id === SUMMIT_UNLOCK_LEVEL_ID &&
+    (before.stars[SUMMIT_UNLOCK_LEVEL_ID] ?? 0) < 1 &&
+    (next.stars[SUMMIT_UNLOCK_LEVEL_ID] ?? 0) >= 1
+  ) {
+    unlocks.push({ kind: 'summit', star: 1 });
   }
 
   const completedBounties: BountyDef[] = [];

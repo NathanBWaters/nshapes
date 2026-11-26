@@ -125,10 +125,10 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Summit E2E
       if (vp.width === 375) await maybeShot(page, '01-main-menu-375');
     }
 
-    // Clicking Starfall Summit launches SpireSetup directly
+    // /dev/spire bypasses the 1-10 milestone gate and launches SpireSetup directly
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.getByTestId('menu-spire').click();
-    await expect(page.getByTestId('spire-setup')).toBeVisible({ timeout: 10000 });
+    await page.goto('/dev/spire');
+    await expect(page.getByTestId('spire-setup')).toBeVisible({ timeout: 15000 });
     await expect(page.getByTestId('spire-setup')).toContainText('STARFALL SUMMIT');
     await expect(page.getByTestId('spire-setup')).not.toContainText(/spire/i);
     await expect(page.getByTestId('spire-start-climb')).toBeVisible();

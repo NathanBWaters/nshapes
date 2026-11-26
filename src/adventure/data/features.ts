@@ -4,7 +4,23 @@
  * or a `clearLevel`. Grants, reveals, the preview chip and the Field Guide all
  * read this table.
  */
-import type { CampaignFeatureDef, UnlockableFeature } from '../types';
+import type { AdventureSave, CampaignFeatureDef, UnlockableFeature } from '../types';
+
+/** Campaign milestone required before Starfall Summit unlocks on MainMenu. */
+export const SUMMIT_UNLOCK_LEVEL_ID = '1-10';
+
+/**
+ * Starfall Summit opens once the World 1 Boss (`SUMMIT_UNLOCK_LEVEL_ID`) is cleared,
+ * or automatically for existing players who already have Summit runs / an active climb.
+ */
+export const isSummitUnlocked = (
+  save: Pick<AdventureSave, 'stars'>,
+  spireMeta?: { totalRuns?: number } | null,
+  hasActiveRun?: boolean,
+): boolean =>
+  (save.stars[SUMMIT_UNLOCK_LEVEL_ID] ?? 0) >= 1 ||
+  (spireMeta?.totalRuns ?? 0) > 0 ||
+  Boolean(hasActiveRun);
 
 export const CAMPAIGN_FEATURES: Record<UnlockableFeature, CampaignFeatureDef> = {
   coins: {

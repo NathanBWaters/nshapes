@@ -97,6 +97,8 @@ const screenFor = (d: FeatureDestination, returnLevelId?: string): Screen => ({ 
 
 interface Props {
   onExit: () => void;
+  /** Optional shortcut when Starfall Summit unlocks on clearing 1-10 */
+  onOpenSummit?: () => void;
   autoPlayer?: boolean;
   /** Dev: start with a specific save */
   initialSave?: AdventureSave;
@@ -117,6 +119,7 @@ interface Props {
 
 const AdventureMode: React.FC<Props> = ({
   onExit,
+  onOpenSummit,
   autoPlayer,
   initialSave,
   coldOpen = true,
@@ -480,7 +483,13 @@ const AdventureMode: React.FC<Props> = ({
       />
     );
   } else if (screen.kind === 'guide') {
-    body = <FieldGuide save={save} onClose={() => setScreen({ kind: 'map' })} />;
+    body = (
+      <FieldGuide
+        save={save}
+        onReplayWalkthrough={() => startRun(MAIN_LEVELS[0])}
+        onClose={() => setScreen({ kind: 'map' })}
+      />
+    );
   }
 
   return (
@@ -542,6 +551,7 @@ const AdventureMode: React.FC<Props> = ({
             }
           }}
           onShowPath={id => { clearPendingTimers(); setScreen({ kind: 'map', highlight: id }); }}
+          onOpenSummit={onOpenSummit ? () => { clearPendingTimers(); music.stop(); onOpenSummit(); } : undefined}
           onDone={() => {
             setUnlocks([]);
             setUnlocksRevealed(true);

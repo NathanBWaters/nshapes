@@ -124,10 +124,12 @@ interface Props {
   onOpenFeature?: (feature: UnlockableFeature) => void;
   /** Go and look at a secret path on the map (offered on the last reveal only) */
   onShowPath?: (levelId: string) => void;
+  /** Jump straight into Starfall Summit when unlocked (offered on the last reveal only) */
+  onOpenSummit?: () => void;
   onDone: () => void;
 }
 
-const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onSwapCharm, onEquipArcana, onOpenFeature, onShowPath, onDone }) => {
+const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onSwapCharm, onEquipArcana, onOpenFeature, onShowPath, onOpenSummit, onDone }) => {
   // (read from the context, so the reveal also stands alone where there is no safe-area provider)
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
   const reduced = useReducedMotion();
@@ -205,6 +207,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const evo = u.kind === 'evolution' ? EVOLUTION_RECIPES.find(r => r.id === u.id) ?? null : null;
   const feature = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature] : null;
   const path = u.kind === 'path' ? getLevel(u.levelId) : null;
+  const isSummit = u.kind === 'summit';
   const last = i + 1 >= unlocks.length;
   // Offered only when it is the final reveal, so the remaining ones are not skipped
   const openFeature = feature?.open && last && onOpenFeature ? feature.open : null;
@@ -301,7 +304,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const charmEquipped = u.kind === 'weapon' && equippedCharms(save).includes(u.id);
   const charmsFull = equippedCharms(save).length >= charmSlots(save);
   const arcanaEquipped = u.kind === 'arcana' && equippedArcanaOf(save).includes(u.id);
-  const sourceLabel = path ? 'Secret' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
+  const sourceLabel = path ? 'Secret' : isSummit ? 'New mode' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
   return (
     <Modal visible transparent animationType="none">
       {/* Closing, it no longer takes taps: the results' buttons are usable from the first frame of the way out */}
@@ -364,9 +367,11 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 text={
                   fighter
                     ? `${companionVoice(fighter.name).hello} I’m ${fighter.name}. Pick me whenever you like!`
-                    : u.kind === 'weapon' && u.firstWeapon
-                      ? `${companionVoice(save.selectedFighter).cheer} Our first weapon! I clipped it on. It fires by itself.`
-                      : `${companionVoice(save.selectedFighter).cheer} Look what we won!`
+                    : isSummit
+                      ? `${companionVoice(save.selectedFighter).cheer} Starfall Summit is open — climb where the star fell!`
+                      : u.kind === 'weapon' && u.firstWeapon
+                        ? `${companionVoice(save.selectedFighter).cheer} Our first weapon! I clipped it on. It fires by itself.`
+                        : `${companionVoice(save.selectedFighter).cheer} Look what we won!`
                 }
                 style={{ alignSelf: 'stretch' }}
               />
@@ -487,6 +492,17 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                     <Text style={st.note}>Equip or remove Arcana anytime at Camp or on the level preview sheet.</Text>
                   </>
                 )}
+                {isSummit && (
+                  <>
+                    <Text style={[st.rowBody, { color: '#5EEAD4', fontWeight: '800' }]}>
+                      Starfall Summit Unlocked — climb where the star fell!
+                    </Text>
+                    <Text style={st.rowBody}>
+                      Draft Armory weapons, forge Evolutions, parry bosses, and push into Endless across a 3-Act roguelike climb.
+                    </Text>
+                    <Text style={st.note}>Now unlocked on the Main Menu whenever you want a fresh run.</Text>
+                  </>
+                )}
               </View>
               </Rise>
             </Animated.View>
@@ -603,6 +619,27 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 <Text style={st.secondaryText}>Keep current rules for now</Text>
               </TouchableOpacity>
             </>
+          )
+        )}
+        {isSummit && (
+          last && onOpenSummit ? (
+            <>
+              <TouchableOpacity
+                testID="unlock-primary"
+                onPress={() => { sfx('confirm'); onDone(); onOpenSummit(); }}
+                style={st.cta}
+                activeOpacity={0.85}
+              >
+                <Text style={st.ctaText}>Climb Starfall Summit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Stay on results</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
+            </TouchableOpacity>
           )
         )}
             </Rise>

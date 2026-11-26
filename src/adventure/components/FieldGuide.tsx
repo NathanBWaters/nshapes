@@ -44,6 +44,8 @@ const featureEntry = (save: AdventureSave, id: UnlockableFeature): Entry => {
 interface Props {
   save: AdventureSave;
   onClose: () => void;
+  /** Launch 1-1 (First Light) with guided hints to review how Sets work */
+  onReplayWalkthrough?: () => void;
 }
 
 type GuideTab = 'mechanics' | 'fighters' | 'recipes';
@@ -54,7 +56,7 @@ const TAB_META: Record<GuideTab, { icon: React.ComponentProps<typeof Icon>['name
   recipes: { icon: 'lorc/crystal-shine', title: 'RECIPE GUIDE' },
 };
 
-const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
+const FieldGuide: React.FC<Props> = ({ save, onClose, onReplayWalkthrough }) => {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<GuideTab>('mechanics');
   const [open, setOpen] = useState<MechanicDef | null>(null);
@@ -134,6 +136,29 @@ const FieldGuide: React.FC<Props> = ({ save, onClose }) => {
 
       {tab === 'mechanics' && (
         <ScrollView contentContainerStyle={[st.grid, { paddingBottom: insets.bottom + 24 }]}>
+          {onReplayWalkthrough && (
+            <TouchableOpacity
+              testID="guide-replay-walkthrough"
+              accessibilityRole="button"
+              accessibilityLabel="Replay 1-1 Walkthrough"
+              onPress={() => {
+                sfx('confirm');
+                onReplayWalkthrough();
+              }}
+              style={st.walkthroughCard}
+              activeOpacity={0.85}
+            >
+              <View style={st.walkthroughIcon}>
+                <Icon name="lorc/crossed-swords" size={22} color={INK} />
+              </View>
+              <View style={st.walkthroughTextWrap}>
+                <Text style={st.walkthroughTitle}>Replay 1-1 Walkthrough</Text>
+                <Text style={st.walkthroughSub}>
+                  Play First Light (2 traits, 9 cards, live guided hints) to review the Set rule.
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
           {entries.map(({ m, where, known: k }) => (
             <TouchableOpacity key={m.id} disabled={!k} onPress={() => setOpen(m)} style={[st.entry, !k && st.entryLocked]} activeOpacity={0.85}>
               <View style={st.icon}><Icon name={k ? m.icon : 'lorc/uncertainty'} size={28} color={k ? INK : '#A69F95'} /></View>
@@ -292,6 +317,11 @@ const st = StyleSheet.create({
   tabOn: { backgroundColor: COLORS.actionYellow, borderColor: INK, borderBottomWidth: 4 },
   tabText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: INK },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 12, justifyContent: 'center', maxWidth: 620, alignSelf: 'center' },
+  walkthroughCard: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.actionYellow, borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, padding: 12, minHeight: 56 },
+  walkthroughIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.canvasWhite, borderWidth: 1.5, borderColor: INK, alignItems: 'center', justifyContent: 'center' },
+  walkthroughTextWrap: { flex: 1, minWidth: 0, gap: 2 },
+  walkthroughTitle: { fontSize: 14, fontWeight: '900', color: INK, flexShrink: 1 },
+  walkthroughSub: { fontSize: 12, lineHeight: 16, fontWeight: '600', color: INK, opacity: 0.85, flexShrink: 1 },
   entry: { width: 104, alignItems: 'center', gap: 4, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, padding: 8 },
   entryLocked: { borderColor: TONE.spentEdge, backgroundColor: '#EFEAE2' },
   icon: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },

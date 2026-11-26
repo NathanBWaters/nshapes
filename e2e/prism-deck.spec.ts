@@ -233,7 +233,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     const errors = attachErrorCollector(page);
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    await page.goto('/');
+    await page.goto('/?labs=1');
     await expect(page.getByTestId('menu-prism')).toBeVisible({ timeout: 20_000 });
 
     // Verify updated subtitle & absence of legacy "Match-Three" copy
@@ -307,7 +307,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     const errors = attachErrorCollector(page);
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    await page.goto('/');
+    await page.goto('/?labs=1');
     await expect(page.getByTestId('menu-prism')).toBeVisible({ timeout: 20_000 });
     await page.getByTestId('menu-prism').click();
     await expect(page.getByTestId('prism-tutorial-skip')).toBeVisible({ timeout: 10_000 });
@@ -657,8 +657,8 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     const errors = attachErrorCollector(page);
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    // Navigate directly to deep link → bypasses tutorial and pre-populates seed SHARE99
-    await page.goto('/?mode=prism&seed=SHARE99');
+    // Navigate directly to deep link (with Labs enabled) → bypasses tutorial and pre-populates seed SHARE99
+    await page.goto('/?labs=1&mode=prism&seed=SHARE99');
     await expect(page.getByTestId('prism-seed-input')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId('prism-seed-input')).toHaveValue('SHARE99');
     await expect(page.getByText('Loaded shared Seed "SHARE99"', { exact: false })).toBeVisible();
@@ -731,11 +731,11 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
 
     // 1. Small Phone 320x568 Main Menu audit
     await page.setViewportSize({ width: 320, height: 568 });
-    await page.goto('/');
+    await page.goto('/?labs=1');
     await expect(page.getByTestId('menu-prism')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(300);
     await assertNoHorizontalOverflowOrClipping(page, 'Main Menu (320x568)');
-    for (const id of ['menu-adventure', 'menu-spire', 'menu-prism', 'menu-freeplay', 'menu-tutorial', 'menu-options']) {
+    for (const id of ['menu-adventure', 'menu-spire', 'menu-prism', 'menu-freeplay', 'menu-options']) {
       const box = await page.getByTestId(id).boundingBox();
       expect(box, `${id} should have bounding box on 320x568`).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(-1);

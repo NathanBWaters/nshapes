@@ -23,7 +23,7 @@ import { isFighterTrial, unlockablesOf, type Unlockable } from '../data/rewards'
 import { DARK } from './ui';
 
 export interface UnlockableDisplay {
-  kind: Unlockable['kind'] | 'path';
+  kind: Unlockable['kind'] | 'path' | 'summit';
   /** Its name on the unlock reveal */
   name: string;
   /** Its label in a reward row once earned */
@@ -118,6 +118,20 @@ const describePath = (levelId: string): UnlockableDisplay => {
 
 export const describeUnlock = (u: Unlock): UnlockableDisplay => {
   if (u.kind === 'path') return describePath(u.levelId);
+  if (u.kind === 'summit') {
+    return {
+      kind: 'summit',
+      name: 'Starfall Summit',
+      revealed: 'Starfall Summit',
+      secret: 'New game mode',
+      bountySecret: 'New game mode',
+      icon: 'lorc/mountaintop',
+      headline: 'Starfall Summit Unlocked!',
+      tease: 'Starfall Summit Unlocked — climb where the star fell!',
+      badge: 'ROGUELIKE MODE UNLOCKED',
+      accent: '#16AA98',
+    };
+  }
   if (u.kind === 'weapon' && u.level !== undefined) {
     const d = describeUnlockable(u);
     return {

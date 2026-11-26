@@ -1405,7 +1405,6 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
         onSelectAdventure={() => {}}
         onSelectSpire={() => {}}
         onSelectFreeplay={() => {}}
-        onSelectTutorial={() => {}}
         onSelectOptions={() => {}}
       />
     );
@@ -1417,7 +1416,6 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
         onSelectAdventure={() => {}}
         onSelectSpire={() => {}}
         onSelectFreeplay={() => {}}
-        onSelectTutorial={() => {}}
         onSelectOptions={() => {}}
       />
     );
@@ -1429,7 +1427,6 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
         onSelectAdventure={() => {}}
         onSelectSpire={() => {}}
         onSelectFreeplay={() => {}}
-        onSelectTutorial={() => {}}
         onSelectOptions={() => {}}
       />
     );

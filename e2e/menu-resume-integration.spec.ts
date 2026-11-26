@@ -95,6 +95,11 @@ test.describe('Main Menu ↔ Mode Resume Integration (Summit & Adventure)', () =
     // Start from Main Menu: enter Adventure Mode (fresh player → Story → Skip → 1-1 live fight)
     await page.goto('/');
     await expect(page.getByTestId('menu-adventure')).toBeVisible({ timeout: 20000 });
+    // Day-1 focus: Starfall Summit starts as a locked teaser pill until 1-10 is cleared; Prism Deck & legacy Tutorial are hidden
+    await expect(page.getByTestId('menu-spire')).toContainText('Unlocks after 1-10');
+    await expect(page.getByTestId('menu-prism')).toHaveCount(0);
+    await expect(page.getByTestId('menu-tutorial')).toHaveCount(0);
+
     await page.getByTestId('menu-adventure').click();
     await expect(page.getByTestId('story-skip')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('story-skip').click();
@@ -107,11 +112,9 @@ test.describe('Main Menu ↔ Mode Resume Integration (Summit & Adventure)', () =
     await page.getByLabel('Back to menu').click();
     await expect(page.getByTestId('menu-adventure')).toBeVisible({ timeout: 10000 });
 
-    // Start a Starfall Summit run, enter Floor 1 preview, then leave to Main Menu
-    await page.getByTestId('menu-spire').click();
-    await expect(page.getByTestId('spire-start-climb')).toBeVisible({ timeout: 10000 });
-    await page.getByTestId('spire-start-climb').click();
-    await expect(page.getByTestId('spire-map')).toBeVisible({ timeout: 10000 });
+    // Start a Starfall Summit run via /dev/spire (bypasses campaign gate), enter Floor 1 preview, then leave to Main Menu
+    await page.goto('/dev/spire?start=true&seed=24');
+    await expect(page.getByTestId('spire-map')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('spire-node-a1-r0-c0').click({ force: true });
     await expect(page.getByTestId('spire-encounter-preview')).toBeVisible({ timeout: 10000 });
     await page.getByTestId('spire-back-menu').click();

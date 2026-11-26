@@ -98,7 +98,9 @@ const PrismSetup: React.FC<PrismSetupProps> = ({
   const isWide = width >= 720;
 
   const [tab, setTab] = useState<'standard' | 'daily'>(initialTab);
+  const canUseLabUnlock = typeof __DEV__ !== 'undefined' && __DEV__;
   const [unlockAllLab, setUnlockAllLab] = useState(false);
+  const effectiveUnlockAll = canUseLabUnlock && unlockAllLab;
   const [selectedDeck, setSelectedDeck] = useState<StarterDeckId>(() =>
     initialDeckId && (isDeckUnlocked(initialDeckId, meta) || initialDeckId === 'classic_prism')
       ? initialDeckId
@@ -436,38 +438,40 @@ const PrismSetup: React.FC<PrismSetupProps> = ({
 
           {tab === 'standard' ? (
             <View style={styles.sectionStack}>
-              {/* Starter Deck Picker Header + Lab Toggle */}
+              {/* Starter Deck Picker Header + Dev-only Lab Toggle */}
               <View style={styles.sectionHeaderRow}>
                 <Text style={styles.sectionLabel}>STARTER DECKS (5)</Text>
-                <Pressable
-                  testID="prism-unlock-all"
-                  onPress={() => {
-                    playPrismSfx('click');
-                    setUnlockAllLab(prev => !prev);
-                  }}
-                  style={({ pressed }) => [
-                    styles.labToggle,
-                    unlockAllLab && styles.labToggleActive,
-                    pressed && styles.pressed,
-                    Platform.OS === 'web' && { cursor: 'pointer' as never },
-                  ]}
-                >
-                  <Icon
-                    name="lorc/fizzing-flask"
-                    size={14}
-                    color={unlockAllLab ? PRISM_COLORS.feltBg : PRISM_COLORS.gold}
-                  />
-                  <Text style={[styles.labToggleText, unlockAllLab && styles.labToggleTextActive]}>
-                    Lab: Unlock All {unlockAllLab ? 'ON' : 'OFF'}
-                  </Text>
-                </Pressable>
+                {canUseLabUnlock && (
+                  <Pressable
+                    testID="prism-unlock-all"
+                    onPress={() => {
+                      playPrismSfx('click');
+                      setUnlockAllLab(prev => !prev);
+                    }}
+                    style={({ pressed }) => [
+                      styles.labToggle,
+                      effectiveUnlockAll && styles.labToggleActive,
+                      pressed && styles.pressed,
+                      Platform.OS === 'web' && { cursor: 'pointer' as never },
+                    ]}
+                  >
+                    <Icon
+                      name="lorc/fizzing-flask"
+                      size={14}
+                      color={effectiveUnlockAll ? PRISM_COLORS.feltBg : PRISM_COLORS.gold}
+                    />
+                    <Text style={[styles.labToggleText, effectiveUnlockAll && styles.labToggleTextActive]}>
+                      Lab: Unlock All {effectiveUnlockAll ? 'ON' : 'OFF'}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
 
               {/* 5 Starter Decks Grid */}
               <View style={[styles.deckGrid, isWide && styles.deckGridWide]}>
                 {STARTER_DECKS.map(deck => {
                   const naturallyUnlocked = isDeckUnlocked(deck.id, meta);
-                  const unlocked = naturallyUnlocked || unlockAllLab;
+                  const unlocked = naturallyUnlocked || effectiveUnlockAll;
                   const active = selectedDeck === deck.id;
                   const wins = meta.deckWins[deck.id] ?? 0;
 
@@ -508,7 +512,7 @@ const PrismSetup: React.FC<PrismSetupProps> = ({
                                 <Text style={styles.winPillText}>★ {wins}</Text>
                               </View>
                             )}
-                            {!naturallyUnlocked && unlockAllLab && (
+                            {!naturallyUnlocked && effectiveUnlockAll && (
                               <View style={styles.labPill}>
                                 <Text style={styles.labPillText}>LAB</Text>
                               </View>

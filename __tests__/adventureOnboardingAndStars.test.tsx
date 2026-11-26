@@ -630,7 +630,7 @@ describe('Adventure first minutes: the screens', () => {
 
   it('the main menu invites a new player to Play and takes a returning one back to their next foe', () => {
     const noop = () => {};
-    const props = { onSelectAdventure: noop, onSelectFreeplay: noop, onSelectTutorial: noop, onSelectOptions: noop };
+    const props = { onSelectAdventure: noop, onSelectFreeplay: noop, onSelectOptions: noop };
     const fresh = render(wrap(<MainMenu {...props} />));
     expect(fresh.getByTestId('menu-adventure').props.accessibilityLabel).toBe('Adventure: Play');
     expect(fresh.getByText('A star fell. The critters went wild.')).toBeTruthy();
