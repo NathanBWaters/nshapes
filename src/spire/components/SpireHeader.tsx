@@ -63,6 +63,11 @@ const SpireHeader: React.FC<Props> = ({
             <Text style={st.actText} numberOfLines={1}>
               {actTag} · FL {run.floor}
             </Text>
+            {run.isDaily && (
+              <View style={st.dailyPill} testID="spire-header-daily-badge">
+                <Text style={st.dailyText}>DAILY</Text>
+              </View>
+            )}
             {run.ascension > 0 && (
               <View style={st.ascPill}>
                 <Text style={st.ascText}>A{run.ascension}</Text>
@@ -176,6 +181,18 @@ const st = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     color: COLORS.actionYellow,
+  },
+  dailyPill: {
+    backgroundColor: '#7C3AED',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  dailyText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    color: COLORS.canvasWhite,
+    letterSpacing: 0.4,
   },
   heartsRow: {
     flexDirection: 'row',

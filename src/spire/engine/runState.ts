@@ -18,9 +18,18 @@ import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { damagePerMinute } from '@/adventure/history';
 import { mergeSpireDamageLedger } from '@/adventure/engine/damageStory';
 import { createRng, type Rng } from '@/adventure/engine/rng';
+import type { SummitDailyMutatorId } from '@/adventure/dailySeed';
 import { ascensionModifiers } from '../data/ascensions';
+import { dailyMutatorModifiers, getDailySummitConfig } from '../data/dailyModifiers';
 import { generateSpireEncounter, SPIRE_WEAPON_POOL, STARTER_KITS } from '../data/encounters';
 import { getSpireEvent, SPIRE_EVENTS } from '../data/events';
+import {
+  buildFocusedWeaponPool,
+  FOCUSED_POOL_WEIGHT,
+  isValidThemePackId,
+  rollSummitThemePacks,
+  type SummitThemePackId,
+} from '../data/themePacks';
 import { generateActMap, reachableNodeIds } from './mapGen';
 import { newEvolutionsArmedBy } from './bridge';
 import type {
@@ -70,7 +79,10 @@ const recordSeenEnemy = (seenEnemies: readonly string[] | undefined, name?: stri
  *    candidates. If all 6 held weapons are already Lv 5, fill cleanly with fresh swap candidates.
  */
 export const rollSynergyWeapons = (
-  run: Pick<SpireRun, 'weapons' | 'weaponLevels' | 'act'>,
+  run: Pick<SpireRun, 'weapons' | 'weaponLevels' | 'act'> & {
+    fighter?: CharacterName;
+    themePacks?: readonly SummitThemePackId[];
+  },
   rng: Rng,
   count: number,
   minLevel = 1,
@@ -109,32 +121,54 @@ export const rollSynergyWeapons = (
   }
   const newCount = Math.min(unheld.length, count - upgradeSlots);
 
-  const synergy = unheld.filter(id => newEvolutionsArmedBy(run, id).length > 0);
+  // 80/20 Theme-Pack Focused Pool + Wildcard Weighting (`[GP-25]`):
+  // All 62 Summit weapons (64 Armory minus 2 XP-only) remain rollable via the 20% Wildcard slice.
+  const focusedSet = run.fighter
+    ? buildFocusedWeaponPool(run.fighter, run.themePacks)
+    : null;
+
   const chosen: string[] = [];
+  const pickFromPool = (pool: readonly string[], slotIndex: number, isWildcard: boolean): string | null => {
+    const avail = pool.filter(id => !chosen.includes(id));
+    if (avail.length === 0) return null;
 
-  // Prefer an Evolution-arming synergy weapon (biasing toward engine roles)
-  if (newCount > 0 && synergy.length > 0 && rng.next() < 0.82) {
-    const synEngine = synergy.filter(id => ENGINE_ROLES.has(weaponRole(id)));
-    const synPool = synEngine.length > 0 && rng.next() < 0.75 ? synEngine : synergy;
-    chosen.push(rng.pick(synPool));
-  }
-
-  // Remaining new weapon slots: bias toward build-defining engine weapons while keeping support in the mix
-  const availEngine = rng.shuffle(unheld.filter(id => !chosen.includes(id) && ENGINE_ROLES.has(weaponRole(id))));
-  const availSupport = rng.shuffle(unheld.filter(id => !chosen.includes(id) && !ENGINE_ROLES.has(weaponRole(id))));
-  let eIdx = 0;
-  let sIdx = 0;
-  while (chosen.length < newCount) {
-    const needEngine = chosen.length === 1 || rng.next() < 0.72;
-    if (needEngine && eIdx < availEngine.length) {
-      chosen.push(availEngine[eIdx++]);
-    } else if (sIdx < availSupport.length) {
-      chosen.push(availSupport[sIdx++]);
-    } else if (eIdx < availEngine.length) {
-      chosen.push(availEngine[eIdx++]);
-    } else {
-      break;
+    if (slotIndex === 0 && !isWildcard) {
+      const synergy = avail.filter(id => newEvolutionsArmedBy(run, id).length > 0);
+      if (synergy.length > 0 && rng.next() < 0.82) {
+        const synEngine = synergy.filter(id => ENGINE_ROLES.has(weaponRole(id)));
+        const synPool = synEngine.length > 0 && rng.next() < 0.75 ? synEngine : synergy;
+        return rng.pick(synPool);
+      }
     }
+
+    if (isWildcard) {
+      // Wildcard 20% slice samples cleanly across all off-pack Armory weapons so every weapon stays discoverable
+      return rng.pick(avail);
+    }
+
+    const availEngine = avail.filter(id => ENGINE_ROLES.has(weaponRole(id)));
+    const availSupport = avail.filter(id => !ENGINE_ROLES.has(weaponRole(id)));
+    const needEngine = slotIndex === 1 || rng.next() < 0.72;
+    if (needEngine && availEngine.length > 0) return rng.pick(availEngine);
+    if (availSupport.length > 0) return rng.pick(availSupport);
+    if (availEngine.length > 0) return rng.pick(availEngine);
+    return rng.pick(avail);
+  };
+
+  for (let slot = 0; slot < newCount; slot++) {
+    let pick: string | null = null;
+    if (focusedSet) {
+      const focusedAvail = unheld.filter(id => !chosen.includes(id) && focusedSet.has(id));
+      const wildcardAvail = unheld.filter(id => !chosen.includes(id) && !focusedSet.has(id));
+      const useFocused =
+        focusedAvail.length > 0 &&
+        (wildcardAvail.length === 0 || rng.next() < FOCUSED_POOL_WEIGHT);
+      pick = pickFromPool(useFocused ? focusedAvail : wildcardAvail, slot, !useFocused);
+    } else {
+      pick = pickFromPool(unheld, slot, false);
+    }
+    if (!pick) break;
+    chosen.push(pick);
   }
 
   const actFloor = run.act >= 3 ? 3 : run.act === 2 ? 2 : 1;
@@ -352,7 +386,9 @@ const bumpUpgrade = (run: SpireRun, id: SpireShopUpgradeKind, delta = 1): SpireR
 });
 
 const shopPriceScaleOf = (run: SpireRun): number =>
-  ascensionModifiers(run.ascension).shopPriceScale * (1 + (run.act - 1) * 0.12);
+  ascensionModifiers(run.ascension).shopPriceScale *
+  dailyMutatorModifiers(run.dailyMutatorId).shopPriceScale *
+  (1 + (run.act - 1) * 0.12);
 
 export const standaloneWeaponShopPrice = (
   weaponId: string,
@@ -509,17 +545,43 @@ const buildShopState = (
 
 // ─── Start Run ──────────────────────────────────────────────────────────────
 
-export const createSpireRun = (fighter: CharacterName, ascension: number, seed: number): SpireRun => {
+export interface CreateSpireRunOptions {
+  themePacks?: readonly SummitThemePackId[];
+  daily?: { dateKey: string; mutatorId: SummitDailyMutatorId };
+}
+
+export const createSpireRun = (
+  fighter: CharacterName,
+  ascension: number,
+  seed: number,
+  options?: CreateSpireRunOptions
+): SpireRun => {
   const kit = STARTER_KITS[fighter];
   const asc = ascensionModifiers(ascension);
+  const dailyMutatorId = options?.daily?.mutatorId;
+  const dailyMod = dailyMutatorModifiers(dailyMutatorId);
   const rng = createRng((seed ^ 0x51a2fa11) >>> 0);
-  const maxHearts = Math.max(3, kit.maxHearts + asc.maxHeartsDelta);
-  const coins = Math.max(20, kit.startingCoins + asc.startingCoinsDelta);
-  const map = generateActMap(1, seed, ascension, [], []);
+  const maxHearts = Math.max(3, kit.maxHearts + asc.maxHeartsDelta + dailyMod.maxHeartsDelta);
+  const coins = Math.max(20, kit.startingCoins + asc.startingCoinsDelta + dailyMod.startingCoinsDelta);
+  const map = generateActMap(1, seed, ascension, [], [], dailyMutatorId);
+
+  const rolledPacks = rollSummitThemePacks(fighter, rng, dailyMod.forcedThemePack);
+  const requestedPacks = (options?.themePacks ?? []).filter(isValidThemePackId);
+  const uniqueRequested = [...new Set(requestedPacks)];
+  let themePacks: SummitThemePackId[] =
+    uniqueRequested.length >= 2 ? uniqueRequested.slice(0, 2) : [...rolledPacks];
+  if (dailyMod.forcedThemePack && !themePacks.includes(dailyMod.forcedThemePack)) {
+    themePacks = [dailyMod.forcedThemePack, themePacks[0]];
+  }
+
+  const upgrades: Record<string, number> = {
+    evolution_lab: 1, // Starfall Summit starts with Evolution Lab active so Catalysts flow early!
+    ...(dailyMod.heavyHitterBonus > 0 ? { heavy_hitter: dailyMod.heavyHitterBonus } : {}),
+  };
 
   return {
     version: 1,
-    id: `spire-${seed}-${ascension}`,
+    id: options?.daily ? `spire-daily-${options.daily.dateKey}-${seed}` : `spire-${seed}-${ascension}`,
     seed,
     rngState: rng.state,
     fighter,
@@ -531,11 +593,11 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
     hearts: maxHearts,
     maxHearts,
     coins,
-    startingHints: kit.startingHints,
-    startingGraces: kit.startingGraces,
-    upgrades: { evolution_lab: 1 }, // Starfall Summit starts with Evolution Lab active so Catalysts flow early!
-    extraEvolutionCap: 0,
-    extraEvolutionLikelihood: 6,
+    startingHints: kit.startingHints + dailyMod.startingHintsDelta,
+    startingGraces: kit.startingGraces + dailyMod.startingGracesDelta,
+    upgrades,
+    extraEvolutionCap: dailyMod.extraEvolutionCap,
+    extraEvolutionLikelihood: 6 + dailyMod.extraEvolutionLikelihood,
     weapons: [kit.starterWeapon, kit.bonusWeapon],
     weaponLevels: { [kit.starterWeapon]: 2, [kit.bonusWeapon]: 2 },
     arcana: [],
@@ -545,6 +607,15 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
     activeEncounter: null,
     seenEvents: [],
     seenEnemies: [],
+    themePacks,
+    seenSpecificCounter: false,
+    ...(options?.daily
+      ? {
+          isDaily: true,
+          dailyDate: options.daily.dateKey,
+          dailyMutatorId: options.daily.mutatorId,
+        }
+      : {}),
     reward: null,
     shop: null,
     campfire: null,
@@ -567,6 +638,14 @@ export const createSpireRun = (fighter: CharacterName, ascension: number, seed: 
       eventsResolved: 0,
     },
   };
+};
+
+/** Create a deterministic Daily Starfall Summit climb for the given UTC `YYYY-MM-DD` date. */
+export const createDailySpireRun = (dateKey?: string | null): SpireRun => {
+  const cfg = getDailySummitConfig(dateKey);
+  return createSpireRun(cfg.fighter, cfg.ascension, cfg.seed, {
+    daily: { dateKey: cfg.dateKey, mutatorId: cfg.mutator.id },
+  });
 };
 
 // ─── Node Selection ─────────────────────────────────────────────────────────
@@ -658,11 +737,13 @@ export const selectSpireNode = (run: SpireRun, nodeId: string): SpireRun => {
 
 export const startSpireEncounter = (run: SpireRun): SpireRun => {
   if (run.phase !== 'preview' || !run.activeEncounter) return run;
+  const hasSpecificCounter = run.activeEncounter.parry.counter.kind !== 'any';
   return {
     ...run,
     prevNodeId: undefined,
     phase: 'fight',
     seenEnemies: recordSeenEnemy(run.seenEnemies, run.activeEncounter.name),
+    seenSpecificCounter: run.seenSpecificCounter || hasSpecificCounter,
   };
 };
 
@@ -772,7 +853,9 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
 
   // Carry over remaining hearts (clamped 1..maxHearts) + small post-fight breather on Bosses!
   const remainingHearts = Math.max(1, Math.min(run.maxHearts, fight.hearts ?? run.hearts));
-  const parryBonusCoins = fight.parriesLanded * 4 + fight.perfectParriesLanded * 6;
+  const dailyParryBonus = dailyMutatorModifiers(run.dailyMutatorId).parryBonusCoins;
+  const parryBonusCoins =
+    fight.parriesLanded * (4 + dailyParryBonus) + fight.perfectParriesLanded * 6;
   // Cap per-fight bonus coins so overkill_harvest / coin builds stay rewarding without flooding the Summit shop with 5,000+ unspendable gold
   const maxFightCoins = 75 + run.act * 25;
   const fightCoinBonus = Math.min(maxFightCoins, Math.round(fight.coins * 0.5));
@@ -906,7 +989,7 @@ export const advanceToNextAct = (run: SpireRun): SpireRun => {
   // Between Acts: restore 50% of missing hearts + +1 Max Heart reward for defeating an Act Boss!
   const nextMaxHearts = run.maxHearts + 1;
   const healed = Math.min(nextMaxHearts, run.hearts + Math.max(2, Math.ceil((nextMaxHearts - run.hearts) * 0.6)));
-  const map = generateActMap(nextAct, run.seed, run.ascension, run.seenEvents, run.seenEnemies ?? []);
+  const map = generateActMap(nextAct, run.seed, run.ascension, run.seenEvents, run.seenEnemies ?? [], run.dailyMutatorId);
   return {
     ...run,
     act: nextAct,
@@ -1415,6 +1498,7 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
           id: `ambush-${next.floor}`,
           excludeEnemies,
           mustExcludeEnemies: mapEnemies,
+          dailyMutatorId: next.dailyMutatorId,
         });
         next = { ...next, seenEnemies: recordSeenEnemy(next.seenEnemies, enc.name) };
         ambushEncounter = { ...enc, coinReward: enc.coinReward * 2 };

@@ -10,7 +10,7 @@
  *
  * HP curves are empirically validated via `__tests__/spireBalance.test.ts`.
  */
-import type { CharacterName } from '@/types';
+import type { CharacterName, Color, Shape } from '@/types';
 import type { BiomeId, LevelHazards, ParryRequirement, ParrySpec } from '@/adventure/types';
 import { getBiome } from '@/adventure/data/biomes';
 import { getLevel } from '@/adventure/data/levels';
@@ -18,8 +18,13 @@ import { PARRY_RULES, resolveParrySpec } from '@/adventure/data/parry';
 import { WEAPON_ROLES, weaponRole } from '@/adventure/data/weaponRoles';
 import { ALL_ARMORY_WEAPON_IDS } from '@/adventure/data/armory';
 import type { Rng } from '@/adventure/engine/rng';
+import type { SummitDailyMutatorId } from '@/adventure/dailySeed';
 import type { SpireEncounter } from '../types';
 import { ascensionModifiers } from './ascensions';
+import { dailyMutatorModifiers } from './dailyModifiers';
+
+const SIMPLE_PARRY_COLORS: readonly Color[] = ['red', 'green', 'purple'];
+const SIMPLE_PARRY_SHAPES: readonly Shape[] = ['oval', 'squiggle', 'diamond'];
 
 /** Every valid Armory weapon id shared between Adventure Mode and Starfall Summit. */
 export const SPIRE_WEAPON_POOL: readonly string[] = ALL_ARMORY_WEAPON_IDS;
@@ -190,8 +195,8 @@ export const canonicalLevelEnemyName = (levelId: string): string => {
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
   1: { start: 105, end: 280, eliteMult: 1.4, boss: 630, timer: 100, skirmishTimer: 72 },
-  2: { start: 515, end: 1150, eliteMult: 1.3, boss: 2080, timer: 110, skirmishTimer: 94 },
-  3: { start: 1960, end: 4120, eliteMult: 1.26, boss: 7600, timer: 112, skirmishTimer: 106 },
+  2: { start: 540, end: 1240, eliteMult: 1.32, boss: 2350, timer: 110, skirmishTimer: 94 },
+  3: { start: 2300, end: 5100, eliteMult: 1.3, boss: 11200, timer: 112, skirmishTimer: 106 },
 };
 
 const actCurve = (act: number) => {
@@ -217,10 +222,12 @@ export const generateSpireEncounter = (o: {
   id: string;
   excludeEnemies?: ReadonlySet<string>;
   mustExcludeEnemies?: ReadonlySet<string>;
+  dailyMutatorId?: SummitDailyMutatorId;
 }): SpireEncounter => {
-  const { act, row, kind, ascension, rng, id, excludeEnemies, mustExcludeEnemies } = o;
+  const { act, row, kind, ascension, rng, id, excludeEnemies, mustExcludeEnemies, dailyMutatorId } = o;
   const theme = actThemeFor(act);
   const asc = ascensionModifiers(ascension);
+  const dailyMod = dailyMutatorModifiers(dailyMutatorId);
   const curve = actCurve(act);
 
   const actBucket: 1 | 2 | 3 = act <= 1 ? 1 : act === 2 ? 2 : 3;
@@ -271,20 +278,37 @@ export const generateSpireEncounter = (o: {
         : curve.skirmishTimer + (act === 1 ? row * 3 : 0);
   const timer = Math.max(60, Math.round(timerBase * asc.timerScale));
 
-  // Early Act 1 Skirmishes default to timing-based parry unless Ascension 5+ or late Act 1
-  const useDefaultTiming =
-    act === 1 && kind === 'skirmish' && row <= 2 && !asc.earlySpecificCounters;
-  const counter: ParryRequirement = useDefaultTiming
-    ? { kind: 'any' }
-    : (srcParry?.counter ?? { kind: 'any' });
+  // Smooth Summit Parry Onboarding (`[GP-25]`):
+  // - Act 1 Skirmishes rows 0..2: pure timing `{ kind: 'any' }` (unless Ascension 5+)
+  // - Act 1 Skirmishes rows 3..5: simple single-trait `{ kind: 'color' | 'shape' }` counters (unless Ascension 5+)
+  // - Act 1 Elites, Act 1 Boss, and Act 2+: full canonical trait-count/number/Rainbow counters
+  const rawCounter: ParryRequirement = srcParry?.counter ?? { kind: 'any' };
+  let counter: ParryRequirement;
+  if (act === 1 && kind === 'skirmish' && row <= 2 && !asc.earlySpecificCounters) {
+    counter = { kind: 'any' };
+  } else if (act === 1 && kind === 'skirmish' && row >= 3 && row <= 5 && !asc.earlySpecificCounters) {
+    if (rawCounter.kind === 'color' || rawCounter.kind === 'shape') {
+      counter = rawCounter;
+    } else {
+      counter =
+        rng.next() < 0.5
+          ? { kind: 'color', color: rng.pick(SIMPLE_PARRY_COLORS) }
+          : { kind: 'shape', shape: rng.pick(SIMPLE_PARRY_SHAPES) };
+    }
+  } else {
+    counter = rawCounter;
+  }
+
   const baseCooldown = srcParry?.cooldownMs ?? (kind === 'boss' ? 12000 : kind === 'elite' ? 12500 : 13500);
   const baseWindup = srcParry?.windupMs ?? (counter.kind === 'any' ? 15000 : 15500);
+  const effectiveParryScale = asc.parrySpeedScale * dailyMod.parrySpeedScale;
   const parry: ParrySpec = {
+    ...(srcParry ?? {}),
     attackName: srcParry?.attackName ?? 'Wild Lunge',
     icon: srcParry?.icon ?? 'lorc/sword-clash',
     counter,
-    cooldownMs: Math.max(8000, Math.round(baseCooldown * asc.parrySpeedScale)),
-    windupMs: Math.max(10500, Math.round(baseWindup * asc.parrySpeedScale)),
+    cooldownMs: Math.max(8000, Math.round(baseCooldown * effectiveParryScale)),
+    windupMs: Math.max(10500, Math.round(baseWindup * effectiveParryScale)),
     perfectWindowMs: srcParry?.perfectWindowMs ?? PARRY_RULES.perfectWindowMs,
     penalty: srcParry?.penalty === 'time' ? 'time' : 'heart',
   };
@@ -296,12 +320,14 @@ export const generateSpireEncounter = (o: {
 
   const shadingSurge = act >= 3 || (act === 2 && kind === 'boss');
 
-  const coinReward =
+  const rawCoinReward =
     kind === 'boss'
       ? 70 + act * 20
       : kind === 'elite'
         ? 52 + act * 16
         : 28 + act * 10 + row * 3;
+  const coinReward =
+    kind === 'elite' ? Math.round(rawCoinReward * dailyMod.eliteCoinScale) : rawCoinReward;
 
   const difficulty = Math.min(
     5,

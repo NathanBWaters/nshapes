@@ -11,6 +11,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { COLORS } from '@/utils/colors';
+import { useColorblind } from '@/utils/cardColors';
+import { formatParryCounterMeta } from '@/utils/cardVisuals';
 import { getBiome } from '@/adventure/data/biomes';
 import { foeDisplay } from '@/adventure/data/foes';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
@@ -18,16 +20,26 @@ import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice } from '@/adventure/c
 import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn, Skulls, TONE } from '@/adventure/components/ui';
 import { spireEncounterLoadout } from '../engine/bridge';
 import type { SpireEncounter, SpireRun } from '../types';
+import SpireBeltBar from './SpireBeltBar';
 
 interface Props {
   run: SpireRun;
   encounter: SpireEncounter;
   onFight: () => void;
   onInspectBuild: () => void;
+  onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onBack?: () => void;
 }
 
-const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onInspectBuild, onBack }) => {
+const SpireEncounterPreview: React.FC<Props> = ({
+  run,
+  encounter,
+  onFight,
+  onInspectBuild,
+  onReorderWeapon,
+  onBack,
+}) => {
+  const colorblind = useColorblind();
   const biome = getBiome(encounter.biome);
   const foeDef = encounter.foes[0];
   const foe = foeDisplay(foeDef);
@@ -36,6 +48,11 @@ const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onIns
   const totalClock = loadout.timer ?? encounter.timer;
   const isBoss = encounter.kind === 'boss';
   const isElite = encounter.kind === 'elite';
+  const isFirstSpecificCounter =
+    encounter.parry.counter.kind !== 'any' && !run.seenSpecificCounter;
+  const counterMeta = isFirstSpecificCounter
+    ? formatParryCounterMeta(encounter.parry.counter, colorblind)
+    : null;
 
   return (
     <View style={[st.root, { backgroundColor: biome.colors.sky }]} testID="spire-encounter-preview">
@@ -87,9 +104,29 @@ const SpireEncounterPreview: React.FC<Props> = ({ run, encounter, onFight, onIns
             {/* Shared Set-Parry Pre-Battle Briefing */}
             <ParryPreviewCard spec={encounter.parry} testID="spire-preview-parry" />
 
+            {/* First-time Specific Counter-Parry 1-Line Callout (`[GP-25]`) */}
+            {counterMeta && (
+              <View style={st.firstCounterCallout} testID="spire-first-counter-callout">
+                <Icon name="lorc/shield-reflect" size={15} color="#92400E" />
+                <Text style={st.firstCounterText}>
+                  FIRST COUNTER-PARRY: Match a {counterMeta.shortLabel} Trio while the foe winds up to break their strike for 2× Stagger!
+                </Text>
+              </View>
+            )}
+
             {encounter.shadingSurge && <ShadingSurgeNotice />}
 
             {encounter.hazards && <HazardNotices hazards={encounter.hazards} testID="spire-preview-hazards" />}
+
+            {onReorderWeapon && run.weapons.includes('understudy') && run.weapons.length > 1 && (
+              <SpireBeltBar
+                run={run}
+                onReorder={onReorderWeapon}
+                title="PRE-FIGHT BELT ORDER"
+                compact
+                testIDPrefix="spire-preview-belt"
+              />
+            )}
 
             {/* Loot Preview */}
             <View style={st.lootRow}>
@@ -141,6 +178,24 @@ const st = StyleSheet.create({
   tauntBox: { backgroundColor: COLORS.canvasWhite, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 6 },
   tauntText: { fontSize: 12, fontStyle: 'italic', fontWeight: '700', color: INK },
   content: { padding: 12, gap: 10 },
+  firstCounterCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#D97706',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  firstCounterText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#92400E',
+    lineHeight: 16,
+  },
   lootRow: { backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 10, gap: 6 },
   lootLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
   lootPills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },

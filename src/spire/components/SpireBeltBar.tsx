@@ -78,8 +78,9 @@ const SpireBeltBar: React.FC<Props> = ({
           const lv = run.weaponLevels[w.id] ?? 1;
           const sellPrice = spireWeaponSellValue(w.id, lv);
           const isInspected = inspected?.id === w.id;
+          const isCopiedTarget = understudyIdx > 0 && i === understudyIdx - 1;
           return (
-            <View key={`${w.id}-${i}`} style={[st.row, isInspected && st.rowFocused]}>
+            <View key={`${w.id}-${i}`} style={[st.row, isInspected && st.rowFocused, isCopiedTarget && st.rowCopiedTarget]}>
               <Text style={st.slotNum}>{i + 1}</Text>
               <View style={st.chipWrap}>
                 <WeaponChip
@@ -94,11 +95,18 @@ const SpireBeltBar: React.FC<Props> = ({
                 />
               </View>
 
+              {isCopiedTarget && (
+                <View style={st.copiedPill} testID={`${testIDPrefix}-copied-target`}>
+                  <Text style={st.copiedPillText}>COPIED</Text>
+                </View>
+              )}
+
               {onReorder && held.length > 1 && (
                 <View style={st.moveGroup}>
                   <TouchableOpacity
                     testID={`${testIDPrefix}-left-${i}`}
                     disabled={i === 0}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     onPress={() => {
                       sfx('click');
                       onReorder(i, i - 1);
@@ -112,6 +120,7 @@ const SpireBeltBar: React.FC<Props> = ({
                   <TouchableOpacity
                     testID={`${testIDPrefix}-right-${i}`}
                     disabled={i === held.length - 1}
+                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                     onPress={() => {
                       sfx('click');
                       onReorder(i, i + 1);
@@ -244,6 +253,24 @@ const st = StyleSheet.create({
     borderColor: INK,
     backgroundColor: TONE.selected,
   },
+  rowCopiedTarget: {
+    borderColor: '#D97706',
+    backgroundColor: '#FFFBEB',
+  },
+  copiedPill: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#D97706',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+  },
+  copiedPillText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    color: '#92400E',
+  },
   slotNum: {
     width: 16,
     textAlign: 'center',
@@ -262,8 +289,8 @@ const st = StyleSheet.create({
     gap: 4,
   },
   moveBtn: {
-    width: 26,
-    height: 26,
+    width: 30,
+    height: 30,
     borderRadius: 6,
     borderWidth: 1.5,
     borderColor: INK,

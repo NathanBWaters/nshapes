@@ -191,7 +191,15 @@ const SpireShop: React.FC<Props> = ({
                   bg: TONE.evoReady,
                 });
               }
-              if (clashes.length > 0) badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+              if (clashes.length > 0) {
+                badges.push({
+                  text:
+                    clashes.length > 1
+                      ? `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()} +${clashes.length - 1}`
+                      : `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()}`,
+                  bg: '#B45309',
+                });
+              }
               const btnLabel = offer.sold
                 ? 'SOLD'
                 : needsSwap
@@ -509,8 +517,8 @@ const st = StyleSheet.create({
   lockSummary: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EFF6FF', borderRadius: 8, borderWidth: 1.5, borderColor: '#2563EB', paddingHorizontal: 8, paddingVertical: 5 },
   lockSummaryText: { flex: 1, fontSize: 11, fontWeight: '800', color: '#1D4ED8' },
   evoCallouts: { gap: 4, paddingLeft: 4 },
-  clashBox: { backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1.5, borderColor: '#B91C1C', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
-  clashText: { fontSize: 11.5, fontWeight: '800', color: '#991B1B', lineHeight: 16 },
+  clashBox: { backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
+  clashText: { fontSize: 11.5, fontWeight: '800', color: '#92400E', lineHeight: 16 },
   purgeBtn: { backgroundColor: '#FEE2E2', borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: '#991B1B', paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center' },
   purgeBtnText: { fontSize: 11, fontWeight: '900', color: '#991B1B', fontVariant: ['tabular-nums'] },
   forgePicker: { backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: '#D97706', padding: 10, gap: 8 },

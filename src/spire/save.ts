@@ -8,7 +8,9 @@
  */
 import { storage } from '@/utils/storage';
 import { mergeDiscoveredEvolutions } from '@/adventure/save';
+import { diffUtcDays, isValidDateKey } from '@/adventure/dailySeed';
 import { MAX_ASCENSION } from './data/ascensions';
+import { computeSpireRating } from './engine/share';
 import type { SpireMeta, SpireRun } from './types';
 
 // Legacy MMKV key names preserved for backwards compatibility with existing Starfall Summit saves
@@ -32,6 +34,12 @@ export const createInitialSpireMeta = (): SpireMeta => ({
   bestBiggestHit: 0,
   bestDpm: 0,
   fighterWins: {},
+  bestSummitRating: 0,
+  dailyStreak: 0,
+  bestDailyStreak: 0,
+  lastDailyDate: null,
+  completedDailyDates: [],
+  dailyBestRatings: {},
 });
 
 /** Hydrate a parsed SpireMeta record (supports version 1 and best-effort future `version > 1`). */
@@ -43,11 +51,40 @@ export const hydrateSpireMeta = (parsed: unknown): SpireMeta | null => {
   const fighterWins = isRecord(parsed.fighterWins)
     ? (parsed.fighterWins as SpireMeta['fighterWins'])
     : defaults.fighterWins;
+  const completedDailyDates = Array.isArray(parsed.completedDailyDates)
+    ? parsed.completedDailyDates.filter((d): d is string => typeof d === 'string' && isValidDateKey(d))
+    : [];
+  const dailyBestRatings: Record<string, number> = {};
+  if (isRecord(parsed.dailyBestRatings)) {
+    for (const [k, v] of Object.entries(parsed.dailyBestRatings)) {
+      if (isValidDateKey(k) && typeof v === 'number' && Number.isFinite(v)) {
+        dailyBestRatings[k] = Math.max(0, Math.round(v));
+      }
+    }
+  }
   return {
     ...defaults,
     ...(parsed as Partial<SpireMeta>),
     version: 1,
     fighterWins,
+    bestSummitRating:
+      typeof parsed.bestSummitRating === 'number' && Number.isFinite(parsed.bestSummitRating)
+        ? Math.max(0, Math.round(parsed.bestSummitRating))
+        : 0,
+    dailyStreak:
+      typeof parsed.dailyStreak === 'number' && Number.isFinite(parsed.dailyStreak)
+        ? Math.max(0, Math.floor(parsed.dailyStreak))
+        : 0,
+    bestDailyStreak:
+      typeof parsed.bestDailyStreak === 'number' && Number.isFinite(parsed.bestDailyStreak)
+        ? Math.max(0, Math.floor(parsed.bestDailyStreak))
+        : 0,
+    lastDailyDate:
+      typeof parsed.lastDailyDate === 'string' && isValidDateKey(parsed.lastDailyDate)
+        ? parsed.lastDailyDate
+        : null,
+    completedDailyDates,
+    dailyBestRatings,
   };
 };
 
@@ -168,6 +205,40 @@ export const recordSpireRunEnd = (run: SpireRun, victory: boolean): SpireMeta =>
   const prev = loadSpireMeta();
   const nextWins = { ...prev.fighterWins };
   if (victory) nextWins[run.fighter] = (nextWins[run.fighter] ?? 0) + 1;
+
+  const runRating = computeSpireRating(run, victory).rating;
+  const bestSummitRating = Math.max(prev.bestSummitRating ?? 0, runRating);
+
+  let dailyStreak = prev.dailyStreak ?? 0;
+  let bestDailyStreak = prev.bestDailyStreak ?? 0;
+  let lastDailyDate = prev.lastDailyDate ?? null;
+  const completedDailyDates = [...(prev.completedDailyDates ?? [])];
+  const dailyBestRatings = { ...(prev.dailyBestRatings ?? {}) };
+
+  if (run.isDaily && run.dailyDate && isValidDateKey(run.dailyDate)) {
+    const dayKey = run.dailyDate;
+    dailyBestRatings[dayKey] = Math.max(dailyBestRatings[dayKey] ?? 0, runRating);
+    if (victory) {
+      if (!completedDailyDates.includes(dayKey)) {
+        completedDailyDates.push(dayKey);
+      }
+      if (!lastDailyDate) {
+        dailyStreak = 1;
+        lastDailyDate = dayKey;
+      } else if (lastDailyDate !== dayKey) {
+        const delta = diffUtcDays(lastDailyDate, dayKey);
+        if (delta === 1) {
+          dailyStreak += 1;
+          lastDailyDate = dayKey;
+        } else if (delta > 1) {
+          dailyStreak = 1;
+          lastDailyDate = dayKey;
+        }
+      }
+      bestDailyStreak = Math.max(bestDailyStreak, dailyStreak);
+    }
+  }
+
   const next: SpireMeta = {
     ...prev,
     totalRuns: prev.totalRuns + (run.endless && !victory ? 0 : 1),
@@ -181,6 +252,12 @@ export const recordSpireRunEnd = (run: SpireRun, victory: boolean): SpireMeta =>
     bestBiggestHit: Math.max(prev.bestBiggestHit, run.stats.biggestHit),
     bestDpm: Math.max(prev.bestDpm, run.stats.peakDpm),
     fighterWins: nextWins,
+    bestSummitRating,
+    dailyStreak,
+    bestDailyStreak,
+    lastDailyDate,
+    completedDailyDates,
+    dailyBestRatings,
   };
   writeSpireMeta(next);
   return next;

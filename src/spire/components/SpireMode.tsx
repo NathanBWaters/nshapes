@@ -52,6 +52,7 @@ import {
   claimTreasure,
   completeSpireBattle,
   createSpireRun,
+  type CreateSpireRunOptions,
   enterEndlessSpire,
   finishSpireRewards,
   leaveCampfire,
@@ -106,9 +107,24 @@ interface Props {
   autoPlayer?: boolean;
   /** Dev helper: skip setup and immediately open a fresh run */
   initialRun?: SpireRun | null;
+  /** Optional URL deep-link parameters (`?mode=summit&seed=<N>&daily=YYYY-MM-DD&fighter=...&asc=...`) */
+  initialSeed?: number;
+  initialDaily?: boolean;
+  initialDailyDate?: string;
+  initialFighter?: CharacterName;
+  initialAscension?: number;
 }
 
-const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
+const SpireMode: React.FC<Props> = ({
+  onExit,
+  autoPlayer,
+  initialRun,
+  initialSeed,
+  initialDaily,
+  initialDailyDate,
+  initialFighter,
+  initialAscension,
+}) => {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const [prefs, setPrefs] = useState(() => {
@@ -222,9 +238,14 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
     });
   }, []);
 
-  const handleStartNew = useCallback((fighter: CharacterName, ascension: number, seed: number) => {
+  const handleStartNew = useCallback((
+    fighter: CharacterName,
+    ascension: number,
+    seed: number,
+    options?: CreateSpireRunOptions
+  ) => {
     commitSpireFight('spire_new_run');
-    const fresh = createSpireRun(fighter, ascension, seed);
+    const fresh = createSpireRun(fighter, ascension, seed, options);
     setLastFight(null);
     setLastFightFeedback(null);
     updateRun(fresh);
@@ -329,6 +350,11 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
       <SpireSetup
         activeRun={savedRun}
         meta={meta}
+        initialTab={initialDaily ? 'daily' : 'standard'}
+        initialSeed={initialSeed}
+        initialFighter={initialFighter}
+        initialAscension={initialAscension}
+        initialDailyDate={initialDailyDate}
         onStartNew={handleStartNew}
         onResume={handleResume}
         onAbandonActive={handleAbandonActive}
@@ -474,6 +500,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           encounter={run.activeEncounter}
           onFight={() => updateRun(startSpireEncounter(run))}
           onInspectBuild={() => setBuildOpen(true)}
+          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
           onBack={run.prevNodeId !== undefined ? () => updateRun(cancelSpirePreview(run)) : undefined}
         />
       )}
@@ -494,6 +521,7 @@ const SpireMode: React.FC<Props> = ({ onExit, autoPlayer, initialRun }) => {
           onSkipArcana={() => updateRun(skipRewardArcana(run))}
           onClaimSkill={id => updateRun(claimRewardSkillNode(run, id))}
           onSkipSkill={() => updateRun(skipRewardSkillNode(run))}
+          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
           onContinue={handleFinishRewards}
         />
       )}

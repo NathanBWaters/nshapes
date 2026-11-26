@@ -34,6 +34,7 @@ import {
 } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS, REWARD_REROLL_COST, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireLastFightSnapshot, SpireRewardBundle, SpireRun } from '../types';
+import SpireBeltBar from './SpireBeltBar';
 import SpireSwapPicker from './SpireSwapPicker';
 
 interface Props {
@@ -51,6 +52,7 @@ interface Props {
   onSkipArcana: () => void;
   onClaimSkill: (nodeId: string) => void;
   onSkipSkill: () => void;
+  onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onContinue: () => void;
 }
 
@@ -69,6 +71,7 @@ const SpireRewardScreen: React.FC<Props> = ({
   onSkipArcana,
   onClaimSkill,
   onSkipSkill,
+  onReorderWeapon,
   onContinue,
 }) => {
   const reduced = useReducedMotion();
@@ -215,7 +218,13 @@ const SpireRewardScreen: React.FC<Props> = ({
                   });
                 }
                 if (clashes.length > 0) {
-                  badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+                  badges.push({
+                    text:
+                      clashes.length > 1
+                        ? `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()} +${clashes.length - 1}`
+                        : `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()}`,
+                    bg: '#B45309',
+                  });
                 }
                 return (
                   <View key={`${opt.weaponId}-${i}`} style={{ gap: 5 }}>
@@ -339,6 +348,16 @@ const SpireRewardScreen: React.FC<Props> = ({
           </View>
         )}
 
+        {onReorderWeapon && run.weapons.includes('understudy') && run.weapons.length > 1 && (
+          <SpireBeltBar
+            run={run}
+            onReorder={onReorderWeapon}
+            title="BELT ORDER"
+            compact
+            testIDPrefix="spire-reward-belt"
+          />
+        )}
+
         {onRateFun && (
           <RoundFunPrompt
             rating={funRating}
@@ -428,8 +447,8 @@ const st = StyleSheet.create({
   miniBtnText: { fontSize: 11, fontWeight: '800', color: INK },
   choiceList: { gap: 8 },
   evoCallouts: { gap: 4, paddingLeft: 4 },
-  clashBox: { backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1.5, borderColor: '#B91C1C', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
-  clashText: { fontSize: 11.5, fontWeight: '800', color: '#991B1B', lineHeight: 16 },
+  clashBox: { backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
+  clashText: { fontSize: 11.5, fontWeight: '800', color: '#92400E', lineHeight: 16 },
   confirmSkipBox: { backgroundColor: '#FFFBEB', borderRadius: 12, borderWidth: 2, borderColor: '#B45309', padding: 10, gap: 8 },
   confirmSkipHint: { fontSize: 12, fontWeight: '800', color: '#92400E', textAlign: 'center' },
   confirmSkipRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

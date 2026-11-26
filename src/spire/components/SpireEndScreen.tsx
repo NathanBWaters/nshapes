@@ -4,7 +4,7 @@
  * Reuses `FighterAvatar`, `WeaponAvatar`, `FightReplay`, and shared `ui.tsx`.
  */
 import React, { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon from '@/components/Icon';
@@ -12,6 +12,7 @@ import RoundFunPrompt from '@/components/RoundFunPrompt';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
+import { MONO_FONT } from '@/utils/fonts';
 import { buildDamageStory, buildSpireRunDamageStory } from '@/adventure/engine/damageStory';
 import BattleDamageStory from '@/adventure/components/BattleDamageStory';
 import FightReplay from '@/adventure/components/FightReplay';
@@ -20,7 +21,25 @@ import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui'
 import { sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
+import { computeSpireRating, formatSpireShareCard } from '../engine/share';
 import type { SpireLastFightSnapshot, SpireRun } from '../types';
+
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const Clipboard = await import('expo-clipboard');
+    if (Clipboard?.setStringAsync) {
+      await Clipboard.setStringAsync(text);
+      return true;
+    }
+  } catch {
+    // Clipboard unavailable
+  }
+  return false;
+};
 
 interface Props {
   run: SpireRun;
@@ -51,8 +70,16 @@ const SpireEndScreen: React.FC<Props> = ({
   const reduced = useReducedMotion();
   const [replayOpen, setReplayOpen] = useState(false);
   const [storyScope, setStoryScope] = useState<'climb' | 'final'>('climb');
+  const [copiedShare, setCopiedShare] = useState(false);
   const held = spireHeldWeapons(run);
   const builds = useMemo(() => buildSpireWeaponBuilds(run), [run]);
+  const rating = useMemo(() => computeSpireRating(run, victory), [run, victory]);
+  const shareCard = useMemo(() => formatSpireShareCard(run, victory), [run, victory]);
+  const handleCopyShare = async () => {
+    await copyToClipboard(shareCard);
+    sfx('click');
+    setCopiedShare(true);
+  };
   const climbStory = useMemo(
     () => buildSpireRunDamageStory(run.stats.sourceDamage, run.stats.floorLedger),
     [run.stats.sourceDamage, run.stats.floorLedger]
@@ -91,6 +118,38 @@ const SpireEndScreen: React.FC<Props> = ({
             mood={victory ? 'victory' : 'defeat'}
           />
         </PopIn>
+
+        {/* Summit Rating & GSP-Style Percentile Framing (`[TP-19]`) */}
+        <View style={st.ratingCard} testID="spire-end-rating">
+          <View style={st.ratingTop}>
+            <View style={[st.tierPill, { backgroundColor: rating.tierColor }]}>
+              <Text style={st.tierPillText}>{rating.tierName.toUpperCase()} TIER</Text>
+            </View>
+            {run.isDaily && run.dailyDate && (
+              <Text style={st.dailyTag}>DAILY · {run.dailyDate}</Text>
+            )}
+          </View>
+          <Text style={st.ratingValue}>
+            Summit Rating {rating.rating.toLocaleString('en-US')}
+          </Text>
+          <Text style={st.ratingPercentile}>
+            Outscored ~{rating.percentile}% of climbers
+          </Text>
+          <View style={st.ratingTrack}>
+            <View style={[st.ratingFill, { width: `${rating.percentile}%` }]} />
+          </View>
+          <View style={st.breakdownRow}>
+            <Text style={st.breakdownChip}>Floors +{rating.floorPoints}</Text>
+            <Text style={st.breakdownChip}>DPM +{rating.dpmPoints}</Text>
+            <Text style={st.breakdownChip}>Parries +{rating.parryPoints}</Text>
+            {rating.evolutionPoints > 0 && (
+              <Text style={st.breakdownChip}>Evos +{rating.evolutionPoints}</Text>
+            )}
+            {rating.ascensionMultiplier > 1 && (
+              <Text style={st.breakdownChip}>×{rating.ascensionMultiplier} Asc</Text>
+            )}
+          </View>
+        </View>
 
         {/* Cumulative Damage Story (Full Climb + optional Final Fight toggle) */}
         {activeStory && activeStory.totalDamage > 0 && (
@@ -157,6 +216,20 @@ const SpireEndScreen: React.FC<Props> = ({
           )}
         </View>
 
+        {/* Spoiler-Free Share Card + Seed URL (`[TP-19]`) */}
+        <View style={st.statsCard} testID="spire-end-share-card">
+          <Text style={st.sec}>SPOILER-FREE SHARE CARD</Text>
+          <Text style={st.sharePreview}>{shareCard}</Text>
+          <Btn
+            testID="spire-end-copy-share"
+            small
+            variant={copiedShare ? 'secondary' : 'primary'}
+            label={copiedShare ? 'Copied Share Card ✓' : 'Copy Share Card & Seed Link'}
+            icon="lorc/scroll-unfurled"
+            onPress={handleCopyShare}
+          />
+        </View>
+
         {onRateFun && (
           <RoundFunPrompt
             rating={funRating}
@@ -217,6 +290,18 @@ const st = StyleSheet.create({
   hero: { borderRadius: 16, borderWidth: 3, borderBottomWidth: 6, padding: 18, alignItems: 'center', gap: 8 },
   heroWin: { backgroundColor: DARK.panel, borderColor: COLORS.actionYellow },
   heroLose: { backgroundColor: '#2A181B', borderColor: '#DC2626' },
+  ratingCard: { backgroundColor: '#1E293B', borderRadius: 14, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 14, gap: 6, alignItems: 'center' },
+  ratingTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tierPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  tierPillText: { fontSize: 10, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 1 },
+  dailyTag: { fontSize: 10, fontWeight: '900', color: COLORS.actionYellow, letterSpacing: 0.8 },
+  ratingValue: { fontSize: 22, fontWeight: '900', color: COLORS.canvasWhite, fontVariant: ['tabular-nums'] },
+  ratingPercentile: { fontSize: 13, fontWeight: '800', color: '#99F6E4' },
+  ratingTrack: { width: '100%', height: 7, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.16)', overflow: 'hidden', marginTop: 2 },
+  ratingFill: { height: '100%', backgroundColor: COLORS.actionYellow, borderRadius: 999 },
+  breakdownRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5, marginTop: 3 },
+  breakdownChip: { fontSize: 10, fontWeight: '800', color: '#E2E8F0', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2, fontVariant: ['tabular-nums'] },
+  sharePreview: { backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 10, fontSize: 11, lineHeight: 16, color: INK, fontFamily: MONO_FONT },
   title: { fontSize: 26, fontWeight: '900', color: DARK.text, letterSpacing: 1, textAlign: 'center' },
   sub: { fontSize: 13, color: DARK.muted, textAlign: 'center', lineHeight: 19 },
   statsCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 14, gap: 10 },

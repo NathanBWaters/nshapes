@@ -11,8 +11,10 @@
  */
 import { createRng } from '@/adventure/engine/rng';
 import { foeDisplay } from '@/adventure/data/foes';
+import type { SummitDailyMutatorId } from '@/adventure/dailySeed';
 import type { SpireActMap, SpireNode, SpireNodeKind } from '../types';
 import { ascensionModifiers } from '../data/ascensions';
+import { dailyMutatorModifiers } from '../data/dailyModifiers';
 import { actThemeFor, generateSpireEncounter } from '../data/encounters';
 import { SPIRE_EVENTS } from '../data/events';
 
@@ -26,12 +28,15 @@ export const generateActMap = (
   seed: number,
   ascension: number,
   seenEvents: readonly string[] = [],
-  seenEnemies: readonly string[] = []
+  seenEnemies: readonly string[] = [],
+  dailyMutatorId?: SummitDailyMutatorId
 ): SpireActMap => {
   // Keep map RNG keyed on (seed, act) so the same Run Seed produces the same paired layout across Ascensions
   const rng = createRng((seed ^ (act * 0x9e3779b1)) >>> 0);
   const theme = actThemeFor(act);
   const asc = ascensionModifiers(ascension);
+  const dailyMod = dailyMutatorModifiers(dailyMutatorId);
+  const extraElites = asc.extraElites + dailyMod.extraElites;
 
   const mapUsedEnemies = new Set<string>(seenEnemies);
   const currentActEnemies = new Set<string>();
@@ -65,9 +70,9 @@ export const generateActMap = (
   const rowTemplates: SpireNodeKind[][] = [
     ['skirmish', 'skirmish', 'skirmish'],
     rng.shuffle<SpireNodeKind>(['skirmish', 'event', 'shop']),
-    rng.shuffle<SpireNodeKind>(asc.extraElites > 0 ? ['elite', 'elite', 'event'] : ['elite', 'skirmish', 'event']),
+    rng.shuffle<SpireNodeKind>(extraElites > 0 ? ['elite', 'elite', 'event'] : ['elite', 'skirmish', 'event']),
     rng.shuffle<SpireNodeKind>(['treasure', 'shop', 'campfire']),
-    rng.shuffle<SpireNodeKind>(['elite', 'skirmish', 'event']),
+    rng.shuffle<SpireNodeKind>(extraElites >= 2 ? ['elite', 'elite', 'event'] : ['elite', 'skirmish', 'event']),
     rng.shuffle<SpireNodeKind>(['campfire', 'campfire', 'shop']),
   ];
 
@@ -82,6 +87,7 @@ export const generateActMap = (
     id: `enc-${bossId}`,
     excludeEnemies: mapUsedEnemies,
     mustExcludeEnemies: currentActEnemies,
+    dailyMutatorId,
   });
   mapUsedEnemies.add(bossEncounter.name);
   currentActEnemies.add(bossEncounter.name);
@@ -112,6 +118,7 @@ export const generateActMap = (
           id: `enc-${id}`,
           excludeEnemies: mapUsedEnemies,
           mustExcludeEnemies: currentActEnemies,
+          dailyMutatorId,
         });
         mapUsedEnemies.add(node.encounter.name);
         currentActEnemies.add(node.encounter.name);

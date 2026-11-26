@@ -1,12 +1,14 @@
 /**
- * Starfall Summit — Run Launch & Ascension Setup screen.
+ * Starfall Summit — Run Launch, Theme-Pack Curation, Ascension & Daily Climb Hub.
  *
- * Lets the player resume an active climb, pick any of the 6 Fighters (with full
- * Starter Kit & Passives preview), tune Ascension 0..20, inspect Career Stats,
- * or roll a fresh deterministic seed.
+ * Lets the player resume an active climb, choose between Standard Climb (pick any
+ * of the 6 Fighters, customize 2 Theme Packs for the 80/20 Focused Draft Pool,
+ * tune Ascension 0..20, inspect Career Stats, or share/roll a deterministic seed)
+ * and Daily Climb (today's UTC deterministic seed, featured climber, rotating
+ * Daily Mutator spotlight, and streak tracking).
  */
-import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
@@ -15,30 +17,96 @@ import { COLORS } from '@/utils/colors';
 import type { CharacterName } from '@/types';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { getArmoryWeapon } from '@/adventure/data/armory';
-import { randomSeed } from '@/adventure/engine/rng';
+import {
+  buildSummitShareUrl,
+  getDailySummitConfig,
+  normalizeDateKey,
+  type SummitDailyMutatorId,
+} from '@/adventure/dailySeed';
+import { createRng, randomSeed } from '@/adventure/engine/rng';
 import { sfx } from '@/audio';
 import { FighterPassivesList } from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { ASCENSION_DESCRIPTIONS, MAX_ASCENSION } from '../data/ascensions';
 import { STARTER_KITS } from '../data/encounters';
-import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
+import {
+  rollSummitThemePacks,
+  SUMMIT_THEME_PACKS,
+  type SummitThemePackId,
+} from '../data/themePacks';
+import { MAX_SUMMIT_WEAPONS, type CreateSpireRunOptions } from '../engine/runState';
 import type { SpireMeta, SpireRun } from '../types';
 
-interface Props {
+export interface SpireSetupProps {
   activeRun: SpireRun | null;
   meta: SpireMeta;
-  onStartNew: (fighter: CharacterName, ascension: number, seed: number) => void;
+  initialTab?: 'standard' | 'daily';
+  initialSeed?: number;
+  initialFighter?: CharacterName;
+  initialAscension?: number;
+  initialDailyDate?: string;
+  onStartNew: (
+    fighter: CharacterName,
+    ascension: number,
+    seed: number,
+    options?: CreateSpireRunOptions
+  ) => void;
   onResume: () => void;
   onAbandonActive: () => void;
   onExit: () => void;
 }
 
-const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, onAbandonActive, onExit }) => {
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const Clipboard = await import('expo-clipboard');
+    if (Clipboard?.setStringAsync) {
+      await Clipboard.setStringAsync(text);
+      return true;
+    }
+  } catch {
+    // Clipboard unavailable
+  }
+  return false;
+};
+
+const SpireSetup: React.FC<SpireSetupProps> = ({
+  activeRun,
+  meta,
+  initialTab = 'standard',
+  initialSeed,
+  initialFighter,
+  initialAscension,
+  initialDailyDate,
+  onStartNew,
+  onResume,
+  onAbandonActive,
+  onExit,
+}) => {
   const insets = useSafeAreaInsets();
-  const [fighter, setFighter] = useState<CharacterName>(activeRun?.fighter ?? 'Orange Tabby');
-  const [ascension, setAscension] = useState<number>(Math.min(meta.highestAscensionUnlocked, MAX_ASCENSION));
-  const [seed, setSeed] = useState<number>(() => randomSeed());
+  const [tab, setTab] = useState<'standard' | 'daily'>(initialTab);
+  const [fighter, setFighter] = useState<CharacterName>(
+    initialFighter ?? activeRun?.fighter ?? 'Orange Tabby'
+  );
+  const [ascension, setAscension] = useState<number>(() => {
+    if (typeof initialAscension === 'number' && Number.isFinite(initialAscension)) {
+      return Math.max(0, Math.min(MAX_ASCENSION, Math.floor(initialAscension)));
+    }
+    return Math.min(meta.highestAscensionUnlocked, MAX_ASCENSION);
+  });
+  const [seed, setSeed] = useState<number>(() =>
+    typeof initialSeed === 'number' && initialSeed > 0 ? initialSeed : randomSeed()
+  );
+  const [customPacks, setCustomPacks] = useState<SummitThemePackId[] | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
+
+  const hasSharedLaunch = Boolean(
+    initialSeed || initialFighter || initialAscension !== undefined || initialDailyDate
+  );
 
   useEffect(() => {
     setConfirmAbandon(false);
@@ -50,11 +118,65 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
     return () => clearTimeout(timer);
   }, [confirmAbandon]);
 
-  const kit = STARTER_KITS[fighter];
+  useEffect(() => {
+    setCopiedLink(false);
+  }, [seed, fighter, ascension]);
+
+  const autoPacks = useMemo<[SummitThemePackId, SummitThemePackId]>(() => {
+    const previewRng = createRng((seed ^ 0x51a2fa11) >>> 0);
+    return rollSummitThemePacks(fighter, previewRng);
+  }, [fighter, seed]);
+
+  const activePacks: readonly SummitThemePackId[] =
+    customPacks && customPacks.length === 2 ? customPacks : autoPacks;
+
+  const toggleThemePack = (packId: SummitThemePackId) => {
+    sfx('click');
+    setCustomPacks(prev => {
+      const current = prev && prev.length === 2 ? [...prev] : [...autoPacks];
+      if (current.includes(packId)) {
+        // Keep 2 packs active: rotate the untouched pack + next available pack
+        const other = current.find(id => id !== packId) ?? autoPacks[0];
+        const nextFill = SUMMIT_THEME_PACKS.find(p => p.id !== packId && p.id !== other)?.id ?? autoPacks[1];
+        return [other, nextFill];
+      }
+      return [current[1], packId];
+    });
+  };
+
+  const dailyDate = useMemo(() => normalizeDateKey(initialDailyDate), [initialDailyDate]);
+  const dailyConfig = useMemo(() => getDailySummitConfig(dailyDate), [dailyDate]);
+  const dailyClearedToday = Boolean(meta.completedDailyDates?.includes(dailyConfig.dateKey));
+  const dailyBestToday = meta.dailyBestRatings?.[dailyConfig.dateKey] ?? 0;
+
+  const displayedFighter = tab === 'daily' ? dailyConfig.fighter : fighter;
+  const kit = STARTER_KITS[displayedFighter];
   const w1 = getArmoryWeapon(kit.starterWeapon, { [kit.starterWeapon]: { level: 2, tuning: {} } });
   const w2 = getArmoryWeapon(kit.bonusWeapon, { [kit.bonusWeapon]: { level: 2, tuning: {} } });
 
-  const maxSelectableAsc = Math.max(1, meta.highestAscensionUnlocked);
+  const maxSelectableAsc = Math.max(
+    1,
+    meta.highestAscensionUnlocked,
+    typeof initialAscension === 'number' ? Math.min(MAX_ASCENSION, initialAscension) : 0
+  );
+
+  const handleCopySeedLink = async () => {
+    const url = buildSummitShareUrl({ seed, fighter, ascension });
+    await copyToClipboard(url);
+    sfx('click');
+    setCopiedLink(true);
+  };
+
+  const startDailyClimb = () => {
+    sfx('confirm');
+    const dailyOpts: { dateKey: string; mutatorId: SummitDailyMutatorId } = {
+      dateKey: dailyConfig.dateKey,
+      mutatorId: dailyConfig.mutator.id,
+    };
+    onStartNew(dailyConfig.fighter, dailyConfig.ascension, dailyConfig.seed, {
+      daily: dailyOpts,
+    });
+  };
 
   return (
     <View style={[st.root, { paddingTop: insets.top }]} testID="spire-setup">
@@ -78,13 +200,28 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
       </View>
 
       <ScrollView contentContainerStyle={st.body}>
+        {/* Shared Seed Deep-Link Banner */}
+        {hasSharedLaunch && (
+          <View style={st.sharedBanner} testID="spire-shared-banner">
+            <Icon name="delapouite/sparkles" size={15} color={COLORS.deepOnyx} />
+            <Text style={st.sharedBannerText}>
+              {tab === 'daily'
+                ? `Loaded Daily Summit · ${dailyConfig.dateKey}`
+                : `Shared Seed #${seed}${initialFighter ? ` · ${initialFighter}` : ''}${initialAscension ? ` · A${initialAscension}` : ''}`}
+            </Text>
+          </View>
+        )}
+
         {/* Resume Active Climb Banner */}
         {activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' && (
           <PopIn style={st.resumeCard}>
             <View style={st.resumeHead}>
               <FighterAvatar character={activeRun.fighter} size={44} health={activeRun.hearts} maxHealth={activeRun.maxHearts} animate={false} framed />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Eyebrow text="CLIMB IN PROGRESS" color={COLORS.actionYellow} />
+                <Eyebrow
+                  text={activeRun.isDaily ? `DAILY CLIMB · ${activeRun.dailyDate}` : 'CLIMB IN PROGRESS'}
+                  color={COLORS.actionYellow}
+                />
                 <Text style={st.resumeTitle} numberOfLines={1}>
                   {activeRun.fighter} · {activeRun.endless ? `Endless Act ${activeRun.act}` : `Act ${activeRun.act}`} · Floor {activeRun.floor}
                 </Text>
@@ -130,116 +267,295 @@ const SpireSetup: React.FC<Props> = ({ activeRun, meta, onStartNew, onResume, on
           </PopIn>
         )}
 
-        {/* Fighter Selection */}
-        <Text style={st.section}>CHOOSE YOUR CLIMBER</Text>
-        <View style={st.fighterGrid}>
-          {FIGHTERS.map(f => {
-            const sel = f.name === fighter;
-            const wins = meta.fighterWins[f.name] ?? 0;
-            return (
-              <TouchableOpacity
-                key={f.name}
-                testID={`spire-fighter-${f.name}`}
-                onPress={() => { sfx('click'); setFighter(f.name); }}
-                style={[st.fighterCard, sel && st.fighterCardSel]}
-                activeOpacity={0.85}
-                accessibilityState={{ selected: sel }}
-              >
-                <FighterAvatar character={f.name} size={42} mood={sel ? 'anticipation' : 'idle'} animate={sel} />
-                <Text style={[st.fighterName, sel && st.fighterNameSel]} numberOfLines={1}>{f.name}</Text>
-                {wins > 0 && <Text style={[st.winBadge, sel && st.winBadgeSel]}>★ {wins}</Text>}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Selected Fighter Kit */}
-        <View style={st.kitCard} testID="spire-starter-kit">
-          <View style={st.kitTop}>
-            <Text style={st.kitTitle}>{fighter}</Text>
-            <View style={st.kitStats}>
-              <Heart size={13} />
-              <Text style={st.kitStatText}>{kit.maxHearts}</Text>
-              <Icon name="lorc/crown-coin" size={13} color={TONE.coinBright} />
-              <Text style={st.kitStatText}>{kit.startingCoins}¢</Text>
-            </View>
-          </View>
-          <Text style={st.kitBlurb}>{kit.tagline}</Text>
-
-          <FighterPassivesList fighter={fighter} compact />
-
-          <Text style={st.subSection}>STARTER WEAPONS (LV 2)</Text>
-          <View style={st.starterRow}>
-            {[w1, w2].map(w =>
-              w ? (
-                <View key={w.id} style={st.starterChip}>
-                  <WeaponAvatar weapon={w} size={24} />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
-                    <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
-                  </View>
-                </View>
-              ) : null
+        {/* Mode Switcher: Standard Climb | Daily Climb (`[TP-19]`) */}
+        <View style={st.tabRow}>
+          <TouchableOpacity
+            testID="spire-tab-standard"
+            accessibilityRole="button"
+            accessibilityState={{ selected: tab === 'standard' }}
+            onPress={() => { sfx('click'); setTab('standard'); }}
+            style={[st.tabBtn, tab === 'standard' && st.tabBtnActive]}
+          >
+            <Icon name="lorc/mountaintop" size={15} color={tab === 'standard' ? INK : TONE.onDusk} />
+            <Text style={[st.tabText, tab === 'standard' && st.tabTextActive]}>STANDARD CLIMB</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="spire-tab-daily"
+            accessibilityRole="button"
+            accessibilityState={{ selected: tab === 'daily' }}
+            onPress={() => { sfx('click'); setTab('daily'); }}
+            style={[st.tabBtn, tab === 'daily' && st.tabBtnActive]}
+          >
+            <Icon name="lorc/rainbow-star" size={15} color={tab === 'daily' ? INK : COLORS.actionYellow} />
+            <Text style={[st.tabText, tab === 'daily' && st.tabTextActive]}>DAILY CLIMB</Text>
+            {dailyClearedToday && (
+              <View style={st.clearedDot}>
+                <Text style={st.clearedDotText}>✓</Text>
+              </View>
             )}
-          </View>
-        </View>
-
-        {/* Ascension Selector */}
-        <Text style={st.section}>ASCENSION LEVEL</Text>
-        <View style={st.ascCard}>
-          <View style={st.ascRow}>
-            <TouchableOpacity
-              testID="spire-asc-down"
-              disabled={ascension <= 0}
-              onPress={() => { sfx('click'); setAscension(a => Math.max(0, a - 1)); }}
-              style={[st.stepBtn, ascension <= 0 && { opacity: 0.35 }]}
-            >
-              <Text style={st.stepText}>−</Text>
-            </TouchableOpacity>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text testID="spire-asc-value" style={st.ascTitle}>
-                ASCENSION {ascension}
-              </Text>
-              <Text style={st.ascUnlockHint}>
-                Unlocked up to A{maxSelectableAsc} · Beat Act III to unlock higher tiers
-              </Text>
-            </View>
-            <TouchableOpacity
-              testID="spire-asc-up"
-              disabled={ascension >= maxSelectableAsc}
-              onPress={() => { sfx('click'); setAscension(a => Math.min(maxSelectableAsc, a + 1)); }}
-              style={[st.stepBtn, ascension >= maxSelectableAsc && { opacity: 0.35 }]}
-            >
-              <Text style={st.stepText}>+</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={st.ascDesc}>{ASCENSION_DESCRIPTIONS[ascension]}</Text>
-        </View>
-
-        {/* Career Stats & Seed */}
-        <View style={st.statsStrip}>
-          <StatBox label="RUNS" value={String(meta.totalRuns)} />
-          <StatBox label="WINS" value={String(meta.victories)} />
-          <StatBox label="BEST FL" value={String(meta.bestFloor)} />
-          <StatBox label="BEST HIT" value={meta.bestBiggestHit > 0 ? meta.bestBiggestHit.toLocaleString() : '—'} />
-        </View>
-
-        <View style={st.seedRow}>
-          <Text style={st.seedText}>Run Seed: #{seed}</Text>
-          <TouchableOpacity onPress={() => { sfx('click'); setSeed(randomSeed()); }} style={st.rerollSeedBtn}>
-            <Icon name="lorc/cycle" size={13} color={INK} />
-            <Text style={st.rerollSeedText}>New Seed</Text>
           </TouchableOpacity>
         </View>
+
+        {tab === 'standard' ? (
+          <>
+            {/* Fighter Selection */}
+            <Text style={st.section}>CHOOSE YOUR CLIMBER</Text>
+            <View style={st.fighterGrid}>
+              {FIGHTERS.map(f => {
+                const sel = f.name === fighter;
+                const wins = meta.fighterWins[f.name] ?? 0;
+                return (
+                  <TouchableOpacity
+                    key={f.name}
+                    testID={`spire-fighter-${f.name}`}
+                    onPress={() => { sfx('click'); setFighter(f.name); }}
+                    style={[st.fighterCard, sel && st.fighterCardSel]}
+                    activeOpacity={0.85}
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <FighterAvatar character={f.name} size={42} mood={sel ? 'anticipation' : 'idle'} animate={sel} />
+                    <Text style={[st.fighterName, sel && st.fighterNameSel]} numberOfLines={1}>{f.name}</Text>
+                    {wins > 0 && <Text style={[st.winBadge, sel && st.winBadgeSel]}>★ {wins}</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Selected Fighter Kit */}
+            <View style={st.kitCard} testID="spire-starter-kit">
+              <View style={st.kitTop}>
+                <Text style={st.kitTitle}>{fighter}</Text>
+                <View style={st.kitStats}>
+                  <Heart size={13} />
+                  <Text style={st.kitStatText}>{kit.maxHearts}</Text>
+                  <Icon name="lorc/crown-coin" size={13} color={TONE.coinBright} />
+                  <Text style={st.kitStatText}>{kit.startingCoins}¢</Text>
+                </View>
+              </View>
+              <Text style={st.kitBlurb}>{kit.tagline}</Text>
+
+              <FighterPassivesList fighter={fighter} compact />
+
+              <Text style={st.subSection}>STARTER WEAPONS (LV 2)</Text>
+              <View style={st.starterRow}>
+                {[w1, w2].map(w =>
+                  w ? (
+                    <View key={w.id} style={st.starterChip}>
+                      <WeaponAvatar weapon={w} size={24} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
+                        <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                      </View>
+                    </View>
+                  ) : null
+                )}
+              </View>
+            </View>
+
+            {/* Focused Draft Pool Theme Packs (`[GP-25]`) */}
+            <View style={st.packCard} testID="spire-theme-packs">
+              <View style={st.packHeadRow}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={st.packSecTitle}>FOCUSED DRAFT PACKS (2 ACTIVE · 80/20 POOL)</Text>
+                  <Text style={st.packSub}>
+                    80% of offers pull from your 2 packs; 20% Wildcards keep all 64 Armory weapons live.
+                  </Text>
+                </View>
+                {customPacks && (
+                  <TouchableOpacity
+                    testID="spire-packs-auto"
+                    onPress={() => { sfx('click'); setCustomPacks(null); }}
+                    style={st.autoPackBtn}
+                  >
+                    <Text style={st.autoPackText}>Auto</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <View style={st.packGrid}>
+                {SUMMIT_THEME_PACKS.map(pack => {
+                  const selected = activePacks.includes(pack.id);
+                  return (
+                    <TouchableOpacity
+                      key={pack.id}
+                      testID={`spire-pack-${pack.id}`}
+                      onPress={() => toggleThemePack(pack.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      style={[
+                        st.packChip,
+                        selected && {
+                          backgroundColor: '#FFFBEB',
+                          borderColor: pack.accentColor,
+                          borderWidth: 2,
+                        },
+                      ]}
+                    >
+                      <Icon name={pack.icon} size={14} color={selected ? pack.accentColor : TONE.spent} />
+                      <Text style={[st.packChipName, selected && { color: INK }]} numberOfLines={1}>
+                        {pack.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Ascension Selector */}
+            <Text style={st.section}>ASCENSION LEVEL</Text>
+            <View style={st.ascCard}>
+              <View style={st.ascRow}>
+                <TouchableOpacity
+                  testID="spire-asc-down"
+                  disabled={ascension <= 0}
+                  onPress={() => { sfx('click'); setAscension(a => Math.max(0, a - 1)); }}
+                  style={[st.stepBtn, ascension <= 0 && { opacity: 0.35 }]}
+                >
+                  <Text style={st.stepText}>−</Text>
+                </TouchableOpacity>
+                <View style={{ flex: 1, alignItems: 'center' }}>
+                  <Text testID="spire-asc-value" style={st.ascTitle}>
+                    ASCENSION {ascension}
+                  </Text>
+                  <Text style={st.ascUnlockHint}>
+                    Unlocked up to A{maxSelectableAsc} · Beat Act III to unlock higher tiers
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  testID="spire-asc-up"
+                  disabled={ascension >= maxSelectableAsc}
+                  onPress={() => { sfx('click'); setAscension(a => Math.min(maxSelectableAsc, a + 1)); }}
+                  style={[st.stepBtn, ascension >= maxSelectableAsc && { opacity: 0.35 }]}
+                >
+                  <Text style={st.stepText}>+</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={st.ascDesc}>{ASCENSION_DESCRIPTIONS[ascension]}</Text>
+            </View>
+
+            {/* Career Stats & Seed */}
+            <View style={st.statsStrip}>
+              <StatBox label="RUNS" value={String(meta.totalRuns)} />
+              <StatBox label="WINS" value={String(meta.victories)} />
+              <StatBox label="BEST FL" value={String(meta.bestFloor)} />
+              <StatBox
+                label="TOP RATING"
+                value={(meta.bestSummitRating ?? 0) > 0 ? (meta.bestSummitRating ?? 0).toLocaleString() : '—'}
+              />
+            </View>
+
+            <View style={st.seedRow}>
+              <Text style={st.seedText}>Run Seed: #{seed}</Text>
+              <View style={st.seedActions}>
+                <TouchableOpacity
+                  testID="spire-copy-seed-link"
+                  onPress={handleCopySeedLink}
+                  style={st.rerollSeedBtn}
+                >
+                  <Icon name="lorc/scroll-unfurled" size={13} color={INK} />
+                  <Text style={st.rerollSeedText}>{copiedLink ? 'Link Copied ✓' : 'Share Seed'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="spire-reroll-seed"
+                  onPress={() => { sfx('click'); setSeed(randomSeed()); }}
+                  style={st.rerollSeedBtn}
+                >
+                  <Icon name="lorc/cycle" size={13} color={INK} />
+                  <Text style={st.rerollSeedText}>New Seed</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        ) : (
+          /* DAILY CLIMB TAB (`[TP-19]`) */
+          <View style={st.dailyStack} testID="spire-daily-panel">
+            <View style={st.dailyHeroCard}>
+              <View style={st.dailyTopRow}>
+                <View style={st.dailyDateBadge}>
+                  <Text style={st.dailyDateText}>{dailyConfig.dateKey}</Text>
+                </View>
+                <View style={[st.dailyStatusBadge, dailyClearedToday && st.dailyStatusCleared]}>
+                  <Text style={[st.dailyStatusText, dailyClearedToday && st.dailyStatusTextCleared]}>
+                    {dailyClearedToday ? 'CLEARED TODAY ✓' : 'UNPLAYED TODAY'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={st.dailyHeadline}>Everyone Climbs the Exact Same Seed</Text>
+              <Text style={st.dailySeedSub}>Daily Seed #{dailyConfig.seed} · Ascension 0</Text>
+
+              {/* Daily Mutator Spotlight */}
+              <View
+                style={[st.mutatorBox, { borderColor: dailyConfig.mutator.accentColor }]}
+                testID="spire-daily-mutator"
+              >
+                <View style={[st.mutatorIcon, { borderColor: dailyConfig.mutator.accentColor }]}>
+                  <Icon name={dailyConfig.mutator.icon} size={24} color={dailyConfig.mutator.accentColor} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={st.mutatorEyebrow}>TODAY&apos;S DAILY MUTATOR</Text>
+                  <Text style={st.mutatorName}>{dailyConfig.mutator.name}</Text>
+                  <Text style={st.mutatorDesc}>{dailyConfig.mutator.description}</Text>
+                </View>
+              </View>
+
+              {/* Daily Fighter Showcase */}
+              <View style={st.dailyFighterBox}>
+                <FighterAvatar character={dailyConfig.fighter} size={46} mood="anticipation" framed />
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Text style={st.mutatorEyebrow}>TODAY&apos;S FEATURED CLIMBER</Text>
+                  <Text style={st.kitTitle}>{dailyConfig.fighter}</Text>
+                  <Text style={st.kitBlurb}>{kit.tagline}</Text>
+                </View>
+              </View>
+
+              <View style={st.starterRow}>
+                {[w1, w2].map(w =>
+                  w ? (
+                    <View key={w.id} style={st.starterChip}>
+                      <WeaponAvatar weapon={w} size={24} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
+                        <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                      </View>
+                    </View>
+                  ) : null
+                )}
+              </View>
+
+              {/* Daily Streak & Records */}
+              <View style={st.statsStrip}>
+                <StatBox label="STREAK" value={String(meta.dailyStreak ?? 0)} />
+                <StatBox label="BEST STREAK" value={String(meta.bestDailyStreak ?? 0)} />
+                <StatBox label="CLEARS" value={String(meta.completedDailyDates?.length ?? 0)} />
+                <StatBox
+                  label="TODAY BEST"
+                  value={dailyBestToday > 0 ? dailyBestToday.toLocaleString() : '—'}
+                />
+              </View>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
       <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        <Btn
-          testID="spire-start-climb"
-          label={activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' ? 'Start Fresh Climb' : 'Begin Summit Climb'}
-          icon="lorc/mountaintop"
-          onPress={() => { sfx('confirm'); onStartNew(fighter, ascension, seed); }}
-        />
+        {tab === 'daily' ? (
+          <Btn
+            testID="spire-start-daily"
+            label={dailyClearedToday ? "Replay Today's Daily Climb" : 'Begin Daily Climb'}
+            icon="lorc/rainbow-star"
+            onPress={startDailyClimb}
+          />
+        ) : (
+          <Btn
+            testID="spire-start-climb"
+            label={activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' ? 'Start Fresh Climb' : 'Begin Summit Climb'}
+            icon="lorc/mountaintop"
+            onPress={() => {
+              sfx('confirm');
+              onStartNew(fighter, ascension, seed, { themePacks: [...activePacks] });
+            }}
+          />
+        )}
       </View>
     </View>
   );
@@ -261,12 +577,21 @@ const st = StyleSheet.create({
   trophyPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.coinPale, borderWidth: 2, borderColor: INK, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4 },
   trophyText: { fontSize: 12, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   body: { padding: 14, gap: 12, maxWidth: 540, width: '100%', alignSelf: 'center' },
+  sharedBanner: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: COLORS.actionYellow, borderRadius: 9, borderWidth: 2, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
+  sharedBannerText: { flex: 1, fontSize: 11.5, fontWeight: '900', color: INK },
   resumeCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, padding: 12, gap: 10 },
   resumeHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   resumeTitle: { fontSize: 15, fontWeight: '900', color: INK, marginTop: 2 },
   resumeSub: { fontSize: 12, fontWeight: '700', color: TONE.spent },
   resumeBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   confirmDangerBtn: { flex: 1, backgroundColor: '#B91C1C', borderColor: '#7F1D1D' },
+  tabRow: { flexDirection: 'row', gap: 8 },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 2, borderColor: '#6B5A49', paddingVertical: 9, paddingHorizontal: 8 },
+  tabBtnActive: { backgroundColor: COLORS.actionYellow, borderColor: INK, borderBottomWidth: 4 },
+  tabText: { fontSize: 11.5, fontWeight: '900', color: TONE.onDusk, letterSpacing: 0.7 },
+  tabTextActive: { color: INK },
+  clearedDot: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#0F766E', alignItems: 'center', justifyContent: 'center' },
+  clearedDotText: { fontSize: 10, fontWeight: '900', color: COLORS.canvasWhite },
   section: { fontSize: 11, fontWeight: '900', letterSpacing: 1.8, color: COLORS.actionYellow, marginTop: 2 },
   fighterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fighterCard: { width: '31%', flexGrow: 1, minWidth: 92, alignItems: 'center', gap: 4, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 2, borderColor: '#6B5A49', paddingVertical: 8, paddingHorizontal: 3 },
@@ -287,6 +612,15 @@ const st = StyleSheet.create({
   starterChip: { flex: 1, minWidth: 132, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 7 },
   starterName: { fontSize: 12, fontWeight: '900', color: INK },
   starterDesc: { fontSize: 10, color: INK, opacity: 0.8, lineHeight: 13 },
+  packCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
+  packHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  packSecTitle: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1, color: INK },
+  packSub: { fontSize: 11, fontWeight: '600', color: TONE.spent, marginTop: 2, lineHeight: 15 },
+  autoPackBtn: { backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 3 },
+  autoPackText: { fontSize: 10.5, fontWeight: '900', color: INK },
+  packGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  packChip: { width: '48%', flexGrow: 1, minWidth: 130, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', paddingHorizontal: 8, paddingVertical: 7 },
+  packChipName: { flex: 1, fontSize: 11.5, fontWeight: '900', color: TONE.spent },
   ascCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
   ascRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   stepBtn: { width: 38, height: 38, borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },
@@ -298,10 +632,28 @@ const st = StyleSheet.create({
   statBox: { flex: 1, backgroundColor: '#3A2D21', borderRadius: 8, borderWidth: 1.5, borderColor: '#6B5A49', paddingVertical: 8, alignItems: 'center' },
   statVal: { fontSize: 15, fontWeight: '900', color: COLORS.actionYellow, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 9, fontWeight: '800', color: TONE.onDusk, letterSpacing: 0.8 },
-  seedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
+  seedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingHorizontal: 4 },
   seedText: { fontSize: 11, fontWeight: '700', color: TONE.onDusk, opacity: 0.85, fontVariant: ['tabular-nums'] },
+  seedActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rerollSeedBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },
   rerollSeedText: { fontSize: 11, fontWeight: '800', color: INK },
+  dailyStack: { gap: 12 },
+  dailyHeroCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, padding: 14, gap: 10 },
+  dailyTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  dailyDateBadge: { backgroundColor: INK, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  dailyDateText: { fontSize: 11, fontWeight: '900', color: COLORS.actionYellow, fontVariant: ['tabular-nums'] },
+  dailyStatusBadge: { backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 3 },
+  dailyStatusCleared: { backgroundColor: '#0F766E', borderColor: '#0F766E' },
+  dailyStatusText: { fontSize: 10, fontWeight: '900', color: INK, letterSpacing: 0.6 },
+  dailyStatusTextCleared: { color: COLORS.canvasWhite },
+  dailyHeadline: { fontSize: 17, fontWeight: '900', color: INK },
+  dailySeedSub: { fontSize: 11.5, fontWeight: '700', color: TONE.spent, fontVariant: ['tabular-nums'] },
+  mutatorBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, padding: 10 },
+  mutatorIcon: { width: 42, height: 42, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  mutatorEyebrow: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.1, color: TONE.spent },
+  mutatorName: { fontSize: 15, fontWeight: '900', color: INK },
+  mutatorDesc: { fontSize: 11.5, fontWeight: '700', color: INK, opacity: 0.85, lineHeight: 16 },
+  dailyFighterBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 10 },
 });
 
 export default SpireSetup;

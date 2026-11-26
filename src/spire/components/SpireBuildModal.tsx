@@ -20,7 +20,10 @@ import {
   WeaponChip,
 } from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
+import Icon from '@/components/Icon';
 import { ASCENSION_DESCRIPTIONS } from '../data/ascensions';
+import { getSummitDailyMutator } from '../data/dailyModifiers';
+import { getThemePack } from '../data/themePacks';
 import { buildSpireWeaponBuilds, spireArmedRecipes, spireHeldWeapons } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
@@ -159,6 +162,43 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onReorderWeapon, onClo
               </>
             )}
 
+            {/* Active Theme Packs (80/20 Focused Draft Pool) */}
+            {run.themePacks && run.themePacks.length > 0 && (
+              <>
+                <Text style={st.section}>FOCUSED DRAFT PACKS (80/20 POOL)</Text>
+                <View style={st.packRow} testID="spire-build-theme-packs">
+                  {run.themePacks.map(packId => {
+                    const pack = getThemePack(packId);
+                    return (
+                      <View key={pack.id} style={[st.packPill, { borderColor: pack.accentColor }]}>
+                        <Icon name={pack.icon} size={13} color={pack.accentColor} />
+                        <Text style={st.packPillText}>{pack.name}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </>
+            )}
+
+            {/* Active Daily Mutator */}
+            {run.isDaily && run.dailyMutatorId && (
+              <>
+                <Text style={st.section}>DAILY CLIMB MUTATOR ({run.dailyDate})</Text>
+                {(() => {
+                  const mut = getSummitDailyMutator(run.dailyMutatorId);
+                  return (
+                    <View style={[st.dailyMutatorCard, { borderColor: mut.accentColor }]}>
+                      <Icon name={mut.icon} size={18} color={mut.accentColor} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={st.dailyMutatorTitle}>{mut.name}</Text>
+                        <Text style={st.dailyMutatorDesc}>{mut.description}</Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+              </>
+            )}
+
             {/* Active Ascensions */}
             {run.ascension > 0 && (
               <>
@@ -204,6 +244,12 @@ const st = StyleSheet.create({
   reorderBtns: { flexDirection: 'row', gap: 6 },
   moveBtn: { backgroundColor: COLORS.canvasWhite, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },
   moveBtnText: { fontSize: 10.5, fontWeight: '900', color: INK },
+  packRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  packPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 9, paddingVertical: 4 },
+  packPillText: { fontSize: 11, fontWeight: '900', color: INK },
+  dailyMutatorCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFBEB', borderRadius: 9, borderWidth: 1.5, paddingHorizontal: 10, paddingVertical: 7 },
+  dailyMutatorTitle: { fontSize: 12, fontWeight: '900', color: INK },
+  dailyMutatorDesc: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.85, lineHeight: 15 },
   ascLine: { fontSize: 11, color: INK, opacity: 0.85, lineHeight: 16 },
   footer: { padding: 12, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
 });

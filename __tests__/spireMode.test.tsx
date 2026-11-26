@@ -18,7 +18,13 @@ import {
   SPIRE_WEAPON_POOL,
   STARTER_KITS,
   canonicalLevelEnemyName,
+  generateSpireEncounter,
 } from '@/spire/data/encounters';
+import {
+  SUMMIT_THEME_PACKS,
+  buildFocusedWeaponPool,
+} from '@/spire/data/themePacks';
+import { createDailySpireRun } from '@/spire/engine/runState';
 import {
   ARCANA_PURGE_COST,
   MAX_SHOP_LOCKS,
@@ -2011,5 +2017,257 @@ describe('Starfall Summit — Strict 6-Weapon Cap (MAX_SUMMIT_WEAPONS = 6) & Inl
     expect(onPickEvWeapon).toHaveBeenCalledWith(0, 'flint-spark');
     fireEvent.press(evView.getByTestId('spire-event-weapon-skip'));
     expect(onSkipEvWeapon).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('[GP-25] & [TP-19] Parry Ramp, 80/20 Theme Packs, Amber Clash Pills, Belt Order & Daily Summit UI', () => {
+  it('ramps Act 1 Skirmishes from any (rows 0-2) to simple color/shape counters (rows 3-5) and complex counters later', () => {
+    const simpleKinds = new Set(['color', 'shape']);
+    const seenSimple = new Set<string>();
+    const seenComplexInAct2OrBoss = new Set<string>();
+
+    for (let seed = 1; seed <= 40; seed++) {
+      const rng = createRng(seed * 997);
+      // Act 1 rows 0..2 Skirmishes (A0) -> strictly { kind: 'any' }
+      for (const row of [0, 1, 2]) {
+        const enc = generateSpireEncounter({ act: 1, row, kind: 'skirmish', ascension: 0, rng, id: `r${row}-${seed}` });
+        expect(enc.parry.counter.kind).toBe('any');
+      }
+      // Act 1 rows 3..5 Skirmishes (A0) -> strictly simple color or shape counters
+      for (const row of [3, 4, 5]) {
+        const enc = generateSpireEncounter({ act: 1, row, kind: 'skirmish', ascension: 0, rng, id: `r${row}-${seed}` });
+        expect(simpleKinds.has(enc.parry.counter.kind)).toBe(true);
+        seenSimple.add(enc.parry.counter.kind);
+      }
+      // Act 1 Boss & Act 2 Skirmishes allow full complex counters
+      const boss = generateSpireEncounter({ act: 1, row: 6, kind: 'boss', ascension: 0, rng, id: `b-${seed}` });
+      const act2 = generateSpireEncounter({ act: 2, row: 2, kind: 'skirmish', ascension: 0, rng, id: `a2-${seed}` });
+      for (const k of [boss.parry.counter.kind, act2.parry.counter.kind]) {
+        if (k !== 'any' && !simpleKinds.has(k)) seenComplexInAct2OrBoss.add(k);
+      }
+    }
+
+    expect(seenSimple.has('color')).toBe(true);
+    expect(seenSimple.has('shape')).toBe(true);
+    expect(seenComplexInAct2OrBoss.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps all 64 Armory weapons accessible via 80/20 Theme-Pack + Wildcard weighting with zero orphan IDs', () => {
+    expect(ALL_ARMORY_WEAPON_IDS).toHaveLength(64);
+    expect(SPIRE_WEAPON_POOL).toHaveLength(64);
+
+    // Every weapon listed in SUMMIT_THEME_PACKS is a valid non-excluded Armory weapon,
+    // and the union of all 6 packs covers 100% of all 62 Summit-draftable weapons!
+    const validSummitIds = new Set(SPIRE_WEAPON_POOL.filter(id => !SPIRE_EXCLUDED_WEAPONS.has(id)));
+    const packUnion = new Set<string>();
+    for (const pack of SUMMIT_THEME_PACKS) {
+      for (const id of pack.weapons) {
+        expect(validSummitIds.has(id)).toBe(true);
+        packUnion.add(id);
+      }
+    }
+    expect(packUnion.size).toBe(validSummitIds.size);
+
+    // Run focused pool stays tight (~22-38 weapons) while 80/20 rolls yield ~80% focused + ~20% wildcards
+    const run = createSpireRun('Orange Tabby', 0, 2026, { themePacks: ['pyro_blasts', 'webs_echoes'] });
+    expect(run.themePacks).toEqual(['pyro_blasts', 'webs_echoes']);
+    const focused = buildFocusedWeaponPool(run.fighter, run.themePacks);
+    expect(focused.size).toBeGreaterThanOrEqual(20);
+    expect(focused.size).toBeLessThanOrEqual(38);
+
+    const rng = createRng(88888);
+    let focusedHits = 0;
+    let wildcardHits = 0;
+    const allRolledAcrossSeeds = new Set<string>();
+
+    for (let i = 0; i < 1200; i++) {
+      const offers = rollSynergyWeapons(run, rng, 3, 1, { allowUpgrade: false });
+      for (const o of offers) {
+        if (focused.has(o.weaponId)) focusedHits += 1;
+        else wildcardHits += 1;
+        allRolledAcrossSeeds.add(o.weaponId);
+      }
+    }
+    const focusedRatio = focusedHits / (focusedHits + wildcardHits);
+    expect(focusedRatio).toBeGreaterThanOrEqual(0.72);
+    expect(focusedRatio).toBeLessThanOrEqual(0.88);
+    expect(wildcardHits).toBeGreaterThan(200);
+    // Wildcards reach EVERY remaining unheld Summit weapon (62 - 2 starters = 60 unheld) even on a single run
+    expect(allRolledAcrossSeeds.size).toBe(validSummitIds.size - run.weapons.length);
+  });
+
+  it('renders First-Counter callout once, amber CLASHES WITH [Name] pills, Understudy COPIED badge, and Daily Summit / Rating / Share Card UI with zero "Spire" text', () => {
+    const safeMetrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
+    const collectText = (node: unknown, out: string[] = []): string[] => {
+      if (node == null) return out;
+      if (typeof node === 'string' || typeof node === 'number') {
+        const s = String(node).trim();
+        if (s) out.push(s);
+        return out;
+      }
+      if (Array.isArray(node)) {
+        for (const c of node) collectText(c, out);
+        return out;
+      }
+      if (typeof node === 'object') {
+        const obj = node as { props?: Record<string, unknown>; children?: unknown[] };
+        if (typeof obj.props?.accessibilityLabel === 'string') out.push(obj.props.accessibilityLabel);
+        if (obj.children) collectText(obj.children, out);
+      }
+      return out;
+    };
+    const assertZeroSpire = (tree: unknown) => {
+      const text = collectText(tree).join('\n');
+      expect(text).not.toMatch(/spire/i);
+      return text;
+    };
+
+    // 1. First-Counter Callout on SpireEncounterPreview (shown before first specific counter, hidden after startSpireEncounter)
+    const runWithUnderstudy = {
+      ...createSpireRun('Orange Tabby', 0, 5555),
+      weapons: ['blast-powder', 'understudy', 'mending-charm'],
+      weaponLevels: { 'blast-powder': 2, understudy: 2, 'mending-charm': 2 },
+    };
+    const specEncounter = generateSpireEncounter({
+      act: 1,
+      row: 4,
+      kind: 'skirmish',
+      ascension: 0,
+      rng: createRng(77),
+      id: 'enc-first-counter',
+    });
+    expect(specEncounter.parry.counter.kind).not.toBe('any');
+
+    const previewFirst = render(
+      <SpireEncounterPreview
+        run={{ ...runWithUnderstudy, phase: 'preview', activeEncounter: specEncounter, seenSpecificCounter: false }}
+        encounter={specEncounter}
+        onFight={() => {}}
+        onInspectBuild={() => {}}
+        onReorderWeapon={() => {}}
+      />
+    );
+    expect(previewFirst.getByTestId('spire-first-counter-callout')).toBeTruthy();
+    expect(previewFirst.getByTestId('spire-preview-belt')).toBeTruthy();
+    expect(previewFirst.getByTestId('spire-preview-belt-copied-target')).toBeTruthy();
+    assertZeroSpire(previewFirst.toJSON());
+
+    const afterStart = startSpireEncounter({
+      ...runWithUnderstudy,
+      phase: 'preview',
+      activeEncounter: specEncounter,
+      seenSpecificCounter: false,
+    });
+    expect(afterStart.seenSpecificCounter).toBe(true);
+    const previewSecond = render(
+      <SpireEncounterPreview
+        run={afterStart}
+        encounter={specEncounter}
+        onFight={() => {}}
+        onInspectBuild={() => {}}
+      />
+    );
+    expect(previewSecond.queryByTestId('spire-first-counter-callout')).toBeNull();
+
+    // 2. Prominent amber CLASHES WITH [Name] badge on SpireRewardScreen & SpireShop
+    const clashRun = {
+      ...runWithUnderstudy,
+      coins: 200,
+      weapons: ['blast-powder', 'chain-gang'],
+      weaponLevels: { 'blast-powder': 2, 'chain-gang': 2 },
+    };
+    const rewardView = render(
+      <SpireRewardScreen
+        run={clashRun}
+        reward={{
+          nodeKind: 'skirmish',
+          foeName: 'Lazy Sloth',
+          coinsEarned: 50,
+          parryBonusCoins: 0,
+          dpm: 400,
+          biggestHit: 40,
+          parries: 0,
+          perfectParries: 0,
+          weaponOptions: [{ weaponId: 'long-fuse', level: 2 }],
+          weaponClaimed: false,
+          weaponRerolled: false,
+          arcanaOptions: [],
+          arcanaClaimed: true,
+          skillOptions: [],
+          skillClaimed: true,
+          isActBoss: false,
+        }}
+        lastFight={null}
+        onClaimWeapon={() => {}}
+        onRerollWeapons={() => {}}
+        onSkipWeapon={() => {}}
+        onClaimArcana={() => {}}
+        onSkipArcana={() => {}}
+        onClaimSkill={() => {}}
+        onSkipSkill={() => {}}
+        onContinue={() => {}}
+      />
+    );
+    expect(assertZeroSpire(rewardView.toJSON())).toContain('⚠ CLASHES WITH CHAIN GANG');
+
+    // 3. SpireSetup Daily Climb tab + Theme Packs picker + SpireEndScreen Summit Rating & Share Card
+    const onStartNew = jest.fn();
+    const setupView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireSetup
+          activeRun={null}
+          meta={createInitialSpireMeta()}
+          initialDailyDate="2026-11-26"
+          onStartNew={onStartNew}
+          onResume={() => {}}
+          onAbandonActive={() => {}}
+          onExit={() => {}}
+        />
+      </SafeAreaProvider>
+    );
+    expect(setupView.getByTestId('spire-theme-packs')).toBeTruthy();
+    assertZeroSpire(setupView.toJSON());
+
+    fireEvent.press(setupView.getByTestId('spire-tab-daily'));
+    expect(setupView.getByTestId('spire-daily-panel')).toBeTruthy();
+    expect(setupView.getByTestId('spire-daily-mutator')).toBeTruthy();
+    assertZeroSpire(setupView.toJSON());
+    fireEvent.press(setupView.getByTestId('spire-start-daily'));
+    expect(onStartNew).toHaveBeenCalledTimes(1);
+    expect(onStartNew.mock.calls[0][3]?.daily?.dateKey).toBe('2026-11-26');
+
+    const dailyRun = {
+      ...createDailySpireRun('2026-11-26'),
+      act: 3,
+      floor: 21,
+      phase: 'victory' as const,
+      stats: {
+        ...createDailySpireRun('2026-11-26').stats,
+        floorsCleared: 21,
+        peakDpm: 1850,
+        biggestHit: 520,
+        parries: 7,
+        perfectParries: 2,
+        evolutionsForged: 4,
+      },
+    };
+    const endView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireEndScreen
+          run={dailyRun}
+          victory
+          lastFight={null}
+          onEnterEndless={() => {}}
+          onNewRun={() => {}}
+          onExitToMenu={() => {}}
+        />
+      </SafeAreaProvider>
+    );
+    expect(endView.getByTestId('spire-end-rating')).toBeTruthy();
+    expect(endView.getByTestId('spire-end-share-card')).toBeTruthy();
+    const endText = assertZeroSpire(endView.toJSON());
+    expect(endText).toContain('Summit Rating');
+    expect(endText).toContain('Outscored ~');
+    expect(endText).toContain('?mode=summit&seed=');
   });
 });
