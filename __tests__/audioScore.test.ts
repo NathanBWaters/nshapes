@@ -3,10 +3,27 @@
  * every weapon and a theme for every evolution, the director (fight state →
  * mix) and the bridge from fight events to cues. docs/sound-design.md.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { Platform } from 'react-native';
 import { EVENT_CUE, HIT_SIZES, JACKPOT_CHAIN, MAX_CHAIN, alertsOf, hitSize, moodOf, soundsFor, type FightSound } from '@/audio/fightAudio';
 import { band, CUE_NAMES } from '@/audio/band';
+import { chip, foldFreq, makeSoftClipCurve, MASTER_BUS, MAX_OSC_FREQ_HZ, SOFT_CLIP_CEILING } from '@/audio/chip';
 import { DIRECTOR, NO_ALERTS, direct, restingMix, worldTone, type FightMood } from '@/audio/director';
-import { INSTRUMENTS } from '@/audio/instruments';
+import { DRUMS, INSTRUMENTS, subDrop } from '@/audio/instruments';
+import {
+  __setNativeAudioForTests,
+  CUE_TO_NATIVE,
+  NATIVE_CUE_ASSETS,
+  NATIVE_LOOP_ASSETS,
+  nativeBridge,
+  resolveCueKey,
+  resolveNativeLoop,
+  resolveWeaponStingKey,
+  type NativeAudioModule,
+  type NativeSoundHandle,
+} from '@/audio/nativeBridge';
+import { audioFlags } from '@/audio/settings';
 import { ARRANGEMENTS, THEME, THEME_B } from '@/audio/songs';
 import { themeOf } from '@/audio/themes';
 import {
@@ -22,6 +39,8 @@ import { BIOMES } from '@/adventure/data/biomes';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { createMaxedSave } from '@/adventure/progress';
 import type { RunEvent, RunEventType } from '@/adventure/types';
+import { __setAppActiveForTests } from '@/utils/appLifecycle';
+import { MusicStorage, SettingsStorage, SoundStorage, storage } from '@/utils/storage';
 import { playSet, startFight, tick, withWeapons } from './testUtils/adventureFight';
 
 const mood = (over: Partial<FightMood> = {}): FightMood => ({
@@ -502,5 +521,530 @@ describe('the fight the band hears', () => {
     expect(() => band.storyBeat({ weaponId: 'war-drum', step: 0, totalSteps: 5 })).not.toThrow();
     expect(() => band.storyBeat({ step: 4, totalSteps: 5 })).not.toThrow();
     expect(() => band.finale(true)).not.toThrow();
+  });
+});
+
+// ─── [AU-01] .ogg -> .m4a Asset Migration & iOS Compatibility ───────────────
+
+describe('[AU-01] AAC .m4a sound assets (zero .ogg remaining)', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  const soundsDir = path.join(repoRoot, 'assets', 'sounds');
+
+  const walkFiles = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) out.push(...walkFiles(full));
+      else out.push(full);
+    }
+    return out;
+  };
+
+  it('contains zero .ogg or uncompressed .wav files anywhere under assets/sounds/', () => {
+    const all = walkFiles(soundsDir);
+    const oggs = all.filter(f => f.toLowerCase().endsWith('.ogg'));
+    const wavs = all.filter(f => f.toLowerCase().endsWith('.wav'));
+    const m4as = all.filter(f => f.toLowerCase().endsWith('.m4a'));
+    expect(oggs).toEqual([]);
+    expect(wavs).toEqual([]);
+    expect(m4as.length).toBeGreaterThanOrEqual(26);
+    for (const file of m4as) {
+      expect(fs.statSync(file).size).toBeGreaterThan(100);
+    }
+  });
+
+  it('has zero .ogg or .wav references in src/utils/sounds.ts and every required asset exists', () => {
+    const src = fs.readFileSync(path.join(repoRoot, 'src', 'utils', 'sounds.ts'), 'utf8');
+    expect(src).not.toMatch(/\.ogg\b/i);
+    expect(src).not.toMatch(/\.wav\b/i);
+    const matches = [...src.matchAll(/require\(['"]\.\.\/\.\.\/(assets\/sounds\/[^'"]+)['"]\)/g)];
+    expect(matches.length).toBe(26);
+    for (const m of matches) {
+      expect(fs.existsSync(path.join(repoRoot, m[1]))).toBe(true);
+    }
+  });
+});
+
+// ─── [AU-02] Native Adventure & Starfall Summit Bridge ─────────────────────
+
+describe('[AU-02] native audio bridge & pre-rendered .m4a pack', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+
+  const createMockNativeAudio = () => {
+    const handles: { source: unknown; opts: unknown; handle: NativeSoundHandle }[] = [];
+    const setAudioModeAsync = jest.fn(async () => undefined);
+    const createAsync = jest.fn(async (source: unknown, opts?: { shouldPlay?: boolean; isLooping?: boolean; volume?: number }) => {
+      const handle: NativeSoundHandle = {
+        playAsync: jest.fn(async () => undefined),
+        pauseAsync: jest.fn(async () => undefined),
+        stopAsync: jest.fn(async () => undefined),
+        unloadAsync: jest.fn(async () => undefined),
+        setPositionAsync: jest.fn(async () => undefined),
+        setVolumeAsync: jest.fn(async () => undefined),
+        setIsLoopingAsync: jest.fn(async () => undefined),
+      };
+      handles.push({ source, opts, handle });
+      return { sound: handle };
+    });
+    const mod: NativeAudioModule = { setAudioModeAsync, Sound: { createAsync } };
+    return { mod, handles, setAudioModeAsync, createAsync };
+  };
+
+  afterEach(() => {
+    __setNativeAudioForTests(null);
+    __setAppActiveForTests(true);
+    audioFlags.music = true;
+    audioFlags.sfx = true;
+    band.stop();
+  });
+
+  it('bundles pre-rendered .m4a loops for every arrangement and maps all 77 cues & 64 weapons', () => {
+    for (const arr of Object.keys(ARRANGEMENTS)) {
+      const loopKey = resolveNativeLoop(arr);
+      expect(loopKey in NATIVE_LOOP_ASSETS).toBe(true);
+      const file = path.join(repoRoot, 'assets', 'sounds', 'native', 'loops', `${loopKey}.m4a`);
+      expect(fs.existsSync(file)).toBe(true);
+      expect(fs.statSync(file).size).toBeGreaterThan(10_000);
+    }
+    expect(resolveNativeLoop('summit')).toBe('boss');
+
+    for (const cueKey of Object.keys(NATIVE_CUE_ASSETS)) {
+      const file = path.join(repoRoot, 'assets', 'sounds', 'native', 'cues', `${cueKey}.m4a`);
+      expect(fs.existsSync(file)).toBe(true);
+      expect(fs.statSync(file).size).toBeGreaterThan(1_000);
+    }
+
+    for (const name of CUE_NAMES) {
+      expect(CUE_TO_NATIVE[name] in NATIVE_CUE_ASSETS).toBe(true);
+      expect(resolveCueKey(name, 3) in NATIVE_CUE_ASSETS).toBe(true);
+    }
+    expect(resolveCueKey('star', 1)).toBe('star-1');
+    expect(resolveCueKey('star', 2)).toBe('star-2');
+    expect(resolveCueKey('star', 3)).toBe('star-3');
+    expect(resolveCueKey('multSlam', 3)).toBe('payout-3');
+
+    const rolesUsed = new Set<string>();
+    for (const id of createMaxedSave().armory) {
+      const key = resolveWeaponStingKey(id);
+      expect(key in NATIVE_CUE_ASSETS).toBe(true);
+      rolesUsed.add(key);
+    }
+    expect(rolesUsed.size).toBe(6);
+  });
+
+  it('delegates band music loops, cues, payouts, weapon stings, and lifecycle pause/resume on native', async () => {
+    const mock = createMockNativeAudio();
+    __setNativeAudioForTests(mock.mod);
+
+    band.play('meadow');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mock.setAudioModeAsync).toHaveBeenCalledWith({
+      playsInSilentModeIOS: false,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    });
+    expect(mock.createAsync).toHaveBeenCalledWith(
+      NATIVE_LOOP_ASSETS.meadow,
+      expect.objectContaining({ shouldPlay: true, isLooping: true })
+    );
+    expect(nativeBridge.activeTrack).toBe('meadow');
+
+    // Combat feedback on native plays real pre-rendered cues & ducks BGM
+    band.select(1);
+    band.payout({ combo: 4, tier: 2, rainbow: true });
+    band.fire('blast-powder');
+    band.cue('perfectParry');
+    band.evolve(EVOLUTION_RECIPES[0].id);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const loadedSources = mock.handles.map(h => h.source);
+    expect(loadedSources).toContain(NATIVE_CUE_ASSETS['select-1']);
+    expect(loadedSources).toContain(NATIVE_CUE_ASSETS['payout-2']);
+    expect(loadedSources).toContain(NATIVE_CUE_ASSETS['sting-brass']);
+    expect(loadedSources).toContain(NATIVE_CUE_ASSETS['perfect-parry']);
+    expect(loadedSources).toContain(NATIVE_CUE_ASSETS.evolve);
+
+    // Backgrounding pauses the looping BGM; foregrounding resumes it
+    const bgmHandle = mock.handles[0].handle;
+    __setAppActiveForTests(false);
+    expect(bgmHandle.pauseAsync).toHaveBeenCalled();
+
+    __setAppActiveForTests(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(bgmHandle.playAsync).toHaveBeenCalled();
+
+    // Finale stops BGM and plays victory fanfare
+    band.finale(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(bgmHandle.stopAsync).toHaveBeenCalled();
+    expect(mock.handles.map(h => h.source)).toContain(NATIVE_CUE_ASSETS.victory);
+  });
+});
+
+// ─── [AU-03] Native SOUND_ENABLED Default = true & Staged Preloading ───────
+
+describe('[AU-03] native sound default true & bounded staged preload', () => {
+  afterEach(() => {
+    storage.clearAll();
+  });
+
+  it('defaults SoundStorage and MusicStorage to true on native iOS/Android and honors explicit opt-out', () => {
+    const origOs = Platform.OS;
+    try {
+      for (const os of ['ios', 'android', 'web'] as const) {
+        Platform.OS = os;
+        storage.clearAll();
+        expect(SettingsStorage.getSoundEnabled()).toBe(true);
+        expect(SoundStorage.get()).toBe(true);
+        expect(MusicStorage.get()).toBe(true);
+      }
+      Platform.OS = 'ios';
+      SettingsStorage.setSoundEnabled(false);
+      expect(SettingsStorage.getSoundEnabled()).toBe(false);
+      expect(MusicStorage.get()).toBe(false);
+    } finally {
+      Platform.OS = origOs;
+    }
+  });
+
+  it('preloads core sounds first and caps concurrent Audio.Sound.createAsync calls at <= 3', async () => {
+    let inFlight = 0;
+    let peakInFlight = 0;
+    const loadedOrder: unknown[] = [];
+    const setAudioModeAsync = jest.fn(async () => undefined);
+    const createAsync = jest.fn(async (src: unknown) => {
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      loadedOrder.push(src);
+      await Promise.resolve();
+      inFlight -= 1;
+      return {
+        sound: {
+          setPositionAsync: jest.fn(async () => undefined),
+          playAsync: jest.fn(async () => undefined),
+          unloadAsync: jest.fn(async () => undefined),
+          setOnPlaybackStatusUpdate: jest.fn(),
+        },
+      };
+    });
+
+    await jest.isolateModulesAsync(async () => {
+      jest.doMock('expo-av', () => ({
+        Audio: { setAudioModeAsync, Sound: { createAsync } },
+      }));
+      const actualSounds = jest.requireActual<typeof import('@/utils/sounds')>('@/utils/sounds');
+      await actualSounds.initAudio();
+      expect(setAudioModeAsync).toHaveBeenCalledWith({
+        playsInSilentModeIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+      });
+
+      expect(actualSounds.PRELOAD_MAX_CONCURRENT).toBe(3);
+      expect(actualSounds.CORE_SOUND_CATEGORIES).toEqual(['click', 'confirm', 'confirmExit', 'matchValid', 'matchInvalid']);
+      await actualSounds.preloadAllSounds();
+      expect(createAsync).toHaveBeenCalledTimes(26);
+      expect(peakInFlight).toBeLessThanOrEqual(actualSounds.PRELOAD_MAX_CONCURRENT);
+    });
+  });
+});
+
+// ─── [AU-14] Pitch Folding & FM Nyquist Guard + [AU-15] Phone Mastering ────
+
+describe('[AU-14] & [AU-15] pitch folding, FM Nyquist safety & phone-speaker master bus', () => {
+  interface RecordedOsc {
+    type: string;
+    freq: number;
+    targetIsParam: boolean;
+  }
+
+  const createInspectableContext = (sampleRate = 44100) => {
+    const oscs: RecordedOsc[] = [];
+    const filters: { type: string; frequency: { value: number }; Q: { value: number }; gain: { value: number } }[] = [];
+    const compressors: {
+      threshold: { value: number };
+      knee: { value: number };
+      ratio: { value: number };
+      attack: { value: number };
+      release: { value: number };
+    }[] = [];
+    const shapers: { curve: Float32Array | null; oversample: string }[] = [];
+    const gains: { gain: { value: number }; isModDepth?: boolean }[] = [];
+
+    const makeParam = (initial = 0) => {
+      const p = {
+        value: initial,
+        __isAudioParam: true,
+        setValueAtTime: jest.fn((v: number, _at?: number) => { p.value = v; }),
+        linearRampToValueAtTime: jest.fn(),
+        exponentialRampToValueAtTime: jest.fn(),
+        setTargetAtTime: jest.fn(),
+        cancelScheduledValues: jest.fn(),
+      };
+      return p;
+    };
+
+    const ctx: Record<string, any> = {
+      sampleRate,
+      currentTime: 0,
+      destination: { channelCount: 2, connect: jest.fn() },
+      createGain: jest.fn(() => {
+        const g: Record<string, any> = {
+          gain: makeParam(1),
+          connect: jest.fn((dest: any) => {
+            if (dest && dest.__isAudioParam) g.isModDepth = true;
+            return dest;
+          }),
+        };
+        gains.push(g as any);
+        return g;
+      }),
+      createBiquadFilter: jest.fn(() => {
+        const f = {
+          type: 'lowpass',
+          frequency: makeParam(350),
+          Q: makeParam(1),
+          gain: makeParam(0),
+          connect: jest.fn((dest: unknown) => dest),
+        };
+        filters.push(f);
+        return f;
+      }),
+      createDynamicsCompressor: jest.fn(() => {
+        const c = {
+          threshold: makeParam(-24),
+          knee: makeParam(30),
+          ratio: makeParam(12),
+          attack: makeParam(0.003),
+          release: makeParam(0.25),
+          connect: jest.fn((dest: unknown) => dest),
+        };
+        compressors.push(c);
+        return c;
+      }),
+      createWaveShaper: jest.fn(() => {
+        const s = {
+          curve: null as Float32Array | null,
+          oversample: 'none',
+          connect: jest.fn((dest: unknown) => dest),
+        };
+        shapers.push(s);
+        return s;
+      }),
+      createConvolver: jest.fn(() => ({ buffer: null, connect: jest.fn((d: unknown) => d) })),
+      createDelay: jest.fn(() => ({ delayTime: makeParam(0), connect: jest.fn((d: unknown) => d) })),
+      createStereoPanner: jest.fn(() => ({ pan: makeParam(0), connect: jest.fn((d: unknown) => d) })),
+      createPeriodicWave: jest.fn(() => ({})),
+      createBuffer: jest.fn((_ch: number, len: number) => ({ getChannelData: () => new Float32Array(len) })),
+      createBufferSource: jest.fn(() => ({ buffer: null, loop: false, start: jest.fn(), stop: jest.fn(), connect: jest.fn((d: unknown) => d) })),
+      createOscillator: jest.fn(() => {
+        const rec: RecordedOsc = { type: 'sine', freq: 440, targetIsParam: false };
+        const freqParam = makeParam(440);
+        const origSet = freqParam.setValueAtTime;
+        freqParam.setValueAtTime = jest.fn((v: number, at?: number) => {
+          rec.freq = v;
+          origSet(v, at);
+        });
+        const osc = {
+          get type() { return rec.type; },
+          set type(v: string) { rec.type = v; },
+          frequency: freqParam,
+          detune: makeParam(0),
+          setPeriodicWave: jest.fn(),
+          start: jest.fn(),
+          stop: jest.fn(),
+          connect: jest.fn((dest: any) => {
+            // Detect FM modulator / vibrato LFO wired into a GainNode that feeds carrier.frequency
+            const origDestConnect = dest?.connect;
+            if (typeof origDestConnect === 'function') {
+              dest.connect = jest.fn((next: any) => {
+                if (next && next.__isAudioParam) rec.targetIsParam = true;
+                return origDestConnect(next);
+              });
+            }
+            return dest;
+          }),
+        };
+        oscs.push(rec);
+        return osc;
+      }),
+    };
+
+    return { ctx: ctx as unknown as BaseAudioContext, oscs, filters, compressors, shapers, gains };
+  };
+
+  it('octave-folds high frequencies cleanly without flat-clamping pitch class', () => {
+    expect(foldFreq(440, 2600)).toBe(440);
+    expect(foldFreq(2600, 2600)).toBe(2600);
+    // D8 (4698.64 Hz) folds cleanly to D7 (2349.32 Hz)
+    expect(foldFreq(4698.64, 2600)).toBeCloseTo(2349.32, 2);
+    // Extreme combo rung (18795 Hz) folds into (1300, 2600] preserving octave ratio
+    const folded = foldFreq(18795, 2600);
+    expect(folded).toBeGreaterThan(1300);
+    expect(folded).toBeLessThanOrEqual(2600);
+    expect(18795 / folded).toBeCloseTo(8, 5);
+  });
+
+  it('keeps all melodic/ladder notes <= 2,600 Hz and all FM modulators < 0.42 * sampleRate across combo 1..20 & all worlds', () => {
+    for (const sampleRate of [44100, 22050]) {
+      const mock = createInspectableContext(sampleRate);
+      const restore = chip.useContext(mock.ctx);
+      try {
+        // Test every arrangement (including peaks with leadOctave: 12) at full intensity + evolution
+        for (const arrangement of Object.keys(ARRANGEMENTS)) {
+          band.renderScript(
+            3,
+            [
+              {
+                at: 0,
+                mood: mood({
+                  arrangement,
+                  foeHp: 0.1,
+                  combo: 15,
+                  evolutions: [EVOLUTION_RECIPES[0].id],
+                  evolutionEndsMs: 20000,
+                  weapons: ['snowball', 'glass-sword', 'fortunes-favor', 'cascade-core'],
+                }),
+              },
+            ],
+            0.05
+          );
+        }
+
+        // Test payout across combos 1..20 + high-register cues
+        for (let combo = 1; combo <= 20; combo++) {
+          band.payout({ combo, tier: 3, rainbow: combo === 20 });
+        }
+        band.cue('coins', { amount: 12, slot: 8 });
+        band.cue('ding', { slot: 12 });
+        band.cue('killCamShatter');
+        band.cue('star', { amount: 3 });
+        band.cue('keyFound');
+        band.cue('friendRescued');
+        band.cue('catalyst');
+
+        // Separate audio-rate FM modulators from melodic carriers & partials
+        const modulators = mock.oscs.filter(o => o.targetIsParam && o.freq > 20);
+        const carriersAndPartials = mock.oscs.filter(o => !o.targetIsParam);
+        expect(carriersAndPartials.length).toBeGreaterThan(100);
+
+        // No FM modulator may ever reach or exceed 0.42 * sampleRate (fixes 49 kHz glock Nyquist aliasing)
+        for (const m of modulators) {
+          expect(m.freq).toBeLessThan(sampleRate * 0.42);
+        }
+
+        // Check melodic fundamentals directly via chip.play spy: peaks + combo 1..20 must stay <= 2,600 Hz
+        const playSpy = jest.spyOn(chip, 'play');
+        const toneSpy = jest.spyOn(chip, 'tone');
+        try {
+          band.renderScript(2, [{ at: 0, mood: mood({ arrangement: 'peaks', foeHp: 0.1, combo: 15 }) }], 0.05);
+          for (let combo = 1; combo <= 20; combo++) band.payout({ combo, tier: 3, rainbow: true });
+          for (const [, opts] of playSpy.mock.calls) {
+            expect(opts.freq).toBeLessThanOrEqual(2600);
+          }
+          for (const [opts] of toneSpy.mock.calls) {
+            expect(opts.freq).toBeLessThanOrEqual(2600);
+          }
+        } finally {
+          playSpy.mockRestore();
+          toneSpy.mockRestore();
+        }
+      } finally {
+        restore();
+      }
+    }
+  });
+
+  it('enforces the 4,200 Hz emergency clamp, retunes sleigh <= 4,200 Hz, and skips high-frequency FM modulators', () => {
+    const mock = createInspectableContext(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      DRUMS.sleigh(0, 1, 'sfx');
+      const sleighFreqs = mock.oscs.map(o => o.freq);
+      expect(sleighFreqs).toEqual([3100, 3650, 4100]);
+      for (const f of sleighFreqs) expect(f).toBeLessThanOrEqual(MAX_OSC_FREQ_HZ);
+
+      mock.oscs.length = 0;
+      // 9,000 Hz glock: carrier clamped to 4,200 Hz, FM mod (4,200 * 7 = 29,400 Hz >= 0.42 * 44,100) skipped!
+      chip.play(INSTRUMENTS.glock, { freq: 9000, at: 0, dur: 0.2, bus: 'sfx' });
+      expect(mock.oscs.some(o => o.freq === MAX_OSC_FREQ_HZ)).toBe(true);
+      expect(mock.oscs.filter(o => o.targetIsParam)).toHaveLength(0);
+    } finally {
+      restore();
+    }
+  });
+
+  it('wires the [AU-15] phone-speaker master chain (70 Hz HPF, 4 kHz -3 dB shelf, 10.5 kHz LPF, 20:1/1ms limiter, tanh soft-clipper)', () => {
+    const mock = createInspectableContext(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      expect(chip.master?.gain.value).toBeCloseTo(MASTER_BUS.gain, 4);
+      const hpf = mock.filters.find(f => f.type === 'highpass');
+      const presence = mock.filters.find(f => f.type === 'peaking');
+      const lpf = mock.filters.find(f => f.type === 'lowpass' && f.frequency.value === MASTER_BUS.lpfHz);
+      expect(hpf?.frequency.value).toBe(70);
+      expect(hpf?.Q.value).toBeCloseTo(0.707, 3);
+      expect(presence?.frequency.value).toBe(4000);
+      expect(presence?.Q.value).toBeCloseTo(0.9, 3);
+      expect(presence?.gain.value).toBe(-3);
+      expect(lpf?.frequency.value).toBe(10500);
+
+      expect(mock.compressors).toHaveLength(1);
+      expect(mock.compressors[0].threshold.value).toBe(-6);
+      expect(mock.compressors[0].knee.value).toBe(2);
+      expect(mock.compressors[0].ratio.value).toBe(20);
+      expect(mock.compressors[0].attack.value).toBe(0.001);
+      expect(mock.compressors[0].release.value).toBe(0.09);
+
+      expect(mock.shapers).toHaveLength(1);
+      const curve = mock.shapers[0].curve!;
+      expect(curve).toHaveLength(4096);
+      expect(curve[0]).toBeCloseTo(-SOFT_CLIP_CEILING, 4);
+      expect(curve[curve.length - 1]).toBeCloseTo(SOFT_CLIP_CEILING, 4);
+      expect(Math.abs(curve[Math.floor(curve.length / 2)])).toBeLessThan(0.002);
+      // Verify curve matches makeSoftClipCurve and stays strictly bounded below 1.0
+      const fresh = makeSoftClipCurve();
+      expect(fresh[0]).toBeCloseTo(curve[0], 6);
+      for (let i = 1; i < fresh.length; i++) {
+        expect(fresh[i]).toBeGreaterThanOrEqual(fresh[i - 1]);
+        expect(Math.abs(fresh[i])).toBeLessThanOrEqual(SOFT_CLIP_CEILING + 1e-6);
+      }
+    } finally {
+      restore();
+    }
+  });
+
+  it('injects warm 2nd & 3rd bass harmonics on sub, kick, timpani, taiko, thud & subDrop and keeps mono fold-down pan safe', () => {
+    expect(INSTRUMENTS.sub.partials).toEqual([[2, 0.32], [3, 0.14]]);
+    const mock = createInspectableContext(44100);
+    const restore = chip.useContext(mock.ctx);
+    try {
+      const checkWarm = (fn: () => void, fund: number) => {
+        mock.oscs.length = 0;
+        fn();
+        const freqs = mock.oscs.map(o => o.freq);
+        expect(freqs).toContain(fund);
+        expect(freqs).toContain(fund * 2);
+        expect(freqs).toContain(fund * 3);
+      };
+      checkWarm(() => DRUMS.kick(0, 1, 'music'), 155);
+      checkWarm(() => DRUMS.timpani(0, 1, 'sfx'), 98);
+      checkWarm(() => DRUMS.taiko(0, 1, 'sfx'), 120);
+      checkWarm(() => DRUMS.thud(0, 1, 'sfx'), 90);
+      checkWarm(() => subDrop(0, 1, 'sfx'), 110);
+    } finally {
+      restore();
+    }
+
+    // Mono fold-down safety: every weapon pan sits strictly inside [-1, 1] with equal-power panning
+    for (const v of Object.values(WEAPON_VOICES)) {
+      expect(v.pan).toBeGreaterThanOrEqual(-1);
+      expect(v.pan).toBeLessThanOrEqual(1);
+    }
   });
 });

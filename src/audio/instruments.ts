@@ -51,7 +51,7 @@ export const INSTRUMENTS: Record<InstrumentId, Patch> = {
   // Power: the sound of an evolution
   saw: { osc: 'sawtooth', detune: 19, lp: { hz: 5, track: true, env: 1.5, decay: 0.2 }, a: 0.004, d: 0.3, s: 0.45, r: 0.12, vol: 0.14, space: 'echo' },
   theremin: { osc: 'sine', vibrato: 0.012, a: 0.06, d: 0.2, s: 0.9, r: 0.2, vol: 0.2, space: 'hall' },
-  sub: { osc: 'sine', a: 0.004, d: 0.3, s: 0.6, r: 0.08, vol: 0.24 },
+  sub: { osc: 'sine', partials: [[2, 0.32], [3, 0.14]], lp: { hz: 480 }, a: 0.004, d: 0.3, s: 0.6, r: 0.08, vol: 0.24 },
   toy: { osc: 'triangle', fm: { ratio: 6, index: 0.5, decay: 0.04 }, a: 0.001, d: 0.22, s: 0, r: 0.04, vol: 0.22 },
 };
 
@@ -84,12 +84,16 @@ export type DrumId =
 type Hit = (at: number, vol: number, bus: Bus, pan?: number, soft?: boolean) => void;
 
 const SINE: Patch = { osc: 'sine', a: 0.001, d: 0.2, s: 0, r: 0.02, vol: 1 };
+/** Warm low-end body with 2nd & 3rd harmonics so phone speakers hear kicks/drops via missing-fundamental ([AU-15]). */
+const WARM_BASS: Patch = { osc: 'sine', partials: [[2, 0.32], [3, 0.14]], lp: { hz: 520 }, a: 0.001, d: 0.2, s: 0, r: 0.02, vol: 1 };
 const drop = (from: number, to: number, d: number, vol: number): Hit => (at, v, bus, pan, soft) =>
   chip.play({ ...SINE, d }, { freq: from, slideTo: to, at, dur: d * 0.7, vol: vol * v, bus, pan, soft });
+const warmDrop = (from: number, to: number, d: number, vol: number): Hit => (at, v, bus, pan, soft) =>
+  chip.play({ ...WARM_BASS, d }, { freq: from, slideTo: to, at, dur: d * 0.7, vol: vol * v, bus, pan, soft });
 
 export const DRUMS: Record<DrumId, Hit> = {
   kick: (at, v, bus, pan, soft) => {
-    drop(155, 44, 0.16, 0.85)(at, v, bus, pan, soft);
+    warmDrop(155, 44, 0.16, 0.85)(at, v, bus, pan, soft);
     chip.noise({ at, dur: 0.02, vol: 0.3 * v, filter: 3500, bus, soft });
   },
   snare: (at, v, bus, pan, soft) => {
@@ -116,17 +120,17 @@ export const DRUMS: Record<DrumId, Hit> = {
     chip.noise({ at, dur: 0.02, vol: 0.3 * v, filter: 4200, bus, pan, soft });
   },
   sleigh: (at, v, bus, pan, soft) => {
-    for (const [f, dt] of [[5200, 0], [6100, 0.012], [7300, 0.02]] as const) chip.play({ ...SINE, d: 0.09 }, { freq: f, at: at + dt, dur: 0.05, vol: 0.12 * v, bus, pan, space: 'room', soft });
+    for (const [f, dt] of [[3100, 0], [3650, 0.012], [4100, 0.02]] as const) chip.play({ ...SINE, d: 0.09 }, { freq: f, at: at + dt, dur: 0.05, vol: 0.12 * v, bus, pan, space: 'room', soft });
   },
   tick: (at, v, bus, pan, soft) => chip.play({ ...SINE, d: 0.022 }, { freq: 2100, at, dur: 0.015, vol: 0.34 * v, bus, pan, soft }),
   crash: (at, v, bus, pan) => chip.noise({ at, dur: 1.3, vol: 0.44 * v, short: true, filter: 5200, type: 'highpass', bus, pan, space: 'hall' }),
   ride: (at, v, bus, pan, soft) => chip.noise({ at, dur: 0.3, vol: 0.16 * v, short: true, filter: 9500, type: 'highpass', bus, pan, soft }),
   timpani: (at, v, bus, pan, soft) => {
-    drop(98, 82, 0.55, 0.8)(at, v, bus, pan, soft);
+    warmDrop(98, 82, 0.55, 0.8)(at, v, bus, pan, soft);
     chip.noise({ at, dur: 0.06, vol: 0.3 * v, filter: 700, bus, space: 'hall', soft });
   },
   taiko: (at, v, bus, pan, soft) => {
-    drop(120, 58, 0.32, 0.9)(at, v, bus, pan, soft);
+    warmDrop(120, 58, 0.32, 0.9)(at, v, bus, pan, soft);
     chip.noise({ at, dur: 0.09, vol: 0.5 * v, filter: 900, type: 'lowpass', bus, pan, space: 'room', soft });
   },
   tom: (at, v, bus, pan, soft) => drop(190, 110, 0.2, 0.6)(at, v, bus, pan, soft),
@@ -134,7 +138,7 @@ export const DRUMS: Record<DrumId, Hit> = {
     for (let i = 0; i < 4; i++) chip.noise({ at: at + i * 0.027 + (i % 2) * 0.008, dur: 0.018, vol: 0.34 * v, short: true, filter: 3000 + i * 1300, bus, pan, soft });
   },
   thud: (at, v, bus, pan, soft) => {
-    drop(90, 38, 0.24, 0.9)(at, v, bus, pan, soft);
+    warmDrop(90, 38, 0.24, 0.9)(at, v, bus, pan, soft);
     chip.noise({ at, dur: 0.1, vol: 0.4 * v, filter: 420, type: 'lowpass', bus, soft });
   },
   chain: (at, v, bus, pan, soft) => {
@@ -162,4 +166,4 @@ export const downlifter = (at: number, dur: number, vol = 1, bus: Bus = 'sfx') =
 
 /** A sub-bass drop under a huge hit. */
 export const subDrop = (at: number, vol = 1, bus: Bus = 'sfx') =>
-  chip.play({ ...SINE, d: 0.7 }, { freq: 110, slideTo: 30, at, dur: 0.5, vol: 0.85 * vol, bus });
+  chip.play({ ...WARM_BASS, d: 0.7 }, { freq: 110, slideTo: 30, at, dur: 0.5, vol: 0.85 * vol, bus });

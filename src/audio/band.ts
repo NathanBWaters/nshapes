@@ -17,9 +17,10 @@
  */
 import { getIsAppActive } from '@/utils/appLifecycle';
 import { registerInterval } from '@/utils/perfWatchdog';
-import { chip } from './chip';
+import { chip, foldFreq } from './chip';
 import { direct, restingMix, worldTone, type FightMood, type Mix } from './director';
 import { DRUMS, INSTRUMENTS, downlifter, drum, note, riser, subDrop, type DrumId, type InstrumentId } from './instruments';
+import { nativeBridge } from './nativeBridge';
 import { audioFlags } from './settings';
 import { ARRANGEMENTS, THEME, THEME_B, type Arrangement } from './songs';
 import { themeOf } from './themes';
@@ -118,6 +119,11 @@ class Band {
     return this.mood !== null;
   }
 
+  /** True on native iOS/Android where Web Audio is absent and no offline context is attached. */
+  private get useNative(): boolean {
+    return !chip.ctx && !chip.available;
+  }
+
   private get now(): number {
     return this.clockOverride ?? chip.now;
   }
@@ -130,6 +136,11 @@ class Band {
     this.clearSlowMo();
     if (!this.mood) this.mix = restingMix(known);
     if (!audioFlags.music) return;
+    if (this.useNative) {
+      nativeBridge.setMusicLevel(this.mix.level);
+      nativeBridge.playMusic(known);
+      return;
+    }
     if (!chip.ensure()) return;
     if (this.timer && this.arr) {
       if (this.arrName !== known) this.pending = known; // swap on the next bar line
@@ -150,6 +161,7 @@ class Band {
   /** Stop and forget the song (leaving a screen). */
   stop() {
     this.halt();
+    if (this.useNative) nativeBridge.stopMusic();
     this.current = null;
     this.mood = null;
     this.heat.clear();
@@ -158,6 +170,7 @@ class Band {
   /** Silence playback but remember the song (music toggled off, autoplay blocked). */
   halt() {
     this.clearSlowMo();
+    if (this.useNative) nativeBridge.haltMusic();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.stopIntervalTrack?.();
@@ -288,6 +301,10 @@ class Band {
 
   private applied = { filterHz: -1, level: -1, echo: -1 };
   private applyMixToChip(glide: number) {
+    if (this.useNative) {
+      nativeBridge.setMusicLevel(this.mix.level);
+      return;
+    }
     const a = this.applied;
     const echo = Math.round(this.stepDur() * 300) / 100;
     if (a.filterHz !== this.mix.filterHz) chip.setMusicFilter(this.mix.filterHz, glide);
@@ -299,6 +316,10 @@ class Band {
   /** A weapon fired: play its sting and bring its riff forward for the next bars. */
   fire(weaponId: string, slot = 0, afterMs = 0) {
     this.heat.set(weaponId, Math.min(1, (this.heat.get(weaponId) ?? 0) + 0.5));
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.fireWeapon(weaponId, slot, afterMs);
+      return;
+    }
     const c = this.cueCtx(slot, false, afterMs);
     if (!c) return;
     logCue(`sting:${weaponId}`, c.t, this.now);
@@ -317,7 +338,7 @@ class Band {
   private playSting(v: WeaponVoice, c: CueCtx, vol: number) {
     const octave = Math.min(6, v.octave + (v.octave <= 3 ? 1 : 0));
     stingOf(v).forEach((s, i) =>
-      note(v.inst, degreeToFreq(c.mode, c.key, c.root + s, octave), c.t + i * c.g, c.g * 3, { vol: 1.15 * vol, pan: v.pan, bus: SFX })
+      note(v.inst, foldFreq(degreeToFreq(c.mode, c.key, c.root + s, octave), 2600), c.t + i * c.g, c.g * 3, { vol: 1.15 * vol, pan: v.pan, bus: SFX })
     );
     if (v.drum) drum(v.drum, c.t, 0.8 * vol, SFX, v.pan);
   }
@@ -339,7 +360,7 @@ class Band {
     const root = chordRoot(mode, bar);
     // During slow-mo knockout, pitch-bend the music bed downward (~3.5 semitones) as time dilates
     const pitchScale = this.slowMo < 0.99 ? 0.72 + 0.28 * this.slowMo : 1;
-    const f = (degree: number, octave: number) => degreeToFreq(mode, key, degree, octave) * pitchScale;
+    const f = (degree: number, octave: number) => foldFreq(degreeToFreq(mode, key, degree, octave) * pitchScale, 2600);
     const evo = mix.evolutions.length > 0 ? themeOf(mix.evolutions[0]) : null;
     const flicker = mix.evolutionFading && s16 % 8 >= 4;
 
@@ -361,7 +382,9 @@ class Band {
       if (mix.lounge) note('vibes', freq, t, dur, { vol: 0.9 * leadEnv });
       else {
         chip.tone({ voice: 'pulse1', freq, at: t, dur, vol: a.leadVol * leadEnv, duty: a.leadDuty, vibrato: len > 2 ? a.leadVibrato : 0 });
-        if (colourEnv > 0.05) note(WORLD_COLOUR[this.arrName] ?? 'glock', freq * (this.arrName === 'boss' ? 0.5 : 2), t, dur, { vol: 0.45 * colourEnv * leadEnv, soft: true });
+        // [AU-14]: avoid pushing high-register leads (e.g. peaks leadOctave: 12) up into D8 shrieks
+        const colourMult = this.arrName === 'boss' ? 0.5 : freq > 1300 ? 1 : 2;
+        if (colourEnv > 0.05) note(WORLD_COLOUR[this.arrName] ?? 'glock', foldFreq(freq * colourMult, 2600), t, dur, { vol: 0.45 * colourEnv * leadEnv, soft: true });
         if (this.env.counter > 0.05) note('flute', f(lead.degree - 2, lead.octave + semis), t, dur, { vol: 0.5 * this.env.counter * leadEnv, pan: -0.3, soft: true });
       }
     }
@@ -425,7 +448,7 @@ class Band {
     if (c >= '0' && c <= '9') {
       let len = 1;
       while (s16 + len < 16 && v.riff[s16 + len] === '-') len++;
-      const freq = degreeToFreq(mode, key, root + (c.charCodeAt(0) - 48), Math.min(6, v.octave + up));
+      const freq = foldFreq(degreeToFreq(mode, key, root + (c.charCodeAt(0) - 48), Math.min(6, v.octave + up)), 2600);
       note(v.inst, freq, t, sd * len * 0.92, { vol, pan: v.pan, soft: true });
       if (double) note(double, freq, t, sd * len * 0.92, { vol: vol * 0.55, pan: -v.pan, soft: true });
     }
@@ -522,17 +545,25 @@ class Band {
 
   /** A card was tapped: the first, second and third card are the root, third and fifth of the chord. */
   select(count: number) {
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.select(count);
+      return;
+    }
     const c = this.cueCtx(0, true);
     if (!c) return;
     const i = Math.max(0, Math.min(2, count - 1));
-    note('kalimba', degreeToFreq(c.mode, c.key, c.root + i * 2, 5), c.t, 0.2, { vol: 0.9, bus: SFX });
+    note('kalimba', foldFreq(degreeToFreq(c.mode, c.key, c.root + i * 2, 5), 2600), c.t, 0.2, { vol: 0.9, bus: SFX });
     drum('tick', c.t, 0.25, SFX);
   }
 
   deselect() {
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.deselect();
+      return;
+    }
     const c = this.cueCtx(0, true);
     if (!c) return;
-    note('kalimba', degreeToFreq(c.mode, c.key, c.root, 4), c.t, 0.15, { vol: 0.6, bus: SFX });
+    note('kalimba', foldFreq(degreeToFreq(c.mode, c.key, c.root, 4), 2600), c.t, 0.15, { vol: 0.6, bus: SFX });
   }
 
   /**
@@ -541,10 +572,14 @@ class Band {
    * 0 a tap, 1 a thump, 2 a slam with a sub drop, 3 the whole orchestra.
    */
   payout(o: { combo: number; tier: number; rainbow?: boolean; afterMs?: number }) {
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.payout(o);
+      return;
+    }
     const c = this.cueCtx(0, false, o.afterMs);
     if (!c) return;
     logCue('payout', c.t, this.now);
-    const f = (degree: number, octave: number) => degreeToFreq(c.mode, c.key, degree, octave);
+    const f = (degree: number, octave: number) => foldFreq(degreeToFreq(c.mode, c.key, degree, octave), 2600);
     const N = (inst: InstrumentId, degree: number, octave: number, dt: number, dur: number, vol = 1, pan?: number) =>
       note(inst, f(degree, octave), c.t + dt, dur, { vol, pan, bus: SFX });
 
@@ -576,6 +611,10 @@ class Band {
 
   /** Play a named cue on the next 32nd note, in key. */
   cue(name: CueName, o: CueOpts = {}) {
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.cue(name, o);
+      return;
+    }
     const immediate = name === 'tap' || name === 'back' || name === 'slowMoDefeat' || name === 'star' || name === 'starSwoosh' || name === 'rankSeal' || name === 'storyClimax' || name === 'keyFound' || name === 'friendRescued';
     const c = this.cueCtx(o.slot ?? 0, immediate, o.afterMs);
     if (!c) return;
@@ -594,6 +633,10 @@ class Band {
 
   /** An evolution begins: a riser into the recipe's own fanfare. The band lifts a key (the director does that). */
   evolve(recipeId: string) {
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.evolve();
+      return;
+    }
     const c = this.cueCtx();
     if (!c) return;
     const theme = themeOf(recipeId);
@@ -607,30 +650,38 @@ class Band {
     const key = c.key + theme.lift;
     theme.fanfare.forEach((s, i) => {
       const last = i === theme.fanfare.length - 1;
-      const freq = degreeToFreq(c.mode, key, s, 4);
+      const freq = foldFreq(degreeToFreq(c.mode, key, s, 4), 2600);
       const dur = last ? c.g * 12 : c.g * 2.4;
       note(theme.insts[i < theme.fanfare.length / 2 ? 0 : 1], freq, t + i * c.g * 2, dur, { vol: 1.1, bus: SFX, pan: i % 2 ? 0.3 : -0.3 });
       note('brass', freq, t + i * c.g * 2, dur, { vol: 0.7, bus: SFX });
-      if (last) for (const d of [2, 4]) note('strings', degreeToFreq(c.mode, key, s - 7 + d, 4), t + i * c.g * 2, dur, { vol: 0.9, bus: SFX });
+      if (last) for (const d of [2, 4]) note('strings', foldFreq(degreeToFreq(c.mode, key, s - 7 + d, 4), 2600), t + i * c.g * 2, dur, { vol: 0.9, bus: SFX });
     });
   }
 
   /** The evolution ends: the power drains away. */
   devolve() {
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.cue('clarityEnd');
+      return;
+    }
     const c = this.cueCtx();
     if (!c) return;
     downlifter(c.t, c.g * 12, 0.7);
-    [7, 4, 2, 0].forEach((s, i) => note('vibes', degreeToFreq(c.mode, c.key, c.root + s, 5), c.t + i * c.g * 2, 0.6, { vol: 0.7, bus: SFX }));
+    [7, 4, 2, 0].forEach((s, i) => note('vibes', foldFreq(degreeToFreq(c.mode, c.key, c.root + s, 5), 2600), c.t + i * c.g * 2, 0.6, { vol: 0.7, bus: SFX }));
   }
 
   /** Audition a weapon outside a fight (Armory, unlock screen): its riff for one bar, then its sting. */
   audition(weaponId: string) {
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.fireWeapon(weaponId);
+      return;
+    }
     const c = this.cueCtx(0, true);
     if (!c) return;
     const v = weaponVoice(weaponId);
     const sd = c.g * 2;
     for (const [s, at, len] of riffNotes(v.riff)) {
-      note(v.inst, degreeToFreq(c.mode, c.key, c.root + s, v.octave), c.t + at * sd, sd * len * 0.92, { vol: 1.2, pan: v.pan, bus: SFX });
+      note(v.inst, foldFreq(degreeToFreq(c.mode, c.key, c.root + s, v.octave), 2600), c.t + at * sd, sd * len * 0.92, { vol: 1.2, pan: v.pan, bus: SFX });
     }
     if (v.beat) [...v.beat].forEach((ch, i) => {
       const id: DrumId | undefined = ch === 'x' ? v.drum : ch === 'o' ? v.drum2 : undefined;
@@ -649,6 +700,13 @@ class Band {
    * the scale and gaining energy as the cumulative damage graph races toward its climax.
    */
   storyBeat(opts: { weaponId?: string; step: number; totalSteps: number }) {
+    if (this.useNative) {
+      if (audioFlags.sfx) {
+        if (opts.weaponId) nativeBridge.fireWeapon(opts.weaponId);
+        else nativeBridge.select(Math.min(3, (opts.step % 3) + 1));
+      }
+      return;
+    }
     const c = this.cueCtx(0, true);
     if (!c) return;
     const total = Math.max(1, opts.totalSteps);
@@ -663,15 +721,15 @@ class Band {
       const oct = Math.min(6, v.octave + (v.octave <= 3 ? 1 : 0));
       const motif = stingOf(v).slice(0, 2);
       motif.forEach((s, i) => {
-        const freq = degreeToFreq(c.mode, c.key, c.root + s + Math.floor(opts.step / 2), oct);
+        const freq = foldFreq(degreeToFreq(c.mode, c.key, c.root + s + Math.floor(opts.step / 2), oct), 2600);
         note(v.inst, freq, c.t + i * c.g * 0.9, c.g * 2.8, { vol: vol * 0.95, pan: v.pan, bus: SFX });
       });
       if (v.drum) drum(v.drum, c.t, 0.45 + ratio * 0.35, SFX, v.pan);
       // Delicate ascending celesta shimmer linking each weapon voice into one musical crescendo
-      note('celesta', degreeToFreq(c.mode, c.key, deg, 6), c.t + c.g * 0.5, 0.28, { vol: 0.35 + ratio * 0.22, pan, bus: SFX });
+      note('celesta', foldFreq(degreeToFreq(c.mode, c.key, deg, 6), 2600), c.t + c.g * 0.5, 0.28, { vol: 0.35 + ratio * 0.22, pan, bus: SFX });
     } else {
-      note('marimba', degreeToFreq(c.mode, c.key, deg, 5), c.t, 0.22, { vol: vol * 0.85, pan, bus: SFX });
-      note('celesta', degreeToFreq(c.mode, c.key, deg + 4, 6), c.t + c.g * 0.6, 0.3, { vol: 0.42 + ratio * 0.25, pan: -pan, bus: SFX });
+      note('marimba', foldFreq(degreeToFreq(c.mode, c.key, deg, 5), 2600), c.t, 0.22, { vol: vol * 0.85, pan, bus: SFX });
+      note('celesta', foldFreq(degreeToFreq(c.mode, c.key, deg + 4, 6), 2600), c.t + c.g * 0.6, 0.3, { vol: 0.42 + ratio * 0.25, pan: -pan, bus: SFX });
       drum(ratio > 0.65 ? 'woodblock' : 'shaker', c.t, 0.4 + ratio * 0.25, SFX, pan);
     }
   }
@@ -683,6 +741,10 @@ class Band {
    */
   slowMoDefeat(opts: { boss?: boolean; perfectParry?: boolean } = {}) {
     this.clearSlowMo();
+    if (this.useNative) {
+      if (audioFlags.sfx) nativeBridge.slowMoDefeat();
+      return;
+    }
     this.slowMo = 0.36;
     chip.setMusicFilter(320, 0.34);
     chip.setMusicLevel(0.32, 0.3);
@@ -698,6 +760,13 @@ class Band {
 
   /** The fight is over: the band stops on a cadence (won) or falls apart (lost). */
   finale(won: boolean) {
+    if (this.useNative) {
+      this.halt();
+      this.mood = null;
+      this.heat.clear();
+      if (audioFlags.sfx) nativeBridge.finale(won);
+      return;
+    }
     const c = this.cueCtx();
     this.halt();
     this.mood = null;
@@ -707,7 +776,7 @@ class Band {
     chip.setMusicLevel(1, 0.22);
     this.applied = { filterHz: -1, level: -1, echo: -1 };
     if (!c) return;
-    const f = (degree: number, octave: number) => degreeToFreq(won ? c.mode : 'aeolian', c.key, degree, octave);
+    const f = (degree: number, octave: number) => foldFreq(degreeToFreq(won ? c.mode : 'aeolian', c.key, degree, octave), 2600);
     const beat = c.g * 8;
     if (won) {
       // V … I, then the top of the chord: "ta-da-daaa"
@@ -784,13 +853,13 @@ class Band {
 // Every cue is written in steps above the chord root (or the tonic), so it is
 // in tune with whatever the band is playing. `c.g` is one 32nd note.
 
-const fq = (c: CueCtx, degree: number, octave: number) => degreeToFreq(c.mode, c.key, degree, octave);
+const fq = (c: CueCtx, degree: number, octave: number) => foldFreq(degreeToFreq(c.mode, c.key, degree, octave), 2600);
 /** A note `degree` steps above the chord root */
 const N = (c: CueCtx, inst: InstrumentId, degree: number, octave: number, dt = 0, dur = 0.3, vol = 1, pan?: number) =>
   note(inst, fq(c, c.root + degree, octave), c.t + dt, dur, { vol, pan, bus: SFX });
 /** The same, pushed `semis` semitones out of the scale: a note that is wrong on purpose */
 const X = (c: CueCtx, inst: InstrumentId, degree: number, octave: number, semis: number, dt = 0, dur = 0.3, vol = 1) =>
-  note(inst, fq(c, c.root + degree, octave) * Math.pow(2, semis / 12), c.t + dt, dur, { vol, bus: SFX });
+  note(inst, foldFreq(fq(c, c.root + degree, octave) * Math.pow(2, semis / 12), 2600), c.t + dt, dur, { vol, bus: SFX });
 const D = (c: CueCtx, id: DrumId, dt = 0, vol = 1, pan?: number) => drum(id, c.t + dt, vol, SFX, pan);
 const runUp = (c: CueCtx, inst: InstrumentId, degrees: number[], octave: number, gap = 1, dur = 0.3, vol = 1) =>
   degrees.forEach((d, i) => N(c, inst, d, octave, i * c.g * gap, dur, vol, i % 2 ? 0.4 : -0.4));
@@ -1086,7 +1155,7 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
   },
   // Something special appeared: one note from outside the scale, then it resolves
   catalyst: c => {
-    note('bell', fq(c, 0, 6) * Math.pow(2, 6 / 12), c.t, 0.5, { vol: 0.8, bus: SFX });
+    note('bell', foldFreq(fq(c, 0, 6) * Math.pow(2, 6 / 12), 2600), c.t, 0.5, { vol: 0.8, bus: SFX });
     note('bell', fq(c, 4, 6), c.t + c.g * 3, 0.9, { vol: 0.9, bus: SFX });
     note('sub', fq(c, 0, 2), c.t, 0.4, { vol: 0.7, bus: SFX });
   },
@@ -1185,8 +1254,8 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
   // Expedition 33 slow-mo finishing blow: deep sub-bass drop + downward pitch-sagging harmonic resonance + slow-mo vacuum whoosh
   slowMoDefeat: c => {
     const emphasis = Math.max(0, Math.min(2, Math.round(c.amount)));
-    // Chest-thumping time-stop bass drop
-    chip.play({ osc: 'sine', a: 0.002, d: 0.95, s: 0, r: 0.08, vol: 0.95 }, { freq: 122, slideTo: 26, at: c.t, dur: 0.85, vol: 1.0, bus: SFX });
+    // Chest-thumping time-stop bass drop (with warm 2nd/3rd harmonics for phone speakers [AU-15])
+    chip.play({ osc: 'sine', partials: [[2, 0.3], [3, 0.14]], lp: { hz: 520 }, a: 0.002, d: 0.95, s: 0, r: 0.08, vol: 0.95 }, { freq: 122, slideTo: 26, at: c.t, dur: 0.85, vol: 1.0, bus: SFX });
     D(c, 'taiko', 0, 1.0);
     D(c, 'timpani', 0.015, 0.9);
     if (emphasis >= 1) D(c, 'anvil', 0, emphasis >= 2 ? 0.95 : 0.72);
