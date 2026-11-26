@@ -9,7 +9,6 @@ import type { AttributeName, Card, Weapon } from '@/types';
 import { isValidCombination } from '@/utils/gameUtils';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
 import { getBoardSizeForAttributes } from '@/utils/gameConfig';
-import { resolveMatch } from '@/utils/matchResolution';
 import type { AdventureSave, ChallengeDef, LevelDef, RunState } from '../types';
 import { createRng, type Rng } from './rng';
 import { computeStars, createRun, runReducer, shopPrice, type RunOverrides } from './run';
@@ -367,31 +366,19 @@ const nearMiss = (cards: Card[], attrs: AttributeName[], rng: Rng): Card[] | nul
   return null;
 };
 
-/**
- * GameBoard rolls weapon effects with Math.random, so the bot swaps in a seeded
- * source while it plays; that keeps balance numbers reproducible run to run.
- */
 export interface SimOptions {
   /** Pass on every level-up pick and shop offer, so the fight measures only what was brought in */
   skipPicks?: boolean;
-  /** Optional CreateRun overrides (used by Starfall Spire & lab counterfactuals) */
+  /** Optional CreateRun overrides (used by Starfall Summit & lab counterfactuals) */
   overrides?: RunOverrides;
-  /** Override accumulated features (used by Starfall Spire balance simulations) */
+  /** Override accumulated features (used by Starfall Summit balance simulations) */
   features?: RunState['features'];
   /** Opt-in lab telemetry: count firings & zero-op firings per rule key */
   trackRuleFirings?: boolean;
 }
 
-export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, plan?: BuildPlan, opts: SimOptions = {}) => {
-  const realRandom = Math.random;
-  const boardRng = createRng(seed ^ 0x5bd1e995);
-  Math.random = boardRng.next;
-  try {
-    return playRun(level, plan ? gearUp(save, plan, seed) : save, bot, seed, plan?.chaseRecipes !== false, opts);
-  } finally {
-    Math.random = realRandom;
-  }
-};
+export const simulateRun = (level: LevelDef, save: AdventureSave, bot: BotProfile, seed: number, plan?: BuildPlan, opts: SimOptions = {}) =>
+  playRun(level, plan ? gearUp(save, plan, seed) : save, bot, seed, plan?.chaseRecipes !== false, opts);
 
 /** Seconds of standing still the foe punishes, read off its ability text ("30s inactivity → …"), or null. */
 const inactivityLimit = (s: RunState): number | null => {
@@ -400,28 +387,19 @@ const inactivityLimit = (s: RunState): number | null => {
 };
 
 /**
- * Submit three picked cards the way GameBoard does: a Set (or a near miss a
- * grace covers) scores through the same match resolution, anything else is a
- * mistake. Either way the cards are replaced, and any ignited cards burn out
- * immediately afterward (matching GameBoard's 250ms post-Set burn cascade).
+ * Submit three picked cards: valid Sets (or near misses a grace covers) resolve
+ * weapon effects deterministically inside `runReducer` via the run's seeded RNG;
+ * anything else is a mistake. Either way the cards are replaced, and any ignited
+ * cards burn out immediately afterward (matching GameBoard's 250ms post-Set burn cascade).
  */
 const submit = (s: RunState, picked: Card[], hinted = false): RunState => {
   const v = isValidCombination(picked, s.attributes);
   const graceUsed = !v.isValid && v.invalidAttributes.length === 1 && s.stats.graces > 0;
   let next: RunState;
   if (v.isValid || graceUsed) {
-    // Note: `s.stats` already has `applyEnemyStatModifiers` applied via `refreshSources(d)` in fight.ts
-    const { cards, rewards, weaponEffects } = resolveMatch({
-      board: s.board,
-      selected: picked,
-      playerStats: s.stats,
-      weapons: s.weapons,
-      activeAttributes: s.attributes,
-      connections: s.connections,
-      graceUsed,
-    });
-    next = runReducer(s, { type: 'MATCH', cards, rewards, effects: weaponEffects, hinted });
-    next = runReducer(next, { type: 'REPLACE', ids: cards.map(c => c.id) });
+    next = runReducer(s, { type: 'MATCH', cards: picked, graceUsed, hinted, resolveWeapons: true });
+    const ids = next.replacing.length > 0 ? next.replacing : picked.map(c => c.id);
+    next = runReducer(next, { type: 'REPLACE', ids });
   } else {
     next = runReducer(s, { type: 'INVALID', cards: picked });
     next = runReducer(next, { type: 'REPLACE', ids: picked.map(c => c.id) });

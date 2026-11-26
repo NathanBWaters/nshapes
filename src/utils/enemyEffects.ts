@@ -20,6 +20,21 @@ import type {
 } from '@/types/enemy';
 
 /**
+ * Unbiased Fisher-Yates shuffle using an injected RNG (falls back to Math.random when omitted).
+ */
+export function shuffleWithRng<T>(items: readonly T[], rng?: () => number): T[] {
+  const out = [...items];
+  const nextRand = () => (rng ? rng() : Math.random());
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(nextRand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+const nextRandom = (rng?: () => number): number => (rng ? rng() : Math.random());
+
+/**
  * Create a no-op enemy for testing.
  * All hooks return empty/neutral deltas.
  * checkDefeatCondition always returns true (always "defeated").
@@ -81,9 +96,9 @@ export function createDummyEnemy(): EnemyInstance {
  * Config: { chance: number } - percentage chance (0-100) to create dud on card draw
  */
 export const DudCardEffect: EffectBehavior = {
-  onCardDraw: (card: Card, config: unknown): Card => {
+  onCardDraw: (card: Card, config: unknown, rng?: () => number): Card => {
     const { chance } = config as { chance: number };
-    if (Math.random() * 100 < chance) {
+    if (nextRandom(rng) * 100 < chance) {
       return { ...card, isDud: true };
     }
     return card;
@@ -173,9 +188,9 @@ export const ScoreDecayEffect: EffectBehavior = {
  * Config: { chance: number, flipChance: number }
  */
 export const FaceDownEffect: EffectBehavior = {
-  onCardDraw: (card: Card, config: unknown): Card => {
+  onCardDraw: (card: Card, config: unknown, rng?: () => number): Card => {
     const { chance } = config as { chance: number; flipChance: number };
-    if (Math.random() * 100 < chance) {
+    if (nextRandom(rng) * 100 < chance) {
       return { ...card, isFaceDown: true };
     }
     return card;
@@ -185,7 +200,8 @@ export const FaceDownEffect: EffectBehavior = {
     _cards: Card[],
     board: Card[],
     _internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyMatchResult> => {
     const { flipChance } = config as { chance: number; flipChance: number };
     // Any match triggers flip chance for ALL face-down cards on board
@@ -193,7 +209,7 @@ export const FaceDownEffect: EffectBehavior = {
     const cardsToFlip: string[] = [];
 
     for (const card of faceDownCards) {
-      if (Math.random() * 100 < flipChance) {
+      if (nextRandom(rng) * 100 < flipChance) {
         cardsToFlip.push(card.id);
       }
     }
@@ -214,7 +230,8 @@ export const CardRemovalEffect: EffectBehavior = {
     deltaMs: number,
     board: Card[],
     internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyTickResult> => {
     const { intervalMs, minBoardSize } = config as { intervalMs: number; minBoardSize: number };
     const state = internalState as { timeSinceRemoval: number };
@@ -226,7 +243,7 @@ export const CardRemovalEffect: EffectBehavior = {
       // Pick random card to remove (not duds)
       const validCards = board.filter((c) => !c.isDud);
       if (validCards.length > 0) {
-        const target = validCards[Math.floor(Math.random() * validCards.length)];
+        const target = validCards[Math.floor(nextRandom(rng) * validCards.length)];
         return {
           cardsToRemove: [target.id],
           events: [{ type: 'card_removed', cardId: target.id, reason: 'enemy_effect' }],
@@ -405,7 +422,8 @@ export const ExtraCardRemovalOnMatchEffect: EffectBehavior = {
     _cards: Card[],
     board: Card[],
     _internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyMatchResult> => {
     const { count, minBoardSize } = config as { count: number; minBoardSize: number };
 
@@ -415,9 +433,9 @@ export const ExtraCardRemovalOnMatchEffect: EffectBehavior = {
 
     if (actualRemove <= 0) return {};
 
-    // Pick random cards to remove (not duds)
+    // Pick random cards to remove (not duds) via unbiased Fisher-Yates shuffle
     const validCards = board.filter((c) => !c.isDud);
-    const shuffled = [...validCards].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleWithRng(validCards, rng);
     const toRemove = shuffled.slice(0, actualRemove);
 
     return {
@@ -440,7 +458,8 @@ export const ExtraCardRemovalOnInvalidEffect: EffectBehavior = {
     _cards: Card[],
     board: Card[],
     _internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyMatchResult> => {
     const { count, minBoardSize } = config as { count: number; minBoardSize: number };
 
@@ -450,9 +469,9 @@ export const ExtraCardRemovalOnInvalidEffect: EffectBehavior = {
 
     if (actualRemove <= 0) return {};
 
-    // Pick random cards to remove (not duds)
+    // Pick random cards to remove (not duds) via unbiased Fisher-Yates shuffle
     const validCards = board.filter((c) => !c.isDud);
-    const shuffled = [...validCards].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleWithRng(validCards, rng);
     const toRemove = shuffled.slice(0, actualRemove);
 
     return {
@@ -475,7 +494,8 @@ export const AttributeChangeEffect: EffectBehavior = {
     deltaMs: number,
     board: Card[],
     internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyTickResult> => {
     const { intervalMs } = config as { intervalMs: number };
     const state = internalState as { timeSinceAttributeChange: number };
@@ -488,17 +508,17 @@ export const AttributeChangeEffect: EffectBehavior = {
       const validCards = board.filter((c) => !c.isDud && !c.isFaceDown);
       if (validCards.length === 0) return {};
 
-      const target = validCards[Math.floor(Math.random() * validCards.length)];
+      const target = validCards[Math.floor(nextRandom(rng) * validCards.length)];
 
       // Pick a random attribute to change
       const attributes = ['shape', 'color', 'number', 'shading'] as const;
-      const attribute = attributes[Math.floor(Math.random() * attributes.length)];
+      const attribute = attributes[Math.floor(nextRandom(rng) * attributes.length)];
 
       // Pick a different value than current
       const currentValue = target[attribute];
       const values: readonly (string | number)[] = ATTRIBUTE_VALUES[attribute];
       const possibleValues = values.filter((v) => v !== currentValue);
-      const newValue = possibleValues[Math.floor(Math.random() * possibleValues.length)];
+      const newValue = possibleValues[Math.floor(nextRandom(rng) * possibleValues.length)];
 
       return {
         cardModifications: [
@@ -526,13 +546,13 @@ export const AttributeChangeEffect: EffectBehavior = {
  * Config: { bombChance: number, bombTimerMs: number, minBoardSize: number }
  */
 export const BombEffect: EffectBehavior = {
-  onCardDraw: (card: Card, config: unknown): Card => {
+  onCardDraw: (card: Card, config: unknown, rng?: () => number): Card => {
     const { bombChance, bombTimerMs } = config as {
       bombChance: number;
       bombTimerMs: number;
       minBoardSize: number;
     };
-    if (Math.random() * 100 < bombChance) {
+    if (nextRandom(rng) * 100 < bombChance) {
       return { ...card, hasBomb: true, bombTimer: bombTimerMs };
     }
     return card;
@@ -617,7 +637,8 @@ export const CountdownEffect: EffectBehavior = {
   onRoundStart: (
     board: Card[],
     internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyStartResult> => {
     const { countdownMs } = config as { countdownMs: number };
 
@@ -625,7 +646,7 @@ export const CountdownEffect: EffectBehavior = {
     const validCards = board.filter((c) => !c.isDud && !c.isFaceDown);
     if (validCards.length === 0) return {};
 
-    const target = validCards[Math.floor(Math.random() * validCards.length)];
+    const target = validCards[Math.floor(nextRandom(rng) * validCards.length)];
     internalState.countdownCardId = target.id;
     internalState.countdownTimer = countdownMs;
 
@@ -644,7 +665,8 @@ export const CountdownEffect: EffectBehavior = {
     deltaMs: number,
     board: Card[],
     internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyTickResult> => {
     const { countdownMs } = config as { countdownMs: number };
     const countdownCardId = internalState.countdownCardId as string | undefined;
@@ -661,7 +683,7 @@ export const CountdownEffect: EffectBehavior = {
         return {};
       }
 
-      const newTarget = validCards[Math.floor(Math.random() * validCards.length)];
+      const newTarget = validCards[Math.floor(nextRandom(rng) * validCards.length)];
       internalState.countdownCardId = newTarget.id;
       internalState.countdownTimer = countdownMs;
 
@@ -709,7 +731,7 @@ export const CountdownEffect: EffectBehavior = {
       // Pick a new countdown card
       const validCards = board.filter((c) => !c.isDud && !c.isFaceDown && c.id !== countdownCardId);
       if (validCards.length > 0) {
-        const newTarget = validCards[Math.floor(Math.random() * validCards.length)];
+        const newTarget = validCards[Math.floor(nextRandom(rng) * validCards.length)];
         internalState.countdownCardId = newTarget.id;
         internalState.countdownTimer = countdownMs;
         cardModifications.push({
@@ -753,13 +775,14 @@ export const TripleCardEffect: EffectBehavior = {
   onRoundStart: (
     board: Card[],
     internalState: Record<string, unknown>,
-    config: unknown
+    config: unknown,
+    rng?: () => number
   ): Partial<EnemyStartResult> => {
     const { count } = config as { count: number };
 
-    // Pick random cards to become triple cards
+    // Pick random cards to become triple cards via unbiased Fisher-Yates shuffle
     const validCards = board.filter((c) => !c.isDud && !c.isFaceDown);
-    const shuffled = [...validCards].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleWithRng(validCards, rng);
     const targets = shuffled.slice(0, Math.min(count, validCards.length));
 
     // Track triple cards in internal state
@@ -832,7 +855,7 @@ export function composeEffects(
     description: base.description ?? dummy.description,
     defeatConditionText: base.defeatConditionText ?? dummy.defeatConditionText,
 
-    onRoundStart: (board: Card[]): EnemyStartResult => {
+    onRoundStart: (board: Card[], rng?: () => number): EnemyStartResult => {
       // Reset internal state
       internalState.timeSinceMatch = 0;
       internalState.timeSinceRemoval = 0;
@@ -846,7 +869,7 @@ export function composeEffects(
 
       for (const { behavior, config } of effects) {
         if (behavior.onRoundStart) {
-          const effectResult = behavior.onRoundStart(board, internalState, config);
+          const effectResult = behavior.onRoundStart(board, internalState, config, rng);
           result.cardModifications.push(...(effectResult.cardModifications ?? []));
           result.events.push(...(effectResult.events ?? []));
         }
@@ -855,7 +878,7 @@ export function composeEffects(
       return result;
     },
 
-    onTick: (deltaMs: number, board: Card[]): EnemyTickResult => {
+    onTick: (deltaMs: number, board: Card[], rng?: () => number): EnemyTickResult => {
       const result: EnemyTickResult = {
         scoreDelta: 0,
         healthDelta: 0,
@@ -869,7 +892,7 @@ export function composeEffects(
 
       for (const { behavior, config } of effects) {
         if (behavior.onTick) {
-          const effectResult = behavior.onTick(deltaMs, board, internalState, config);
+          const effectResult = behavior.onTick(deltaMs, board, internalState, config, rng);
           result.scoreDelta += effectResult.scoreDelta ?? 0;
           result.healthDelta += effectResult.healthDelta ?? 0;
           result.timeDelta += effectResult.timeDelta ?? 0;
@@ -884,7 +907,7 @@ export function composeEffects(
       return result;
     },
 
-    onValidMatch: (matchedCards: Card[], board: Card[]): EnemyMatchResult => {
+    onValidMatch: (matchedCards: Card[], board: Card[], rng?: () => number): EnemyMatchResult => {
       // Reset inactivity timer on any match
       internalState.timeSinceMatch = 0;
 
@@ -898,7 +921,7 @@ export function composeEffects(
 
       for (const { behavior, config } of effects) {
         if (behavior.onValidMatch) {
-          const effectResult = behavior.onValidMatch(matchedCards, board, internalState, config);
+          const effectResult = behavior.onValidMatch(matchedCards, board, internalState, config, rng);
           result.timeDelta += effectResult.timeDelta ?? 0;
           result.pointsMultiplier *= effectResult.pointsMultiplier ?? 1;
           result.cardsToRemove.push(...(effectResult.cardsToRemove ?? []));
@@ -910,7 +933,7 @@ export function composeEffects(
       return result;
     },
 
-    onInvalidMatch: (cards: Card[], board: Card[]): EnemyMatchResult => {
+    onInvalidMatch: (cards: Card[], board: Card[], rng?: () => number): EnemyMatchResult => {
       const result: EnemyMatchResult = {
         timeDelta: 0,
         pointsMultiplier: 1,
@@ -921,7 +944,7 @@ export function composeEffects(
 
       for (const { behavior, config } of effects) {
         if (behavior.onInvalidMatch) {
-          const effectResult = behavior.onInvalidMatch(cards, board, internalState, config);
+          const effectResult = behavior.onInvalidMatch(cards, board, internalState, config, rng);
           result.timeDelta += effectResult.timeDelta ?? 0;
           result.pointsMultiplier *= effectResult.pointsMultiplier ?? 1;
           result.cardsToRemove.push(...(effectResult.cardsToRemove ?? []));
@@ -933,11 +956,11 @@ export function composeEffects(
       return result;
     },
 
-    onCardDraw: (card: Card): Card => {
+    onCardDraw: (card: Card, rng?: () => number): Card => {
       let modifiedCard = card;
       for (const { behavior, config } of effects) {
         if (behavior.onCardDraw) {
-          modifiedCard = behavior.onCardDraw(modifiedCard, config);
+          modifiedCard = behavior.onCardDraw(modifiedCard, config, rng);
         }
       }
       return modifiedCard;

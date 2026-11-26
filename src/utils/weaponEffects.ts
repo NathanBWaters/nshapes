@@ -7,6 +7,8 @@ import { DEFAULT_EFFECT_CAPS, rollBridgeEffects } from './gameDefinitions';
 // Grid dimensions (assumes 3 columns)
 const GRID_COLS = 3;
 
+const nextRandom = (rng?: () => number): number => (rng ? rng() : Math.random());
+
 /**
  * Get the effective (capped) value for a stat, respecting the player's current caps.
  * Uses the player's effectCaps if available, otherwise falls back to defaults.
@@ -84,7 +86,8 @@ export const getLineIndices = (index: number, boardSize: number, isRow: boolean)
 export const getExplosiveCards = (
   board: Card[],
   matchedCards: Card[],
-  explosionChance: number
+  explosionChance: number,
+  rng?: () => number
 ): Card[] => {
   const cardsToExplode: Card[] = [];
   const explodedIndices = new Set<number>();
@@ -98,7 +101,7 @@ export const getExplosiveCards = (
 
     adjacentIndices.forEach(adjIndex => {
       // Roll explosion chance for each adjacent card
-      if (!explodedIndices.has(adjIndex) && Math.random() * 100 < explosionChance) {
+      if (!explodedIndices.has(adjIndex) && nextRandom(rng) * 100 < explosionChance) {
         explodedIndices.add(adjIndex);
         const adjCard = board[adjIndex];
         if (adjCard && !matchedCards.some(mc => mc.id === adjCard.id)) {
@@ -116,7 +119,7 @@ export const getExplosiveCards = (
  * Set-geometric aiming: if 2+ matched cards share a row or column (with at least
  * one other card on that line), aim the laser along that axis through that card!
  */
-export const getLaserCards = (board: Card[], matchedCards: Card[]): Card[] => {
+export const getLaserCards = (board: Card[], matchedCards: Card[], rng?: () => number): Card[] => {
   const cardsToDestroy: Card[] = [];
   const matchedIdSet = new Set(matchedCards.map(mc => mc.id));
   const matchedIndices = matchedCards
@@ -142,23 +145,23 @@ export const getLaserCards = (board: Card[], matchedCards: Card[]): Card[] => {
   let originIndex: number;
   let isRow: boolean;
   if (alignedRows.length > 0 && alignedCols.length > 0) {
-    if (Math.random() < 0.5) {
+    if (nextRandom(rng) < 0.5) {
       isRow = true;
-      originIndex = alignedRows[Math.floor(Math.random() * alignedRows.length)][0];
+      originIndex = alignedRows[Math.floor(nextRandom(rng) * alignedRows.length)][0];
     } else {
       isRow = false;
-      originIndex = alignedCols[Math.floor(Math.random() * alignedCols.length)][0];
+      originIndex = alignedCols[Math.floor(nextRandom(rng) * alignedCols.length)][0];
     }
   } else if (alignedCols.length > 0) {
     isRow = false;
-    originIndex = alignedCols[Math.floor(Math.random() * alignedCols.length)][0];
+    originIndex = alignedCols[Math.floor(nextRandom(rng) * alignedCols.length)][0];
   } else if (alignedRows.length > 0) {
     isRow = true;
-    originIndex = alignedRows[Math.floor(Math.random() * alignedRows.length)][0];
+    originIndex = alignedRows[Math.floor(nextRandom(rng) * alignedRows.length)][0];
   } else {
-    originIndex = matchedIndices[Math.floor(Math.random() * matchedIndices.length)];
+    originIndex = matchedIndices[Math.floor(nextRandom(rng) * matchedIndices.length)];
     // If the random axis would hit zero non-matched cards (e.g. 3 matched in one row), fire perpendicular
-    const tryRow = Math.random() < 0.5;
+    const tryRow = nextRandom(rng) < 0.5;
     isRow = hasTargetsOnLine(originIndex, tryRow) ? tryRow : !tryRow;
   }
 
@@ -189,7 +192,8 @@ export const getRicochetCards = (
   matchedCards: Card[],
   excludedCards: Card[],
   ricochetChance: number,
-  chainChance: number
+  chainChance: number,
+  rng?: () => number
 ): Card[] => {
   const ricochetedCards: Card[] = [];
   const destroyedIds = new Set<string>();
@@ -199,7 +203,7 @@ export const getRicochetCards = (
   excludedCards.forEach(c => destroyedIds.add(c.id));
 
   // Roll initial ricochet chance
-  if (Math.random() * 100 >= ricochetChance) {
+  if (nextRandom(rng) * 100 >= ricochetChance) {
     return ricochetedCards; // No ricochet triggered
   }
 
@@ -214,7 +218,7 @@ export const getRicochetCards = (
     }
 
     // Pick a random target
-    const randomIndex = Math.floor(Math.random() * availableTargets.length);
+    const randomIndex = Math.floor(nextRandom(rng) * availableTargets.length);
     const targetCard = availableTargets[randomIndex];
 
     // Destroy this card
@@ -222,7 +226,7 @@ export const getRicochetCards = (
     destroyedIds.add(targetCard.id);
 
     // Roll for chain continuation
-    if (Math.random() * 100 >= chainChance) {
+    if (nextRandom(rng) * 100 >= chainChance) {
       chaining = false; // Chain ends
     }
   }
@@ -236,7 +240,8 @@ export const getRicochetCards = (
 export const getFireSpreadCards = (
   board: Card[],
   matchedCards: Card[],
-  fireChance: number
+  fireChance: number,
+  rng?: () => number
 ): Card[] => {
   const cardsToIgnite: Card[] = [];
   const igniteIndices = new Set<number>();
@@ -249,7 +254,7 @@ export const getFireSpreadCards = (
 
     adjacentIndices.forEach(adjIndex => {
       // Roll fire chance for each adjacent card
-      if (!igniteIndices.has(adjIndex) && Math.random() * 100 < fireChance) {
+      if (!igniteIndices.has(adjIndex) && nextRandom(rng) * 100 < fireChance) {
         const adjCard = board[adjIndex];
         // Don't ignite already burning cards or matched cards
         if (adjCard && !adjCard.onFire && !matchedCards.some(mc => mc.id === adjCard.id)) {
@@ -335,7 +340,8 @@ export const processWeaponEffects = (
     triggersThisRound: number;
     effectiveCap: number;
   },
-  isGraceMatch: boolean = false
+  isGraceMatch: boolean = false,
+  rng?: () => number
 ): WeaponEffectResult => {
   const result: WeaponEffectResult = {
     explosiveCards: [],
@@ -367,7 +373,7 @@ export const processWeaponEffects = (
 
   // Echo effect - MUST be processed FIRST to reserve the echo set before explosions
   // Only triggers on player matches (not on echoed matches) to prevent infinite loops
-  if (!isEchoMatch && capped.echo > 0 && activeAttributes && Math.random() * 100 < capped.echo) {
+  if (!isEchoMatch && capped.echo > 0 && activeAttributes && nextRandom(rng) * 100 < capped.echo) {
     // Find a valid set among remaining cards (only excluding matched cards at this point)
     const echoSet = findValidSet(board, matchedCards, activeAttributes);
     if (echoSet) {
@@ -375,7 +381,7 @@ export const processWeaponEffects = (
       result.notifications.push('Echo!');
 
       // Check for Chain Reaction - chance for a second auto-match
-      if (playerStats.chainReactionChance > 0 && Math.random() * 100 < playerStats.chainReactionChance) {
+      if (playerStats.chainReactionChance > 0 && nextRandom(rng) * 100 < playerStats.chainReactionChance) {
         // Exclude the first echo set too
         const excludedForSecond = [...matchedCards, ...echoSet];
         const secondEchoSet = findValidSet(board, excludedForSecond, activeAttributes);
@@ -393,7 +399,7 @@ export const processWeaponEffects = (
 
   // Explosive effect - destroy adjacent cards (excluding echo set cards)
   if (capped.explosion > 0) {
-    const rawExplosiveCards = getExplosiveCards(board, matchedCards, capped.explosion);
+    const rawExplosiveCards = getExplosiveCards(board, matchedCards, capped.explosion, rng);
     // Filter out cards that are part of echo sets
     result.explosiveCards = rawExplosiveCards.filter(c => !echoCardIds.has(c.id));
     if (result.explosiveCards.length > 0) {
@@ -418,9 +424,9 @@ export const processWeaponEffects = (
 
     laserWeapons.forEach(weapon => {
       const chance = Math.min(100, (weapon.effects.laserChance || 0) * laserScale);
-      if (Math.random() * 100 < chance) {
+      if (nextRandom(rng) * 100 < chance) {
         // This laser fires! Get cards for this laser
-        const thisLaserCards = getLaserCards(board, matchedCards);
+        const thisLaserCards = getLaserCards(board, matchedCards, rng);
         thisLaserCards.forEach(card => {
           // Only add if not already exploded, already lasered, or part of echo set
           if (!result.explosiveCards.some(ec => ec.id === card.id) &&
@@ -441,9 +447,9 @@ export const processWeaponEffects = (
       const laserText = lasersActivated > 1 ? `${lasersActivated}x Laser!` : 'Laser!';
       result.notifications.push(`${laserText} +${result.laserCards.length * 2}`);
     }
-  } else if (capped.laser > 0 && Math.random() * 100 < capped.laser) {
+  } else if (capped.laser > 0 && nextRandom(rng) * 100 < capped.laser) {
     // Fallback: single roll with combined chance (for backward compatibility or non-laser-tagged sources)
-    result.laserCards = getLaserCards(board, matchedCards);
+    result.laserCards = getLaserCards(board, matchedCards, rng);
     result.laserCards = result.laserCards.filter(
       lc => !result.explosiveCards.some(ec => ec.id === lc.id) && !echoCardIds.has(lc.id)
     );
@@ -469,7 +475,8 @@ export const processWeaponEffects = (
       matchedCards,
       excludedCards,
       capped.ricochet,
-      playerStats.ricochetChainChance  // Chain chance isn't capped (ricochet cap is for initial chance)
+      playerStats.ricochetChainChance,  // Chain chance isn't capped (ricochet cap is for initial chance)
+      rng
     );
 
     result.ricochetCount = result.ricochetCards.length;
@@ -488,26 +495,26 @@ export const processWeaponEffects = (
 
   // Fire spread effect - set adjacent cards on fire
   if (capped.fire > 0) {
-    result.fireCards = getFireSpreadCards(board, matchedCards, capped.fire);
+    result.fireCards = getFireSpreadCards(board, matchedCards, capped.fire, rng);
     if (result.fireCards.length > 0) {
       result.notifications.push(`Fire! ${result.fireCards.length} cards`);
     }
   }
 
   // Healing chance
-  if (capped.healing > 0 && Math.random() * 100 < capped.healing) {
+  if (capped.healing > 0 && nextRandom(rng) * 100 < capped.healing) {
     result.bonusHealing = 1;
     result.notifications.push('+1 HP');
   }
 
   // Hint gain chance
-  if (capped.hint > 0 && Math.random() * 100 < capped.hint) {
+  if (capped.hint > 0 && nextRandom(rng) * 100 < capped.hint) {
     result.bonusHints = 1;
     result.notifications.push('+1 Hint');
   }
 
   // Time gain chance - respects per-round trigger cap
-  if (capped.timeGain > 0 && Math.random() * 100 < capped.timeGain) {
+  if (capped.timeGain > 0 && nextRandom(rng) * 100 < capped.timeGain) {
     // Check if we're under the trigger cap
     const canTrigger = !timeGainContext ||
       timeGainContext.triggersThisRound < timeGainContext.effectiveCap;
@@ -521,7 +528,7 @@ export const processWeaponEffects = (
   }
 
   // Grace gain chance
-  if (capped.graceGain > 0 && Math.random() * 100 < capped.graceGain) {
+  if (capped.graceGain > 0 && nextRandom(rng) * 100 < capped.graceGain) {
     result.bonusGraces = 1;
     result.notifications.push('+1 Grace');
   }
@@ -536,7 +543,7 @@ export const processWeaponEffects = (
     result.bonusExperience += guaranteedXP;
 
     // Roll for the remaining chance
-    if (remainingChance > 0 && Math.random() * 100 < remainingChance) {
+    if (remainingChance > 0 && nextRandom(rng) * 100 < remainingChance) {
       result.bonusExperience += 1;
     }
 
@@ -555,7 +562,7 @@ export const processWeaponEffects = (
     result.bonusCoins += guaranteedCoins;
 
     // Roll for the remaining chance
-    if (remainingChance > 0 && Math.random() * 100 < remainingChance) {
+    if (remainingChance > 0 && nextRandom(rng) * 100 < remainingChance) {
       result.bonusCoins += 1;
     }
 
@@ -565,7 +572,7 @@ export const processWeaponEffects = (
   }
 
   // Board growth chance
-  if (capped.boardGrowth > 0 && Math.random() * 100 < capped.boardGrowth) {
+  if (capped.boardGrowth > 0 && nextRandom(rng) * 100 < capped.boardGrowth) {
     result.boardGrowth = playerStats.boardGrowthAmount || 1;
     result.notifications.push(`+${result.boardGrowth} Cards`);
   }
@@ -573,9 +580,9 @@ export const processWeaponEffects = (
   // Bridge weapon cross-system triggers (non-cascading, player matches only)
   if (!isEchoMatch && weapons && weapons.some(w => w.specialEffect === 'bridge')) {
     if (isGraceMatch) {
-      for (const b of rollBridgeEffects('onGraceUse', weapons)) {
+      for (const b of rollBridgeEffects('onGraceUse', weapons, rng)) {
         if (b.effect === 'triggerLaser') {
-          const bridgeLaserCards = getLaserCards(board, matchedCards).filter(
+          const bridgeLaserCards = getLaserCards(board, matchedCards, rng).filter(
             lc =>
               !result.explosiveCards.some(ec => ec.id === lc.id) &&
               !result.laserCards.some(existing => existing.id === lc.id) &&
@@ -593,7 +600,7 @@ export const processWeaponEffects = (
     }
 
     if (result.explosiveCards.length > 0) {
-      for (const b of rollBridgeEffects('onExplosion', weapons)) {
+      for (const b of rollBridgeEffects('onExplosion', weapons, rng)) {
         if (b.effect === 'gainGrace') {
           const amt = b.amount ?? 1;
           result.bonusGraces += amt;
@@ -603,7 +610,7 @@ export const processWeaponEffects = (
     }
 
     if (result.timeGainTriggered && activeAttributes) {
-      for (const b of rollBridgeEffects('onTimeGain', weapons)) {
+      for (const b of rollBridgeEffects('onTimeGain', weapons, rng)) {
         if (b.effect === 'triggerEcho') {
           const excluded = [
             ...matchedCards,
@@ -622,7 +629,7 @@ export const processWeaponEffects = (
     }
 
     if (result.autoMatchedSets.length > 0) {
-      for (const b of rollBridgeEffects('onEcho', weapons)) {
+      for (const b of rollBridgeEffects('onEcho', weapons, rng)) {
         if (b.effect === 'fireCard') {
           const count = b.amount ?? 1;
           const busyIds = new Set([
@@ -635,7 +642,7 @@ export const processWeaponEffects = (
           ]);
           const candidates = board.filter(c => !c.onFire && !busyIds.has(c.id));
           for (let i = 0; i < count && candidates.length > 0; i++) {
-            const pickIdx = Math.floor(Math.random() * candidates.length);
+            const pickIdx = Math.floor(nextRandom(rng) * candidates.length);
             const [picked] = candidates.splice(pickIdx, 1);
             busyIds.add(picked.id);
             result.fireCards.push(picked);
@@ -654,7 +661,7 @@ export const processWeaponEffects = (
       let totalHeal = 0;
       let lastWeaponName = '';
       for (let i = 0; i < destroyedCount; i++) {
-        for (const b of rollBridgeEffects('onDestruction', weapons)) {
+        for (const b of rollBridgeEffects('onDestruction', weapons, rng)) {
           if (b.effect === 'heal') {
             totalHeal += b.amount ?? 1;
             lastWeaponName = b.weaponName;
@@ -668,7 +675,7 @@ export const processWeaponEffects = (
     }
 
     if (result.bonusCoins > 0) {
-      for (const b of rollBridgeEffects('onCoinGain', weapons)) {
+      for (const b of rollBridgeEffects('onCoinGain', weapons, rng)) {
         if (b.effect === 'gainHint') {
           const amt = b.amount ?? 1;
           result.bonusHints += amt;
@@ -678,7 +685,7 @@ export const processWeaponEffects = (
     }
 
     if (result.bonusExperience > 0) {
-      for (const b of rollBridgeEffects('onXPGain', weapons)) {
+      for (const b of rollBridgeEffects('onXPGain', weapons, rng)) {
         if (b.effect === 'gainCoin') {
           const amt = b.amount ?? 1;
           result.bonusCoins += amt;

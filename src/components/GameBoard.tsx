@@ -11,6 +11,7 @@ import { recordComponentRender } from '@/utils/perfWatchdog';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { isValidCombination } from '@/utils/gameUtils';
 import { findSet, resolveMatch } from '@/utils/matchResolution';
+import { shuffleWithRng } from '@/utils/enemyEffects';
 import { useAutoHint } from '@/hooks/useAutoHint';
 import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useScreenShake } from '@/hooks/useScreenShake';
@@ -89,6 +90,8 @@ interface GameBoardProps {
   quietRewards?: boolean;
   /** Adventure's Effects switch: off, a wrong pick washes and fades its cards without shaking them */
   effects?: boolean;
+  /** Optional deterministic RNG stream for match resolution, auto-hints, and board particles */
+  rng?: () => number;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -124,8 +127,12 @@ const GameBoard: React.FC<GameBoardProps> = ({
   onSlotLayout,
   quietRewards = false,
   effects = true,
+  rng,
 }) => {
   recordComponentRender('GameBoard');
+  const rngRef = useRef<(() => number) | undefined>(rng);
+  rngRef.current = rng;
+  const nextRand = useCallback(() => (rngRef.current ? rngRef.current() : Math.random()), []);
   const [selectedCards, setSelectedCards] = useState<CardType[]>([]);
   const [matchedCardIds, setMatchedCardIds] = useState<string[]>([]);
   const [hintCards, setHintCards] = useState<string[]>([]);
@@ -221,11 +228,11 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     for (let i = 0; i < cardCount; i++) {
       // Offset each explosion slightly for visual variety
-      const offsetX = (Math.random() - 0.5) * 100;
-      const offsetY = (Math.random() - 0.5) * 100;
+      const offsetX = (nextRand() - 0.5) * 100;
+      const offsetY = (nextRand() - 0.5) * 100;
       spawnParticles(15, { x: centerX + offsetX, y: centerY + offsetY }, 'explosion');
     }
-  }, [spawnParticles]);
+  }, [spawnParticles, nextRand]);
 
   // Use ref for hints to avoid stale closure issues
   const hintsRef = useRef(playerStats.hints);
@@ -408,8 +415,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
 
     // 1 card by default; Mystic Sight's enhancedHintChance can reveal 2
     const enhancedHintChance = playerStats.enhancedHintChance || 0;
-    const showTwoCards = enhancedHintChance > 0 && Math.random() * 100 < enhancedHintChance;
-    const shuffled = [...set].sort(() => Math.random() - 0.5);
+    const showTwoCards = enhancedHintChance > 0 && nextRand() * 100 < enhancedHintChance;
+    const shuffled = shuffleWithRng(set, nextRand);
     const ids = shuffled.slice(0, showTwoCards ? 2 : 1).map(c => c.id);
     hintCardsRef.current = ids;
     setHintCards(ids);
@@ -421,7 +428,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
       setHintCards([]);
     }, AUTO_HINT_DISPLAY_MS);
     return true;
-  }, [cards, matchedCardIds, playerStats.enhancedHintChance, activeAttributes]);
+  }, [cards, matchedCardIds, playerStats.enhancedHintChance, activeAttributes, nextRand]);
 
   // Auto-hint - triggers after period of inactivity
   // Auto-hint disabled by enemy (e.g., Masked Bandit)
@@ -489,6 +496,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             connections,
             timeGainContext,
             graceUsed,
+            rng: nextRand,
           });
 
           if (weaponEffects.timeGainTriggered) onTimeGainTriggered?.();

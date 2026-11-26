@@ -6,7 +6,7 @@
  */
 
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
-import { WeaponCounterEffect, composeEffects } from '../../enemyEffects';
+import { WeaponCounterEffect, composeEffects, shuffleWithRng } from '../../enemyEffects';
 
 // All possible weapon types for countering
 const WEAPON_TYPES = ['fire', 'explosion', 'laser', 'hint', 'grace', 'time', 'healing'] as const;
@@ -15,9 +15,9 @@ const WEAPON_TYPES = ['fire', 'explosion', 'laser', 'hint', 'grace', 'time', 'he
  * Creates a fresh Goblin Saboteur enemy instance.
  * Randomly selects 3 weapon types to counter at -50%.
  */
-export function createGoblinSaboteur(): EnemyInstance {
-  // Pick 3 random weapon types
-  const shuffled = [...WEAPON_TYPES].sort(() => Math.random() - 0.5);
+export function createGoblinSaboteur(rng?: () => number): EnemyInstance {
+  // Pick 3 random weapon types via unbiased Fisher-Yates shuffle
+  const shuffled = shuffleWithRng(WEAPON_TYPES, rng);
   const selectedTypes = shuffled.slice(0, 3);
 
   const effects = selectedTypes.map((type) => ({

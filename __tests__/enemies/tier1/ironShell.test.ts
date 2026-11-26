@@ -108,8 +108,8 @@ describe('Iron Shell', () => {
       ];
 
       const result = enemy.onRoundStart(cards);
-      // Random(0) with sort(() => 0 - 0.5) reverses the array, so first after shuffle is third
-      expect(result.cardModifications[0].cardId).toBe('third-card');
+      // Random(0) with unbiased Fisher-Yates shuffle moves index 1 ('second-card') into slot 0
+      expect(result.cardModifications[0].cardId).toBe('second-card');
     });
 
     it('picks a card deterministically when random returns 0.99', () => {
@@ -122,7 +122,7 @@ describe('Iron Shell', () => {
       ];
 
       const result = enemy.onRoundStart(cards);
-      // Random(0.99) with sort(() => 0.99 - 0.5) keeps the array order, so first after shuffle is first
+      // Random(0.99) with Fisher-Yates keeps the array order, so first after shuffle is first
       expect(result.cardModifications[0].cardId).toBe('first-card');
     });
 

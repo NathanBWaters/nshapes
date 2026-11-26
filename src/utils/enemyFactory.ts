@@ -14,7 +14,7 @@ import { createDummyEnemy, WEAPON_COUNTERS, applyWeaponCounter } from './enemyEf
 import { ENEMY_CREATORS } from './enemies';
 import { generateChallengeBonus, getChallengeBonusMoney } from './rewardUtils';
 
-const ENEMY_REGISTRY: Record<string, { create: () => EnemyInstance; tier: EnemyInstance['tier'] }> = {};
+const ENEMY_REGISTRY: Record<string, { create: (rng?: () => number) => EnemyInstance; tier: EnemyInstance['tier'] }> = {};
 for (const create of ENEMY_CREATORS) {
   const { name, tier } = create();
   ENEMY_REGISTRY[name] = { create, tier };
@@ -25,15 +25,16 @@ for (const create of ENEMY_CREATORS) {
  * Each call returns a FRESH instance with reset internal state.
  *
  * @param name - The enemy name to create
+ * @param rng - Optional deterministic RNG stream for creation-time rolls (e.g. Goblin Saboteur)
  * @returns A fresh EnemyInstance, or DummyEnemy if name not found
  */
-export function createEnemy(name: string): EnemyInstance {
+export function createEnemy(name: string, rng?: () => number): EnemyInstance {
   const entry = ENEMY_REGISTRY[name];
   if (!entry) {
     console.warn(`Unknown enemy: ${name}, using dummy`);
     return createDummyEnemy();
   }
-  return entry.create();
+  return entry.create(rng);
 }
 
 /**

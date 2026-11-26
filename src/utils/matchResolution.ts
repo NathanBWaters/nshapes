@@ -38,7 +38,7 @@ const collateralReward = (card: Card, effectType: CollateralEffect, stats?: Play
 };
 
 /** The reward for a card the player picked as part of a Set. */
-export const selectedCardReward = (card: Card): CardReward => {
+export const selectedCardReward = (card: Card, rng?: () => number): CardReward => {
   const reward: CardReward = {
     cardId: card.id,
     points: MATCH_REWARDS.basePoints + (card.bonusPoints ?? 0) + (card.charge ?? 0),
@@ -47,7 +47,7 @@ export const selectedCardReward = (card: Card): CardReward => {
   };
   if (card.healing) reward.healing = 1;
   if (card.lootBox) reward.lootBox = true;
-  if (Math.random() < MATCH_REWARDS.hintDropChance) reward.hint = 1;
+  if ((rng ? rng() : Math.random()) < MATCH_REWARDS.hintDropChance) reward.hint = 1;
   return reward;
 };
 
@@ -84,12 +84,14 @@ export const resolveMatch = (input: {
   timeGainContext?: { triggersThisRound: number; effectiveCap: number };
   /** The selection was one attribute off and a grace turned it into a match */
   graceUsed: boolean;
+  /** Optional deterministic RNG stream (falls back to Math.random when omitted) */
+  rng?: () => number;
 }): MatchResolution => {
-  const { board, selected, playerStats, weapons, activeAttributes, connections } = input;
+  const { board, selected, playerStats, weapons, activeAttributes, connections, rng } = input;
 
-  const selectedRewards = selected.map(selectedCardReward);
+  const selectedRewards = selected.map(c => selectedCardReward(c, rng));
   const weaponEffects = processWeaponEffects(
-    board, selected, playerStats, weapons, activeAttributes, false, input.timeGainContext, input.graceUsed
+    board, selected, playerStats, weapons, activeAttributes, false, input.timeGainContext, input.graceUsed, rng
   );
 
   const cards = [...selected];
@@ -148,7 +150,7 @@ export const resolveMatch = (input: {
         experience: MATCH_REWARDS.baseExperience,
       });
     }
-    const echoEffects = processWeaponEffects(board, echoSet, playerStats, weapons, activeAttributes, true);
+    const echoEffects = processWeaponEffects(board, echoSet, playerStats, weapons, activeAttributes, true, undefined, false, rng);
     const addEcho = (c: Card, effectType: CollateralEffect) => {
       if (alreadyHitIds.has(c.id) || futureEchoIds.has(c.id)) return;
       add(c, effectType);
@@ -186,7 +188,7 @@ export const resolveMatch = (input: {
     let linkHeal = 0;
     let lastName = '';
     for (let i = 0; i < connectedCards.length; i++) {
-      for (const b of rollBridgeEffects('onDestruction', weapons)) {
+      for (const b of rollBridgeEffects('onDestruction', weapons, rng)) {
         if (b.effect === 'heal') {
           linkHeal += b.amount ?? 1;
           lastName = b.weaponName;
