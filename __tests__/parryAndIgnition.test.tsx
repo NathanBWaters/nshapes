@@ -211,7 +211,7 @@ describe('Set-Parry live combat loop (Timing, Perfect Parry, Stagger ×2, Unparr
       perfectWindowMs: 3500,
       penalty: 'heart',
     });
-    let s = createRun(level, baseSave(), {
+    let s = createRun(level, { ...baseSave(), selectedFighter: 'Corgi' }, {
       seed: 88,
       features: new Set(['hearts', 'gear', 'coins', 'hints', 'graces']),
     });
@@ -460,7 +460,7 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
       difficulty: 3,
       rewards: { star1: { coins: 10 }, star2: { coins: 20 }, star3: { coins: 30 } },
     };
-    const save = { ...createNewSave(), charms: [], upgrades: { heavy_hitter: 2 } };
+    const save = { ...createNewSave(), selectedFighter: 'Corgi' as const, charms: [], upgrades: { heavy_hitter: 2 } };
     let run = createRun(surgeLevel, save, { seed: 12, features: new Set(['hearts', 'gear']) });
     run = tick(run, SURGE_RULES.calmMs, 500);
     expect(run.surge?.active).toBe(true);

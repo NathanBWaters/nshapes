@@ -9,7 +9,24 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { AttributeName, Background, Color, Shape } from '@/types';
-import { ColorblindStorage } from '@/utils/storage';
+
+interface ColorblindStoreLike {
+  get?: () => boolean;
+  subscribe?: (listener: (enabled: boolean) => void) => () => void;
+}
+
+let cachedColorblindStorage: ColorblindStoreLike | null | undefined;
+const getColorblindStorage = (): ColorblindStoreLike | null => {
+  if (cachedColorblindStorage !== undefined) return cachedColorblindStorage;
+  try {
+    const mod = require('./storage') as { ColorblindStorage?: ColorblindStoreLike };
+    cachedColorblindStorage = mod?.ColorblindStorage ?? null;
+  } catch {
+    // Pure Node CLI scripts (e.g. balance-eras) execute outside React Native / MMKV.
+    cachedColorblindStorage = null;
+  }
+  return cachedColorblindStorage;
+};
 
 export interface CardColorTriplet {
   readonly red: string;
@@ -63,15 +80,19 @@ const SHAPE_SINGULAR_LOWER: Readonly<Record<Shape, string>> = {
 const isCardColor = (c: string): c is Color => c === 'red' || c === 'green' || c === 'purple';
 const isCardShape = (s: string): s is Shape => s === 'oval' || s === 'diamond' || s === 'squiggle';
 
-/** Safe getter for ColorblindStorage (works cleanly in mocked test environments). */
-export const getColorblindMode = (): boolean =>
-  typeof ColorblindStorage?.get === 'function' ? ColorblindStorage.get() : false;
+/** Safe getter for ColorblindStorage (works cleanly in mocked test & Node CLI environments). */
+export const getColorblindMode = (): boolean => {
+  const store = getColorblindStorage();
+  return typeof store?.get === 'function' ? store.get() : false;
+};
 
 /** Safe subscriber for ColorblindStorage. */
-export const subscribeColorblindMode = (onStoreChange: () => void): (() => void) =>
-  typeof ColorblindStorage?.subscribe === 'function'
-    ? ColorblindStorage.subscribe(() => onStoreChange())
+export const subscribeColorblindMode = (onStoreChange: () => void): (() => void) => {
+  const store = getColorblindStorage();
+  return typeof store?.subscribe === 'function'
+    ? store.subscribe(() => onStoreChange())
     : () => {};
+};
 
 /** Reactive hook subscribing to global Colorblind Mode preference. */
 export const useColorblind = (): boolean =>

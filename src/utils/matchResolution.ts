@@ -3,6 +3,7 @@
  * effects, linked cards, echo Sets, and the reward each affected card pays.
  */
 import type { AttributeName, BoardConnection, Card, CardReward, PlayerStats, Weapon } from '@/types';
+import type { ProcAccumulatorState } from '@/adventure/engine/entropy';
 import { MATCH_REWARDS } from './gameConfig';
 import { getLinkedDestructionPositions } from './connectionUtils';
 import { isValidCombination } from './gameUtils';
@@ -86,13 +87,16 @@ export const resolveMatch = (input: {
   graceUsed: boolean;
   /** Optional deterministic RNG stream (falls back to Math.random when omitted) */
   rng?: () => number;
+  /** Optional Adventure damped-entropy pity-bag accumulator for low-proc (<= 35%) weapon channels */
+  procAccum?: ProcAccumulatorState;
 }): MatchResolution => {
-  const { board, selected, playerStats, weapons, activeAttributes, connections, rng } = input;
+  const { board, selected, playerStats, weapons, activeAttributes, connections, rng, procAccum } = input;
 
   const selectedRewards = selected.map(c => selectedCardReward(c, rng));
   const weaponEffects = processWeaponEffects(
-    board, selected, playerStats, weapons, activeAttributes, false, input.timeGainContext, input.graceUsed, rng
+    board, selected, playerStats, weapons, activeAttributes, false, input.timeGainContext, input.graceUsed, rng, procAccum
   );
+  let curProcAccum = weaponEffects.nextProcAccum;
 
   const cards = [...selected];
   const rewards = [...selectedRewards];
@@ -150,7 +154,8 @@ export const resolveMatch = (input: {
         experience: MATCH_REWARDS.baseExperience,
       });
     }
-    const echoEffects = processWeaponEffects(board, echoSet, playerStats, weapons, activeAttributes, true, undefined, false, rng);
+    const echoEffects = processWeaponEffects(board, echoSet, playerStats, weapons, activeAttributes, true, undefined, false, rng, curProcAccum);
+    if (echoEffects.nextProcAccum !== undefined) curProcAccum = echoEffects.nextProcAccum;
     const addEcho = (c: Card, effectType: CollateralEffect) => {
       if (alreadyHitIds.has(c.id) || futureEchoIds.has(c.id)) return;
       add(c, effectType);
@@ -199,6 +204,10 @@ export const resolveMatch = (input: {
       weaponEffects.bonusHealing += linkHeal;
       weaponEffects.notifications.push(`${lastName}: +${linkHeal} HP`);
     }
+  }
+
+  if (procAccum !== undefined && curProcAccum !== undefined) {
+    weaponEffects.nextProcAccum = curProcAccum;
   }
 
   // Game and the adventure engine read this marker to spend the grace

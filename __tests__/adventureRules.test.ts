@@ -138,7 +138,7 @@ describe('rule interpreter', () => {
 
   it('idle rules fire once per quiet stretch; foeBelow fires once per foe', () => {
     let s = withWeapons(
-      startFight({ level: testLevel({ foes: [{ name: 'Dummy', hp: 20 }] }), features: ['hearts', 'gear'] }),
+      startFight({ level: testLevel({ foes: [{ name: 'Dummy', hp: 20 }] }), save: { selectedFighter: 'Corgi' }, features: ['hearts', 'gear'] }),
       relic([{ trigger: { on: 'idle', ms: 3000 }, effects: [{ do: 'damage', amount: 1 }] }]),
       relic([{ trigger: { on: 'foeBelow', fraction: 0.5 }, effects: [{ do: 'damage', amount: 2 }] }], undefined, 'b')
     );
@@ -354,9 +354,9 @@ describe('evolutions', () => {
     expect(s.forgedRecipes).toEqual([phoenix.id]);
     expect(eventsOf(s, 'evolution_start')[0].text).toBe(phoenix.name);
     const before = s.foeHp;
-    // Mending Charm grants an Over-Shield when Phoenix Pyre's opening heal overheals at full hearts;
-    // consume any Over-Shield first so the next miss loses a heart and fires Phoenix's 3×2 blast.
-    while (s.freeMistakesLeft > 0) s = miss(s);
+    // Mending Charm grants an Over-Shield on overheal & Orange Tabby starts with a Wave-1 Pounce Shield;
+    // consume shields first so the next miss loses a heart and fires Phoenix's 3×2 blast.
+    while (s.freeMistakesLeft > 0 || (s.waveShieldLeft ?? 0) > 0) s = miss(s);
     s = miss(s); // Phoenix: a lost heart blasts a 3×2 block
     expect(eventsOf(s, 'blast').length).toBeGreaterThan(0);
     expect(s.foeHp).toBeLessThan(before);
@@ -484,7 +484,11 @@ describe('evolutions', () => {
 
 describe('traps', () => {
   it('time bombs: one at the start, fuse in seconds, a heart and a fresh card when it goes off', () => {
-    let s = startFight({ level: testLevel({ rules: { hazards: { timeBombs: { every: 3, seconds: 5 } } } }), features: ['hearts', 'gear'] });
+    let s = startFight({
+      level: testLevel({ rules: { hazards: { timeBombs: { every: 3, seconds: 5 } } } }),
+      save: { selectedFighter: 'Corgi' },
+      features: ['hearts', 'gear'],
+    });
     expect(s.timeBombIds).toHaveLength(1);
     const bomb = s.board.find(c => c.id === s.timeBombIds[0])!;
     expect(bomb.hasCountdown).toBe(true);
@@ -520,7 +524,7 @@ describe('traps', () => {
   const snareFight = (pick: 'target' | 'snared') => {
     for (let seed = 1; seed < 200; seed++) {
       const fight = startFight({ seed, level: testLevel({ rules: { hazards: { snares: { every: 999 } } } }), features: ['hearts', 'gear'] });
-      const s = { ...fight, passives: [] };
+      const s = { ...fight, passives: [], waveShieldLeft: 0 };
       const i = s.board.findIndex(c => c.snare);
       const t = snareTarget(i, s.board[i].snare!, s.board.length)!;
       const [want, avoid] = pick === 'target' ? [s.board[t].id, s.board[i].id] : [s.board[i].id, s.board[t].id];

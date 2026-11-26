@@ -49,6 +49,7 @@ import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
+import { consecutiveLossesFor } from '../data/relief';
 import { COACH_KEYS } from '../progress';
 import { checksOfSet, computeLiveGuidance, describeSingleCardTraits, explainInvalidPick, fightRemarks, shouldShowDamageNumbers, shouldShowPassiveHud, showsTraitChecks, traitAddedBy } from '../coach';
 import StageBubble from './StageBubble';
@@ -786,6 +787,7 @@ const AdventureRun: React.FC<Props> = ({
     mistakeCards && mistakeCards.length === 3
       ? explainInvalidPick(mistakeCards, run.attributes, run.fighter, colorblind)
       : mistakeNote;
+  const consecutiveLosses = consecutiveLossesFor(startSave, level.id);
   const liveGuidance = useMemo(
     () =>
       computeLiveGuidance(run, {
@@ -796,8 +798,9 @@ const AdventureRun: React.FC<Props> = ({
         seenIntro: coachDismissed,
         noAssist: ui.disableAutoHint === true,
         colorblind,
+        consecutiveLosses,
       }),
-    [run, boardSelectedCount, boardSelectedCards, effectiveMistakeNote, mistakeCards, coachDismissed, ui.disableAutoHint, colorblind]
+    [run, boardSelectedCount, boardSelectedCards, effectiveMistakeNote, mistakeCards, coachDismissed, ui.disableAutoHint, colorblind, consecutiveLosses]
   );
   const activeGlowIds = useMemo(() => {
     const merged = [...(keenEyeIds ?? []), ...(liveGuidance?.glowIds ?? [])];
@@ -1535,6 +1538,7 @@ const AdventureRun: React.FC<Props> = ({
               onInvalidSelection={handleInvalid}
               playerStats={run.stats}
               weapons={run.weapons}
+              procAccum={run.procAccum}
               isPlayerTurn={run.status === 'playing' && !halted && !fx.cutIn}
               activeAttributes={run.attributes}
               onUseHint={handleUseHint}

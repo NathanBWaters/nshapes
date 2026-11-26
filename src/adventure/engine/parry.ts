@@ -227,12 +227,11 @@ export const resolveParryOnSet = (
     : isSpecific
       ? PARRY_RULES.counterParryMult
       : PARRY_RULES.anyParryMult;
-  const anyStaggerMs = (PARRY_RULES as { anyStaggerMs?: number }).anyStaggerMs ?? 2500;
   const staggerMs = perfect
     ? (p.spec.staggerMs ?? PARRY_RULES.perfectStaggerMs)
     : isSpecific
       ? (p.spec.staggerMs ?? PARRY_RULES.counterStaggerMs)
-      : anyStaggerMs;
+      : PARRY_RULES.anyStaggerMs;
   const bonusCoins = perfect ? PARRY_RULES.perfectParryCoins : PARRY_RULES.parryCoins;
 
   d.parriesLanded += 1;

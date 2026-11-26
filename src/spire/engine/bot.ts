@@ -200,14 +200,25 @@ const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): W
   };
 };
 
-/** True when taking `arcanaId` fits the run's build cleanly (Glass Prism allowed when healthy or expert!). */
+/** True when taking `arcanaId` fits the run's build cleanly (risk-calibrated for Wave 2 kiss-curse Arcana). */
 const isGoodArcana = (run: SpireRun, arcanaId: ArcanaId, bot: BotProfile): boolean => {
   if (run.arcana.length >= 3 || run.arcana.includes(arcanaId)) return false;
   if (arcanaId === 'scholars_gambit') return false;
   const isRainbowBuild =
     run.fighter === 'Emperor Penguin' || run.weapons.includes('rainbow-charm') || run.arcana.includes('prismatic_fever');
-  if (arcanaId === 'monochrome_pact' && (isRainbowBuild || run.arcana.includes('prismatic_fever'))) return false;
+  if (arcanaId === 'monochrome_pact') {
+    // Halves Rainbow / 3-diff damage (×0.5); only worth taking on non-Rainbow builds once the engine can spare it.
+    return !isRainbowBuild && !run.arcana.includes('prismatic_fever') && (bot.name === 'expert' || run.act >= 2);
+  }
   if (arcanaId === 'prismatic_fever' && run.arcana.includes('monochrome_pact')) return false;
+  if (arcanaId === 'controlled_burn') {
+    // Zeroes starting Graces and deals 2 Hearts on cooldown mistakes — avoid on fragile 5–6 Heart average runs.
+    return bot.name === 'expert' || run.maxHearts >= 7 || run.fighter === 'Badger';
+  }
+  if (arcanaId === 'catalyst_resonance') {
+    // Non-evolved Sets deal ×0.75 — only take once at least 2 Evolutions are armed (or Catalyst Prism is held).
+    return countArmedEvolutions(run.weapons) >= 2 || run.weapons.includes('catalyst-prism');
+  }
   if (arcanaId === 'glass_prism') {
     // Risk-calibrated Glass Prism: strong when max hearts are already lean (<= 4, e.g. high Ascension),
     // instead of sacrificing an 8+ heart Act 3 survival pool into Snare/Time-Bomb fights.

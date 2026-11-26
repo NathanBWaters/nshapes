@@ -3,6 +3,7 @@ import { isValidCombination } from './gameUtils';
 import { getEffectiveStat } from './gameConfig';
 import { EFFECT_CAP_TYPES, EffectCapType, getMainStatForCap } from '@/game/effectCaps';
 import { DEFAULT_EFFECT_CAPS, rollBridgeEffects } from './gameDefinitions';
+import { rollEntropyProc, shouldUseEntropy, type ProcAccumulatorState } from '@/adventure/engine/entropy';
 
 // Grid dimensions (assumes 3 columns)
 const GRID_COLS = 3;
@@ -317,6 +318,8 @@ export interface WeaponEffectResult {
   boardGrowth: number;
   notifications: string[];
   timeGainTriggered: boolean;  // Whether time gain actually triggered (for tracking)
+  /** Updated damped-entropy pity-bag accumulator state when `procAccum` was supplied */
+  nextProcAccum?: ProcAccumulatorState;
 }
 
 /**
@@ -341,7 +344,8 @@ export const processWeaponEffects = (
     effectiveCap: number;
   },
   isGraceMatch: boolean = false,
-  rng?: () => number
+  rng?: () => number,
+  procAccum?: ProcAccumulatorState
 ): WeaponEffectResult => {
   const result: WeaponEffectResult = {
     explosiveCards: [],
@@ -364,6 +368,17 @@ export const processWeaponEffects = (
     timeGainTriggered: false,
   };
 
+  const rand = rng ?? Math.random;
+  let curAccum: ProcAccumulatorState | undefined = procAccum;
+  const rollProc = (channel: string, pct: number): boolean => {
+    if (curAccum !== undefined && shouldUseEntropy(pct)) {
+      const rolled = rollEntropyProc(curAccum, channel, pct, rand);
+      curAccum = rolled.nextState;
+      return rolled.triggered;
+    }
+    return nextRandom(rng) * 100 < pct;
+  };
+
   // Get player's effect caps (or use defaults)
   const playerCaps = playerStats.effectCaps;
 
@@ -373,7 +388,7 @@ export const processWeaponEffects = (
 
   // Echo effect - MUST be processed FIRST to reserve the echo set before explosions
   // Only triggers on player matches (not on echoed matches) to prevent infinite loops
-  if (!isEchoMatch && capped.echo > 0 && activeAttributes && nextRandom(rng) * 100 < capped.echo) {
+  if (!isEchoMatch && capped.echo > 0 && activeAttributes && rollProc('echo', capped.echo)) {
     // Find a valid set among remaining cards (only excluding matched cards at this point)
     const echoSet = findValidSet(board, matchedCards, activeAttributes);
     if (echoSet) {
@@ -399,9 +414,26 @@ export const processWeaponEffects = (
 
   // Explosive effect - destroy adjacent cards (excluding echo set cards)
   if (capped.explosion > 0) {
-    const rawExplosiveCards = getExplosiveCards(board, matchedCards, capped.explosion, rng);
-    // Filter out cards that are part of echo sets
-    result.explosiveCards = rawExplosiveCards.filter(c => !echoCardIds.has(c.id));
+    if (curAccum !== undefined && shouldUseEntropy(capped.explosion)) {
+      const explodedIndices = new Set<number>();
+      matchedCards.forEach(matchedCard => {
+        const matchedIndex = board.findIndex(c => c.id === matchedCard.id);
+        if (matchedIndex === -1) return;
+        for (const adjIndex of getAdjacentIndices(matchedIndex, board.length)) {
+          if (explodedIndices.has(adjIndex)) continue;
+          const adjCard = board[adjIndex];
+          if (!adjCard || matchedCards.some(mc => mc.id === adjCard.id) || echoCardIds.has(adjCard.id)) continue;
+          if (rollProc('explosion', capped.explosion)) {
+            explodedIndices.add(adjIndex);
+            result.explosiveCards.push(adjCard);
+          }
+        }
+      });
+    } else {
+      const rawExplosiveCards = getExplosiveCards(board, matchedCards, capped.explosion, rng);
+      // Filter out cards that are part of echo sets
+      result.explosiveCards = rawExplosiveCards.filter(c => !echoCardIds.has(c.id));
+    }
     if (result.explosiveCards.length > 0) {
       result.bonusPoints += result.explosiveCards.length;
       result.bonusMoney += result.explosiveCards.length;
@@ -424,7 +456,8 @@ export const processWeaponEffects = (
 
     laserWeapons.forEach(weapon => {
       const chance = Math.min(100, (weapon.effects.laserChance || 0) * laserScale);
-      if (nextRandom(rng) * 100 < chance) {
+      const channel = laserWeapons.length === 1 ? 'laser' : `laser:${weapon.id}`;
+      if (rollProc(channel, chance)) {
         // This laser fires! Get cards for this laser
         const thisLaserCards = getLaserCards(board, matchedCards, rng);
         thisLaserCards.forEach(card => {
@@ -447,7 +480,7 @@ export const processWeaponEffects = (
       const laserText = lasersActivated > 1 ? `${lasersActivated}x Laser!` : 'Laser!';
       result.notifications.push(`${laserText} +${result.laserCards.length * 2}`);
     }
-  } else if (capped.laser > 0 && nextRandom(rng) * 100 < capped.laser) {
+  } else if (capped.laser > 0 && rollProc('laser', capped.laser)) {
     // Fallback: single roll with combined chance (for backward compatibility or non-laser-tagged sources)
     result.laserCards = getLaserCards(board, matchedCards, rng);
     result.laserCards = result.laserCards.filter(
@@ -470,14 +503,27 @@ export const processWeaponEffects = (
       ...result.laserCards,
       ...result.autoMatchedSets.flat(),
     ];
-    result.ricochetCards = getRicochetCards(
-      board,
-      matchedCards,
-      excludedCards,
-      capped.ricochet,
-      playerStats.ricochetChainChance,  // Chain chance isn't capped (ricochet cap is for initial chance)
-      rng
-    );
+    if (curAccum !== undefined && shouldUseEntropy(capped.ricochet)) {
+      if (rollProc('ricochet', capped.ricochet)) {
+        result.ricochetCards = getRicochetCards(
+          board,
+          matchedCards,
+          excludedCards,
+          101,
+          playerStats.ricochetChainChance,
+          rng
+        );
+      }
+    } else {
+      result.ricochetCards = getRicochetCards(
+        board,
+        matchedCards,
+        excludedCards,
+        capped.ricochet,
+        playerStats.ricochetChainChance,  // Chain chance isn't capped (ricochet cap is for initial chance)
+        rng
+      );
+    }
 
     result.ricochetCount = result.ricochetCards.length;
 
@@ -495,7 +541,24 @@ export const processWeaponEffects = (
 
   // Fire spread effect - set adjacent cards on fire
   if (capped.fire > 0) {
-    result.fireCards = getFireSpreadCards(board, matchedCards, capped.fire, rng);
+    if (curAccum !== undefined && shouldUseEntropy(capped.fire)) {
+      const igniteIndices = new Set<number>();
+      matchedCards.forEach(matchedCard => {
+        const matchedIndex = board.findIndex(c => c.id === matchedCard.id);
+        if (matchedIndex === -1) return;
+        for (const adjIndex of getAdjacentIndices(matchedIndex, board.length)) {
+          if (igniteIndices.has(adjIndex)) continue;
+          const adjCard = board[adjIndex];
+          if (!adjCard || adjCard.onFire || matchedCards.some(mc => mc.id === adjCard.id)) continue;
+          if (rollProc('fire', capped.fire)) {
+            igniteIndices.add(adjIndex);
+            result.fireCards.push(adjCard);
+          }
+        }
+      });
+    } else {
+      result.fireCards = getFireSpreadCards(board, matchedCards, capped.fire, rng);
+    }
     if (result.fireCards.length > 0) {
       result.notifications.push(`Fire! ${result.fireCards.length} cards`);
     }
@@ -693,6 +756,10 @@ export const processWeaponEffects = (
         }
       }
     }
+  }
+
+  if (curAccum !== undefined) {
+    result.nextProcAccum = curAccum;
   }
 
   return result;

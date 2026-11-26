@@ -8,7 +8,7 @@ import { comboWindowFor } from '../data/passives';
 import type { Card } from '@/types';
 import type { FightLogMathItem, PassiveId, PassiveState } from '../types';
 import { BASE_RULES } from '../data/rules';
-import { emit, enqueue, hasPassive, redeal, touchable, tuning, updateCards, type Draft } from './fight';
+import { emit, enqueue, hasPassive, powerCardBonusFor, redeal, touchable, tuning, updateCards, type Draft } from './fight';
 import { allSets } from './sets';
 
 export const restingPassiveState = (): PassiveState => ({
@@ -159,8 +159,9 @@ const grantBonusCards = (d: Draft, n: number, kind: 'power' | 'gold', skip: Set<
   const has = kind === 'power' ? isPower : isGold;
   const slots = d.board.map((c, i) => (touchable(d, i) && !skip.has(c.id) && !has(c) ? i : -1)).filter(i => i >= 0);
   const chosen = d._rng.shuffle(slots).slice(0, n);
+  const powerBonus = powerCardBonusFor(d);
   updateCards(d, chosen, c =>
-    kind === 'power' ? { ...c, bonusPoints: (c.bonusPoints ?? 0) + BASE_RULES.powerCardBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
+    kind === 'power' ? { ...c, bonusPoints: (c.bonusPoints ?? 0) + powerBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
   );
   return chosen;
 };

@@ -11,7 +11,6 @@
 import type { IconName } from '@/components/Icon';
 import { cardColorCode, cardColorHex, cardColorLabel, getColorblindMode } from '@/utils/cardColors';
 import type { FoeDef, LevelDef, ParryPenalty, ParryRequirement, ParrySpec } from '../types';
-import type {} from './relief';
 
 export const PARRY_RULES = {
   /** Final golden window of any wind-up that scores a PERFECT PARRY */

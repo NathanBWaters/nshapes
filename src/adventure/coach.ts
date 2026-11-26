@@ -32,6 +32,7 @@ import { readyMapKeys } from './data/mapKeys';
 import { levelFoe } from './data/foes';
 import { MECHANICS } from './data/mechanics';
 import { ASSIST_RULES } from './data/rules';
+import { LOSS_STREAK_ASSIST_STEPS, STUCK_NUDGE_LOSS_THRESHOLD } from './data/relief';
 
 /** One trait's check across the cards in question (the fight shows them in a strip above the board: TraitChecks.tsx). */
 export interface TraitCheckPill {
@@ -337,17 +338,19 @@ export const explainInvalidPick = (
 // ─── Stuck help ─────────────────────────────────────────────────────────────
 
 /** Seconds without a Set before the companion lights 1, 2, then 3 cards of one; null where it stays out of it. */
-export const assistStepsFor = (level: LevelDef): readonly number[] | null => {
+export const assistStepsFor = (level: LevelDef, consecutiveLosses = 0): readonly number[] | null => {
   if (level.rules.sandbox) return null;
   if (level.id === MAIN_LEVELS[0].id) return ASSIST_RULES.firstLevel;
   if (level.biome === 'meadow') return level.rules.attributes.length <= 2 ? ASSIST_RULES.twoTraits : ASSIST_RULES.threeTraits;
   if (level.biome === 'woods') return ASSIST_RULES.secondWorld;
+  // [GP-18] World 3–5 3-loss stuck nudge: softly light 1 card after 25s quiet without spoiling the Set
+  if (consecutiveLosses >= STUCK_NUDGE_LOSS_THRESHOLD) return LOSS_STREAK_ASSIST_STEPS;
   return null;
 };
 
 /** How many cards of a Set the companion is pointing out right now (0 = none yet). */
-export const assistCardsFor = (level: LevelDef, quietMs: number): number => {
-  const steps = assistStepsFor(level);
+export const assistCardsFor = (level: LevelDef, quietMs: number, consecutiveLosses = 0): number => {
+  const steps = assistStepsFor(level, consecutiveLosses);
   if (!steps) return 0;
   return steps.filter(s => quietMs >= s * 1000).length;
 };
@@ -480,6 +483,8 @@ export const computeLiveGuidance = (
     noAssist?: boolean;
     /** Colorblind Mode active: emit Orange / Blue / Plum & Tinted / Dark color words */
     colorblind?: boolean;
+    /** Consecutive losses on this level (enables 25s 1-card stuck nudge on World 3–5 at >= 3 losses) */
+    consecutiveLosses?: number;
   } = {}
 ): GuidedBoardHint | null => {
   if (run.status !== 'playing' || run.level.rules.sandbox) return null;
@@ -491,6 +496,7 @@ export const computeLiveGuidance = (
     seenIntro = false,
     noAssist = false,
     colorblind = false,
+    consecutiveLosses = 0,
   } = opts;
   const voice = companionVoice(run.fighter);
   const available = run.board.filter(c => isSelectable(c) && !run.replacing.includes(c.id));
@@ -498,7 +504,7 @@ export const computeLiveGuidance = (
   const first = run.level.id === MAIN_LEVELS[0].id;
   const idx = mainIndexOf(run.level);
   const quietMs = run.elapsedMs - run.lastMatchAtMs;
-  const assist = noAssist ? 0 : assistCardsFor(run.level, quietMs);
+  const assist = noAssist ? 0 : assistCardsFor(run.level, quietMs, consecutiveLosses);
   const mistakePills = mistakeCards && mistakeCards.length === 3 ? evaluateTripleTraits(mistakeCards, run.attributes, colorblind) : undefined;
   const others = (glow: string[]) => run.board.filter(c => !glow.includes(c.id)).map(c => c.id);
   /** While the rule is still new, two held cards are answered with the card that finishes them */

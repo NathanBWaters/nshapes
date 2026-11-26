@@ -458,7 +458,8 @@ const Card: React.FC<CardProps> = ({
     }
 
     if (hasCountdown && countdownTimer !== undefined) {
-      const isUrgent = countdownTimer <= 5;
+      const displaySec = countdownTimer > 120 ? countdownTimer / 1000 : countdownTimer;
+      const isUrgent = displaySec <= 5;
       chips.push({
         key: 'countdown',
         priority: 11,
@@ -470,7 +471,7 @@ const Card: React.FC<CardProps> = ({
           >
             <Icon name="lorc/stopwatch" size={16} color={isUrgent ? COLORS.canvasWhite : COLORS.slateCharcoal} noShadow />
             <Text style={[styles.timerText, isUrgent && styles.timerTextUrgent]}>
-              {Math.ceil(countdownTimer)}s
+              {Math.ceil(displaySec)}s
             </Text>
           </View>
         ),

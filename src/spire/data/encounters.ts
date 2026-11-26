@@ -56,10 +56,10 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
     fighter: 'Sly Fox',
     starterWeapon: 'snowball',
     bonusWeapon: 'war-drum',
-    maxHearts: 5,
-    startingCoins: 70,
+    maxHearts: 6,
+    startingCoins: 85,
     startingHints: 2,
-    startingGraces: 1,
+    startingGraces: 2,
     tagline: 'Starts armed for Avalanche — blistering combos that ramp Snowball & War Drum bursts.',
   },
   Corgi: {
@@ -194,7 +194,7 @@ export const canonicalLevelEnemyName = (levelId: string): string => {
  * Shading Surge (×5 in Act 3).
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
-  1: { start: 105, end: 280, eliteMult: 1.4, boss: 630, timer: 100, skirmishTimer: 72 },
+  1: { start: 105, end: 280, eliteMult: 1.4, boss: 630, timer: 100, skirmishTimer: 78 },
   2: { start: 540, end: 1240, eliteMult: 1.32, boss: 2350, timer: 110, skirmishTimer: 94 },
   3: { start: 2300, end: 5100, eliteMult: 1.3, boss: 11200, timer: 112, skirmishTimer: 106 },
 };

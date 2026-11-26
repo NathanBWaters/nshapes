@@ -214,8 +214,14 @@ describe('fighter passives', () => {
   const fight = (fighter: RunState['fighter'], over: Parameters<typeof startFight>[0] = {}) =>
     startFight({ ...over, save: { selectedFighter: fighter, ...over.save } });
 
-  it('Orange Tabby — Nine Lives survives one knockout', () => {
+  it('Orange Tabby — Nine Lives grants a Wave-1 Pounce Shield and survives one knockout', () => {
     let s = fight('Orange Tabby', { level: testLevel({ rules: { hearts: 3 } }) });
+    // [GP-14] Wave-1 Pounce Shield absorbs the first hit cleanly
+    expect(s.waveShieldLeft).toBe(1);
+    s = miss(s);
+    expect(s.hearts).toBe(3);
+    expect(s.waveShieldLeft).toBe(0);
+    // Next 3 mistakes drain 3 -> 0 and trigger Nine Lives (leaves 1 heart)
     for (let i = 0; i < 3; i++) s = miss(s);
     expect(s.status).toBe('playing');
     expect(s.hearts).toBe(1);
@@ -224,13 +230,19 @@ describe('fighter passives', () => {
     expect(s.status).toBe('lost');
   });
 
-  it('Orange Tabby — Scrappy adds damage per missing heart', () => {
+  it('Orange Tabby — Scrappy adds +1 base claw damage plus +1.5 per missing heart', () => {
     let s = fight('Orange Tabby', { features: ['hearts', 'gear'] });
-    s = miss(miss(s));
+    const fullBefore = s.foeHp;
+    s = playSet(s);
+    // At full hearts: 3 card base + 1 Scrappy base = 4
+    expect(fullBefore - s.foeHp).toBe(4);
+    // Consume Wave-1 Pounce Shield, then lose 2 real hearts
+    s = miss(miss(miss(s)));
+    expect(s.hearts).toBe(s.maxHearts! - 2);
     const before = s.foeHp;
     s = playSet(s);
-    // [GP-14] Scrappy baseline: +1.5 per missing heart (2 missing hearts -> +3 dmg on 3-dmg base Set)
-    expect(before - s.foeHp).toBe(3 + 3);
+    // [GP-14] Scrappy: +1 base + 1.5 per missing heart (2 missing hearts -> +4 dmg on 3-dmg base Set = 7)
+    expect(before - s.foeHp).toBe(3 + 1 + 3);
   });
 
   it('Sly Fox — quick Sets chain a combo, a mistake breaks it, max combo arms Hot Streak', () => {

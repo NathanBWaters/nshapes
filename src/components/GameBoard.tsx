@@ -9,6 +9,7 @@ import RewardReveal from './RewardReveal';
 import { COLORS } from '@/utils/colors';
 import { recordComponentRender } from '@/utils/perfWatchdog';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
+import type { ProcAccumulatorState } from '@/adventure/engine/entropy';
 import { isValidCombination } from '@/utils/gameUtils';
 import { findSet, resolveMatch } from '@/utils/matchResolution';
 import { shuffleWithRng } from '@/utils/enemyEffects';
@@ -96,6 +97,8 @@ interface GameBoardProps {
   effects?: boolean;
   /** Optional deterministic RNG stream for match resolution, auto-hints, and board particles */
   rng?: () => number;
+  /** Optional Adventure damped-entropy pity-bag accumulator for low-proc (<= 35%) weapon channels */
+  procAccum?: ProcAccumulatorState;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -134,6 +137,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
   quietRewards = false,
   effects = true,
   rng,
+  procAccum,
 }) => {
   recordComponentRender('GameBoard');
   const rngRef = useRef<(() => number) | undefined>(rng);
@@ -518,6 +522,7 @@ const GameBoard: React.FC<GameBoardProps> = ({
             timeGainContext,
             graceUsed,
             rng: nextRand,
+            procAccum,
           });
 
           if (weaponEffects.timeGainTriggered) onTimeGainTriggered?.();

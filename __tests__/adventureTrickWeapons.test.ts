@@ -144,7 +144,7 @@ describe('Snowball and the Glass Sword', () => {
 
 describe('Devil\'s Bargain', () => {
   it('pays for the heart it took and every other missing heart', () => {
-    let s = withTrick({ missingHeartDamage: 2 }, startFight({ features: ['hearts', 'gear'] }));
+    let s = withTrick({ missingHeartDamage: 2 }, startFight({ save: { selectedFighter: 'Corgi' }, features: ['hearts', 'gear'] }));
     s = playSet(s);
     expect(s.log[s.log.length - 1].lines).toContainEqual({ type: 'rule', amount: 2, text: "Devil's Bargain" });
     s = playSet(miss(s));
@@ -328,7 +328,7 @@ describe('Chain Gang', () => {
 
 describe('Thorn Bush', () => {
   it('thorn cards pay when matched in time and cost a heart when left', () => {
-    let s = withTrick({ thornChance: 100, thornDamage: 6 }, startFight({ features: ['hearts', 'gear'] }));
+    let s = withTrick({ thornChance: 100, thornDamage: 6 }, startFight({ save: { selectedFighter: 'Corgi' }, features: ['hearts', 'gear'] }));
     s = playSet(s);
     const thorny = s.board.filter(c => c.thornAt !== undefined);
     expect(thorny.length).toBeGreaterThan(0);

@@ -3,65 +3,15 @@
  * Pre-1-8 Hidden Purse, Retreat Coin Retention & "Starfall Cauldron" Upward Wager.
  *
  * Pure data & helper functions consumed by progress.ts, save.ts, LevelPreview.tsx,
- * fightEvent.ts, and engine/run.ts. All save & parry extension fields are declared
- * optional via module augmentation so parallel Wave 2 lanes compile and merge cleanly.
+ * AdventureMode.tsx, AdventureRun.tsx, coach.ts, fightEvent.ts, and engine/run.ts.
  */
-import type { AdventureSave, LevelDef } from '../types';
+import type { AdventureSave, LevelDef, RunReliefOptions } from '../types';
 import { worldNumber } from './biomes';
 
 /** Upward difficulty wager tier on LevelPreview (World 2+). */
 export type CauldronWagerTier = 0 | 1 | 2;
 
-/**
- * Runtime relief/wager modifier bundle passed into `createRun` / `AdventureRun`.
- * Mirrors Lane 2A's `RunReliefOptions` shape in `src/adventure/types.ts`.
- */
-export interface RunReliefOptions {
-  tailwindActive?: boolean;
-  cauldronWager?: CauldronWagerTier;
-  extraHearts?: number;
-  timerScale?: number;
-  parryWindupScale?: number;
-  foeHpScale?: number;
-  coinMultiplier?: number;
-  starCap?: number;
-}
-
-declare module '../types' {
-  interface AdventureSave {
-    /** Consecutive 0★ defeats per levelId (reset to 0 on any ≥★ clear). */
-    consecutiveLosses?: Record<string, number>;
-    /** Coins quietly banked from pre-1-8 defeats; bursts open into `coins` when 1-8 unlocks coins. */
-    hiddenPurse?: number;
-    /** Active Starfall Cauldron upward coin wager (0 = Standard, 1 = Bold, 2 = Starfall). */
-    cauldronWager?: CauldronWagerTier;
-    /** Whether Friendly Tailwind relief is toggled ON for the next attempt. */
-    tailwindActive?: boolean;
-  }
-
-  interface FoeDef {
-    /** Optional Hydra boss head phase (1, 2, or 3) used by 5-5 while preserving canonical enemy: 'The Hydra' */
-    hydraPhase?: 1 | 2 | 3;
-  }
-
-  interface ParrySpec {
-    /** Optional per-archetype Stagger duration override (ms) for Counter/Heavy parries. */
-    staggerMs?: number;
-    /** Optional penalty magnitude override (hearts for `'heart'`, seconds for `'time'`). */
-    penaltyAmount?: number;
-    /** Optional Boss escalation cooldown tightening (ms) below 50% foe HP. */
-    bossEnrageDeltaMs?: number;
-  }
-
-  interface RunState {
-    /** True when Friendly Tailwind relief was active for this fight. */
-    tailwindActive?: boolean;
-    /** Active Starfall Cauldron upward wager tier for this fight (0 | 1 | 2). */
-    cauldronWager?: CauldronWagerTier;
-    /** Resolved relief/wager runtime modifiers. */
-    relief?: RunReliefOptions;
-  }
-}
+export type { RunReliefOptions };
 
 // ─── Friendly Tailwind (Loss-Streak Relief) ──────────────────────────────────
 

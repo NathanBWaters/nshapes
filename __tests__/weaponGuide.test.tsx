@@ -113,6 +113,15 @@ describe('the explainer card', () => {
     expect(view.getByLabelText('[Extra hearts] 3')).toBeTruthy();
     expect(view.getByText('T2')).toBeTruthy();
   });
+
+  it('[TP-10] + [GP-01] displays clean [Parameter] stats alongside transparent per-trigger Power yield at current level', () => {
+    const build = { level: 3, tuning: {} };
+    const w = getArmoryWeapon('blast-powder', { 'blast-powder': build })!;
+    const view = render(<WeaponExplainer weapon={w} build={build} defaultOpen />);
+    expect(view.getByLabelText('[Blast chance] 26%')).toBeTruthy();
+    expect(view.getByTestId('weapon-explainer-scaling-blast-powder')).toBeTruthy();
+    expect(view.getByText(/Every explosion adds \+0\.15 Power \(Lv 3\)/)).toBeTruthy();
+  });
 });
 
 describe('[GP-12] EvolutionPickOverlay streamlined mid-fight scan', () => {

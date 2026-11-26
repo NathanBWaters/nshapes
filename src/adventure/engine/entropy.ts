@@ -22,6 +22,16 @@ import type { WeaponTriggerKind } from '../rules/types';
 /** Default symmetric jitter half-width (±25% of effectivePct). */
 export const ENTROPY_JITTER_FRACTION = 0.25;
 
+/** Maximum per-channel proc percentage routed through the damped-entropy pity bag ([GP-19]). */
+export const ENTROPY_MAX_PCT = 35;
+
+/** Board-proc weapon channels routed through the damped-entropy pity bag. */
+export const ENTROPY_CHANNELS = ['explosion', 'laser', 'fire', 'ricochet', 'echo'] as const;
+
+/** True when a weapon proc channel falls in the low-proc band (`0 < pct <= 35%`) using pity-bag entropy. */
+export const shouldUseEntropy = (effectivePct: number): boolean =>
+  Number.isFinite(effectivePct) && effectivePct > 0 && effectivePct <= ENTROPY_MAX_PCT;
+
 /** Mutable-free accumulator map persisted on RunState (`procAccum`). */
 export type ProcAccumulatorState = Readonly<Partial<Record<WeaponTriggerKind | string, number>>>;
 
@@ -40,8 +50,22 @@ export interface EntropyRollResult {
 
 const tidy = (n: number): number => Math.round(n * 10000) / 10000;
 
-/** Creates a fresh empty pity-bag accumulator state for a new fight. */
+/** Creates a fresh empty pity-bag accumulator state (0 initial charge on every channel). */
 export const createProcAccumulator = (): ProcAccumulatorState => ({});
+
+/**
+ * Seeds each low-proc entropy channel with a deterministic stationary phase in `[0, 100)`.
+ * Ensures short fights have exact unbiased `E[procs] = K * pct / 100` from Set #1
+ * (no artificial dead-zone on low-proc 8–14% weapons) while keeping hard dry-streak ceilings.
+ */
+export const seedProcAccumulator = (rand: () => number): ProcAccumulatorState => {
+  const seeded: Record<string, number> = {};
+  for (const ch of ENTROPY_CHANNELS) {
+    const u = Math.max(0, Math.min(0.999999999999, rand()));
+    seeded[ch] = tidy(u * 100);
+  }
+  return seeded;
+};
 
 /** Returns the current 0..1 charge progress toward the next guaranteed proc. */
 export const getEntropyCharge = (state: ProcAccumulatorState, kind: WeaponTriggerKind | string): number => {

@@ -5,7 +5,6 @@ import { createHydraHead, type HydraHeadPhase } from '@/utils/enemies/tier4/theH
 import type { EnemyInstance } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
 import type { FoeDef, LevelDef } from '../types';
-import type {} from './relief';
 
 export interface Foe {
   foe: EnemyInstance;

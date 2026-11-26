@@ -19,6 +19,7 @@ import { CAMPAIGN_FEATURES } from './data/features';
 import { MECHANICS } from './data/mechanics';
 import {
   applyLevelResult,
+  applyRetreatResult,
   armRecipePair,
   claimMapKey,
   equipArcana,
@@ -28,12 +29,15 @@ import {
   markCoachMarkSeen,
   markMechanicSeen,
   markPathsRevealed,
+  setCauldronWager,
+  setTailwindActive,
   swapCharm,
   toggleArcana,
   toggleCharm,
   type ResultApplication,
   type Unlock,
 } from './progress';
+import { resolveRunReliefOptions } from './data/relief';
 import { isFirstVisit, lessonsDueBefore, taughtOnPreview, type LessonPlan } from './lessons';
 import { loadAdventureSave, loadBattleHistory, recordBattle, saveBattleFeedback, writeAdventureSave } from './save';
 import type { FightTape } from './engine/replay';
@@ -361,11 +365,13 @@ const AdventureMode: React.FC<Props> = ({
   /** A fight left partway through (retreat or restart) is still a battle, once a move was made. */
   const handleLeft = (level: LevelDef, run: RunState, tape: FightTape) => {
     if (!wasFought(run)) return;
+    const { save: nextSave, coinsRetained } = applyRetreatResult(save, level, run);
+    if (coinsRetained > 0) setSave(nextSave);
     const at = Date.now();
     const fightId = `${at}-${tape.recording.seed}`;
-    const record = battleRecord(level, run, { at, left: true, fightId });
+    const record = battleRecord(level, run, { at, left: true, coins: coinsRetained, fightId });
     remember(record);
-    trackFight(level, run, record, tape, { fightId, afterSave: save });
+    trackFight(level, run, record, tape, { fightId, afterSave: nextSave });
   };
 
   const handleResultsRateFun = (rating: FunRating | null, tags: FunTag[]) => {
@@ -422,12 +428,14 @@ const AdventureMode: React.FC<Props> = ({
     );
   } else if (screen.kind === 'run') {
     const level = getLevel(screen.levelId);
+    const relief = resolveRunReliefOptions(level, save);
     body = (
       <AdventureRun
         key={`${screen.levelId}-${screen.seed}`}
         level={level}
         save={save}
         seed={screen.seed}
+        relief={relief}
         autoPlayer={autoPlayer}
         onFinish={(run, tape) => handleFinish(level, run, tape)}
         onQuit={(run, tape) => { handleLeft(level, run, tape); setScreen({ kind: 'map', highlight: level.id }); }}
@@ -532,6 +540,8 @@ const AdventureMode: React.FC<Props> = ({
           onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
           onArmRecipe={recipeId => { sfx('confirm'); setSave(s => armRecipePair(s, recipeId)); }}
           onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
+          onToggleTailwind={active => { sfx('click'); setSave(s => setTailwindActive(s, active)); }}
+          onSelectWager={tier => { sfx('click'); setSave(s => setCauldronWager(s, tier)); }}
           onShowMechanic={id => setReference(MECHANICS[id])}
           onOpenCamp={tab => {
             // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map

@@ -317,10 +317,8 @@ export const activeEnemyCounters = (
   return out;
 };
 
-/** Re-derive everything that depends on the live sources (call after weapons, evolutions, or wave foe change). */
-export const refreshSources = (d: Draft) => {
-  d._mods = null;
-  d._rules = null;
+/** Re-apply live enemy weapon counters (e.g. Kraken's Tentacle Lock) without rebuilding rules/modifiers. */
+export const syncEnemyCounters = (d: Draft) => {
   const m = mods(d);
   const scale = m.weaponChanceScale ?? {};
   // Luck (Second Chance's growth) lifts every weapon chance
@@ -341,11 +339,23 @@ export const refreshSources = (d: Draft) => {
     }
   }
   d.stats = stats;
+};
+
+/** Re-derive everything that depends on the live sources (call after weapons, evolutions, or wave foe change). */
+export const refreshSources = (d: Draft) => {
+  d._mods = null;
+  d._rules = null;
+  const m = mods(d);
+  syncEnemyCounters(d);
   d.evolutionLikelihood = d.features.has('evolutions')
     ? evolutionLikelihoodFor(d.evolutionLabTier, m, arcana(d).catalystChanceScale ?? 1) + (d.level.rules.evolutionLikelihood ?? 0)
     : 0;
   d.evolutionCap = evolutionCapFor(d.level, m, arcana(d).catalystRespawns ?? 0);
 };
+
+/** Bonus damage carried by newly spawned Power cards (Glass Prism overrides +2 -> +4). */
+export const powerCardBonusFor = (d: Draft): number =>
+  arcana(d).powerCardBonusOverride ?? BASE_RULES.powerCardBonus;
 
 const DEFAULT_TUNING: Record<string, number> = Object.assign({}, ...Object.values(PASSIVE_TUNING));
 
@@ -477,7 +487,7 @@ const dress = (d: Draft, base: Card, opts?: DrawOptions): Card => {
   }
   const specialMult = arcana(d).specialCardChanceScale ?? 1;
   if (d.features.has('coins') && d._rng.next() < BASE_RULES.coinCardChance * specialMult) card.bonusMoney = BASE_RULES.coinCardValue;
-  if (d.features.has('power') && d._rng.next() < BASE_RULES.powerCardChance * specialMult) card.bonusPoints = BASE_RULES.powerCardBonus;
+  if (d.features.has('power') && d._rng.next() < BASE_RULES.powerCardChance * specialMult) card.bonusPoints = powerCardBonusFor(d);
   card = dealTricks(d, card);
   if (opts?.skipFoeDrawEffects) return card;
   return d.foe.onCardDraw(card, d._foeRng.next);
@@ -955,7 +965,11 @@ export const dealDamage = (d: Draft, amount: number): number => {
   if (hpBefore > 0 && dmg > hpBefore) {
     const overkill = dmg - hpBefore;
     d.overkillDamage = Math.max(d.overkillDamage, overkill);
-    const coinsPerDamage = arcana(d).overkillCoinsPerDamage;
+    const a = arcana(d);
+    if (a.overkillCarryPct && a.overkillCarryPct > 0) {
+      d.pendingOverkillCarry = Math.max(d.pendingOverkillCarry ?? 0, Math.round(overkill * a.overkillCarryPct));
+    }
+    const coinsPerDamage = a.overkillCoinsPerDamage;
     if (coinsPerDamage !== undefined) {
       addCoins(d, overkill * coinsPerDamage);
       emit(d, 'overkill', overkill);
@@ -993,7 +1007,11 @@ export const foldSetRuleDamage = (d: Draft, rawBase: number, item: FoldedRuleIte
         if (extraOverkill > 0) {
           fold.overkillCredited = totalOverkill;
           d.overkillDamage = Math.max(d.overkillDamage, totalOverkill);
-          const coinsPerDamage = arcana(d).overkillCoinsPerDamage;
+          const a = arcana(d);
+          if (a.overkillCarryPct && a.overkillCarryPct > 0) {
+            d.pendingOverkillCarry = Math.max(d.pendingOverkillCarry ?? 0, Math.round(totalOverkill * a.overkillCarryPct));
+          }
+          const coinsPerDamage = a.overkillCoinsPerDamage;
           if (coinsPerDamage !== undefined) {
             addCoins(d, extraOverkill * coinsPerDamage);
             emit(d, 'overkill', extraOverkill);
@@ -1029,7 +1047,8 @@ export const foldSetRuleDamage = (d: Draft, rawBase: number, item: FoldedRuleIte
 
 export const addCoins = (d: Draft, base: number) => {
   if (!d.features.has('coins') || base <= 0) return;
-  const reliefMult = d.relief?.coinMultiplier ?? 1;
+  // Cauldron Wager coinMultiplier settles once on KO inside progress.ts `settleCauldronWager`
+  const reliefMult = d.relief?.cauldronWager ? 1 : (d.relief?.coinMultiplier ?? 1);
   const amount = Math.max(1, Math.round(base * d.level.coinMultiplier * (1 + d.coinBonusPercent / 100) * reliefMult));
   d.coins += amount;
   emit(d, 'coins', amount);
@@ -1039,12 +1058,16 @@ export const xpForLevel = (lvl: number): number => 6 + lvl * 5;
 
 export const addXp = (d: Draft, amount: number) => {
   if (!d.features.has('xp') || amount <= 0) return;
-  d.xp += amount * (arcana(d).xpScale ?? 1);
+  const a = arcana(d);
+  d.xp += amount * (a.xpScale ?? 1);
   while (d.xp >= xpForLevel(d.xpLevel)) {
     d.xp -= xpForLevel(d.xpLevel);
     d.xpLevel += 1;
     d.levelUpsTaken += 1;
     d.pendingPicks += 1;
+    if (a.levelUpPowerBonus && a.levelUpPowerBonus > 0) {
+      addPower(d, a.levelUpPowerBonus);
+    }
     emit(d, 'levelup');
   }
 };
@@ -1054,6 +1077,7 @@ export const MAX_OVERHEAL_TRIGGERS_PER_ACTION = 1;
 
 export const heal = (d: Draft, amount: number): boolean => {
   if (d.hearts === null || d.maxHearts === null || amount <= 0) return false;
+  if (arcana(d).noHeal) return false;
   const before = d.hearts;
   d.hearts = Math.min(d.maxHearts, d.hearts + amount);
   const restored = d.hearts - before;
@@ -1242,7 +1266,7 @@ export const destroyCards = (d: Draft, indices: number[], kind: DestroyKind): nu
 };
 
 /** Set random cards on fire. GameBoard burns them and sends BURN. */
-export const igniteCards = (d: Draft, count: number): number => {
+export const igniteCards = (d: Draft, count: number, burnMult: number = d._setMultiplier): number => {
   const candidates = d.board
     .map((c, i) => (touchable(d, i) && isSelectable(c) && !c.onFire ? i : -1))
     .filter(i => i >= 0);
@@ -1251,9 +1275,9 @@ export const igniteCards = (d: Draft, count: number): number => {
   d.roundStats.weaponEffectsTriggered.add('fire');
   // Only a change key for the burn timer, so elapsed time is enough (and must be non-zero)
   const stamp = d.elapsedMs + 1;
-  if (d._setMultiplier !== 1) {
+  if (burnMult !== 1) {
     const nextMults = { ...(d.burnMults ?? {}) };
-    for (const i of chosen) nextMults[d.board[i].id] = d._setMultiplier;
+    for (const i of chosen) nextMults[d.board[i].id] = burnMult;
     d.burnMults = nextMults;
   }
   updateCards(d, chosen, c => ({ ...c, onFire: true, fireStartTime: stamp }));

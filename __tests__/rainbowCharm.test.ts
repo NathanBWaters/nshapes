@@ -47,6 +47,7 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
 
     let s = startFight({
       level: testLevel({ rules: { attributes: ['shape', 'color', 'number'], boardSize: 12 }, foes: [{ name: 'Target', icon: 'lorc/target-dummy', hp: 100 }] }),
+      save: { selectedFighter: 'Corgi' },
       features: ['hearts', 'gear'],
     });
     s = { ...s, board: makeRainbowBoard(s.board, ['shape', 'color', 'number']) };
@@ -75,6 +76,7 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
     let s = withWeapons(
       startFight({
         level: getLevel('1-3'),
+        save: { selectedFighter: 'Corgi' },
         features: ['hearts', 'gear'],
       }),
       charm

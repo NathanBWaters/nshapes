@@ -14,7 +14,7 @@ import { BASE_RULES } from '../data/rules';
 import {
   addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst, catalystOnBoard,
   dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, foldSetRuleDamage, growBoard, heal, igniteCards, liveRulesOf,
-  newLinkSlots, placeCatalyst, recordRuleFiring, recordRuleZeroOp, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth,
+  newLinkSlots, placeCatalyst, powerCardBonusFor, recordRuleFiring, recordRuleZeroOp, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth,
   type Draft, type FightEvent, type FoldedRuleItem,
 } from '../engine/fight';
 import { addMagnet, advanceTricks, feedChest, repairGlass, stampAlbum } from '../engine/gear';
@@ -304,8 +304,9 @@ const convertCards = (d: Draft, to: 'power' | 'gold', count: number) => {
   const chosen = d._rng.shuffle(plain).slice(0, count);
   if (!chosen.length) return;
   const set = new Set(chosen);
+  const powerBonus = powerCardBonusFor(d);
   d.board = d.board.map((c, i) =>
-    !set.has(i) ? c : to === 'power' ? { ...c, bonusPoints: BASE_RULES.powerCardBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
+    !set.has(i) ? c : to === 'power' ? { ...c, bonusPoints: powerBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
   );
   emit(d, 'fetch', chosen.length, to, { slots: chosen });
 };

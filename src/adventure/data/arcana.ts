@@ -11,37 +11,10 @@ import { BASE_RULES } from './rules';
 
 /**
  * Extended structural Kiss-Curse Arcana flags introduced by [GP-15].
- * Extends `ArcanaRules` directly so every existing caller remains type-safe
- * while `loadout.ts`, `combineArcana`, and the engine read the rich rules.
+ * Alias/extension of `ArcanaRules` (now declared directly in `../types.ts`) so
+ * every caller stays strictly typed while preserving backwards-compatible exports.
  */
-export interface ExtendedArcanaRules extends ArcanaRules {
-  /** Monochrome Pact: Power points added on 1-diff Sets */
-  singleTraitPowerBonus?: number;
-  /** Monochrome Pact: damage scale applied to 3+ diff Sets */
-  highDiffDamageScale?: number;
-  /** Controlled Burn: multiplier applied to burn damage from mistake burns */
-  mistakeBurnDamageScale?: number;
-  /** Controlled Burn: Power points added when mistake burn triggers */
-  mistakeBurnPowerBonus?: number;
-  /** Controlled Burn: hearts lost on mistakes while burn is on cooldown */
-  cooldownMistakeHearts?: number;
-  /** Glass Prism: disables all healing while active */
-  noHeal?: boolean;
-  /** Glass Prism: Power card bonus damage override (+4 = double base +2) */
-  powerCardBonusOverride?: number;
-  /** Overkill Harvest: normal Sets drop 0 base coins (only Overkill, Gold cards & Parries pay) */
-  zeroBaseSetCoins?: boolean;
-  /** Overkill Harvest: fraction of overkill damage carried into the next wave */
-  overkillCarryPct?: number;
-  /** Scholar's Gambit: delta to equipped charm slots (-1 = enter with 1 fewer charm) */
-  charmSlotDelta?: number;
-  /** Scholar's Gambit: Power points granted on each mid-fight level-up */
-  levelUpPowerBonus?: number;
-  /** Catalyst Resonance: damage multiplier on Sets made while no Evolution is active */
-  nonEvolvedDamageScale?: number;
-  /** Tempo Surge: extra Combo steps granted on every valid Set */
-  setComboBonus?: number;
-}
+export type ExtendedArcanaRules = ArcanaRules;
 
 const percentMore = (scale: number) => Math.round((scale - 1) * 100);
 

@@ -69,6 +69,7 @@ const WeaponExplainer: React.FC<Props> = ({
   const stats = base ? weaponStatLines(base, build) : [];
   const voice = weaponVoice(weapon.id);
   const grows = WEAPON_GROWTH[weapon.id] ?? [];
+  const powerLine = hidePowerNote ? null : powerText(weapon.id, build.level);
 
   return (
     <View style={st.card} testID={testID ?? `weapon-explainer-${weapon.id}`}>
@@ -126,7 +127,7 @@ const WeaponExplainer: React.FC<Props> = ({
             </View>
           )}
           {!!guide.tip && <Row icon="lorc/light-bulb" title="How to play it" color="#B45309">{guide.tip}</Row>}
-          {(grows.length > 0 || NO_GROWTH[weapon.id]) && (
+          {(grows.length > 0 || NO_GROWTH[weapon.id] || Boolean(powerLine)) && (
             <View style={st.row} testID={`weapon-explainer-scaling-${weapon.id}`}>
               <View style={[st.mark, { borderColor: '#0F766E' }]}><Icon name="lorc/tree-branch" size={16} color="#0F766E" /></View>
               <Text style={st.rowText}>
@@ -138,7 +139,7 @@ const WeaponExplainer: React.FC<Props> = ({
                         const stacks = growth?.[growthKey(weapon.id, i)]?.stacks ?? 0;
                         return `${growthText(def)}${stacks > 0 ? ` Now: ${stacks}${def.max ? `/${def.max}` : ''}.` : ''}`;
                       }).join(' '),
-                  hidePowerNote ? '' : powerText(weapon.id),
+                  powerLine ?? '',
                 ].filter(Boolean).join(' ')}
               </Text>
             </View>

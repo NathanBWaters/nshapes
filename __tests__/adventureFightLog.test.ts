@@ -37,7 +37,7 @@ describe('fight log', () => {
   });
 
   it('records mistakes with the hearts they cost', () => {
-    const s = miss(startFight());
+    const s = miss(startFight({ save: { selectedFighter: 'Corgi' } }));
     const e = s.log[s.log.length - 1];
     expect(e.kind).toBe('mistake');
     expect(e.heartsDelta).toBe(-1);

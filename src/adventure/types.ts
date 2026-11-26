@@ -236,6 +236,8 @@ export interface SetIgnition {
 export interface FoeDef {
   /** Name of a registered enemy in enemyFactory (gives real mechanics) */
   enemy?: string;
+  /** Optional Hydra boss head phase (1, 2, or 3) used by 5-5 while preserving canonical enemy: 'The Hydra' */
+  hydraPhase?: 1 | 2 | 3;
   /** Cosmetic foe (no special effects) */
   name?: string;
   icon?: IconName;
@@ -314,20 +316,46 @@ export interface ArcanaRules {
   nonRainbowDamageDelta?: number;
   /** Bonus damage for a Set with exactly one all-different trait */
   singleTraitBonusDamage?: number;
+  /** Monochrome Pact: Power points added on 1-diff Sets */
+  singleTraitPowerBonus?: number;
+  /** Monochrome Pact: damage scale applied to 3+ diff Sets */
+  highDiffDamageScale?: number;
   rainbowMultiplier?: number;
   damageScale?: number;
   setTimeBonus?: number;
+  /** Tempo Surge: extra Combo steps granted on every valid Set */
+  setComboBonus?: number;
   rainbowTimeBonus?: number;
   timerSpeedScale?: number;
   /** A wrong Set ignites cards instead of costing a heart, at most once per cooldown */
   mistakeBurn?: { cooldownMs: number; cards: number };
+  /** Controlled Burn: multiplier applied to burn damage from mistake burns */
+  mistakeBurnDamageScale?: number;
+  /** Controlled Burn: Power points added when mistake burn triggers */
+  mistakeBurnPowerBonus?: number;
+  /** Controlled Burn: hearts lost on mistakes while burn is on cooldown */
+  cooldownMistakeHearts?: number;
+  /** Glass Prism: disables all healing while active */
+  noHeal?: boolean;
+  /** Glass Prism: Power card bonus damage override (+4 = double base +2) */
+  powerCardBonusOverride?: number;
+  /** Overkill Harvest: normal Sets drop 0 base coins (only Overkill, Gold cards & Parries pay) */
+  zeroBaseSetCoins?: boolean;
   overkillCoinsPerDamage?: number;
+  /** Overkill Harvest: fraction of overkill damage carried into the next wave */
+  overkillCarryPct?: number;
   waveClearHeal?: number;
   xpScale?: number;
   pickOptions?: number;
+  /** Scholar's Gambit: delta to equipped charm slots (-1 = enter with 1 fewer charm) */
+  charmSlotDelta?: number;
+  /** Scholar's Gambit: Power points granted on each mid-fight level-up */
+  levelUpPowerBonus?: number;
   catalystChanceScale?: number;
   catalystRespawns?: number;
   evolutionBurstBonus?: { damage: number; time: number };
+  /** Catalyst Resonance: damage multiplier on Sets made while no Evolution is active */
+  nonEvolvedDamageScale?: number;
 }
 
 export interface ArcanaDef {
@@ -1048,6 +1076,10 @@ export interface RunState {
   arcana: ArcanaId[];
   arcanaBurnCooldownMs: number;
   overkillDamage: number;
+  /** Pending Overkill Harvest carry damage to deal immediately to the next wave foe */
+  pendingOverkillCarry?: number;
+  /** Damped entropy pity-bag accumulator for low-proc (<= 35%) weapon channels ([GP-19]) */
+  procAccum?: Readonly<Partial<Record<string, number>>>;
 
   // Escalating Purity
   purityChain: number;
