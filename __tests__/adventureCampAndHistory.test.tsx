@@ -640,7 +640,10 @@ describe('playing', () => {
   });
 
   it('after playing a Set and finishing, Camp → History opens the full FightReplay timeline from storage', () => {
-    const LABEL_RE = /^(\d+) (red|green|purple) (solid|striped|open) (diamond|oval|squiggle)(?: on (white|cream|sky))?/;
+    const LABEL_RE = /^(\d+) (orange|blue|pink|red|green|purple) (solid|striped|open) (triangle|circle|bolt|diamond|oval|squiggle)(?: on (white|mist|charcoal|beige|cream|sky))?/;
+    const COLOR_MAP: Record<string, Color> = { orange: 'red', red: 'red', blue: 'green', green: 'green', pink: 'purple', purple: 'purple' };
+    const SHAPE_MAP: Record<string, Shape> = { circle: 'oval', oval: 'oval', triangle: 'diamond', diamond: 'diamond', bolt: 'squiggle', squiggle: 'squiggle' };
+    const BG_MAP: Record<string, Background> = { white: 'white', mist: 'beige', beige: 'beige', cream: 'beige', sky: 'beige', charcoal: 'charcoal' };
     const view = render(wrap(<AdventureMode initialSave={ready()} onExit={noop} />));
     fireEvent.press(view.getByTestId(`map-node-${dummy.id}`));
     fireEvent.press(view.getByTestId('preview-play'));
@@ -651,10 +654,10 @@ describe('playing', () => {
       const card: Card = {
         id: `${idx}`,
         number: Number(m[1]) as CardNumber,
-        color: m[2] as Color,
+        color: COLOR_MAP[m[2]],
         shading: m[3] as Shading,
-        shape: m[4] as Shape,
-        background: (m[5] as Background | undefined) ?? 'white',
+        shape: SHAPE_MAP[m[4]],
+        background: m[5] ? (BG_MAP[m[5]] ?? 'white') : 'white',
         selected: false,
       };
       return { pressable, card };

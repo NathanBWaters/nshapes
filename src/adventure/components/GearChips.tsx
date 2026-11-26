@@ -9,7 +9,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import { cardBgPatternMeta, cardColorCode, cardColorHex, cardColorLabel, useColorblind } from '@/utils/cardColors';
-import type { AttributeName } from '@/types';
+import { formatShapeName } from '@/utils/cardVisuals';
+import type { AttributeName, Shape } from '@/types';
 import type { RunState } from '../types';
 import type { Modifiers } from '../rules/types';
 import { growthModifiers } from '../data/weaponGrowth';
@@ -17,8 +18,7 @@ import { modifiersOf } from '../engine/sources';
 import { albumTraits } from '../engine/gear';
 
 const INK = COLORS.slateCharcoal;
-
-/** "purple", "ovals", "2s", "striped" (or Colorblind "blue (B)", "orange (O)", "plum (P)"): the wanted value in player words. */
+/** "pink", "circles", "2s", "striped" (or Colorblind "orange (O)", "blue (B)", "pink (P)", "mist (M) backs"): the wanted value in player words. */
 export const wantedLabel = (
   attribute: AttributeName,
   value: string | number,
@@ -26,7 +26,7 @@ export const wantedLabel = (
 ): string => {
   switch (attribute) {
     case 'number': return `${value}s`;
-    case 'shape': return `${value}s`;
+    case 'shape': return formatShapeName(value as Shape, true).toLowerCase();
     case 'color': {
       const name = cardColorLabel(String(value), colorblind);
       return colorblind ? `${name} (${cardColorCode(String(value), true)})` : name;

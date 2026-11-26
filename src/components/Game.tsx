@@ -6,6 +6,7 @@ import PrismMode from '@/prism/components/PrismMode';
 import { resetPrismStorage } from '@/prism/save';
 import type { StarterDeckId } from '@/prism/types';
 import { useTutorial } from '@/context/TutorialContext';
+import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { FreePlayDifficultyStorage, LabsStorage } from '@/utils/freePlayStorage';
 import MainMenu from './MainMenu';
 import FreePlayMode from './FreePlayMode';
@@ -53,6 +54,18 @@ const Game: React.FC<GameProps> = ({
   const [phase, setPhase] = useState<AppPhase>(initialMode === 'prism' ? 'prism' : 'main_menu');
 
   const { resetTutorial } = useTutorial();
+
+  // Android hardware back button handling for Main Menu / Options modal (sub-modes own their own back stack)
+  useAndroidBackHandler(
+    () => {
+      if (showOptionsModal) {
+        setShowOptionsModal(false);
+        return true;
+      }
+      return false;
+    },
+    phase === 'main_menu'
+  );
 
   const exitToMenu = useCallback(() => {
     setPhase('main_menu');

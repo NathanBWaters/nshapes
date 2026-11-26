@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — NShapes</title>
+  <meta name="description" content="Privacy Policy for NShapes by Nathan Waters." />
+  <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+  <style>
+    :root {
+      --bg: #F5F2EB;
+      --surface: #FFFFFF;
+      --ink: #2C2C2C;
+      --muted: #555960;
+      --teal: #007F7F;
+      --blue: #145CA8;
+      --border: #D9D3C7;
+      --gold: #F5C842;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.65;
+    }
+    header {
+      background: linear-gradient(135deg, #166CC2 0%, #0E4B94 100%);
+      color: #FFFFFF;
+      padding: 36px 20px 32px;
+      border-bottom: 4px solid #2C2C2C;
+    }
+    .header-inner {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--gold);
+      color: #1B2430;
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 32px;
+      letter-spacing: 1px;
+    }
+    .subtitle {
+      margin: 0;
+      opacity: 0.9;
+      font-size: 15px;
+    }
+    main {
+      max-width: 780px;
+      margin: 28px auto 56px;
+      padding: 0 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 2px solid var(--ink);
+      border-radius: 14px;
+      padding: 24px 26px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 20px;
+      color: var(--blue);
+    }
+    p { margin: 0 0 12px; }
+    p:last-child { margin-bottom: 0; }
+    ul {
+      margin: 0 0 12px;
+      padding-left: 22px;
+    }
+    li { margin-bottom: 6px; }
+    a {
+      color: var(--teal);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .pill {
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+    .pill strong {
+      display: block;
+      color: var(--ink);
+      margin-bottom: 2px;
+    }
+    footer {
+      max-width: 780px;
+      margin: 0 auto 40px;
+      padding: 0 20px;
+      color: var(--muted);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="badge">NShapes</div>
+      <h1>Privacy Policy</h1>
+      <p class="subtitle">Effective Date: November 24, 2026 &middot; Publisher: Nathan Waters</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>At a Glance</h2>
+      <p>
+        NShapes is a free, offline-first pattern-matching roguelike built by Nathan Waters.
+        We believe games should respect your privacy: there are no accounts, no ads, no in-app
+        purchases, and no cross-app tracking.
+      </p>
+      <div class="summary-grid">
+        <div class="pill">
+          <strong>No Accounts or PII</strong>
+          We never ask for your name, email, phone number, or location.
+        </div>
+        <div class="pill">
+          <strong>No Ads or Trackers</strong>
+          No ad SDKs, no IDFA/GAID tracking, and no data sold to third parties.
+        </div>
+        <div class="pill">
+          <strong>Local-Only Saves</strong>
+          Your campaign progress, unlocks, and settings stay on your device.
+        </div>
+        <div class="pill">
+          <strong>Opt-Out Analytics</strong>
+          Anonymous gameplay balance telemetry can be turned off anytime in Options.
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>1. Data Stored Locally on Your Device</h2>
+      <p>
+        NShapes stores your game progress (Adventure stars, unlocked fighters, weapons, Arcana,
+        Starfall Summit runs, Prism Deck runs, battle history, and audio/accessibility preferences)
+        locally on your device using on-device storage. This data is never uploaded to a player
+        account server.
+      </p>
+      <p>
+        You can erase all locally stored game progress at any time via
+        <strong>Options &rarr; Reset Game</strong>, or by uninstalling the app.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>2. Anonymous Gameplay Analytics (PostHog)</h2>
+      <p>
+        To balance weapons, enemies, and difficulty across updates, NShapes sends lightweight,
+        anonymous gameplay telemetry to <a href="https://posthog.com/privacy" rel="noopener noreferrer">PostHog</a>
+        (hosted in the United States at <code>us.i.posthog.com</code>):
+      </p>
+      <ul>
+        <li>
+          <strong>Events sent:</strong> One session-open event (<code>app_opened</code>) and one
+          summary event per finished fight or round (<code>fight_ended</code>), including optional
+          thumbs-up/thumbs-down fun ratings if you choose to tap them.
+        </li>
+        <li>
+          <strong>What is included:</strong> Random anonymous install identifier (not linked to your
+          identity, Apple ID, or Google account), app version, platform (iOS / Android / Web),
+          selected fighter/weapons/level, match outcome, and fight balance statistics.
+        </li>
+        <li>
+          <strong>What is NOT collected:</strong> No names, emails, contacts, precise location,
+          advertising identifiers (IDFA/GAID), photos, microphone audio, or cross-app activity.
+        </li>
+      </ul>
+      <p>
+        <strong>How to opt out:</strong> Open <strong>Options</strong> from the Main Menu and toggle
+        <strong>Gameplay Analytics</strong> to <strong>OFF</strong>. When disabled, NShapes stops
+        sending analytics events immediately and discards any unsent local analytics queue.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>3. Platform Crash Diagnostics &amp; App Updates</h2>
+      <p>
+        On iOS and Android, Apple and Google may provide anonymized crash logs and performance
+        diagnostics if you have opted into diagnostics in your device's system settings. NShapes
+        also uses Expo Updates (EAS Update) to check for over-the-air JavaScript game updates using
+        only standard HTTP metadata (app version and platform).
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>4. External Links</h2>
+      <p>
+        NShapes includes optional links to our community Discord server and support pages. Visiting
+        an external website or Discord is governed by that service's own privacy policy.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>5. Children's Privacy</h2>
+      <p>
+        NShapes is intended for a general audience and is not directed to children under 13 (or the
+        equivalent minimum age in your jurisdiction). We do not knowingly collect personal
+        information from children. If you believe any information has been inadvertently collected,
+        please reach out via our support channels below so we can address it promptly.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>6. Changes &amp; Contact</h2>
+      <p>
+        We may update this Privacy Policy as NShapes evolves. Updates will be posted on this page
+        with a revised effective date.
+      </p>
+      <p>
+        Questions or privacy requests? Reach Nathan Waters via
+        <a href="https://github.com/NathanBWaters/nshapes/issues" rel="noopener noreferrer">GitHub Issues</a>
+        or the <a href="https://discord.gg/JFkUmp54Sp" rel="noopener noreferrer">NShapes Discord</a>,
+        or visit our <a href="./support.html">Support Page</a>.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <span>&copy; 2026 Nathan Waters &middot; NShapes</span>
+    <span>
+      <a href="./support.html">Support</a> &middot;
+      <a href="./">Play on Web</a>
+    </span>
+  </footer>
+</body>
+</html>

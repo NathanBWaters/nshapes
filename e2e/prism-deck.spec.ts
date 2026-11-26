@@ -48,6 +48,24 @@ interface ParsedBoardCard {
 }
 
 async function readBoardCards(page: Page): Promise<ParsedBoardCard[]> {
+  const COLOR_ALIAS: Record<string, 'red' | 'green' | 'purple'> = {
+    orange: 'red',
+    red: 'red',
+    blue: 'green',
+    teal: 'green',
+    green: 'green',
+    pink: 'purple',
+    purple: 'purple',
+  };
+  const SHAPE_ALIAS: Record<string, 'oval' | 'squiggle' | 'diamond'> = {
+    circle: 'oval',
+    oval: 'oval',
+    bolt: 'squiggle',
+    moon: 'squiggle',
+    squiggle: 'squiggle',
+    triangle: 'diamond',
+    diamond: 'diamond',
+  };
   const cards: ParsedBoardCard[] = [];
   for (let i = 0; i < 15; i++) {
     const loc = page.getByTestId(`prism-card-${i}`);
@@ -55,14 +73,14 @@ async function readBoardCards(page: Page): Promise<ParsedBoardCard[]> {
     const label = (await loc.getAttribute('aria-label')) ?? '';
     const isWild = /^Wild\b/i.test(label);
     const debuffed = /\bdebuffed\b/i.test(label);
-    const match = label.match(/^([123])\s+(red|green|purple)\s+(oval|squiggle|diamond)/i);
+    const match = label.match(/^([123])\s+(orange|blue|pink|teal|red|green|purple)\s+(circle|bolt|moon|triangle|oval|squiggle|diamond)/i);
     const editionMatch = label.match(/,\s*(Foil|Holo|Polychrome|Glass|Gold|Wild)/i);
     cards.push({
       idx: i,
       wild: isWild,
       number: match ? Number(match[1]) : null,
-      color: match ? (match[2].toLowerCase() as 'red' | 'green' | 'purple') : null,
-      shape: match ? (match[3].toLowerCase() as 'oval' | 'squiggle' | 'diamond') : null,
+      color: match ? (COLOR_ALIAS[match[2].toLowerCase()] ?? null) : null,
+      shape: match ? (SHAPE_ALIAS[match[3].toLowerCase()] ?? null) : null,
       edition: editionMatch ? editionMatch[1].toLowerCase() : null,
       debuffed,
       label,
@@ -249,7 +267,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     await page.getByTestId('prism-tutorial-card-0').click();
     await page.getByTestId('prism-tutorial-card-1').click();
     await page.getByTestId('prism-tutorial-card-2').click();
-    await expect(page.getByTestId('prism-tutorial-play')).toContainText('PLAY SET!');
+    await expect(page.getByTestId('prism-tutorial-play')).toContainText('PLAY TRIO!');
     await page.getByTestId('prism-tutorial-play').click();
     await expect(page.getByTestId('prism-tutorial-celebration')).toBeVisible();
     await page.getByTestId('prism-tutorial-next').click();
@@ -272,7 +290,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
     // Swap out trap card (idx 2) for 3 Purple Diamonds (idx 3) → valid True Rainbow!
     await page.getByTestId('prism-tutorial-card-2').click();
     await page.getByTestId('prism-tutorial-card-3').click();
-    await expect(page.getByTestId('prism-tutorial-play')).toContainText('PLAY SET!');
+    await expect(page.getByTestId('prism-tutorial-play')).toContainText('PLAY TRIO!');
     await page.getByTestId('prism-tutorial-play').click();
     await expect(page.getByTestId('prism-tutorial-celebration')).toBeVisible();
     await expect(page.getByTestId('prism-tutorial-celebration')).toContainText('True Rainbow');
@@ -384,7 +402,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
 
     const playBtn = page.getByTestId('prism-play-set');
     await expect(playBtn).toBeEnabled();
-    await expect(playBtn).toContainText('PLAY SET (+');
+    await expect(playBtn).toContainText('PLAY TRIO (+');
     await page.waitForTimeout(350);
 
     // Capture desktop Play Screen screenshot showing 9-card felt table, fixed Squiggle, live preview, and Belt
@@ -427,7 +445,7 @@ test.describe('Prism Deck — Real-Browser E2E & Visual QA Suite', () => {
       await expect(page.getByTestId('prism-spell-targeting-bar')).toBeVisible();
       await page.getByTestId('prism-card-0').click();
       if (await page.getByTestId('prism-spell-value-picker').isVisible()) {
-        const nextColor = card0LabelBefore.includes('red') ? 'green' : 'red';
+        const nextColor = /\b(orange|red)\b/i.test(card0LabelBefore) ? 'green' : 'red';
         await page.getByTestId(`prism-spell-val-${nextColor}`).click();
       }
       await expect(page.getByTestId('prism-spell-targeting-bar')).toHaveCount(0);

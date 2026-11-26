@@ -549,8 +549,8 @@ const PrismPlayScreen: React.FC<PrismPlayScreenProps> = ({
         accessibilityRole="button"
         accessibilityLabel={
           canPlay
-            ? `Play Set for ${formatScore(preview.estimatedTotal)} points`
-            : 'Play Set'
+            ? `Play Trio for ${formatScore(preview.estimatedTotal)} points`
+            : 'Play Trio'
         }
         accessibilityState={{ disabled: !canPlay }}
         disabled={!canPlay}
@@ -575,8 +575,8 @@ const PrismPlayScreen: React.FC<PrismPlayScreenProps> = ({
           numberOfLines={1}
         >
           {canPlay
-            ? `PLAY SET (+${formatScore(preview.estimatedTotal)})`
-            : `PLAY SET (${run.selectedIndices.length}/3)`}
+            ? `PLAY TRIO (+${formatScore(preview.estimatedTotal)})`
+            : `PLAY TRIO (${run.selectedIndices.length}/3)`}
         </Text>
       </TouchableOpacity>
 

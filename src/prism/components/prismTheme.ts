@@ -2,7 +2,7 @@
  * Prism Deck shared velvet-emerald & brass theme, number formatters,
  * Charm/Edition visual metadata, Colorblind shape palette, and SFX gateway.
  */
-import { COLORS } from '@/utils/colors';
+import { COLOR_BADGE_LETTER, getCardShapeColor } from '@/utils/cardVisuals';
 import { playSound, type SoundCategory } from '@/utils/sounds';
 import { selectionHaptic, triggerHaptic, type HapticType } from '@/utils/haptics';
 import { SoundStorage, MusicStorage } from '@/utils/storage';
@@ -39,33 +39,11 @@ export const PRISM_COLORS = {
   utilityTeal: '#2DD4BF',
 } as const;
 
-export const PRISM_COLORBLIND_LETTER: Record<PrismColor, string> = {
-  red: 'R',
-  green: 'B',
-  purple: 'P',
-};
+export const PRISM_COLORBLIND_LETTER: Record<PrismColor, string> = COLOR_BADGE_LETTER;
 
-/** Shape stroke/fill colors — matches src/components/Card.tsx (including Okabe-Ito CVD palette). */
-export const getPrismShapeColor = (color: PrismColor, colorblind = false): string => {
-  if (colorblind) {
-    switch (color) {
-      case 'red':
-        return '#D55E00';
-      case 'green':
-        return '#0072B2';
-      case 'purple':
-        return '#CC79A7';
-    }
-  }
-  switch (color) {
-    case 'red':
-      return COLORS.impactRed;
-    case 'green':
-      return COLORS.logicTeal;
-    case 'purple':
-      return '#7C3AED';
-  }
-};
+/** Universal CVD-safe shape colors — matches src/components/Card.tsx (Orange / Sky Blue / Berry Pink). */
+export const getPrismShapeColor = (color: PrismColor, _colorblind = false): string =>
+  getCardShapeColor(color);
 
 /**
  * Format Balatro-scale numbers cleanly:

@@ -1,8 +1,9 @@
 import React, { createContext, memo, useCallback, useContext, useState } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
-import Svg, { Circle, Defs, Ellipse, Line, Path, Pattern, Polygon, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, Pattern, Polygon, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { MONO_FONT } from '@/utils/fonts';
 import {
   cardBgPatternMeta,
   cardColorCode,
@@ -10,7 +11,17 @@ import {
   cardColorLabel,
   useColorblind,
 } from '@/utils/cardColors';
-import { BACKGROUND_COLORS } from '@/utils/gameConfig';
+import {
+  CARD_SHAPE_GEOMETRY,
+  CARD_STOCK_BORDER,
+  CARD_STRIPE_PITCH,
+  CARD_STROKE_WIDTH,
+  CARD_SVG_HEIGHT,
+  CARD_SVG_WIDTH,
+  formatShapeName,
+  getCardShapeColor,
+  getCardStockBackground,
+} from '@/utils/cardVisuals';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
 import Icon, { type IconName } from './Icon';
 
@@ -110,23 +121,23 @@ const FogTimerBadge: React.FC<{ targetMs: number; elapsedMsOverride?: number }> 
   );
 });
 
-/** Subtle built-in perimeter dot pattern for warm parchment (#F5E8C8) cards — keeps central shapes uncluttered. */
-const ParchmentPerimeterPattern: React.FC = memo(function ParchmentPerimeterPattern() {
+/** Subtle built-in perimeter dot pattern for Blueprint Mist (#E2ECF7) cards — keeps central shapes uncluttered. */
+const MistPerimeterPattern: React.FC = memo(function MistPerimeterPattern() {
   return (
-    <View testID="card-parchment-pattern" pointerEvents="none" style={styles.patternLayer}>
+    <View testID="card-mist-pattern" pointerEvents="none" style={styles.patternLayer}>
       <Svg width="100%" height="100%" viewBox="0 0 100 130" preserveAspectRatio="none">
         {/* Top & bottom perimeter dots */}
         {[12, 24, 36, 48, 60, 72, 84].map(x => (
           <React.Fragment key={`tb-${x}`}>
-            <Circle cx={x} cy={6} r={1.3} fill="rgba(146, 114, 58, 0.16)" />
-            <Circle cx={x + 4} cy={124} r={1.3} fill="rgba(146, 114, 58, 0.16)" />
+            <Circle cx={x} cy={6} r={1.3} fill="rgba(59, 102, 155, 0.2)" />
+            <Circle cx={x + 4} cy={124} r={1.3} fill="rgba(59, 102, 155, 0.2)" />
           </React.Fragment>
         ))}
         {/* Left & right perimeter dots */}
         {[18, 32, 46, 60, 74, 88, 102, 114].map(y => (
           <React.Fragment key={`lr-${y}`}>
-            <Circle cx={5.5} cy={y} r={1.3} fill="rgba(146, 114, 58, 0.16)" />
-            <Circle cx={94.5} cy={y} r={1.3} fill="rgba(146, 114, 58, 0.16)" />
+            <Circle cx={5.5} cy={y} r={1.3} fill="rgba(59, 102, 155, 0.2)" />
+            <Circle cx={94.5} cy={y} r={1.3} fill="rgba(59, 102, 155, 0.2)" />
           </React.Fragment>
         ))}
       </Svg>
@@ -134,7 +145,7 @@ const ParchmentPerimeterPattern: React.FC = memo(function ParchmentPerimeterPatt
   );
 });
 
-/** Colorblind 5th-attribute corner hatch (`dots` for parchment, `diagonal-hatch` for charcoal, `none` for white). */
+/** Colorblind 5th-attribute corner hatch (`dots` for Blueprint Mist, `diagonal-hatch` for charcoal, `none` for white). */
 const ColorblindBgCornerPattern: React.FC<{ pattern: 'dots' | 'diagonal-hatch' }> = memo(
   function ColorblindBgCornerPattern({ pattern }) {
     if (pattern === 'dots') {
@@ -142,12 +153,12 @@ const ColorblindBgCornerPattern: React.FC<{ pattern: 'dots' | 'diagonal-hatch' }
         <View testID="card-bg-pattern" pointerEvents="none" style={styles.patternLayer}>
           <Svg width="100%" height="100%" viewBox="0 0 100 130" preserveAspectRatio="none">
             {/* Subtle corner dot clusters */}
-            <Circle cx={8} cy={118} r={1.8} fill="rgba(120, 90, 40, 0.34)" />
-            <Circle cx={15} cy={122} r={1.8} fill="rgba(120, 90, 40, 0.34)" />
-            <Circle cx={92} cy={118} r={1.8} fill="rgba(120, 90, 40, 0.34)" />
-            <Circle cx={85} cy={122} r={1.8} fill="rgba(120, 90, 40, 0.34)" />
-            <Circle cx={92} cy={12} r={1.8} fill="rgba(120, 90, 40, 0.34)" />
-            <Circle cx={85} cy={8} r={1.8} fill="rgba(120, 90, 40, 0.34)" />
+            <Circle cx={8} cy={118} r={1.8} fill="rgba(59, 102, 155, 0.38)" />
+            <Circle cx={15} cy={122} r={1.8} fill="rgba(59, 102, 155, 0.38)" />
+            <Circle cx={92} cy={118} r={1.8} fill="rgba(59, 102, 155, 0.38)" />
+            <Circle cx={85} cy={122} r={1.8} fill="rgba(59, 102, 155, 0.38)" />
+            <Circle cx={92} cy={12} r={1.8} fill="rgba(59, 102, 155, 0.38)" />
+            <Circle cx={85} cy={8} r={1.8} fill="rgba(59, 102, 155, 0.38)" />
           </Svg>
         </View>
       );
@@ -253,10 +264,10 @@ const canHoverWeb = (): boolean => {
   }
 };
 
-// SVG viewBox dimensions (1:2 width:height ratio)
-const SVG_WIDTH = 20;
-const SVG_HEIGHT = 40;
-const STROKE_WIDTH = 2;
+// Compact 24x30 (1:1.25) SVG viewBox for optimal 320px mobile crowding & badge clearance
+const SVG_WIDTH = CARD_SVG_WIDTH;
+const SVG_HEIGHT = CARD_SVG_HEIGHT;
+const STROKE_WIDTH = CARD_STROKE_WIDTH;
 
 interface CardProps {
   card: CardType;
@@ -373,9 +384,11 @@ const Card: React.FC<CardProps> = ({
   }
 
   const getCardStyle = () => {
+    const stockBorder = card.background ? CARD_STOCK_BORDER[card.background] : undefined;
     const cardStyles: any[] = [
       styles.card,
       { backgroundColor: getCardBackgroundColor(card.background) },
+      stockBorder && { borderColor: stockBorder },
     ];
 
     // Dud cards have special styling - grayed out white card
@@ -396,9 +409,10 @@ const Card: React.FC<CardProps> = ({
       cardStyles.push(styles.selected);
     }
 
-    // A pointed-out card that has been picked has been found: its warm fill gives way to the selection border
+    // A pointed-out card that has been picked has been found: its warm fill gives way to the selection border.
+    // On dark Charcoal stock, keep dark background and highlight with a warm golden frame so light-on-dark shapes stay legible.
     if (isHint && !selected) {
-      cardStyles.push(styles.hint);
+      cardStyles.push(card.background === 'charcoal' ? styles.hintDark : styles.hint);
     }
 
     if (disabled || isUnselectable) {
@@ -659,12 +673,13 @@ const Card: React.FC<CardProps> = ({
   const isClickDisabled = disabled || isUnselectable;
 
   const spokenColor = cardColorLabel(color, colorblind);
+  const spokenShape = formatShapeName(shape).toLowerCase();
   const spokenBg = card.background ? bgMeta.a11yLabel : null;
 
   return (
     <TouchableOpacity
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
-      accessibilityLabel={`${number} ${spokenColor} ${shading} ${shape}${spokenBg ? ` on ${spokenBg}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? (resolvedCatalystLabel ? (resolvedCatalystLabel === 'Pick Evo' ? ', evolution choice catalyst' : `, catalyst for ${resolvedCatalystLabel}`) : ', evolution ready') : ', dormant catalyst') : ''}${isMirrorSlot ? ', mirror slot' : ''}${isTightropeSlot ? ', on tightrope' : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
+      accessibilityLabel={`${number} ${spokenColor} ${shading} ${spokenShape}${spokenBg ? ` on ${spokenBg}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? (resolvedCatalystLabel ? (resolvedCatalystLabel === 'Pick Evo' ? ', evolution choice catalyst' : `, catalyst for ${resolvedCatalystLabel}`) : ', evolution ready') : ', dormant catalyst') : ''}${isMirrorSlot ? ', mirror slot' : ''}${isTightropeSlot ? ', on tightrope' : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
       style={[
         getCardStyle(),
         isHovered && !selected && !disabled && !isUnselectable && styles.hoveredCard,
@@ -679,8 +694,8 @@ const Card: React.FC<CardProps> = ({
       onHoverIn={handleHoverIn}
       onHoverOut={handleHoverOut}
     >
-      {/* Warm parchment (#F5E8C8) built-in perimeter dot pattern */}
-      {card.background === 'beige' && visible && <ParchmentPerimeterPattern />}
+      {/* Blueprint Mist (#E2ECF7) built-in perimeter dot pattern */}
+      {card.background === 'beige' && visible && <MistPerimeterPattern />}
 
       {/* 5th-attribute Colorblind corner hatch (`dots` for parchment, `diagonal-hatch` for charcoal) */}
       {showBgMicroTag && bgMeta.pattern !== 'none' && (
@@ -833,13 +848,13 @@ const Card: React.FC<CardProps> = ({
       {/* Hue-neutral SVG locked overlay (0% color wash over center shapes) */}
       {card.locked && visible && <LockedPatternOverlay frozen={(card.frozen ?? 0) > 0} />}
 
-      {/* Fire overlay - progressive darkening (no border, borders are for selection only) */}
+      {/* Fire overlay — progressive ember tint (no border, borders are for selection only) */}
       {card.onFire && visible && (
         <View
           style={[
             styles.fireOverlay,
             {
-              backgroundColor: `rgba(239, 68, 68, ${fireProgress * 0.3})`,
+              backgroundColor: `rgba(239, 68, 68, ${fireProgress * 0.25})`,
             },
           ]}
           pointerEvents="none"
@@ -866,33 +881,41 @@ interface ShapeProps {
   colorblind?: boolean;
 }
 
-const getCardBackgroundColor = (background?: Background) => {
-  if (!background || background === 'white') {
-    return COLORS.canvasWhite;
-  }
-  return BACKGROUND_COLORS[background];
-};
+// Get the appropriate universal CVD-safe shape color based on card stock
+const getShapeColor = (color: string, background?: Background, _colorblind = false) =>
+  getCardShapeColor(color, background);
 
-// Stripe pattern for "striped" shading
+const getCardBackgroundColor = (background?: Background) => getCardStockBackground(background);
+
+// -45° diagonal hatch pattern ("\") for "striped" shading — cuts cleanly across Circle, Triangle, and chunky 8-vertex Bolt
 const StripesPattern: React.FC<{ id: string; color: string }> = memo(function StripesPattern({ id, color }) {
+  const pitch = CARD_STRIPE_PITCH;
   return (
     <Defs>
-      <Pattern id={id} patternUnits="userSpaceOnUse" width="4" height="4">
-        <Rect x="0" y="0" width="4" height="2" fill={color} />
+      <Pattern
+        id={id}
+        patternUnits="userSpaceOnUse"
+        width={pitch}
+        height={pitch}
+        patternTransform="rotate(45)"
+      >
+        <Rect x="0" y="0" width={pitch} height={pitch / 2} fill={color} />
       </Pattern>
     </Defs>
   );
 });
 
 const getFill = (color: string, shading: string, patternId: string, background?: Background, colorblind = false) => {
-  if (shading === 'solid') return cardColorHex(color, background, colorblind);
+  if (shading === 'solid') return getShapeColor(color, background, colorblind);
   if (shading === 'striped') return `url(#${patternId})`;
   return 'transparent';
 };
 
+// Slot 'oval' → Circle (smooth symmetric convex archetype)
 const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, background, colorblind = false }) {
-  const strokeColor = cardColorHex(color, background, colorblind);
-  const patternId = `stripes-oval-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
+  const strokeColor = getShapeColor(color, background, colorblind);
+  const patternId = `stripes-circle-${color}-${background || 'white'}`;
+  const { cx, cy, r } = CARD_SHAPE_GEOMETRY.circle;
   return (
     <Svg
       width="100%"
@@ -901,11 +924,10 @@ const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, backgrou
       preserveAspectRatio="xMidYMid meet"
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
-      <Ellipse
-        cx={SVG_WIDTH / 2}
-        cy={SVG_HEIGHT / 2}
-        rx={(SVG_WIDTH - STROKE_WIDTH) / 2}
-        ry={(SVG_HEIGHT - STROKE_WIDTH) / 2}
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={r}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
         fill={getFill(color, shading, patternId, background, colorblind)}
@@ -914,11 +936,10 @@ const Oval: React.FC<ShapeProps> = memo(function Oval({ color, shading, backgrou
   );
 });
 
+// Slot 'diamond' → Triangle (sharp straight-edge convex archetype)
 const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, background, colorblind = false }) {
-  const strokeColor = cardColorHex(color, background, colorblind);
-  const patternId = `stripes-diamond-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
-  // Diamond points: top, right, bottom, left
-  const points = `${SVG_WIDTH / 2},${STROKE_WIDTH} ${SVG_WIDTH - STROKE_WIDTH},${SVG_HEIGHT / 2} ${SVG_WIDTH / 2},${SVG_HEIGHT - STROKE_WIDTH} ${STROKE_WIDTH},${SVG_HEIGHT / 2}`;
+  const strokeColor = getShapeColor(color, background, colorblind);
+  const patternId = `stripes-triangle-${color}-${background || 'white'}`;
   return (
     <Svg
       width="100%"
@@ -928,29 +949,21 @@ const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, ba
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
       <Polygon
-        points={points}
+        points={CARD_SHAPE_GEOMETRY.trianglePoints}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
+        strokeLinejoin="round"
+        strokeLinecap="round"
         fill={getFill(color, shading, patternId, background, colorblind)}
       />
     </Svg>
   );
 });
 
-// Classic 180-degree symmetric, C1-continuous S-curve squiggle in 20x40 viewBox
-// Mathematically verified: 0 self-intersections, bbox [2.4..17.6] x [2.2..37.8], min width 8.4
-const SQUIGGLE_PATH =
-  'M 14.2,2.4 ' +
-  'C 17.8,3.8 12.2,9.2 12,14 ' +
-  'C 11.8,18.8 17.4,22.3 17.6,27.5 ' +
-  'C 17.8,32.7 9.4,39 5.8,37.6 ' +
-  'C 2.2,36.2 7.8,30.8 8,26 ' +
-  'C 8.2,21.2 2.6,17.7 2.4,12.5 ' +
-  'C 2.2,7.3 10.6,1 14.2,2.4 Z';
-
+// Slot 'squiggle' → Chunky 8-vertex Bolt (crisp diagonal V1 pop-out; 52.6% clear interior, zero clip)
 const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, background, colorblind = false }) {
-  const strokeColor = cardColorHex(color, background, colorblind);
-  const patternId = `stripes-squiggle-${color}-${background || 'white'}${colorblind ? '-cb' : ''}`;
+  const strokeColor = getShapeColor(color, background, colorblind);
+  const patternId = `stripes-bolt-${color}-${background || 'white'}`;
   return (
     <Svg
       width="100%"
@@ -959,8 +972,8 @@ const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, 
       preserveAspectRatio="xMidYMid meet"
     >
       {shading === 'striped' && <StripesPattern id={patternId} color={strokeColor} />}
-      <Path
-        d={SQUIGGLE_PATH}
+      <Polygon
+        points={CARD_SHAPE_GEOMETRY.boltPoints}
         stroke={strokeColor}
         strokeWidth={STROKE_WIDTH}
         strokeLinejoin="round"
@@ -1230,10 +1243,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: COLORS.actionYellow,
   },
-  // Pointed out: a warm fill (never a border: those are for selection)
+  // Pointed out: a warm fill on light cards, golden rim on dark charcoal cards
   hint: {
     backgroundColor: '#FFF3B0',
   },
+  hintDark: {
+    borderColor: '#FDE047',
+    shadowColor: '#FDE047',
+    shadowOpacity: 0.55,
+    shadowRadius: 6,
+  },
+  // Note: Fire state is shown via small icon in bottom left, not border
   // Borders/outlines are EXCLUSIVELY for selection state
   fireOverlay: {
     position: 'absolute',
@@ -1384,7 +1404,7 @@ const styles = StyleSheet.create({
   timerText: {
     fontSize: 10.5,
     fontWeight: '800',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     fontVariant: ['tabular-nums'],
     color: COLORS.slateCharcoal,
   },
@@ -1425,7 +1445,7 @@ const styles = StyleSheet.create({
     color: COLORS.canvasWhite,
     fontSize: 10,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
   },
   hoveredCard: {
     shadowRadius: 8,

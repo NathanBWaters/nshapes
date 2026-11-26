@@ -76,7 +76,21 @@ jest.mock('react-native-svg', () => {
   };
 });
 
-// Mock sounds module to avoid .ogg file import issues
+// Mock react-native-audio-api so Jest tests do not load native C++ JSI audio bindings
+jest.mock(
+  'react-native-audio-api',
+  () => ({
+    __esModule: true,
+    AudioContext: undefined,
+    AudioManager: {
+      setSystemOptions: jest.fn(),
+      setAudioSessionActivity: jest.fn(() => Promise.resolve()),
+    },
+  }),
+  { virtual: true }
+);
+
+// Mock sounds module cleanly in unit tests
 jest.mock('@/utils/sounds', () => ({
   playSound: jest.fn(),
   preloadSound: jest.fn(),

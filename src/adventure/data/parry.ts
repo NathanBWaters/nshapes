@@ -67,7 +67,7 @@ export const parryCounterMeta = (req: ParryRequirement, colorblind?: boolean): C
       const color = cardColorHex(req.color, 'white', cb);
       return {
         shortLabel: cb ? `ALL ${name.toUpperCase()} (${code})` : `ALL ${name.toUpperCase()}`,
-        label: cb ? `All ${cap} (${code}) Set` : `All ${cap} Set`,
+        label: cb ? `All ${cap} (${code}) Trio` : `All ${cap} Trio`,
         explain: cb
           ? `Match 3 ${name} (${code}) cards to counter this strike and Stagger the foe.`
           : `Match 3 ${name} cards to counter this strike and Stagger the foe.`,
@@ -76,12 +76,12 @@ export const parryCounterMeta = (req: ParryRequirement, colorblind?: boolean): C
       };
     }
     case 'shape': {
-      const plural = req.shape === 'oval' ? 'Ovals' : req.shape === 'diamond' ? 'Diamonds' : 'Squiggles';
+      const plural = req.shape === 'oval' ? 'Circles' : req.shape === 'diamond' ? 'Triangles' : 'Bolts';
       return {
         shortLabel: `ALL ${plural.toUpperCase()}`,
-        label: `All ${plural} Set`,
+        label: `All ${plural} Trio`,
         explain: `Match 3 ${plural.toLowerCase()} to counter this strike and Stagger the foe.`,
-        color: '#0F766E',
+        color: '#007ED9',
         icon: 'lorc/diamond-hard',
       };
     }

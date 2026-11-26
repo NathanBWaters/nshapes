@@ -1,0 +1,108 @@
+name: Mobile Release (EAS Build / Submit / Update)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'EAS action to run'
+        required: true
+        default: 'build'
+        type: choice
+        options:
+          - build
+          - build-and-submit
+          - ota-update
+      platform:
+        description: 'Target mobile platform'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+      profile:
+        description: 'EAS build profile / update branch'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - preview
+          - production
+      update_message:
+        description: 'OTA update message (only used for ota-update)'
+        required: false
+        default: 'Production OTA update'
+        type: string
+
+jobs:
+  validate:
+    name: Validate Native & Store Readiness
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full guardrails & store readiness validation
+        run: npm run verify:guardrails && npm run test:fast
+
+      - name: Run Expo Doctor
+        run: npx --yes expo-doctor
+
+  eas:
+    name: Run EAS ${{ inputs.action }} (${{ inputs.platform }} / ${{ inputs.profile }})
+    runs-on: ubuntu-24.04
+    needs: validate
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+    steps:
+      - name: Check required EAS credentials
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Missing EXPO_TOKEN secret. Add it in GitHub Repo Settings → Secrets → Actions (see docs/store/RELEASE_GUIDE.md)."
+            exit 1
+          fi
+          if [ -z "$EAS_PROJECT_ID" ]; then
+            echo "::error::Missing EAS_PROJECT_ID variable. Run 'npx eas-cli init' locally and add EAS_PROJECT_ID in GitHub Repo Settings → Variables → Actions."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run EAS Build
+        if: inputs.action == 'build'
+        run: eas build --platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive --no-wait
+
+      - name: Run EAS Build & Auto-Submit
+        if: inputs.action == 'build-and-submit'
+        run: eas build --platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --auto-submit --non-interactive --no-wait
+
+      - name: Push EAS OTA Update
+        if: inputs.action == 'ota-update'
+        run: eas update --branch ${{ inputs.profile }} --platform ${{ inputs.platform }} --message "${{ inputs.update_message }}" --non-interactive

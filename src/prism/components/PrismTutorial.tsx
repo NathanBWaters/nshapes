@@ -194,7 +194,7 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
     setRepaintAvailable(false);
     setRepaintMode(false);
     setRepaintTargetIdx(null);
-    setHintBanner(`Repainted card to ${COLOR_LABELS[color]}! Now tap 3 cards and hit PLAY SET!`);
+    setHintBanner(`Repainted card to ${COLOR_LABELS[color]}! Now tap 3 cards and hit PLAY TRIO!`);
   };
 
   const handlePlaySet = () => {
@@ -203,7 +203,7 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
       playPrismSfx('invalid');
       setHintBanner(
         step === 2
-          ? 'Zero penalty! Check the red X pill — swap the trap card out for the 3 Purple Diamonds.'
+          ? 'Zero penalty! Check the red X pill — swap the trap card out for the 3 Pink Triangles.'
           : 'Not a valid Set yet — every trait must be ALL SAME or ALL DIFFERENT.'
       );
       return;
@@ -268,10 +268,10 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
   const stepMeta =
     step === 1
       ? {
-          eyebrow: 'STEP 1 OF 3 · YOUR FIRST SET',
+          eyebrow: 'STEP 1 OF 3 · YOUR FIRST TRIO',
           title: 'Same Color, Same Shape, 1-2-3',
           prompt:
-            'In Prism Deck, a Set is 3 cards where each trait (Color, Shape, Number) is ALL THE SAME or ALL DIFFERENT. Tap all 3 Red Diamonds and hit PLAY SET!',
+            'In Prism Deck, a Trio is 3 cards where each trait (Color, Shape, Number) is ALL THE SAME or ALL DIFFERENT. Tap all 3 Orange Triangles and hit PLAY TRIO!',
         }
       : step === 2
         ? {
@@ -284,7 +284,7 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
             eyebrow: 'STEP 3 OF 3 · COMBOS, CHARMS & SPELLS',
             title: 'Smash the Blind Target (250)',
             prompt:
-              'Charms multiply your Sets! Match a True Rainbow (all traits different) — or cast Repaint on the top-right 3 Red Diamonds → Purple to forge a Prismatic Crown!',
+              'Charms multiply your Trios! Match a True Rainbow (all traits different) — or cast Repaint on the top-right 3 Orange Triangles → Pink to forge a Prismatic Crown!',
           };
 
   const cardWidthStyle =
@@ -667,7 +667,7 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
                   {selected.length < 3
                     ? `Select ${3 - selected.length} More`
                     : evaluation?.isValid
-                      ? 'PLAY SET!'
+                      ? 'PLAY TRIO!'
                       : 'Check Set'}
                 </Text>
               </Pressable>

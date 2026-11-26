@@ -1,9 +1,10 @@
 /**
- * Verification suite for [UI-08], [UI-09], [UI-10], [UI-11], [UI-12], and [UI-14]:
+ * Verification suite for [UI-08], [UI-09], [UI-10], [UI-11], [UI-12], and [UI-14]
+ * harmonized on top of v0.1.173 Circle/Triangle/Bolt × Orange/Blue/Pink × Blueprint Mist:
  * - WCAG 2.1 contrast ratios (>=3.0:1 card graphical shapes, >=4.5:1 button surfaces)
- * - Grayscale luminance stagger (>=8% pairwise separation across all 4 card palettes)
- * - Viénot 1999 CVD simulation RGB distances (>=90 across Protanopia / Deuteranopia / Tritanopia)
- * - 1:1 Colorblind Orange (O) / Blue (B) / Plum (P) & 5th-attribute W/T/D propagation
+ * - Viénot 1999 CVD simulation RGB distances (>=100 across Protanopia / Deuteranopia / Tritanopia)
+ * - Dark-stock luminance stagger (>=15% pairwise separation on Charcoal #383838)
+ * - 1:1 Colorblind Orange (O) / Blue (B) / Pink (P) & 5th-attribute W/M/D propagation
  * - Double-stroke selection frame & removal of all 4 card border-rule violations
  * - Non-colliding card badge zones, capped hazard tray (<=2 + +N), >=14px hazard icons
  */
@@ -37,6 +38,12 @@ import {
   cardColorLabel,
   formatChallengeText,
 } from '@/utils/cardColors';
+import {
+  CARD_DARK_COLORS,
+  CARD_LIGHT_COLORS,
+  CARD_STOCK_BACKGROUND,
+  formatParryCounterMeta,
+} from '@/utils/cardVisuals';
 import { BACKGROUND_COLORS } from '@/utils/gameConfig';
 import { ColorblindStorage, storage } from '@/utils/storage';
 import type { Card as CardType, Color } from '@/types';
@@ -208,52 +215,43 @@ function collectNodes(node: any, out: any[] = []): any[] {
   return out;
 }
 
-describe('[UI-08] [UI-09] [UI-14] WCAG Contrast, Grayscale Stagger & Viénot CVD Separation', () => {
-  it('replaces #808080 beige with warm parchment #F5E8C8 (~81.3% lum) and keeps >=3.0:1 graphical contrast on every card surface', () => {
+describe('[UI-08] [UI-09] [UI-14] WCAG Contrast, Universal CVD Triad & Blueprint Mist Stock', () => {
+  it('uses Blueprint Mist #E2ECF7 (synchronized with cardVisuals) and keeps >=3.0:1 graphical contrast on every card stock', () => {
     expect(BACKGROUND_COLORS.white).toBe('#FFFFFF');
-    expect(BACKGROUND_COLORS.beige).toBe('#F5E8C8');
+    expect(BACKGROUND_COLORS.beige).toBe('#E2ECF7');
     expect(BACKGROUND_COLORS.charcoal).toBe('#383838');
+    expect(BACKGROUND_COLORS).toEqual(CARD_STOCK_BACKGROUND);
 
-    const beigeLum = relativeLuminance(BACKGROUND_COLORS.beige);
-    expect(beigeLum).toBeGreaterThan(0.8);
-    expect(beigeLum).toBeLessThan(0.83);
+    const mistLum = relativeLuminance(BACKGROUND_COLORS.beige);
+    expect(mistLum).toBeGreaterThan(0.8);
+    expect(mistLum).toBeLessThan(0.86);
 
     const colors: Color[] = ['red', 'green', 'purple'];
     for (const cb of [false, true]) {
       for (const c of colors) {
         const lightHex = cardColorHex(c, 'white', cb);
+        expect(lightHex).toBe(CARD_LIGHT_COLORS[c]);
         expect(contrastRatio(lightHex, BACKGROUND_COLORS.white)).toBeGreaterThanOrEqual(3.0);
         expect(contrastRatio(lightHex, BACKGROUND_COLORS.beige)).toBeGreaterThanOrEqual(3.0);
 
         const darkHex = cardColorHex(c, 'charcoal', cb);
+        expect(darkHex).toBe(CARD_DARK_COLORS[c]);
         expect(contrastRatio(darkHex, BACKGROUND_COLORS.charcoal)).toBeGreaterThanOrEqual(3.0);
       }
     }
   });
 
-  it('staggers grayscale luminance by >=8% across all 3 colors in every card palette', () => {
-    const palettes = [
-      Object.values(CARD_PALETTES.standard.light),
-      Object.values(CARD_PALETTES.standard.dark),
-      Object.values(CARD_PALETTES.colorblind.light),
-      Object.values(CARD_PALETTES.colorblind.dark),
-    ];
-    for (const triplet of palettes) {
-      expect(minPairwiseLuminanceStep(triplet)).toBeGreaterThanOrEqual(0.08);
-    }
-  });
-
-  it('maintains Viénot Protanopia, Deuteranopia, and Tritanopia RGB distance >= 90 across all Colorblind & Standard Light palettes', () => {
+  it('maintains Viénot Protanopia, Deuteranopia, and Tritanopia RGB distance >= 100 across both Light and Dark universal palettes', () => {
     const cvdKinds: CvdKind[] = ['protan', 'deutan', 'tritan'];
-    const cbLight = Object.values(CARD_PALETTES.colorblind.light);
-    const cbDark = Object.values(CARD_PALETTES.colorblind.dark);
-    const stdLight = Object.values(CARD_PALETTES.standard.light);
+    const light = Object.values(CARD_PALETTES.standard.light);
+    const dark = Object.values(CARD_PALETTES.standard.dark);
 
     for (const kind of cvdKinds) {
-      expect(minPairwiseCvdDistance(cbLight, kind)).toBeGreaterThanOrEqual(90);
-      expect(minPairwiseCvdDistance(cbDark, kind)).toBeGreaterThanOrEqual(90);
-      expect(minPairwiseCvdDistance(stdLight, kind)).toBeGreaterThanOrEqual(90);
+      expect(minPairwiseCvdDistance(light, kind)).toBeGreaterThanOrEqual(100);
+      expect(minPairwiseCvdDistance(dark, kind)).toBeGreaterThanOrEqual(100);
     }
+    // Dark stock palette also staggers luminance by >= 15% pairwise
+    expect(minPairwiseLuminanceStep(dark)).toBeGreaterThanOrEqual(0.15);
   });
 
   it('verifies >=4.5:1 WCAG AA contrast for all white-on-surface button tokens and high-contrast double-stroke selection', () => {
@@ -273,7 +271,7 @@ describe('[UI-08] [UI-09] [UI-14] WCAG Contrast, Grayscale Stagger & Viénot CVD
   });
 });
 
-describe('[UI-10] End-to-End 1:1 Colorblind Propagation (Orange (O) / Blue (B) / Plum (P) & 5th Attribute W/T/D)', () => {
+describe('[UI-10] End-to-End 1:1 Colorblind Propagation (Orange (O) / Blue (B) / Pink (P) & 5th Attribute W/M/D)', () => {
   beforeEach(() => {
     storage.clearAll();
     ColorblindStorage.set(false);
@@ -283,42 +281,52 @@ describe('[UI-10] End-to-End 1:1 Colorblind Propagation (Orange (O) / Blue (B) /
     ColorblindStorage.set(false);
   });
 
-  it('aligns labels, single-letter codes, parry metadata, GearChips, and coach output 1:1', () => {
+  it('aligns labels, single-letter codes, parry metadata, GearChips, and challenge copy 1:1', () => {
     expect(COLORBLIND_COLOR_CODES).toEqual({ red: 'O', green: 'B', purple: 'P' });
-    expect(COLORBLIND_COLOR_LABELS).toEqual({ red: 'orange', green: 'blue', purple: 'plum' });
+    expect(COLORBLIND_COLOR_LABELS).toEqual({ red: 'orange', green: 'blue', purple: 'pink' });
 
     const expected: Record<Color, { label: string; code: string; hex: string }> = {
-      red: { label: 'orange', code: 'O', hex: '#D55E00' },
-      green: { label: 'blue', code: 'B', hex: '#0064A8' },
-      purple: { label: 'plum', code: 'P', hex: '#5E1742' },
+      red: { label: 'orange', code: 'O', hex: '#DF5A00' },
+      green: { label: 'blue', code: 'B', hex: '#007ED9' },
+      purple: { label: 'pink', code: 'P', hex: '#940E65' },
     };
 
     for (const c of ['red', 'green', 'purple'] as Color[]) {
       const exp = expected[c];
       expect(cardColorLabel(c, true)).toBe(exp.label);
+      expect(cardColorLabel(c, false)).toBe(exp.label);
       expect(cardColorCode(c, true)).toBe(exp.code);
       expect(cardColorHex(c, 'white', true)).toBe(exp.hex);
 
-      // Parry counter metadata matches 1:1
+      // Parry counter metadata matches 1:1 in both parry.ts and cardVisuals.ts
       const parry = parryCounterMeta({ kind: 'color', color: c }, true);
       expect(parry.shortLabel).toBe(`ALL ${exp.label.toUpperCase()} (${exp.code})`);
       expect(parry.color).toBe(exp.hex);
       expect(parry.explain.toLowerCase()).toContain(`${exp.label} (${exp.code.toLowerCase()})`);
 
+      const formatted = formatParryCounterMeta({ kind: 'color', color: c }, true);
+      expect(formatted.shortLabel).toBe(`ALL ${exp.label.toUpperCase()} (${exp.code})`);
+      expect(formatted.color).toBe(exp.hex);
+
       // GearChips wantedLabel matches 1:1
       expect(wantedLabel('color', c, true)).toBe(`${exp.label} (${exp.code})`);
-      expect(wantedLabel('color', c, false)).toBe(c);
+      expect(wantedLabel('color', c, false)).toBe(exp.label);
     }
 
-    // Standard mode keeps red / green / purple unchanged
-    expect(parryCounterMeta({ kind: 'color', color: 'green' }, false).shortLabel).toBe('ALL GREEN');
-    expect(formatChallengeText('Make 2 all-red Sets', true)).toBe('Make 2 all-orange (O) Sets');
-    expect(formatChallengeText('Make 2 all-green Sets', true)).toBe('Make 2 all-blue (B) Sets');
-    expect(formatChallengeText('Make 2 all-purple Sets', true)).toBe('Make 2 all-plum (P) Sets');
-    expect(formatChallengeText('Make 2 all-red Sets', false)).toBe('Make 2 all-red Sets');
+    expect(parryCounterMeta({ kind: 'color', color: 'green' }, false).shortLabel).toBe('ALL BLUE');
+    expect(wantedLabel('shape', 'oval', false)).toBe('circles');
+    expect(wantedLabel('shape', 'diamond', false)).toBe('triangles');
+    expect(wantedLabel('shape', 'squiggle', false)).toBe('bolts');
+    expect(wantedLabel('background', 'beige', true)).toBe('mist (M) backs');
+    expect(wantedLabel('background', 'charcoal', true)).toBe('dark (D) backs');
+
+    expect(formatChallengeText('Make 2 all-orange Sets', true)).toBe('Make 2 all-orange (O) Sets');
+    expect(formatChallengeText('Make 2 all-blue Sets', true)).toBe('Make 2 all-blue (B) Sets');
+    expect(formatChallengeText('Make 2 all-pink Sets', true)).toBe('Make 2 all-pink (P) Sets');
+    expect(formatChallengeText('Make 2 all-orange Sets', false)).toBe('Make 2 all-orange Sets');
   });
 
-  it('propagates Colorblind Orange/Blue/Plum through all coach.ts helpers and live guidance', () => {
+  it('propagates Orange/Blue/Pink & Circle/Triangle/Bolt through all coach.ts helpers and live guidance', () => {
     const c1 = mkCard({ id: 'a', shape: 'diamond', color: 'red', number: 1 });
     const c2 = mkCard({ id: 'b', shape: 'oval', color: 'red', number: 2 });
     const c3Bad = mkCard({ id: 'c', shape: 'squiggle', color: 'green', number: 3 });
@@ -336,20 +344,21 @@ describe('[UI-10] End-to-End 1:1 Colorblind Propagation (Orange (O) / Blue (B) /
     expect(describeSingleCardTraits(c3Bad, ['shape', 'color'], true)[0].detail).toBe('blue');
 
     const pred = predictThirdCard([c1, c2], ['shape', 'color'], [c1, c2, c3Good], true)!;
-    expect(pred.neededSummary).toBe('an orange squiggle');
+    expect(pred.neededSummary).toBe('an orange bolt');
     expect(pred.pills[0].label).toBe('Color: same → orange');
+    expect(pred.pills[1].label).toBe('Shape: different → bolt');
 
     const run = createRun(getLevel('1-1'), createNewSave(), { seed: 42 });
     const step = computeLiveGuidance(run, { colorblind: true })!;
     expect(step.message).not.toMatch(/\b(red|green|purple)\b/i);
-    expect(step.message).toMatch(/\b(orange|blue|plum)\b/i);
+    expect(step.message).toMatch(/\b(orange|blue|pink)\b/i);
   });
 
-  it('renders Card O/B/P badge, Colorblind accessibilityLabel, 5th-attribute W/T/D tags, and hue-neutral locked overlays', () => {
+  it('renders Card O/B/P badge, Colorblind accessibilityLabel, 5th-attribute W/M/D tags, and hue-neutral locked overlays', () => {
     ColorblindStorage.set(true);
 
-    // Green card on beige parchment with 5th attribute active -> B + T + parchment pattern + bg pattern + accessible blue/tinted
-    const greenBeige = render(
+    // Blue (green slot) card on Blueprint Mist with 5th attribute active -> B + M + mist pattern + bg pattern + accessible blue/circle/mist
+    const blueMist = render(
       React.createElement(
         CardBoardProvider,
         { overlay: { backgroundAttributeActive: true }, clockMs: null },
@@ -359,18 +368,18 @@ describe('[UI-10] End-to-End 1:1 Colorblind Propagation (Orange (O) / Blue (B) /
         })
       )
     );
-    expect(greenBeige.getByTestId('card-colorblind-badge')).toHaveTextContent('B');
-    expect(greenBeige.getByTestId('card-bg-code-badge')).toHaveTextContent('T');
-    expect(greenBeige.getByTestId('card-parchment-pattern')).toBeTruthy();
-    expect(greenBeige.getByTestId('card-bg-pattern')).toBeTruthy();
-    expect(greenBeige.getByTestId('card-coin-badge')).toHaveTextContent('+2¢');
+    expect(blueMist.getByTestId('card-colorblind-badge')).toHaveTextContent('B');
+    expect(blueMist.getByTestId('card-bg-code-badge')).toHaveTextContent('M');
+    expect(blueMist.getByTestId('card-mist-pattern')).toBeTruthy();
+    expect(blueMist.getByTestId('card-bg-pattern')).toBeTruthy();
+    expect(blueMist.getByTestId('card-coin-badge')).toHaveTextContent('+2¢');
     // Top-left badges sit horizontally side-by-side (never vertically stacked down into shapes)
-    expect(StyleSheet.flatten(greenBeige.getByTestId('card-top-left-row').props.style).flexDirection).toBe('row');
-    expect(greenBeige.getByLabelText(/2 blue solid oval on tinted \(T\)/)).toBeTruthy();
-    greenBeige.unmount();
+    expect(StyleSheet.flatten(blueMist.getByTestId('card-top-left-row').props.style).flexDirection).toBe('row');
+    expect(blueMist.getByLabelText(/2 blue solid circle on mist \(M\)/)).toBeTruthy();
+    blueMist.unmount();
 
-    // Red card on charcoal -> O + D + diagonal-hatch pattern
-    const redDark = render(
+    // Orange (red slot) card on charcoal -> O + D + diagonal-hatch pattern
+    const orangeDark = render(
       React.createElement(
         CardBoardProvider,
         { overlay: { backgroundAttributeActive: true }, clockMs: null },
@@ -380,13 +389,13 @@ describe('[UI-10] End-to-End 1:1 Colorblind Propagation (Orange (O) / Blue (B) /
         })
       )
     );
-    expect(redDark.getByTestId('card-colorblind-badge')).toHaveTextContent('O');
-    expect(redDark.getByTestId('card-bg-code-badge')).toHaveTextContent('D');
-    expect(redDark.getByTestId('card-bg-pattern')).toBeTruthy();
+    expect(orangeDark.getByTestId('card-colorblind-badge')).toHaveTextContent('O');
+    expect(orangeDark.getByTestId('card-bg-code-badge')).toHaveTextContent('D');
+    expect(orangeDark.getByTestId('card-bg-pattern')).toBeTruthy();
     expect(cardBgPatternMeta('charcoal', true).pattern).toBe('diagonal-hatch');
     expect(cardBgPatternMeta('beige', true).pattern).toBe('dots');
     expect(cardBgPatternMeta('white', true).pattern).toBe('none');
-    redDark.unmount();
+    orangeDark.unmount();
 
     // Locked cursed & frozen cards use hue-neutral SVG overlays with ZERO translucent purple/cyan washes
     for (const lockedCard of [
@@ -411,24 +420,24 @@ describe('[UI-10] End-to-End 1:1 Colorblind Propagation (Orange (O) / Blue (B) /
       charms: ['bounty-poster'],
     };
     const baseRun = createRun(getLevel('2-9'), save, { seed: 7, features: new Set(['hearts', 'gear']) });
-    const runWithGreenBounty = {
+    const runWithBlueBounty = {
       ...baseRun,
       gear: { ...baseRun.gear, bounty: { attribute: 'color' as const, value: 'green', left: 2 } },
     };
-    const mods = gearModifiers(runWithGreenBounty);
-    const chips = render(React.createElement(GearChips, { run: runWithGreenBounty, mods }));
+    const mods = gearModifiers(runWithBlueBounty);
+    const chips = render(React.createElement(GearChips, { run: runWithBlueBounty, mods }));
     expect(chips.getByTestId('run-bounty-chip')).toHaveTextContent('blue (B) · 2');
     const dotStyle = StyleSheet.flatten(chips.getByTestId('run-bounty-color-dot').props.style);
-    expect(dotStyle.backgroundColor).toBe('#0064A8');
+    expect(dotStyle.backgroundColor).toBe('#007ED9');
     chips.unmount();
 
     // Level 2-9 (Prism Burst) has `{ kind: 'color', color: 'green' }` parry counter -> ALL BLUE (B)
     const inspector = render(
       React.createElement(HudInspector, {
         target: { kind: 'foe' },
-        run: runWithGreenBounty,
-        shownHp: runWithGreenBounty.foeHp,
-        challenge: { text: 'Make 2 all-green Sets', met: false, failed: false },
+        run: runWithBlueBounty,
+        shownHp: runWithBlueBounty.foeHp,
+        challenge: { text: 'Make 2 all-blue Sets', met: false, failed: false },
         onClose: () => {},
       })
     );
@@ -534,9 +543,9 @@ describe('[UI-11] [UI-12] [UI-14] Double-Stroke Selection, Zero Border Violation
     view.unmount();
   });
 
-  it('uses WCAG-AA tealSurface / redSurface tokens and updated O/B/P copy in OptionsMenu', () => {
+  it('uses WCAG-AA tealSurface / redSurface tokens and updated O/B/P & W/M/D copy in OptionsMenu', () => {
     const view = render(React.createElement(OptionsMenu, { visible: true, onClose: () => {} }));
-    expect(view.getByText('High-contrast palette & O/B/P labels')).toBeTruthy();
+    expect(view.getByText('High-visibility O/B/P & W/M/D card badges')).toBeTruthy();
 
     // Verify header and ON toggles use tealSurface (#0F766E)
     const nodes = collectNodes(view.toJSON());

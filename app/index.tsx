@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
 import Game from "@/components/Game";
+import { COLORS } from "@/utils/colors";
 import { STARTER_DECK_BY_ID, normalizeSeed } from "@/prism";
 import type { StarterDeckId } from "@/prism";
 import { LabsStorage } from "@/utils/freePlayStorage";
@@ -42,7 +43,7 @@ export default function Home() {
   const initialDeckId = rawDeck && rawDeck in STARTER_DECK_BY_ID ? rawDeck : undefined;
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: COLORS.paperBeige }}>
       <View className="flex-1">
         <Game
           autoPlayer={isAutoPlayer}

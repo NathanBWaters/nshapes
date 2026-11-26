@@ -9,8 +9,10 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import { useColorblind } from '@/utils/cardColors';
+import { formatParryCounterMeta } from '@/utils/cardVisuals';
 import type { ParrySpec } from '../types';
-import { parryCounterMeta, parryPenaltyText } from '../data/parry';
+import { parryPenaltyText } from '../data/parry';
 import { INK, TONE } from './ui';
 
 interface Props {
@@ -20,7 +22,8 @@ interface Props {
 }
 
 const ParryPreviewCard: React.FC<Props> = ({ spec, compact = false, testID = 'preview-parry-card' }) => {
-  const meta = parryCounterMeta(spec.counter);
+  const colorblind = useColorblind();
+  const meta = formatParryCounterMeta(spec.counter, colorblind);
   const isSpecific = spec.counter.kind !== 'any';
   const perfectSec = (spec.perfectWindowMs / 1000).toFixed(1).replace(/\.0$/, '');
   const windupSec = Math.round(spec.windupMs / 1000);

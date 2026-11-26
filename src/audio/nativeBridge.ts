@@ -21,7 +21,7 @@ import type { InstrumentId } from './instruments';
 import { audioFlags } from './settings';
 import { weaponVoice } from './voices';
 
-type AVPlaybackSource = import('expo-av').AVPlaybackSource;
+export type AVPlaybackSource = number | { uri: string };
 
 export interface NativeSoundHandle {
   playAsync: () => Promise<unknown>;
@@ -276,12 +276,10 @@ const getAudioModule = (): NativeAudioModule | null => {
   if (injectedAudio) return injectedAudio;
   if (Platform.OS === 'web' || isJestEnv()) return null;
   if (cachedExpoAudio !== undefined) return cachedExpoAudio;
-  try {
-    const mod = require('expo-av') as { Audio?: NativeAudioModule };
-    cachedExpoAudio = mod?.Audio ?? null;
-  } catch {
-    cachedExpoAudio = null;
-  }
+  const g = typeof globalThis !== 'undefined'
+    ? (globalThis as { __nshapesExpoAv?: { Audio?: NativeAudioModule } }).__nshapesExpoAv
+    : undefined;
+  cachedExpoAudio = g?.Audio ?? null;
   return cachedExpoAudio;
 };
 

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Support — NShapes</title>
+  <meta name="description" content="Support, FAQ, and bug reporting for NShapes by Nathan Waters." />
+  <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+  <style>
+    :root {
+      --bg: #F5F2EB;
+      --surface: #FFFFFF;
+      --ink: #2C2C2C;
+      --muted: #555960;
+      --teal: #007F7F;
+      --blue: #145CA8;
+      --border: #D9D3C7;
+      --gold: #F5C842;
+      --discord: #5865F2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.65;
+    }
+    header {
+      background: linear-gradient(135deg, #166CC2 0%, #0E4B94 100%);
+      color: #FFFFFF;
+      padding: 36px 20px 32px;
+      border-bottom: 4px solid #2C2C2C;
+    }
+    .header-inner {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--gold);
+      color: #1B2430;
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 32px;
+      letter-spacing: 1px;
+    }
+    .subtitle {
+      margin: 0;
+      opacity: 0.9;
+      font-size: 15px;
+    }
+    main {
+      max-width: 780px;
+      margin: 28px auto 56px;
+      padding: 0 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 2px solid var(--ink);
+      border-radius: 14px;
+      padding: 24px 26px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      margin-top: 0;
+      margin-bottom: 12px;
+      font-size: 20px;
+      color: var(--blue);
+    }
+    h3 {
+      margin: 16px 0 6px;
+      font-size: 16px;
+      color: var(--ink);
+    }
+    h3:first-of-type { margin-top: 6px; }
+    p { margin: 0 0 12px; }
+    p:last-child { margin-bottom: 0; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 18px;
+      border-radius: 10px;
+      border: 2px solid var(--ink);
+      font-weight: 700;
+      font-size: 14px;
+      text-decoration: none;
+      letter-spacing: 0.3px;
+    }
+    .btn-discord {
+      background: var(--discord);
+      color: #FFFFFF;
+    }
+    .btn-github {
+      background: var(--gold);
+      color: var(--ink);
+    }
+    a.inline {
+      color: var(--teal);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    a.inline:hover { text-decoration: underline; }
+    footer {
+      max-width: 780px;
+      margin: 0 auto 40px;
+      padding: 0 20px;
+      color: var(--muted);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="badge">NShapes</div>
+      <h1>Player Support</h1>
+      <p class="subtitle">Help, troubleshooting, and feedback for NShapes &middot; Publisher: Nathan Waters</p>
+    </div>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Get in Touch</h2>
+      <p>
+        Found a bug, balance quirk, or visual glitch — or want to share a wild Prism Deck seed?
+        Reach out through either of our official channels below:
+      </p>
+      <div class="actions">
+        <a class="btn btn-discord" href="https://discord.gg/JFkUmp54Sp" rel="noopener noreferrer">Join the NShapes Discord</a>
+        <a class="btn btn-github" href="https://github.com/NathanBWaters/nshapes/issues" rel="noopener noreferrer">Report an Issue on GitHub</a>
+      </div>
+      <p style="margin-top: 14px; font-size: 13px; color: #555960;">
+        Tip: When reporting a bug, copy your anonymous <strong>Player ID</strong> from
+        <strong>Options &rarr; Player ID</strong> and include your device model and OS version.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Frequently Asked Questions</h2>
+
+      <h3>How do I turn on Colorblind Mode?</h3>
+      <p>
+        NShapes' default card palette (Tangerine Orange, Electric Blue, and Berry Pink with Circle,
+        Triangle, and Bolt shapes) is engineered to be colorblind-safe out of the box. For extra
+        clarity or complete achromatopsia, open <strong>Options</strong> from the Main Menu and
+        toggle <strong>Colorblind Mode</strong> to <strong>ON</strong> to add crisp O / B / P
+        corner badges to every card.
+      </p>
+
+      <h3>I don't hear sound or music on iPhone.</h3>
+      <p>
+        Check two things: (1) open <strong>Options</strong> and ensure <strong>Music</strong> and
+        <strong>Sound Effects</strong> are toggled <strong>ON</strong>, and (2) check your iPhone's
+        side Silent / Ring switch — NShapes respects iOS silent mode so you can play quietly or
+        alongside background music and podcasts.
+      </p>
+
+      <h3>How do I opt out of Gameplay Analytics?</h3>
+      <p>
+        Open <strong>Options</strong> and switch <strong>Gameplay Analytics</strong> to
+        <strong>OFF</strong>. See our <a class="inline" href="./privacy.html">Privacy Policy</a> for
+        full details.
+      </p>
+
+      <h3>How do I reset my save and start fresh?</h3>
+      <p>
+        Open <strong>Options &rarr; Reset Game</strong> and confirm <strong>START OVER</strong>.
+        This permanently erases all local Adventure stars, unlocks, Starfall Summit runs, Prism Deck
+        runs, and battle history on your device.
+      </p>
+
+      <h3>Does NShapes work offline?</h3>
+      <p>
+        Yes! All four modes — Adventure, Starfall Summit, Prism Deck, and Free Play — run 100%
+        offline with local device saves.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <span>&copy; 2026 Nathan Waters &middot; NShapes</span>
+    <span>
+      <a class="inline" href="./privacy.html">Privacy Policy</a> &middot;
+      <a class="inline" href="./">Play on Web</a>
+    </span>
+  </footer>
+</body>
+</html>

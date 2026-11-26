@@ -214,11 +214,11 @@ export const ATTRIBUTE_SCALING = {
   } as Record<number, number>,
 } as const;
 
-// Background color hex values
-// Pure White (#FFFFFF), Warm Textured Parchment (#F5E8C8, 81.3% lum), Deep Charcoal (#383838)
+// Background color hex values (synchronized with src/utils/cardVisuals.ts)
+// Pure White (#FFFFFF), Blueprint Mist (#E2ECF7), Deep Charcoal (#383838)
 export const BACKGROUND_COLORS = {
   white: '#FFFFFF',
-  beige: '#F5E8C8',  // Warm tinted parchment paired with subtle perimeter dot pattern for >=3.1:1 WCAG contrast
+  beige: '#E2ECF7',  // Blueprint Mist paired with subtle perimeter dot pattern for >=3.14:1 WCAG contrast
   charcoal: '#383838',
 } as const;
 

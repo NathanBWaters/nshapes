@@ -1,19 +1,40 @@
 /**
  * Sound effect utility for game audio feedback.
- * Provides platform-optimized audio playback with staged non-blocking preloading.
- * Follows the haptics.ts pattern for graceful degradation.
+ * Routes SFX across Web, iOS, and Android through the unified synthesizer chip
+ * (`src/audio` via Web Audio or `react-native-audio-api`), with staged non-blocking
+ * AAC-LC `.m4a` sample playback fallback when hardware synth is unavailable ([AU-01]/[AU-03]).
  */
 
-import { InteractionManager, Platform } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { getIsAppActive } from './appLifecycle';
 import { SettingsStorage, SoundStorage } from './storage';
-import { sfx, band, audioSupported, setSfxEnabled, type SfxName } from '@/audio';
+import { sfx, band, audioSupported, setSfxEnabled, unlockAudio, type SfxName } from '@/audio';
 
-/**
- * On the web, every sound is synthesized by the chip (src/audio) — no files
- * are downloaded. Native uses the bundled AAC-LC .m4a samples via expo-av.
- */
-const useChip = Platform.OS === 'web' && typeof audioSupported === 'function' && audioSupported();
+type AVPlaybackSource = number | { uri: string };
+
+export interface FallbackSoundHandle {
+  setPositionAsync: (ms: number) => Promise<unknown>;
+  playAsync: () => Promise<unknown>;
+  unloadAsync: () => Promise<unknown>;
+  setOnPlaybackStatusUpdate?: (cb: (status: { isLoaded?: boolean; didJustFinish?: boolean }) => void) => void;
+}
+
+export interface FallbackAudioModule {
+  setAudioModeAsync: (mode: {
+    playsInSilentModeIOS: boolean;
+    staysActiveInBackground: boolean;
+    shouldDuckAndroid: boolean;
+  }) => Promise<unknown>;
+  Sound: {
+    createAsync: (
+      source: AVPlaybackSource,
+      initialStatus?: { shouldPlay?: boolean; volume?: number }
+    ) => Promise<{ sound: FallbackSoundHandle }>;
+  };
+}
+
+const isChipReady = (): boolean =>
+  typeof audioSupported === 'function' && audioSupported();
 
 const CHIP_SFX: Record<SoundCategory, SfxName> = {
   cardSlide: 'deal',
@@ -56,34 +77,19 @@ export const CORE_SOUND_CATEGORIES: readonly SoundCategory[] = [
 /** Max concurrent Audio.Sound.createAsync calls so cold boot never drops frames on iOS ([AU-03]). */
 export const PRELOAD_MAX_CONCURRENT = 3;
 
-/**
- * A card was tapped. In an Adventure fight the first, second and third card
- * sound the root, third and fifth of the chord the music is on, so a Set
- * spells a chord. Everywhere else it is the plain click.
- */
-export const playSelect = (selectedCount: number): void => {
-  // The band has its own switch (Adventure's sound button), so ask it first on both web & native
-  if (band.inFight) {
-    if (selectedCount > 0) band.select(selectedCount);
-    else band.deselect();
-    return;
-  }
-  if (!audioEnabled) return;
-  void playSound('click');
+// Optional fallback sample audio backend (e.g. injected in tests or environments without Web Audio / react-native-audio-api)
+let fallbackAudio: FallbackAudioModule | null =
+  typeof globalThis !== 'undefined'
+    ? ((globalThis as { __nshapesExpoAv?: { Audio?: FallbackAudioModule } }).__nshapesExpoAv?.Audio ?? null)
+    : null;
+
+/** Test hook to inject or clear a fallback Audio implementation without bundling expo-av. */
+export const __setFallbackAudioForTests = (mod: FallbackAudioModule | null): void => {
+  fallbackAudio = mod;
+  soundPools.clear();
+  loadingPools.clear();
+  audioInitialized = false;
 };
-
-// Dynamically import expo-av to handle missing native module gracefully
-let Audio: typeof import('expo-av').Audio | null = null;
-type AVPlaybackSource = import('expo-av').AVPlaybackSource;
-
-// Try to load expo-av only on native (Web synthesizes audio via src/audio)
-if (!useChip) {
-  try {
-    Audio = require('expo-av').Audio;
-  } catch {
-    console.warn('expo-av not available - sounds will be disabled');
-  }
-}
 
 // Sound categories for type safety
 export type SoundCategory =
@@ -103,15 +109,13 @@ export type SoundCategory =
   | 'confirmExit'
   | 'gameOver';
 
-// Sound pool for each category (allows random selection)
 interface SoundPool {
   sources: AVPlaybackSource[];
-  sounds: any[]; // Audio.Sound[] when Audio is available
+  sounds: FallbackSoundHandle[];
   volume: number;
-  currentIndex: number; // For alternating sounds
+  currentIndex: number;
 }
 
-// Preloaded sound pools + in-flight dedupe
 const soundPools: Map<SoundCategory, SoundPool> = new Map();
 const loadingPools: Map<SoundCategory, Promise<void>> = new Map();
 
@@ -119,14 +123,12 @@ const loadingPools: Map<SoundCategory, Promise<void>> = new Map();
 let audioEnabled = true;
 let audioInitialized = false;
 
-// Initialize audio enabled state from storage
 try {
   audioEnabled = SettingsStorage.getSoundEnabled();
   if (typeof setSfxEnabled === 'function') {
     setSfxEnabled(audioEnabled);
   }
 } catch {
-  // Storage not available yet, default to enabled
   audioEnabled = true;
 }
 
@@ -226,15 +228,37 @@ const SOUND_DEFINITIONS: Record<SoundCategory, { sources: AVPlaybackSource[]; vo
 };
 
 /**
- * Initialize audio mode for the app.
- * Call this once at app startup.
- * Respects iOS hardware mute switch by default (`playsInSilentModeIOS: false`).
+ * A card was tapped. In an Adventure fight the first, second and third card
+ * sound the root, third and fifth of the chord the music is on, so a Set
+ * spells a chord. Everywhere else it is the plain click.
+ */
+export const playSelect = (selectedCount: number): void => {
+  if (band.inFight) {
+    if (selectedCount > 0) band.select(selectedCount);
+    else band.deselect();
+    return;
+  }
+  if (!audioEnabled) return;
+  void playSound('click');
+};
+
+/**
+ * Initialize audio for the app.
+ * Unlocks live chip synthesis when available; otherwise configures sample fallback
+ * to respect the iOS hardware mute switch (`playsInSilentModeIOS: false`).
  */
 export const initAudio = async (): Promise<void> => {
-  if (audioInitialized || !Audio || useChip) return;
+  if (isChipReady()) {
+    if (!audioEnabled || !getIsAppActive()) return;
+    if (typeof unlockAudio === 'function') {
+      unlockAudio();
+    }
+    return;
+  }
+  if (audioInitialized || !fallbackAudio) return;
 
   try {
-    await Audio.setAudioModeAsync({
+    await fallbackAudio.setAudioModeAsync({
       playsInSilentModeIOS: false,
       staysActiveInBackground: false,
       shouldDuckAndroid: true,
@@ -267,11 +291,11 @@ const runWithConcurrency = async <T>(
 };
 
 /**
- * Preload a sound category for instant playback (capped concurrency per clip).
+ * Preload a sound category for instant fallback playback (capped concurrency per clip).
  */
 const preloadSound = async (category: SoundCategory): Promise<void> => {
-  if (!Audio || useChip) return; // Audio not available, or synthesized instead
-  if (soundPools.has(category)) return; // Already preloaded
+  if (!fallbackAudio || isChipReady()) return;
+  if (soundPools.has(category)) return;
   const existing = loadingPools.get(category);
   if (existing) return existing;
 
@@ -280,10 +304,10 @@ const preloadSound = async (category: SoundCategory): Promise<void> => {
 
   const task = (async () => {
     try {
-      const sounds: InstanceType<typeof Audio.Sound>[] = new Array(definition.sources.length);
+      const sounds: FallbackSoundHandle[] = new Array(definition.sources.length);
       const indices = definition.sources.map((_, i) => i);
       await runWithConcurrency(indices, PRELOAD_MAX_CONCURRENT, async (i) => {
-        const { sound } = await Audio!.Sound.createAsync(definition.sources[i], {
+        const { sound } = await fallbackAudio!.Sound.createAsync(definition.sources[i], {
           shouldPlay: false,
           volume: definition.volume,
         });
@@ -307,11 +331,8 @@ const preloadSound = async (category: SoundCategory): Promise<void> => {
   return task;
 };
 
-/**
- * Preload multiple sound categories with bounded concurrency (max 3 concurrent createAsync calls).
- */
 const preloadSounds = async (categories: readonly SoundCategory[]): Promise<void> => {
-  if (!Audio || useChip) return;
+  if (!fallbackAudio || isChipReady()) return;
   for (const category of categories) {
     await preloadSound(category);
   }
@@ -321,15 +342,12 @@ const preloadSounds = async (categories: readonly SoundCategory[]): Promise<void
  * Preload immediate core UI and match feedback sounds first ([AU-03]).
  */
 export const preloadCoreSounds = async (): Promise<void> => {
-  if (!Audio || useChip) return;
+  if (!fallbackAudio || isChipReady()) return;
   await preloadSounds(CORE_SOUND_CATEGORIES);
 };
 
-/**
- * Preload non-core combat & reward sound pools quietly in the background.
- */
 const preloadRemainingSounds = async (): Promise<void> => {
-  if (!Audio || useChip) return;
+  if (!fallbackAudio || isChipReady()) return;
   const coreSet = new Set<SoundCategory>(CORE_SOUND_CATEGORIES);
   const rest = (Object.keys(SOUND_DEFINITIONS) as SoundCategory[]).filter((cat) => !coreSet.has(cat));
   await preloadSounds(rest);
@@ -337,11 +355,11 @@ const preloadRemainingSounds = async (): Promise<void> => {
 
 /**
  * Staged non-blocking preload of all game sounds ([AU-03]).
- * Defers until after the first interactive frame, loads core UI/match clips first,
- * then streams combat/reward pools with bounded concurrency (max 3 concurrent decodes).
+ * No-op when procedural chip synthesis is active; otherwise defers until after
+ * the first interactive frame and loads core UI/match clips first with concurrency <= 3.
  */
 export const preloadAllSounds = async (): Promise<void> => {
-  if (!Audio || useChip) return;
+  if (!fallbackAudio || isChipReady()) return;
   await new Promise<void>((resolve) => {
     const start = () => {
       void preloadCoreSounds()
@@ -357,35 +375,30 @@ export const preloadAllSounds = async (): Promise<void> => {
 };
 
 /**
- * Play a sound from a category.
- * - For categories with multiple sounds: alternates between them (click) or picks random (cardSlide, laser, matchValid)
- * - Non-blocking - fires and forgets.
+ * Play a sound from a category (synthesized live by chip when available, else `.m4a` pool).
+ * Non-blocking — fires and forgets.
  */
 export const playSound = async (category: SoundCategory): Promise<void> => {
   if (!audioEnabled || !getIsAppActive()) return;
-  // In an Adventure / Starfall Summit fight the band plays these itself (web chip or nativeBridge)
+  // In an Adventure / Starfall Summit fight the band plays these itself
   if (band.inFight && BAND_OWNED.has(category)) return;
-  if (useChip) {
+  if (isChipReady()) {
     sfx(CHIP_SFX[category]);
     return;
   }
-  if (!Audio) return;
+  if (!fallbackAudio) return;
 
   const pool = soundPools.get(category);
-
   if (!pool || pool.sounds.length === 0) {
-    // Not preloaded - load and play on demand
     const definition = SOUND_DEFINITIONS[category];
     if (!definition) return;
-
     try {
       const randomIndex = Math.floor(Math.random() * definition.sources.length);
-      const { sound } = await Audio.Sound.createAsync(definition.sources[randomIndex], {
+      const { sound } = await fallbackAudio.Sound.createAsync(definition.sources[randomIndex], {
         shouldPlay: true,
         volume: definition.volume,
       });
-      // Clean up after playing
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate?.((status) => {
         if (status.isLoaded && status.didJustFinish) {
           void sound.unloadAsync().catch(() => undefined);
         }
@@ -396,21 +409,15 @@ export const playSound = async (category: SoundCategory): Promise<void> => {
     return;
   }
 
-  // Play from preloaded pool
   try {
     let index: number;
-
-    // Click sounds alternate, others pick random
     if (category === 'click') {
       index = pool.currentIndex;
       pool.currentIndex = (pool.currentIndex + 1) % pool.sounds.length;
     } else {
       index = Math.floor(Math.random() * pool.sounds.length);
     }
-
     const sound = pool.sounds[index];
-
-    // Reset to beginning and play
     await sound.setPositionAsync(0);
     await sound.playAsync();
   } catch (error) {
@@ -424,10 +431,7 @@ export const playSound = async (category: SoundCategory): Promise<void> => {
  * @param delayMs Delay between each card sound (default 50ms)
  */
 export const playCardDealing = (count: number, delayMs: number = 50): void => {
-  // Skip entirely if audio disabled - avoid setTimeout overhead
-  if (!audioEnabled || (!Audio && !useChip)) return;
-
-  // Cap at reasonable number to avoid audio overload
+  if (!audioEnabled || (!isChipReady() && !fallbackAudio)) return;
   const maxSounds = Math.min(count, 8);
   for (let i = 0; i < maxSounds; i++) {
     setTimeout(() => {

@@ -6,6 +6,7 @@ import { dealBoardAndDeck } from '@/game/board';
 import { createInitialGameState } from '@/game/gameState';
 import type { GameState } from '@/game/types';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { useParticles } from '@/hooks/useParticles';
 import type { AttributeName, Card, CardReward, FreePlayDifficulty } from '@/types';
@@ -157,6 +158,15 @@ const FreePlayMode: React.FC<FreePlayModeProps> = ({ onExit, autoPlayer = false 
     }
     onExit();
   }, [clearPendingTimers, funRating, mistakes, onExit, state.foundCombinations.length, state.player.character.name, state.player.weapons, state.score]);
+
+  useAndroidBackHandler(() => {
+    if (difficulty !== null) {
+      handleExit();
+    } else {
+      onExit();
+    }
+    return true;
+  });
 
   const replaceMatchedCards = useCallback((cardsToReplace: Card[]) => {
     let dealtCount = 0;

@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 /**
  * WeaponCounterBadge Component
  * Shows a weapon type with its reduction percentage.
@@ -51,7 +52,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 10,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.impactRed,
   },
 });

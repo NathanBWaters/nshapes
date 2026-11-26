@@ -1,3 +1,4 @@
+import { MONO_FONT } from '@/utils/fonts';
 /**
  * DefeatProgress Component
  * Shows progress toward the enemy's defeat condition.
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 10,
     fontWeight: '700',
-    fontFamily: 'monospace',
+    fontFamily: MONO_FONT,
     color: COLORS.slateCharcoal,
     minWidth: 60,
   },

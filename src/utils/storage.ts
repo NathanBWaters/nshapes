@@ -138,8 +138,8 @@ const notifyListeners = (listeners: Set<BoolListener>, value: boolean) => {
 // Settings storage helpers (legacy Sound API kept 100% backwards-compatible)
 export const SettingsStorage = {
   getSoundEnabled: (): boolean => {
-    // Default on across web and native now that all clips are lightweight AAC .m4a
-    // with staged non-blocking preload ([AU-01]/[AU-03]).
+    // Default on across web & native: synthesized live via src/audio (Web Audio / react-native-audio-api)
+    // with lightweight AAC .m4a staged-preload fallback ([AU-01]/[AU-03]).
     return storage.getBoolean(STORAGE_KEYS.SOUND_ENABLED) ?? true;
   },
 
@@ -194,7 +194,7 @@ export const MusicStorage = {
   },
 };
 
-// Colorblind Mode preference helper (CVD-safe Okabe-Ito card palette + R/B/P corner badges)
+// Colorblind Mode preference helper (universal CVD-safe card palette + O/B/P & W/M/D badges)
 export const ColorblindStorage = {
   get: (): boolean => storage.getBoolean(STORAGE_KEYS.COLORBLIND_MODE) ?? false,
 

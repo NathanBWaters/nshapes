@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "currentEraId": "E10",
-  "currentAppVersion": "0.1.171",
+  "currentEraId": "E11",
+  "currentAppVersion": "0.1.174",
   "eras": [
     {
       "id": "E0",
@@ -242,6 +242,28 @@
           "levels"
         ]
       }
+    },
+    {
+      "id": "E11",
+      "minVersion": "0.1.174",
+      "date": "2026-11-26",
+      "commit": "d06e4df",
+      "summary": "Wave 1 Sakurai foundation reconciled on v0.1.173 visual identity: Classic purge, card/CVD polish, deterministic RNG, deadlock fixes & native audio",
+      "scope": "global",
+      "invalidated": {
+        "global": true,
+        "modes": [
+          "adventure",
+          "spire"
+        ],
+        "categories": [
+          "weapons",
+          "evolutions",
+          "fighters",
+          "arcana",
+          "levels"
+        ]
+      }
     }
   ],
   "fingerprints": {
@@ -263,14 +285,14 @@
       "src/adventure/loadout.ts": "ce60b457753b54f7",
       "src/adventure/weaponLevels.ts": "e1d31f25004ae73a",
       "src/adventure/data/rules.ts": "7ad03548fde313b4",
-      "src/adventure/data/parry.ts": "560ddffb7b63e2fc",
+      "src/adventure/data/parry.ts": "82408a55a27d259d",
       "src/adventure/data/weaponStats.ts": "3c8395b88b9f39f5",
       "src/adventure/data/upgrades.ts": "c50cbad30222963e",
       "src/adventure/data/armory.ts": "ed1685353d84c921",
       "src/adventure/data/foes.ts": "a91e4db3a2b2a33f",
       "src/utils/weaponEffects.ts": "fe551e33de16e30e",
       "src/utils/matchResolution.ts": "0fec3da307114ca3",
-      "src/utils/gameConfig.ts": "dc8e537d39a3b712",
+      "src/utils/gameConfig.ts": "43b8c7671a538aca",
       "src/utils/enemyEffects.ts": "7ff4007deb4b33e2",
       "src/utils/enemyFactory.ts": "9781e2cd1b890975",
       "src/spire/data/ascensions.ts": "92fde46da64fb696",

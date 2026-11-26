@@ -734,22 +734,24 @@ describe('[AU-03] native sound default true & bounded staged preload', () => {
     });
 
     await jest.isolateModulesAsync(async () => {
-      jest.doMock('expo-av', () => ({
-        Audio: { setAudioModeAsync, Sound: { createAsync } },
-      }));
       const actualSounds = jest.requireActual<typeof import('@/utils/sounds')>('@/utils/sounds');
-      await actualSounds.initAudio();
-      expect(setAudioModeAsync).toHaveBeenCalledWith({
-        playsInSilentModeIOS: false,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
+      actualSounds.__setFallbackAudioForTests({ setAudioModeAsync, Sound: { createAsync } });
+      try {
+        await actualSounds.initAudio();
+        expect(setAudioModeAsync).toHaveBeenCalledWith({
+          playsInSilentModeIOS: false,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+        });
 
-      expect(actualSounds.PRELOAD_MAX_CONCURRENT).toBe(3);
-      expect(actualSounds.CORE_SOUND_CATEGORIES).toEqual(['click', 'confirm', 'confirmExit', 'matchValid', 'matchInvalid']);
-      await actualSounds.preloadAllSounds();
-      expect(createAsync).toHaveBeenCalledTimes(26);
-      expect(peakInFlight).toBeLessThanOrEqual(actualSounds.PRELOAD_MAX_CONCURRENT);
+        expect(actualSounds.PRELOAD_MAX_CONCURRENT).toBe(3);
+        expect(actualSounds.CORE_SOUND_CATEGORIES).toEqual(['click', 'confirm', 'confirmExit', 'matchValid', 'matchInvalid']);
+        await actualSounds.preloadAllSounds();
+        expect(createAsync).toHaveBeenCalledTimes(26);
+        expect(peakInFlight).toBeLessThanOrEqual(actualSounds.PRELOAD_MAX_CONCURRENT);
+      } finally {
+        actualSounds.__setFallbackAudioForTests(null);
+      }
     });
   });
 });

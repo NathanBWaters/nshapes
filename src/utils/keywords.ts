@@ -55,7 +55,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   attribute: {
     terms: ['attribute', 'attributes'],
     brief: 'A property of cards: shape, color, number, shading, or background.',
-    detailed: 'Cards have up to 5 attributes, each with 3 possible values. Shape (diamond/squiggle/oval), color (red/green/purple), number (1/2/3), shading (solid/striped/open), and background color. More attributes = harder puzzles.',
+    detailed: 'Cards have up to 5 attributes, each with 3 possible values. Shape (circle/triangle/bolt), color (orange/blue/pink), number (1/2/3), shading (solid/striped/open), and background stock. More attributes = harder puzzles.',
   },
 
   fire: {
@@ -241,7 +241,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   invalidMatch: {
     terms: ['invalid match', 'invalid', 'wrong match'],
     brief: 'Selecting 3 cards that do NOT form a valid SET.',
-    detailed: 'When you select 3 cards that aren\'t a valid SET, you lose 1 health (unless a grace saves you). The 3 cards are removed from the board and replaced. Some enemies punish invalid matches more severely with extra card removal or increased damage.',
+    detailed: 'When you select 3 cards that aren\'t a valid Trio, you lose 1 health (unless a grace saves you). The 3 cards are removed from the board and replaced. Some enemies punish invalid matches more severely with extra card removal or increased damage.',
   },
 
   streak: {
@@ -277,7 +277,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   attributeShift: {
     terms: ['attribute shift', 'attributes change', 'attributes shift', 'shift'],
     brief: 'Card attributes randomly change to different values.',
-    detailed: 'Unlike shuffling, attribute shifts actually modify the cards themselves. A red card might become green, or a diamond might become an oval. This can break SETs you were planning and create new unexpected combinations.',
+    detailed: 'Unlike shuffling, attribute shifts actually modify the cards themselves. An orange card might become blue, or a triangle might become a circle. This can break Trios you were planning and create new unexpected combinations.',
   },
 
   timeSteal: {
@@ -313,7 +313,7 @@ export const KEYWORDS: Record<string, KeywordDefinition> = {
   allDifferent: {
     terms: ['all-different', 'all different'],
     brief: 'A match where each attribute has 3 different values.',
-    detailed: 'An all-different match means for EVERY active attribute (shape, color, number, etc.), all 3 cards have DIFFERENT values. Example: red-diamond-1, green-oval-2, purple-squiggle-3. These are harder to spot but some enemies require them.',
+    detailed: 'An all-different match means for EVERY active attribute (shape, color, number, etc.), all 3 cards have DIFFERENT values. Example: orange-triangle-1, blue-circle-2, pink-bolt-3. These are harder to spot but some enemies require them.',
   },
 
   allSame: {

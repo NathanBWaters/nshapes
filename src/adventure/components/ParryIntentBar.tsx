@@ -19,8 +19,9 @@ import Animated, {
 import Icon from '@/components/Icon';
 import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
+import { useColorblind } from '@/utils/cardColors';
+import { formatParryCounterMeta } from '@/utils/cardVisuals';
 import type { ParryState } from '../types';
-import { parryCounterMeta } from '../data/parry';
 import { isInPerfectWindow } from '../engine/parry';
 import { INK } from './ui';
 
@@ -36,7 +37,8 @@ interface Props {
 
 const ParryIntentBar: React.FC<Props> = ({ parry, active, counterAvailable = true, compact = false, onPress }) => {
   const appActive = useAppActive();
-  const meta = parryCounterMeta(parry.spec.counter);
+  const colorblind = useColorblind();
+  const meta = formatParryCounterMeta(parry.spec.counter, colorblind);
   const perfect = isInPerfectWindow(parry);
   const staggered = parry.phase === 'staggered';
   const windup = parry.phase === 'windup';

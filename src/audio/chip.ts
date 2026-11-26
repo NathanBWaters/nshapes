@@ -9,6 +9,7 @@
  * poteto's approach. On platforms without Web Audio, everything is a no-op.
  */
 
+import { Platform } from 'react-native';
 import { getIsAppActive } from '@/utils/appLifecycle';
 
 export type Duty = 0.125 | 0.25 | 0.5 | 0.75;
@@ -84,8 +85,8 @@ export const foldFreq = (freq: number, maxHz = 2600): number => {
 
 /** Smooth odd-symmetric tanh soft-clipper curve capped at -0.3 dBFS ([AU-15]). */
 export const makeSoftClipCurve = (
-  samples = MASTER_BUS.softClipSamples,
-  drive = MASTER_BUS.softClipDrive
+  samples: number = MASTER_BUS.softClipSamples,
+  drive: number = MASTER_BUS.softClipDrive
 ): Float32Array<ArrayBuffer> => {
   const curve = new Float32Array(samples);
   const norm = Math.tanh(drive);
@@ -100,7 +101,66 @@ const SOFT_CLIP_CURVE = makeSoftClipCurve();
 
 type Ctx = BaseAudioContext;
 
+interface NativeAudioManagerLike {
+  setSystemOptions?: (opts: {
+    ios?: {
+      category?: string;
+      options?: string[];
+      allowHaptics?: boolean;
+      notifyOthersOnDeactivation?: boolean;
+    };
+  }) => void;
+  setAudioSessionActivity?: (enabled: boolean) => Promise<void>;
+}
+
+interface NativeAudioModuleLike {
+  AudioContext?: new () => AudioContext;
+  AudioManager?: NativeAudioManagerLike;
+}
+
+let nativeAudioCache: NativeAudioModuleLike | null | undefined;
+let nativeSessionConfigured = false;
+
+const loadNativeAudioModule = (): NativeAudioModuleLike | null => {
+  if (Platform.OS === 'web') return null;
+  if (nativeAudioCache !== undefined) return nativeAudioCache;
+  try {
+    nativeAudioCache = require('react-native-audio-api') as NativeAudioModuleLike;
+  } catch {
+    nativeAudioCache = null;
+  }
+  return nativeAudioCache;
+};
+
+const configureNativeSession = (active: boolean) => {
+  const mgr = loadNativeAudioModule()?.AudioManager;
+  if (!mgr) return;
+  try {
+    if (active && !nativeSessionConfigured && typeof mgr.setSystemOptions === 'function') {
+      nativeSessionConfigured = true;
+      mgr.setSystemOptions({
+        ios: {
+          // Respect iOS Silent Switch, mix gently with background music/podcasts, and keep haptics enabled
+          category: 'ambient',
+          options: ['mixWithOthers'],
+          allowHaptics: true,
+          notifyOthersOnDeactivation: true,
+        },
+      });
+    }
+    if (typeof mgr.setAudioSessionActivity === 'function') {
+      void Promise.resolve(mgr.setAudioSessionActivity(active)).catch(() => undefined);
+    }
+  } catch {
+    /* ignore audio session setup failures */
+  }
+};
+
 const getAudioContextCtor = (): (new () => AudioContext) | null => {
+  if (Platform.OS !== 'web') {
+    const NativeCtor = loadNativeAudioModule()?.AudioContext;
+    if (typeof NativeCtor === 'function') return NativeCtor;
+  }
   if (typeof window === 'undefined') return null;
   const w = window as unknown as { AudioContext?: new () => AudioContext; webkitAudioContext?: new () => AudioContext };
   return w.AudioContext ?? w.webkitAudioContext ?? null;
@@ -150,12 +210,16 @@ export class Chip {
     if (!getIsAppActive()) return false;
     if (this.ctx) {
       // iOS reports 'interrupted' after calls/app switches, not just 'suspended'
-      if (this.live && this.live.state !== 'running' && this.live.state !== 'closed') void this.live.resume().catch(() => undefined);
+      if (this.live && this.live.state !== 'running' && this.live.state !== 'closed') {
+        if (Platform.OS !== 'web') configureNativeSession(true);
+        void Promise.resolve(this.live.resume()).catch(() => undefined);
+      }
       return true;
     }
     const Ctor = getAudioContextCtor();
     if (!Ctor) return false;
     try {
+      if (Platform.OS !== 'web') configureNativeSession(true);
       const ctx = new Ctor();
       this.live = ctx;
       this.wire(ctx);
@@ -170,7 +234,10 @@ export class Chip {
   suspend(): void {
     const state = this.live?.state as string | undefined;
     if (this.live && state !== 'suspended' && state !== 'closed') {
-      void this.live.suspend().catch(() => undefined);
+      void Promise.resolve(this.live.suspend()).catch(() => undefined);
+    }
+    if (Platform.OS !== 'web' && this.live) {
+      configureNativeSession(false);
     }
   }
 
@@ -212,21 +279,35 @@ export class Chip {
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = MASTER_BUS.lpfHz;
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = MASTER_BUS.limiterThreshold;
-    limiter.knee.value = MASTER_BUS.limiterKnee;
-    limiter.ratio.value = MASTER_BUS.limiterRatio;
-    limiter.attack.value = MASTER_BUS.limiterAttack;
-    limiter.release.value = MASTER_BUS.limiterRelease;
-    const postLimiter = this.master.connect(hpf).connect(presence).connect(lp).connect(limiter);
-    if (typeof ctx.createWaveShaper === 'function') {
+    const postEq = this.master.connect(hpf).connect(presence).connect(lp);
+    // Browser Web Audio provides DynamicsCompressorNode; native react-native-audio-api
+    // uses a soft-clipping WaveShaperNode fallback when createDynamicsCompressor is absent.
+    if (typeof ctx.createDynamicsCompressor === 'function') {
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = MASTER_BUS.limiterThreshold;
+      limiter.knee.value = MASTER_BUS.limiterKnee;
+      limiter.ratio.value = MASTER_BUS.limiterRatio;
+      limiter.attack.value = MASTER_BUS.limiterAttack;
+      limiter.release.value = MASTER_BUS.limiterRelease;
+      const postLimiter = postEq.connect(limiter);
+      if (typeof ctx.createWaveShaper === 'function') {
+        const shaper = ctx.createWaveShaper();
+        shaper.curve = SOFT_CLIP_CURVE;
+        const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent ?? '');
+        shaper.oversample = isMobile ? 'none' : '2x';
+        postLimiter.connect(shaper).connect(ctx.destination);
+      } else {
+        postLimiter.connect(ctx.destination);
+      }
+    } else if (typeof ctx.createWaveShaper === 'function') {
       const shaper = ctx.createWaveShaper();
-      shaper.curve = SOFT_CLIP_CURVE;
-      const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent ?? '');
-      shaper.oversample = isMobile ? 'none' : '2x';
-      postLimiter.connect(shaper).connect(ctx.destination);
+      shaper.curve = makeSoftClipCurve(256, 1.35);
+      shaper.oversample = 'none';
+      this.master.gain.value = 0.82;
+      postEq.connect(shaper).connect(ctx.destination);
     } else {
-      postLimiter.connect(ctx.destination);
+      this.master.gain.value = 0.78;
+      postEq.connect(ctx.destination);
     }
 
     // Music: bus → filter (muffles when paused or hurt) → duck (dips under big hits) → master
