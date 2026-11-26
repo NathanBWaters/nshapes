@@ -5,19 +5,35 @@
  * what every evolution gives. The fight waits until the player taps.
  *
  * Several evolutions that start at once share one cut, one row each.
+ *
+ * [FX-17] Uses `ChiaroscuroFlash` (gated on `ScreenFlashStorage` & `useReducedMotion()`)
+ * instead of a pure-white full-screen washout, while preserving Wave 3's [OB-08] 200 ms
+ * tap guard and [AU-13] mount audio call.
  */
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import Icon from '@/components/Icon';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
+import { EASE, STAYS } from '@/utils/motion';
 import { band } from '@/audio';
 import type { EvolutionRecipe } from '../types';
 import { fxMs } from './clock';
 import { EVOLUTION_RULES, inFamily } from '../engine/sources';
+import { ChiaroscuroFlash } from '../components/RunFx';
 import { DARK } from '../components/ui';
 
 const INK = COLORS.slateCharcoal;
@@ -38,17 +54,19 @@ const SPEED_LINES = [
 
 const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: number; delay: number }> = ({ span, top, width, ms, delay }) => {
   const appActive = useAppActive();
+  const reducedMotion = useReducedMotion();
   const x = useSharedValue(0);
   useEffect(() => {
-    if (!appActive) {
+    if (!appActive || reducedMotion) {
       cancelAnimation(x);
       return;
     }
     x.value = 0;
-    x.value = withDelay(delay, withRepeat(withTiming(1, { duration: ms, easing: Easing.linear }), -1));
+    x.value = withDelay(fxMs(delay), withRepeat(withTiming(1, { duration: fxMs(ms), easing: Easing.linear }), -1));
     return () => cancelAnimation(x);
-  }, [appActive, x, ms, delay]);
+  }, [appActive, reducedMotion, x, ms, delay]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: span - (span + width) * x.value }] }));
+  if (reducedMotion) return null;
   return <Animated.View style={[st.speed, { top, width }, style]} />;
 };
 
@@ -107,11 +125,11 @@ interface Props {
 
 export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, size, onDone, autoDismissMs, hint }) => {
   const appActive = useAppActive();
-  const slash = useSharedValue(0);
-  const open = useSharedValue(0);
-  const flash = useSharedValue(0);
-  const content = useSharedValue(0);
-  const prompt = useSharedValue(0);
+  const reducedMotion = useReducedMotion();
+  const slash = useSharedValue(reducedMotion ? 1 : 0);
+  const open = useSharedValue(reducedMotion ? 1 : 0);
+  const content = useSharedValue(reducedMotion ? 1 : 0);
+  const prompt = useSharedValue(reducedMotion ? 1 : 0);
   const out = useSharedValue(0);
   const born = useRef(Date.now());
   const closing = useRef(false);
@@ -121,11 +139,22 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    slash.value = withTiming(1, { duration: fxMs(120), easing: Easing.out(Easing.quad) });
-    flash.value = withDelay(fxMs(90), withSequence(withTiming(0.75, { duration: fxMs(40) }), withTiming(0, { duration: fxMs(320), easing: Easing.out(Easing.quad) })));
+    if (reducedMotion) {
+      slash.value = 1;
+      open.value = 1;
+      content.value = 1;
+      return;
+    }
+    slash.value = withTiming(1, { duration: fxMs(120), easing: EASE.ui });
     open.value = withDelay(fxMs(110), withTiming(1, { duration: fxMs(260), easing: Easing.out(Easing.back(1.5)) }));
-    content.value = withDelay(fxMs(230), withTiming(1, { duration: fxMs(280), easing: Easing.out(Easing.cubic) }));
-  }, [slash, flash, open, content]);
+    content.value = withDelay(fxMs(230), withTiming(1, { duration: fxMs(280), easing: EASE.enterSoft }));
+    return () => {
+      cancelAnimation(slash);
+      cancelAnimation(open);
+      cancelAnimation(content);
+      cancelAnimation(out);
+    };
+  }, [reducedMotion, slash, open, content, out]);
 
   // [AU-13] Fire evolution fanfare synced to cut-in mount (90ms riser hits exact slash-flash frame!)
   const firstRecipeId = recipes[0]?.id;
@@ -142,15 +171,18 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   }, [firstRecipeId]);
 
   useEffect(() => {
-    if (!appActive) {
+    if (!appActive || reducedMotion) {
       cancelAnimation(prompt);
-      prompt.value = 0.7;
+      prompt.value = reducedMotion ? 1 : 0.7;
       return;
     }
     prompt.value = 0;
-    prompt.value = withDelay(fxMs(PROMPT_REVEAL_MS), withRepeat(withSequence(withTiming(1, { duration: 500 }), withTiming(0.35, { duration: 500 })), -1, true));
+    prompt.value = withDelay(
+      fxMs(PROMPT_REVEAL_MS),
+      withRepeat(withSequence(withTiming(1, { duration: 500 }), withTiming(0.35, { duration: 500 })), -1)
+    );
     return () => cancelAnimation(prompt);
-  }, [appActive, prompt]);
+  }, [appActive, reducedMotion, prompt]);
 
   const close = useCallback(() => {
     if (closing.current || Date.now() - born.current < fxMs(GUARD_MS)) return;
@@ -158,8 +190,9 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
     // Snap band fully visible if tapped between 200–510ms before briskly sliding shut
     if (open.value < 1) open.value = 1;
     if (content.value < 1) content.value = 1;
-    out.value = withTiming(1, { duration: CLOSE_MS, easing: Easing.in(Easing.quad) });
-    timer.current = setTimeout(() => done.current(), CLOSE_MS);
+    const closeDuration = fxMs(CLOSE_MS);
+    out.value = withTiming(1, { duration: closeDuration, easing: EASE.exitSoft, ...STAYS });
+    timer.current = setTimeout(() => done.current(), closeDuration);
   }, [open, content, out]);
 
   useEffect(() => () => {
@@ -177,10 +210,12 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   const contentWidth = Math.min(size.w - 28, 480);
 
   const dimStyle = useAnimatedStyle(() => ({ opacity: 0.66 * Math.min(1, slash.value * 2) * (1 - out.value) }));
-  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
   const slashStyle = useAnimatedStyle(() => ({ opacity: 1 - open.value, transform: [{ scaleX: slash.value }] }));
   const bandStyle = useAnimatedStyle(() => ({ opacity: open.value > 0 ? 1 : 0, transform: [{ scaleY: Math.max(0.001, open.value * (1 - out.value)) }] }));
-  const headStyle = useAnimatedStyle(() => ({ opacity: content.value, transform: [{ translateX: (1 - content.value) * -90 }] }));
+  const headStyle = useAnimatedStyle(() => ({
+    opacity: content.value,
+    transform: [{ translateX: reducedMotion ? 0 : (1 - content.value) * -90 }],
+  }));
   const promptStyle = useAnimatedStyle(() => ({ opacity: prompt.value * (1 - out.value) }));
 
   return (
@@ -201,7 +236,8 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
         </Animated.View>
         <Animated.View style={[st.slash, slashStyle]} />
       </View>
-      <Animated.View style={[StyleSheet.absoluteFill, st.flash, flashStyle]} pointerEvents="none" />
+      {/* [FX-17]: 112 ms chiaroscuro perimeter flash synced to 90 ms slash-riser peak (gated on ScreenFlashStorage & Reduced Motion) */}
+      <ChiaroscuroFlash trigger={1} delayMs={90} stageW={size.w} testID="evolution-cutin-flash" />
       <Animated.View style={[st.prompt, promptStyle]} pointerEvents="none">
         <Text style={st.promptText}>TAP TO CONTINUE</Text>
       </Animated.View>
@@ -212,7 +248,6 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
 const st = StyleSheet.create({
   root: { ...StyleSheet.absoluteFillObject, zIndex: 500, overflow: 'hidden' },
   dim: { backgroundColor: COLORS.deepOnyx },
-  flash: { backgroundColor: COLORS.canvasWhite },
   slanted: { position: 'absolute', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: `${SLANT_DEG}deg` }] },
   slash: { position: 'absolute', left: 0, right: 0, height: 6, backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderBottomWidth: 2, borderColor: COLORS.actionYellow, transformOrigin: 'left center' },
   band: {

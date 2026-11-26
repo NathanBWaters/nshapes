@@ -11,8 +11,60 @@
  * evolution's ring), which the script works out from the event's source.
  */
 import { COLORS } from '@/utils/colors';
+import type { CombatShakeKind } from '@/hooks/useCombatShake';
 import type { RunEvent, RunEventType } from '../types';
-import type { FxRow } from './types';
+import type { FxRow, HitTier } from './types';
+
+/** Enemy damage-pose style associated with an attacking beat ([FX-12]). */
+export type HitKind = 'throw' | 'blast' | 'zap';
+
+/** Semantic hit-style lookup keyed by event type (without mutating shared `FxRow`). */
+export const EVENT_HIT_KIND: Partial<Record<RunEventType, HitKind>> = {
+  hit: 'throw',
+  rainbow: 'throw',
+  surge_hit: 'throw',
+  echo: 'throw',
+  hot_streak_hit: 'throw',
+  grudge_release: 'throw',
+  patience: 'throw',
+  purity: 'throw',
+  purity_max: 'throw',
+  trap_defused: 'throw',
+  parry: 'throw',
+  perfect_parry: 'throw',
+  blast: 'blast',
+  pinata_break: 'blast',
+  trap_sprung: 'blast',
+  foe_defeated: 'blast',
+  evolution_start: 'blast',
+  laser: 'zap',
+  ricochet: 'zap',
+  link_burst: 'zap',
+  link: 'zap',
+};
+
+/** Resolve the enemy damage-pose style (`throw` | `blast` | `zap`) for an event or catalog row. */
+export const hitKindOf = (typeOrRow: RunEventType | Pick<FxRow, 'board'>): HitKind => {
+  if (typeof typeOrRow === 'string') {
+    const tagged = EVENT_HIT_KIND[typeOrRow];
+    if (tagged) return tagged;
+    const board = EVENT_FX[typeOrRow]?.board;
+    if (board === 'burst') return 'blast';
+    if (board === 'beam' || board === 'zap') return 'zap';
+    return 'throw';
+  }
+  if (typeOrRow.board === 'burst') return 'blast';
+  if (typeOrRow.board === 'beam' || typeOrRow.board === 'zap') return 'zap';
+  return 'throw';
+};
+
+/** Map an event + damage tier to its pattern-varied `useCombatShake` tier ([FX-03]/[FX-18]). */
+export const combatShakeKindOf = (type: RunEventType, tier: HitTier): CombatShakeKind | null => {
+  if (type === 'foe_defeated' || type === 'perfect_parry' || tier >= 3) return 'large';
+  if (type === 'blast' || type === 'pinata_break' || type === 'parry' || tier === 2) return 'medium';
+  if (type === 'foe_strike' || type === 'hurt' || type === 'trap_sprung' || tier === 1) return 'small';
+  return null;
+};
 
 /** The effects' own colours. One meaning each, the same everywhere. */
 export const FX_COLOR = {
@@ -159,5 +211,6 @@ export const EVENT_FX: Record<RunEventType, FxRow | null> = {
   parry_warn: { color: C.buff, from: 'foe', bump: ['foe'], ambient: true, label: () => 'PARRY NOW!' },
   parry: { color: C.shield, aura: true, orb: 'spark', from: 'fighter', to: 'foe', bump: ['fighter', 'foe'], shake: true, fighter: 'ecstatic', enemy: 'hit', label: e => `PARRY! ×${fmt(n(e) || 1.25)}` },
   perfect_parry: { color: C.coin, sweep: 'gold', aura: true, orb: 'spark', from: 'fighter', to: 'foe', bump: ['fighter', 'foe'], shake: true, fighter: 'ecstatic', enemy: 'criticalHit', label: () => 'PERFECT PARRY! STAGGER ×2' },
-  foe_strike: { color: C.sour, orb: 'dark', from: 'foe', to: 'hearts', bump: ['foe', 'hearts'], shake: true, fighter: 'pain', enemy: 'attack', labelColor: C.sour, label: e => `${(e.text ?? 'STRIKE').toUpperCase()}!` },
+  // [FX-03]: Attacking foe lunges cleanly (`enemy: 'attack'`) without self-shake or `foe` anchor jump
+  foe_strike: { color: C.sour, orb: 'dark', from: 'foe', to: 'hearts', bump: ['hearts'], fighter: 'pain', enemy: 'attack', labelColor: C.sour, label: e => `${(e.text ?? 'STRIKE').toUpperCase()}!` },
 };
