@@ -4,10 +4,11 @@
  * shows only the recipe name, ★ SIGNATURE / NEW! badge, icon, and concise
  * ≤55-char combat verb (italic flavor stays in the out-of-combat Recipe Guide).
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import { band } from '@/audio';
 import type { EvolutionRecipe } from '../types';
 import { evolutionShortVerb, isSignatureRecipe } from '../data/evolutions';
 import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
@@ -40,6 +41,20 @@ const EvolutionPickOverlay: React.FC<EvolutionPickOverlayProps> = ({
   const recipes = optionIds
     .map(id => getRecipe(id))
     .filter((r): r is EvolutionRecipe => !!r);
+
+  // [AU-13] Play staggered slot-reel clunks right as the choice cards land on screen
+  useEffect(() => {
+    if (recipes.length === 0) return;
+    const b = band as typeof band & { playWeaponPickReelStop?: () => void };
+    if (typeof b.playWeaponPickReelStop === 'function') {
+      b.playWeaponPickReelStop();
+      return;
+    }
+    if (!band?.inFight && typeof band?.cue === 'function') {
+      const ts = [0, 75, 150].map((ms, slot) => setTimeout(() => band.cue('reelStop', { slot }), ms));
+      return () => ts.forEach(clearTimeout);
+    }
+  }, [recipes.length]);
 
   if (recipes.length === 0) return null;
 

@@ -134,10 +134,11 @@ export interface Beat {
   quiet: boolean;
 }
 
-/** A stretch of beats that plays through, or an evolution cut-in that waits for a tap. */
+/** A stretch of beats that plays through, a blocking first-time cut-in, or a non-blocking repeat/post-pick banner. */
 export type Segment =
   | { kind: 'beats'; events: RunEvent[]; beats: Beat[]; total: number; stride: number }
-  | { kind: 'cutIn'; recipes: string[] };
+  | { kind: 'cutIn'; recipes: string[] }
+  | { kind: 'banner'; recipes: string[] };
 
 export interface Script {
   segments: Segment[];

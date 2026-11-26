@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useColorblind } from '@/utils/cardColors';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
@@ -21,7 +22,8 @@ import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { BOUNTIES } from '../data/bounties';
 import { MAIN_LEVELS, mainIndexOf, getLevel } from '../data/levels';
-import { shouldShowDamageNumbers, companionResultsLine } from '../coach';
+import { STORY_BOSS_CALLBACKS } from '../data/story';
+import { shouldShowDamageNumbers, companionResultsLine, diagnoseResultTip } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { explainStarBreakdown } from '../engine/challenges';
 import { Btn, INK, starLandMs, starPopDelayMs, StarRow, TONE } from './ui';
@@ -53,7 +55,11 @@ interface Props {
   onRetry: () => void;
   onNext: () => void;
   onMap: () => void;
-  onCamp: () => void;
+  onCamp: (tab?: 'fighters' | 'workshop') => void;
+  /** Optional 1-tap "Arm <Recipe> & Retry" handler from context-aware defeat diagnostic ([OB-17]) */
+  onArmRecipeAndRetry?: (recipeId: string) => void;
+  /** Optional replay trigger for the 5-5 Hydra ending ceremony ([OB-20]) */
+  onWatchEnding?: () => void;
 }
 
 const LevelResults: React.FC<Props> = ({
@@ -73,15 +79,17 @@ const LevelResults: React.FC<Props> = ({
   onNext,
   onMap,
   onCamp,
+  onArmRecipeAndRetry,
+  onWatchEnding,
 }) => {
   const insets = useSafeAreaInsets();
+  const colorblind = useColorblind();
   const [replayOpen, setReplayOpen] = useState(false);
   const [powerInfoOpen, setPowerInfoOpen] = useState(false);
   const biome = getBiome(level.biome);
   /** A practice fight has no result: the player simply left */
   const practice = !!level.rules.sandbox;
   const won = stars > 0 || practice;
-  const accuracy = level.starRule?.kind === 'accuracy';
   const knockedOut = run.endReason === 'defeated';
   const hasHearts = run.hearts !== null && run.maxHearts !== null && run.maxHearts > 0;
   const newlyReachableBiome =
@@ -162,18 +170,11 @@ const LevelResults: React.FC<Props> = ({
     return () => clearTimeout(t);
   }, [unlocksRevealed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const extraTip = practice
-    ? null
-    : !won
-    ? run.mistakes > 3
-      ? 'Check one trait at a time: Shape, then Color, then Number!'
-      : 'Try spending ★ in our Skill Tree at Camp!'
-    : stars === 1 && !accuracy
-      ? run.weapons.some(w => w.id === 'rainbow-charm')
-        ? 'Hunt all-different Sets so Rainbow Charm doubles your hits!'
-        : 'Equip Rainbow Charm or offensive charms on the preview screen so every Set hits harder!'
-      : null;
-  const companionText = [companionResultsLine(level, run, stars, result.save.coinsUnlocked), extraTip].filter(Boolean).join(' ');
+  const diagnostic = useMemo(
+    () => (practice ? null : diagnoseResultTip(level, run, stars, result.save, colorblind)),
+    [practice, level, run, stars, result.save, colorblind]
+  );
+  const companionText = [companionResultsLine(level, run, stars, result.save.coinsUnlocked), diagnostic?.text].filter(Boolean).join(' ');
 
   // A weapon the player already owned came back as a free level: name the level it reached
   const levelOf = (star: number, name: string) => {
@@ -320,6 +321,32 @@ const LevelResults: React.FC<Props> = ({
             text={companionText}
             style={{ alignSelf: 'stretch' }}
           />
+          {diagnostic?.quickAction && (
+            <Btn
+              testID="results-quick-action"
+              small
+              variant="primary"
+              icon={
+                diagnostic.quickAction.kind === 'arm_recipe'
+                  ? 'lorc/crystal-shine'
+                  : diagnostic.quickAction.kind === 'open_tree'
+                    ? 'lorc/flat-star'
+                    : 'lorc/gear-hammer'
+              }
+              label={diagnostic.quickAction.label}
+              onPress={() => {
+                const qa = diagnostic.quickAction!;
+                if (qa.kind === 'arm_recipe' && qa.payload && onArmRecipeAndRetry) {
+                  onArmRecipeAndRetry(qa.payload);
+                } else if (qa.kind === 'open_tree') {
+                  onCamp('fighters');
+                } else if (qa.kind === 'open_workshop') {
+                  onCamp('workshop');
+                }
+              }}
+              style={{ alignSelf: 'stretch' }}
+            />
+          )}
 
           {!practice && (
             <View style={st.breakdownBox} testID="results-star-breakdown">
@@ -498,11 +525,22 @@ const LevelResults: React.FC<Props> = ({
           {won && level.isBoss && !practice && (
             <View testID="results-boss-clear" style={st.bossClear}>
               <Icon name="lorc/crown" size={20} color={INK} />
-              <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                 <Text style={st.bossClearTitle}>{biome.name.toUpperCase()} GUARDIAN DEFEATED!</Text>
                 <Text style={st.bossClearSub}>
-                  {nextLevel && nextUnlocked ? `The road to ${getBiome(nextLevel.biome).name} is open!` : 'Region complete!'}
+                  {STORY_BOSS_CALLBACKS[level.id] ?? (nextLevel && nextUnlocked ? `The road to ${getBiome(nextLevel.biome).name} is open!` : 'Region complete!')}
                 </Text>
+                {level.id === '5-5' && onWatchEnding && (
+                  <TouchableOpacity
+                    testID="results-watch-ending"
+                    onPress={() => { sfx('confirm'); onWatchEnding(); }}
+                    style={st.endingBtn}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                  >
+                    <Text style={st.endingBtnText}>Watch Ending Ceremony</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           )}
@@ -557,7 +595,7 @@ const LevelResults: React.FC<Props> = ({
             <Btn testID="results-retry" small label={stars >= 3 ? 'Replay' : 'Retry'} variant="secondary" onPress={onRetry} style={{ flex: 1 }} />
           )}
           <Btn testID="results-map" small label="Map" variant="secondary" icon="lorc/field" onPress={onMap} style={{ flex: 1 }} />
-          <Btn testID="results-camp" small label="Camp" variant="secondary" icon="lorc/campfire" onPress={onCamp} style={{ flex: 1 }} />
+          <Btn testID="results-camp" small label="Camp" variant="secondary" icon="lorc/campfire" onPress={() => onCamp()} style={{ flex: 1 }} />
         </View>
       </View>
       {replayOpen && <FightReplay run={run} visible onClose={() => setReplayOpen(false)} />}
@@ -765,6 +803,15 @@ const st = StyleSheet.create({
   bossClear: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch', backgroundColor: COLORS.actionYellow, borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 10 },
   bossClearTitle: { fontWeight: '900', fontSize: 13, letterSpacing: 1, color: INK, flexShrink: 1 },
   bossClearSub: { fontSize: 12, fontWeight: '700', color: INK, flexShrink: 1 },
+  endingBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  endingBtnText: { color: COLORS.actionYellow, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   pathFound: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 10 },
   pathFoundTitle: { color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 2, fontSize: 11 },
   pathFoundText: { color: COLORS.canvasWhite, fontWeight: '700', fontSize: 13 },

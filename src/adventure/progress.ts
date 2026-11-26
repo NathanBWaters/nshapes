@@ -100,6 +100,8 @@ export const createNewSave = (): AdventureSave => ({
   hiddenPurse: 0,
   cauldronWager: 0,
   tailwindActive: false,
+  bestFoeHpPct: {},
+  endingSeen: false,
 });
 
 // ─── Stars & unlocks ────────────────────────────────────────────────────────
@@ -468,6 +470,8 @@ export const migrateSave = (save: AdventureSave): AdventureSave => {
     hiddenPurse: save.hiddenPurse ?? 0,
     cauldronWager: save.cauldronWager ?? 0,
     tailwindActive: save.tailwindActive ?? false,
+    bestFoeHpPct: save.bestFoeHpPct ?? {},
+    endingSeen: save.endingSeen ?? false,
   };
   if (save.charm && !next.charms.includes(save.charm)) next.charms = [save.charm, ...next.charms];
   if (save.activeArcana && !next.equippedArcana.includes(save.activeArcana)) next.equippedArcana = [save.activeArcana, ...next.equippedArcana];
@@ -580,6 +584,10 @@ export interface ResultApplication {
   hiddenPurseDeposited?: number;
   /** Accumulated hidden purse coins burst open into the player's purse when 1-8 unlocks coins */
   hiddenPurseBurst?: number;
+  /** Previous lowest foe HP fraction (0..1) on this level before this attempt (null if first attempt) */
+  prevBestFoeHpPct?: number | null;
+  /** True on a defeat when this attempt brought the foe closer to KO than ever before ([OB-13]) */
+  isClosestYet?: boolean;
 }
 
 export interface ApplyLevelResultOptions {
@@ -791,6 +799,18 @@ export const applyLevelResult = (
     nextHiddenPurse += hiddenPurseDeposited;
   }
 
+  // Track closest foe-HP-remaining personal best per level for pre-1-8 "Closest Yet!" feedback ([OB-13])
+  const prevBestFoeHpPct = save.bestFoeHpPct?.[level.id] ?? null;
+  let nextBestFoeHpPct = save.bestFoeHpPct ?? {};
+  let isClosestYet = false;
+  if (run && run.foeMaxHp > 0) {
+    const hpPct = Math.round(Math.max(0, Math.min(1, run.foeHp / run.foeMaxHp)) * 1000) / 1000;
+    if (prevBestFoeHpPct === null || hpPct < prevBestFoeHpPct) {
+      nextBestFoeHpPct = { ...nextBestFoeHpPct, [level.id]: hpPct };
+      if (effectiveStars === 0 && hpPct < 1) isClosestYet = true;
+    }
+  }
+
   const nextCoinsBase = Math.max(0, save.coins + adjustedRunCoins + stakeDelta);
   const nextLifetimeBase = save.lifetimeCoins + adjustedRunCoins + Math.max(0, stakeDelta);
 
@@ -801,6 +821,7 @@ export const applyLevelResult = (
     plays: { ...save.plays, [level.id]: (save.plays[level.id] ?? 0) + 1 },
     consecutiveLosses: nextConsecutiveLosses,
     hiddenPurse: nextHiddenPurse,
+    bestFoeHpPct: nextBestFoeHpPct,
     // Clear Tailwind after clearing a level so the next stage starts at full strength
     tailwindActive: effectiveStars >= 1 ? false : Boolean(save.tailwindActive),
     // Reset wager if the player can no longer afford its stake
@@ -899,6 +920,8 @@ export const applyLevelResult = (
     wagerStakeDelta: stakeDelta,
     hiddenPurseDeposited,
     hiddenPurseBurst,
+    prevBestFoeHpPct,
+    isClosestYet,
   };
 };
 
@@ -1128,6 +1151,15 @@ export const COACH_KEYS = {
   weaponGrowth: 'weapon_growth_first',
   /** The first time the Power meter climbs on a level with damage numbers */
   powerMeter: 'power_meter_first',
+  /** First-ever Timing Parry wind-up callout ([OB-10]) */
+  parryFirstWindup: 'parry_first_windup',
+  /** First-ever golden Perfect Parry window callout ([OB-10]) */
+  parryFirstPerfect: 'parry_first_perfect',
+  /** First-ever specific Counter-Parry wind-up callout ([OB-10]) */
+  counterParryFirst: 'counter_parry_first',
+  /** First two Shading Surge 5s onboarding nudges ([OB-11]) */
+  surgeGuided1: 'surge_guided_1',
+  surgeGuided2: 'surge_guided_2',
 } as const;
 
 export const markMechanicSeen = (save: AdventureSave, key: string): AdventureSave =>
@@ -1135,6 +1167,10 @@ export const markMechanicSeen = (save: AdventureSave, key: string): AdventureSav
 
 export const markCoachMarkSeen = (save: AdventureSave, key: string): AdventureSave =>
   save.seenCoachMarks.includes(key) ? save : { ...save, seenCoachMarks: [...save.seenCoachMarks, key] };
+
+/** Record that the 5-5 campaign ending ceremony has been watched or skipped ([OB-20]). */
+export const markEndingSeen = (save: AdventureSave): AdventureSave =>
+  save.endingSeen ? save : { ...save, endingSeen: true };
 
 /**
  * Dev helper: every star, unlock and Workshop item. Skill trees are left
@@ -1156,7 +1192,13 @@ export const createMaxedSave = (): AdventureSave => {
       COACH_KEYS.evolution,
       COACH_KEYS.weaponGrowth,
       COACH_KEYS.powerMeter,
+      COACH_KEYS.parryFirstWindup,
+      COACH_KEYS.parryFirstPerfect,
+      COACH_KEYS.counterParryFirst,
+      COACH_KEYS.surgeGuided1,
+      COACH_KEYS.surgeGuided2,
     ],
+    endingSeen: true,
     coins: 50000,
     upgrades: Object.fromEntries(UPGRADES.map(u => [u.id, u.costs.length])),
     unlockedArcana: ARCANA.map(a => a.id),

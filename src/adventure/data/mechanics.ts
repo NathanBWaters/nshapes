@@ -631,7 +631,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Several foes, one after another.',
     body: ['The ants come in waves. Beat one and the next marches in.', 'Open every wave with your biggest Set: Rally Horn adds damage to it. One Set of 80+ earns the third star.'],
     fightTips: [
-      { title: 'Waves', text: 'This fight has three foes in a row. The clock keeps running between them.', anchor: 'top' },
+      { title: 'Waves', text: 'Three foes in a row — the clock pauses briefly as each wave steps up.', anchor: 'top' },
     ],
     icon: 'delapouite/ant',
     demo: { type: 'icons', items: [{ icon: 'delapouite/ant', label: 'Wave 1' }, { icon: 'delapouite/ant', label: 'Wave 2' }, { icon: 'delapouite/ant', label: 'Wave 3' }] },
@@ -1086,7 +1086,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       items: [
         { icon: 'lorc/gems', label: 'Equip 2 families' },
         { icon: 'lorc/crystal-shine', label: 'Match the Catalyst' },
-        { icon: 'lorc/fireball', label: '20s of power' },
+        { icon: 'lorc/fireball', label: '30s of power' },
       ],
     },
     coachMark: { on: 'catalyst_spawn', text: 'A Catalyst! Match it in any Set to evolve for 30 seconds.' },
@@ -1116,7 +1116,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Cross-run feats that pay out even when you lose.',
     body: [
       'Every Set, Rainbow Strike, Purity combo, and Evolution counts toward lifetime Bounties across all runs.',
-      'Claim coins, rare Armory weapons, and new Arcana wildcards from the Bounty Board on the map.',
+      'Claim coins, rare Armory weapons, and new Arcana wildcards from the Bounty Board at Camp.',
     ],
     icon: 'lorc/trophy',
     demo: {
@@ -1125,6 +1125,46 @@ export const MECHANICS: Record<string, MechanicDef> = {
         { icon: 'lorc/archery-target', label: 'Play Runs' },
         { icon: 'lorc/trophy', label: 'Finish Feats' },
         { icon: 'lorc/crown-coin', label: 'Win Loot' },
+      ],
+    },
+  },
+  set_parry: {
+    id: 'set_parry',
+    kind: 'rule',
+    title: 'Set-Parrying',
+    tagline: 'Match a Set while a foe winds up to Parry & Stagger!',
+    body: [
+      'Watch the attack bar above the board. While a foe winds up a strike, matching ANY valid Set parries it and opens a brief Stagger window.',
+      'Hold your Set until the final golden glow to score a PERFECT PARRY — bursting bonus damage and an 8-second ×2 Stagger!',
+    ],
+    coach: 'Foe winding up! Match ANY Set to Parry (gold = ×2)!',
+    icon: 'lorc/sword-clash',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/sword-clash', label: 'Any Set Parries' },
+        { icon: 'lorc/shield-reflect', label: 'Gold = Perfect!' },
+        { icon: 'lorc/bright-explosion', label: '×2 Stagger' },
+      ],
+    },
+  },
+  counter_parry: {
+    id: 'counter_parry',
+    kind: 'rule',
+    title: 'Counter-Parries',
+    tagline: 'Match the foe’s counter rule to shatter their attack!',
+    body: [
+      'Tougher foes demand a specific Counter-Set during their wind-up — such as 3 Orange cards, 3 Circles, or a Rainbow Trio.',
+      'Landing the required Counter-Set shatters the attack for bonus damage and triggers a 5-second ×2 Stagger (or 8s on a golden Perfect Parry)!',
+    ],
+    coach: 'Watch the counter rule! Match it to Counter & Stagger!',
+    icon: 'lorc/shield-reflect',
+    demo: {
+      type: 'icons',
+      items: [
+        { icon: 'lorc/crystal-shine', label: 'Read Counter Rule' },
+        { icon: 'lorc/shield-reflect', label: 'Match to Counter' },
+        { icon: 'lorc/bright-explosion', label: '×2 Stagger' },
       ],
     },
   },

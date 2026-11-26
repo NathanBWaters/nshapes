@@ -90,6 +90,17 @@ const sanitizeConsecutiveLosses = (raw: unknown): Record<string, number> => {
 const sanitizeCauldronWager = (raw: unknown): CauldronWagerTier =>
   raw === 1 || raw === 2 ? raw : 0;
 
+const sanitizeBestFoeHpPct = (raw: unknown): Record<string, number> => {
+  if (!isRecord(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [levelId, val] of Object.entries(raw)) {
+    if (typeof val === 'number' && Number.isFinite(val) && val >= 0 && val <= 1) {
+      out[levelId] = val;
+    }
+  }
+  return out;
+};
+
 /**
  * Hydrate and reconcile a parsed AdventureSave object (supports version 1 and
  * best-effort forward-compatible hydration for future `version > 1` shapes).
@@ -113,6 +124,8 @@ export const hydrateAdventureSave = (parsed: unknown): AdventureSave | null => {
         : 0,
     cauldronWager: sanitizeCauldronWager(save.cauldronWager),
     tailwindActive: Boolean(save.tailwindActive),
+    bestFoeHpPct: sanitizeBestFoeHpPct(save.bestFoeHpPct),
+    endingSeen: Boolean(save.endingSeen),
   };
   return save;
 };

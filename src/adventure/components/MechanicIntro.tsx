@@ -6,8 +6,8 @@
  *   story / lesson pages → the mechanic summary → "Is this a Set?" questions
  * Every step has to be accepted (Continue / Yes / No); nothing auto-dismisses.
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Modal, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import Card from '@/components/Card';
 import Icon, { IconName } from '@/components/Icon';
@@ -144,32 +144,59 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
     () => (step?.type === 'quiz' ? isValidCombination(step.question.cards.map(toCard), step.question.attributes).isValid : null),
     [step]
   );
-  if (!steps || !step) return null;
 
-  const last = i === steps.length - 1;
-  const next = () => {
+  const last = Boolean(steps && i === steps.length - 1);
+  const next = useCallback(() => {
     sfx('click');
     if (last) onDone();
     else {
       setAnswer(null);
-      setI(i + 1);
+      setI(cur => cur + 1);
     }
-  };
+  }, [last, onDone]);
+
+  const skipAll = useCallback(() => {
+    sfx('click');
+    onDone();
+  }, [onDone]);
+
+  useEffect(() => {
+    if (!steps || !step || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        skipAll();
+      } else if ((e.key === 'Enter' || e.key === ' ') && (step.type === 'page' || answer !== null)) {
+        e.preventDefault();
+        next();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [steps, step, answer, next, skipAll]);
+
+  if (!steps || !step) return null;
+
   const choose = (a: boolean) => {
     setAnswer(a);
     sfx(a === correctAnswer ? 'match' : 'invalid');
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={dismissible ? onDone : undefined}>
+    <Modal visible transparent animationType="fade" onRequestClose={skipAll}>
       <View style={st.overlay}>
         <View testID="lesson-modal" style={st.panel}>
           <View style={st.goldRule} />
-          {dismissible && (
-            <TouchableOpacity onPress={onDone} style={st.close} accessibilityLabel="Close">
-              <Text style={st.closeText}>✕</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            testID="mechanic-intro-skip"
+            onPress={skipAll}
+            style={st.skipPill}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={dismissible ? 'Close' : 'Skip lesson'}
+          >
+            <Text style={st.skipPillText}>{dismissible ? 'Close' : 'Skip'}</Text>
+          </TouchableOpacity>
           <ScrollView contentContainerStyle={st.scroll} bounces={false}>
             <Animated.View style={[{ gap: 14 }, anim]}>
               {step.type === 'page' ? (
@@ -204,12 +231,24 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
                   </View>
                   <View style={st.stage}><CardRow cards={step.question.cards} /></View>
                   {answer === null ? (
-                    <View style={st.answers}>
-                      <TouchableOpacity testID="quiz-yes" onPress={() => choose(true)} style={[st.answer, { borderColor: COLORS.logicTeal }]} activeOpacity={0.85}>
-                        <Text style={[st.answerText, { color: COLORS.logicTeal }]}>✓  YES</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity testID="quiz-no" onPress={() => choose(false)} style={[st.answer, { borderColor: COLORS.impactRed }]} activeOpacity={0.85}>
-                        <Text style={[st.answerText, { color: COLORS.impactRed }]}>✗  NO</Text>
+                    <View style={st.quizBlock}>
+                      <View style={st.answers}>
+                        <TouchableOpacity testID="quiz-yes" onPress={() => choose(true)} style={[st.answer, { borderColor: COLORS.logicTeal }]} activeOpacity={0.85}>
+                          <Text style={[st.answerText, { color: COLORS.logicTeal }]}>✓  YES</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity testID="quiz-no" onPress={() => choose(false)} style={[st.answer, { borderColor: COLORS.impactRed }]} activeOpacity={0.85}>
+                          <Text style={[st.answerText, { color: COLORS.impactRed }]}>✗  NO</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity
+                        testID="quiz-skip"
+                        onPress={next}
+                        style={st.quizSkipBtn}
+                        activeOpacity={0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel="Skip check"
+                      >
+                        <Text style={st.quizSkipText}>Skip check ›</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -272,10 +311,24 @@ const st = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(10,10,10,0.82)', alignItems: 'center', justifyContent: 'center', padding: 14 },
   panel: { width: '100%', maxWidth: 460, maxHeight: '94%', backgroundColor: PANEL, borderRadius: 16, borderWidth: 1, borderColor: DARK.goldEdge(0.35), overflow: 'hidden' },
   goldRule: { height: 4, backgroundColor: GOLD },
-  close: { position: 'absolute', top: 12, right: 12, zIndex: 5, width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: MUTED, alignItems: 'center', justifyContent: 'center' },
-  closeText: { color: TEXT, fontWeight: '800' },
-  scroll: { padding: 20, paddingBottom: 8 },
-  eyebrow: { color: GOLD, fontWeight: '800', letterSpacing: 2.5, fontSize: 11, textTransform: 'uppercase' },
+  skipPill: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 5,
+    minWidth: 52,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: 'rgba(28,27,25,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skipPillText: { color: TEXT, fontWeight: '800', fontSize: 13, letterSpacing: 0.4 },
+  scroll: { padding: 20, paddingTop: 22, paddingBottom: 8 },
+  eyebrow: { color: GOLD, fontWeight: '800', letterSpacing: 2.5, fontSize: 11, textTransform: 'uppercase', paddingRight: 64 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   titleIcon: { width: 54, height: 54, borderRadius: 12, backgroundColor: GOLD, alignItems: 'center', justifyContent: 'center' },
   title: { color: COLORS.canvasWhite, fontSize: 26, fontWeight: '900', lineHeight: 30 },
@@ -296,9 +349,12 @@ const st = StyleSheet.create({
   iconCircleCompact: { width: 48, height: 48, borderRadius: 24 },
   iconCircleLight: { backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK },
   iconLabel: { fontSize: 12, fontWeight: '800', color: TEXT, textAlign: 'center' },
+  quizBlock: { gap: 8, alignItems: 'stretch' },
   answers: { flexDirection: 'row', gap: 10 },
   answer: { flex: 1, paddingVertical: 16, borderRadius: 10, borderWidth: 2, alignItems: 'center', backgroundColor: STAGE },
   answerText: { fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+  quizSkipBtn: { alignSelf: 'center', minHeight: 44, paddingHorizontal: 14, justifyContent: 'center' },
+  quizSkipText: { color: MUTED, fontSize: 13, fontWeight: '700' },
   feedback: { borderWidth: 1.5, borderRadius: 10, padding: 12, gap: 6, backgroundColor: STAGE },
   feedbackTitle: { fontSize: 16, fontWeight: '900' },
   footer: { padding: 16, paddingTop: 10, gap: 12 },

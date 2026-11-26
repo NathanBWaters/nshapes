@@ -179,7 +179,7 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
     if (covers.length) setGhosts(g => [...g, ...covers]);
 
     const reduced = !!opts.current.reduced;
-    const holdsClock = !reduced && script.segments.some(s => s.kind === 'cutIn' || s.total > 0);
+    const holdsClock = !reduced && script.segments.some(s => s.kind === 'cutIn' || (s.kind === 'beats' && s.total > 0));
     if (holdsClock) setHolds(h => h + 1);
     opts.current.anchors.measure();
 
@@ -192,6 +192,13 @@ export const useFightFx = (options: FightFxOptions): FightFx => {
         return;
       }
       const next = () => run(index + 1);
+      if (segment.kind === 'banner') {
+        const key = ++seq.current;
+        setBanner({ recipes: segment.recipes, key });
+        later(() => setBanner(b => (b?.key === key ? null : b)), BANNER_MS);
+        next();
+        return;
+      }
       if (segment.kind === 'cutIn') {
         if (reduced) {
           const key = ++seq.current;

@@ -36,6 +36,7 @@ import { activeEnemyCounters, computeStars, createRun, isSacrificeUnlocked, runR
 import { formatPowerGain } from '../data/weaponPower';
 import { nextCatalystRecipe } from '../engine/fight';
 import { boardHasCounterSet } from '../engine/parry';
+import { randomSeed } from '../engine/rng';
 import { FightRecorder, type FightTape } from '../engine/replay';
 import { challengeProgress } from '../engine/challenges';
 import { GearChips, gearModifiers, hasTrickGearChips } from './GearChips';
@@ -44,23 +45,40 @@ import { MECHANICS } from '../data/mechanics';
 import { getBiome } from '../data/biomes';
 import { FIGHTERS } from '../data/fighters';
 import { foeDisplay } from '../data/foes';
+import { MAIN_LEVELS } from '../data/levels';
+import { STORY_RAIDER_TAUNTS } from '../data/story';
 import { comboWindowFor, getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { consecutiveLossesFor } from '../data/relief';
-import { COACH_KEYS } from '../progress';
-import { checksOfSet, computeLiveGuidance, describeSingleCardTraits, explainInvalidPick, fightRemarks, shouldShowDamageNumbers, shouldShowPassiveHud, showsTraitChecks, traitAddedBy } from '../coach';
+import { COACH_KEYS, type ResultApplication } from '../progress';
+import {
+  checksOfSet,
+  computeLiveGuidance,
+  describeSingleCardTraits,
+  explainInvalidPick,
+  fightRemarks,
+  foeMidFightBark,
+  parryOnboardingCallout,
+  resolvePracticeFeatures,
+  resolvePracticeLevel,
+  shouldShowDamageNumbers,
+  shouldShowPassiveHud,
+  showsTraitChecks,
+  traitAddedBy,
+} from '../coach';
 import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
 import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
-import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, recipeIdOfEvent, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
 import { counterForWeapon } from '../fx/GearBelt';
 import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
 import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
 import EvolutionPickOverlay from './EvolutionPickOverlay';
+import DefeatOverlay from './DefeatOverlay';
 import WeaponExplainer from './WeaponExplainer';
 import PowerMeter from './PowerMeter';
 import PowerExplainer from './PowerExplainer';
@@ -74,6 +92,20 @@ const REPLACE_DELAY_MS = 560;
 
 /** How long the foe's taunt is up as a fight (or a wave) opens, before your fighter speaks */
 const FOE_TAUNT_MS = 2400;
+/** [OB-15] Capped taunt length on mechanic-intro levels so opening coaching shows quickly */
+const INTRO_TAUNT_MS = 900;
+/** [OB-16] Non-blocking banner hold before auto-advancing shopless waves (e.g. 3-3) */
+const AUTO_WAVE_MS = 650;
+/** [OB-13] Brief defeat freeze before DefeatOverlay appears over the paused board */
+const DEFEAT_OVERLAY_DELAY_MS = 300;
+
+/** Defeat metadata recorded once by AdventureMode when DefeatOverlay mounts ([OB-13]). */
+export interface RecordedDefeat {
+  result: ResultApplication;
+  bestDpm: number | null;
+  fightId: string;
+  recordAt: number;
+}
 
 /** How long the checks of the Set just made stay up (they also go as soon as the next card is picked) */
 const LAST_SET_MS = 3200;
@@ -144,6 +176,20 @@ interface Props {
   featuresOverride?: Set<FeatureFlag>;
   /** Optional mode-agnostic HUD & pause chrome overrides */
   chrome?: FightChromeOptions;
+  /** [OB-13] Record a defeat once and display DefeatOverlay in-place over the paused board */
+  onDefeatRecorded?: (run: RunState, tape: FightTape) => RecordedDefeat;
+  /** [OB-13] Open full LevelResults breakdown from DefeatOverlay without re-recording telemetry */
+  onShowDefeatBreakdown?: (run: RunState, recorded: RecordedDefeat) => void;
+  /** [OB-13] Commit staged defeat telemetry and return fresh save/relief for `<250ms` in-place retry */
+  onDefeatRetryStart?: (opts?: { armRecipeId?: string }) => { save: AdventureSave; relief: RunReliefOptions };
+  /** [OB-13] Jump from DefeatOverlay directly into Camp (optionally to Skill Tree or Workshop) */
+  onDefeatCamp?: (tab?: 'fighters' | 'workshop') => void;
+  /** [OB-13] Return to the World Map from DefeatOverlay */
+  onDefeatMap?: () => void;
+  /** [OB-13] Toggle Friendly Tailwind directly from DefeatOverlay */
+  onToggleTailwind?: (active: boolean) => void;
+  /** True when mounted as a quick retry (skips opening FIGHT! banner & foe taunt) */
+  initialIsRetry?: boolean;
 }
 
 /** The recipe an evolution event is about (the engine names it by id or by name). */
@@ -186,6 +232,13 @@ const AdventureRun: React.FC<Props> = ({
   relief,
   featuresOverride,
   chrome,
+  onDefeatRecorded,
+  onShowDefeatBreakdown,
+  onDefeatRetryStart,
+  onDefeatCamp,
+  onDefeatMap,
+  onToggleTailwind,
+  initialIsRetry = false,
 }) => {
   recordComponentRender('AdventureRun');
   const insets = useSafeAreaInsets();
@@ -193,15 +246,24 @@ const AdventureRun: React.FC<Props> = ({
   const reducedMotion = useReducedMotion();
   const colorblind = useColorblind();
   // The save the fight started from and every action sent to it: enough to replay the fight (engine/replay.ts)
-  const [startSave] = useState(save);
-  const [run, setRun] = useState(() =>
-    createRun(level, startSave, {
+  const [startSave, setStartSave] = useState(save);
+  const [activeRelief, setActiveRelief] = useState(relief);
+  const [isRetry, setIsRetry] = useState(initialIsRetry);
+  const [attemptKey, setAttemptKey] = useState(0);
+  const [defeatOverlay, setDefeatOverlay] = useState<{ run: RunState; recorded: RecordedDefeat } | null>(null);
+  const defeatHandledRef = useRef(false);
+  // [OB-11] Dynamic 1-4D Back Field resolves only traits & features unlocked in save
+  const effectiveLevel = useMemo(() => resolvePracticeLevel(level, startSave), [level, startSave]);
+  const [run, setRun] = useState(() => {
+    const resolved = resolvePracticeLevel(level, save);
+    const resolvedFeatures = featuresOverride ?? resolvePracticeFeatures(level, save);
+    return createRun(resolved, save, {
       seed,
-      ...(featuresOverride ? { features: featuresOverride } : {}),
+      ...(resolvedFeatures ? { features: resolvedFeatures } : {}),
       ...(runOverrides ? { overrides: runOverrides } : {}),
       ...(relief ? { relief } : {}),
-    })
-  );
+    });
+  });
   const runRef = useRef(run);
   runRef.current = run;
   const recorder = useRef(new FightRecorder(seed));
@@ -245,26 +307,38 @@ const AdventureRun: React.FC<Props> = ({
   const tip = tips[0] ?? null;
   const pushTip = useCallback((t: Tip) => setTips(q => (q.some(x => x.id === t.id) ? q : [...q, t])), []);
   const seenCoach = useRef(new Set(save.seenCoachMarks));
+  /** [OB-08] Recipes that already showed their cut-in once (repeat triggers use non-blocking banner) */
+  const seenCutInRecipesRef = useRef<Set<string>>(new Set(save.discoveredEvolutions));
+  /** [OB-08] Recipe just chosen in EvolutionPickOverlay (skip double-pause cut-in, use banner!) */
+  const justPickedEvoIdRef = useRef<string | null>(null);
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const biome = getBiome(level.biome);
+  const biome = getBiome(effectiveLevel.biome);
   const ended = run.status === 'won' || run.status === 'lost';
   /** A practice fight never ends by itself: the player leaves with Done */
-  const practice = !!level.rules.sandbox;
+  const practice = !!effectiveLevel.rules.sandbox;
 
   useEffect(() => () => timeouts.current.forEach(clearTimeout), []);
 
-  // The foe speaks first: its taunt, as the fight (and each wave) opens. Then your fighter has the stage.
-  const taunt = level.rules.sandbox ? undefined : level.foes[run.wave]?.taunt;
+  // [OB-15] + [OB-19]: Coaching-first opening! Suppress taunt on 1-1 & retries; cap at 900ms on mechanic-intro levels.
+  const isFirstLevel = effectiveLevel.id === MAIN_LEVELS[0].id;
+  const isMechanicIntroLevel = !startSave.seenMechanics.includes(effectiveLevel.introduces);
+  const rawTaunt = effectiveLevel.rules.sandbox
+    ? undefined
+    : (run.wave === 0 && STORY_RAIDER_TAUNTS[effectiveLevel.id]
+      ? STORY_RAIDER_TAUNTS[effectiveLevel.id]
+      : effectiveLevel.foes[run.wave]?.taunt);
+  const tauntDurationMs = isFirstLevel || isRetry ? 0 : isMechanicIntroLevel ? INTRO_TAUNT_MS : FOE_TAUNT_MS;
+  const taunt = tauntDurationMs > 0 ? rawTaunt : undefined;
   const [taunting, setTaunting] = useState(!!taunt);
   useEffect(() => {
-    if (!taunt) {
+    if (!taunt || tauntDurationMs <= 0) {
       setTaunting(false);
       return;
     }
     setTaunting(true);
-    const t = setTimeout(() => setTaunting(false), FOE_TAUNT_MS);
+    const t = setTimeout(() => setTaunting(false), tauntDurationMs);
     return () => clearTimeout(t);
-  }, [run.wave, taunt]);
+  }, [run.wave, taunt, tauntDurationMs, attemptKey]);
 
   // If the player starts picking right away, cede the stage to live guidance at once
   useEffect(() => {
@@ -273,19 +347,23 @@ const AdventureRun: React.FC<Props> = ({
     }
   }, [taunting, boardSelectedCount, run.matches]);
 
-  // The bell: a banner across the board as the fight opens (taps pass through it)
-  const [opening, setOpening] = useState(true);
+  // The bell: a banner across the board as the fight opens (skipped on instant retries per [OB-13])
+  const [opening, setOpening] = useState(!initialIsRetry);
   useEffect(() => {
+    if (isRetry) {
+      setOpening(false);
+      return;
+    }
     // (rung a moment in, once the band has taken the stage)
     const bell = setTimeout(() => {
-      if (!level.rules.sandbox) band.cue('wave');
+      if (!effectiveLevel.rules.sandbox) band.cue('wave');
     }, 260);
     const t = setTimeout(() => setOpening(false), 1500);
     return () => {
       clearTimeout(bell);
       clearTimeout(t);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Dev only: expose the live run so browser scripts can play end-to-end
   useEffect(() => {
@@ -454,8 +532,26 @@ const AdventureRun: React.FC<Props> = ({
         : e
     );
     const fightEnded = run.status === 'won' || run.status === 'lost';
-    fx.play(scriptFor(staged, { weapons: run.weapons, gridMs: band.gridMs, reduced: !effects, skipCutIn: fightEnded }));
+    // [OB-08] Repeat evolutions & recipes just chosen in EvolutionPickOverlay use non-blocking EvolutionBanner
+    const bannerOnlyRecipes = new Set(seenCutInRecipesRef.current);
+    if (justPickedEvoIdRef.current) bannerOnlyRecipes.add(justPickedEvoIdRef.current);
+    fx.play(
+      scriptFor(staged, {
+        weapons: run.weapons,
+        gridMs: band.gridMs,
+        reduced: !effects,
+        skipCutIn: fightEnded,
+        bannerOnlyRecipes,
+      })
+    );
     for (const e of fresh) {
+      if (e.type === 'evolution_start') {
+        const rid = recipeIdOfEvent(e);
+        if (rid) {
+          seenCutInRecipesRef.current.add(rid);
+          if (justPickedEvoIdRef.current === rid) justPickedEvoIdRef.current = null;
+        }
+      }
       if (!fightEnded && e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
         seenCoach.current.add(COACH_KEYS.evolution);
         onCoachMarkSeen(COACH_KEYS.evolution);
@@ -541,25 +637,133 @@ const AdventureRun: React.FC<Props> = ({
     }
   }, [ended, fx.cutIn, fx.dismissCutIn]);
   useEffect(() => {
-    // The last cascade plays out first; hand off right as the slow-mo release completes (zero dead air)
+    // The last cascade plays out first; hand off right as slow-mo release completes (or mount DefeatOverlay on defeat!)
     if (!ended || fx.busy) return;
     const won = isVictoryRun(runRef.current);
     const targetMs = won
       ? slowMoCinema
         ? victoryImpactDelay + SLOWMO_HOLD_MS + SLOWMO_RELEASE_MS + SLOWMO_SETTLE_PAD_MS
         : SLOWMO_REDUCED_TOTAL_MS
-      : 680;
+      : effects && !reducedMotion
+        ? DEFEAT_OVERLAY_DELAY_MS
+        : 80;
     const elapsed = endedAtRef.current ? Date.now() - endedAtRef.current : 0;
     const wait = Math.max(80, targetMs - elapsed);
-    const t = setTimeout(() => onFinish(runRef.current, recordingOf()), wait);
+    const t = setTimeout(() => {
+      if (!won && !practice && onDefeatRecorded) {
+        if (defeatHandledRef.current) return;
+        defeatHandledRef.current = true;
+        const recorded = onDefeatRecorded(runRef.current, recordingOf());
+        setDefeatOverlay({ run: runRef.current, recorded });
+      } else {
+        onFinish(runRef.current, recordingOf());
+      }
+    }, wait);
     return () => clearTimeout(t);
   }, [ended, fx.busy]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep DefeatOverlay's Tailwind toggle synced when parent updates `save.tailwindActive`
+  useEffect(() => {
+    setDefeatOverlay(cur =>
+      cur && cur.recorded.result.save.tailwindActive !== save.tailwindActive
+        ? {
+            ...cur,
+            recorded: {
+              ...cur.recorded,
+              result: {
+                ...cur.recorded.result,
+                save: { ...cur.recorded.result.save, tailwindActive: save.tailwindActive },
+              },
+            },
+          }
+        : cur
+    );
+  }, [save.tailwindActive]);
+
+  // [OB-13] `<250ms` in-place retry: fresh seed, fresh recorder, skips ScreenTransition, FIGHT! banner, and foe taunt
+  const handleInstantRetry = useCallback(
+    (opts?: { armRecipeId?: string }) => {
+      const refreshed = onDefeatRetryStart?.(opts);
+      const nextSave = refreshed?.save ?? save;
+      const nextRelief = refreshed?.relief ?? activeRelief;
+      const nextSeed = randomSeed();
+      const nextLevel = resolvePracticeLevel(level, nextSave);
+      const nextFeatures = featuresOverride ?? resolvePracticeFeatures(level, nextSave);
+      const nextRun = createRun(nextLevel, nextSave, {
+        seed: nextSeed,
+        ...(nextFeatures ? { features: nextFeatures } : {}),
+        ...(runOverrides ? { overrides: runOverrides } : {}),
+        ...(nextRelief ? { relief: nextRelief } : {}),
+      });
+      timeouts.current.forEach(clearTimeout);
+      timeouts.current = [];
+      recorder.current = new FightRecorder(nextSeed);
+      lastEventId.current = 0;
+      endedAtRef.current = null;
+      defeatHandledRef.current = false;
+      saidRemarks.current.clear();
+      saidFoeBarks.current.clear();
+      prevPowerRef.current = 0;
+      timeTotal.current = nextRun.timeLeft;
+      runRef.current = nextRun;
+      setStartSave(nextSave);
+      setActiveRelief(nextRelief);
+      setRun(nextRun);
+      setDefeatOverlay(null);
+      setIsRetry(true);
+      setAttemptKey(k => k + 1);
+      setOpening(false);
+      setTaunting(false);
+      setPaused(false);
+      setMistakeNote(null);
+      setMistakeCards(null);
+      setLastSet(null);
+      setEventBannerNote(null);
+      setRemark(null);
+      setFoeBark(null);
+      setBoardSelectedCount(0);
+      setBoardSelectedCards([]);
+      setLastMatchTime(Date.now());
+      band.enterFight(moodNow(nextRun, false));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onDefeatRetryStart, save, activeRelief, level, featuresOverride, runOverrides]
+  );
+
+  // [OB-16] Auto-advance shopless waves (e.g. 3-3) with a non-blocking banner instead of an empty modal
+  const autoWaveIntermission = run.status === 'intermission' && !fx.busy && !run.features.has('shop');
+  useEffect(() => {
+    if (!autoWaveIntermission) return;
+    band.cue('wave');
+    const t = setTimeout(() => dispatch({ type: 'NEXT_WAVE' }), AUTO_WAVE_MS);
+    return () => clearTimeout(t);
+  }, [autoWaveIntermission, dispatch]);
+
+  const markSurgeGuidedProgress = useCallback(() => {
+    if (!seenCoach.current.has(COACH_KEYS.surgeGuided1)) {
+      seenCoach.current.add(COACH_KEYS.surgeGuided1);
+      onCoachMarkSeen(COACH_KEYS.surgeGuided1);
+    } else if (!seenCoach.current.has(COACH_KEYS.surgeGuided2)) {
+      seenCoach.current.add(COACH_KEYS.surgeGuided2);
+      onCoachMarkSeen(COACH_KEYS.surgeGuided2);
+    }
+  }, [onCoachMarkSeen]);
+
+  const prevSurgeActiveRef = useRef(false);
+  useEffect(() => {
+    const active = Boolean(run.surge?.active);
+    if (prevSurgeActiveRef.current && !active) {
+      markSurgeGuidedProgress();
+    }
+    prevSurgeActiveRef.current = active;
+  }, [run.surge?.active, markSurgeGuidedProgress]);
 
   const handleMatch = useCallback((cards: Card[], rewards: CardReward[], effects?: WeaponEffectResult, info?: { hinted: boolean }) => {
     setLastMatchTime(Date.now());
     setMistakeNote(null);
     setMistakeCards(null);
     setEventBannerNote(null);
+    if (runRef.current.surge?.active) markSurgeGuidedProgress();
     const graceUsed = rewards.some(r => r.effectType === 'grace');
     const isMegaMatch =
       Boolean(effects?.explosiveCards.length) ||
@@ -575,7 +779,7 @@ const AdventureRun: React.FC<Props> = ({
     const picked = cards.slice(0, 3);
     setLastSet(picked);
     later(() => setLastSet(cur => (cur === picked ? null : cur)), LAST_SET_MS);
-  }, [dispatch, triggerMatch, later]);
+  }, [dispatch, triggerMatch, later, markSurgeGuidedProgress]);
 
   // Defensive Grace Save ([GP-04]): consumes 1 Grace, spares heart, cycles 3 cards, 0 base Set damage
   const handleGraceSave = useCallback((cards: Card[]) => {
@@ -610,6 +814,7 @@ const AdventureRun: React.FC<Props> = ({
   const handlePickEvolution = useCallback((recipeId: string) => {
     sfx('confirm');
     triggerPowerup();
+    justPickedEvoIdRef.current = recipeId;
     dispatch({ type: 'PICK_EVOLUTION', recipeId });
   }, [dispatch, triggerPowerup]);
 
@@ -737,6 +942,22 @@ const AdventureRun: React.FC<Props> = ({
     return boardHasCounterSet(run.board, run.attributes, run.parry.spec.counter);
   }, [run.parry, run.board, run.attributes]);
 
+  // [OB-10] Live Set-Parry & Counter-Parry onboarding StageBubble callout on first wind-up / golden window / counter
+  useEffect(() => {
+    if (ended || practice) return;
+    const callout = parryOnboardingCallout(run.parry, {
+      colorblind,
+      seenWindup: seenCoach.current.has(COACH_KEYS.parryFirstWindup),
+      seenPerfect: seenCoach.current.has(COACH_KEYS.parryFirstPerfect),
+      seenCounter: seenCoach.current.has(COACH_KEYS.counterParryFirst),
+    });
+    if (!callout) return;
+    seenCoach.current.add(callout.key);
+    onCoachMarkSeen(callout.key);
+    setEventBannerNote(callout.text);
+    later(() => setEventBannerNote(prev => (prev === callout.text ? null : prev)), 4500);
+  }, [run.parry?.phase, run.parry?.warned, run.parry?.msLeft, ended, practice, colorblind]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Explain the POWER meter once the first time the player builds Charge in battle
   useEffect(() => {
     if (!showDamageHud || run.power < 1) return;
@@ -787,7 +1008,10 @@ const AdventureRun: React.FC<Props> = ({
     mistakeCards && mistakeCards.length === 3
       ? explainInvalidPick(mistakeCards, run.attributes, run.fighter, colorblind)
       : mistakeNote;
-  const consecutiveLosses = consecutiveLossesFor(startSave, level.id);
+  const consecutiveLosses = consecutiveLossesFor(startSave, effectiveLevel.id);
+  const surgeGuidedCount =
+    (seenCoach.current.has(COACH_KEYS.surgeGuided1) ? 1 : 0) +
+    (seenCoach.current.has(COACH_KEYS.surgeGuided2) ? 1 : 0);
   const liveGuidance = useMemo(
     () =>
       computeLiveGuidance(run, {
@@ -799,8 +1023,9 @@ const AdventureRun: React.FC<Props> = ({
         noAssist: ui.disableAutoHint === true,
         colorblind,
         consecutiveLosses,
+        surgeGuidedCount,
       }),
-    [run, boardSelectedCount, boardSelectedCards, effectiveMistakeNote, mistakeCards, coachDismissed, ui.disableAutoHint, colorblind, consecutiveLosses]
+    [run, boardSelectedCount, boardSelectedCards, effectiveMistakeNote, mistakeCards, coachDismissed, ui.disableAutoHint, colorblind, consecutiveLosses, surgeGuidedCount]
   );
   const activeGlowIds = useMemo(() => {
     const merged = [...(keenEyeIds ?? []), ...(liveGuidance?.glowIds ?? [])];
@@ -814,7 +1039,7 @@ const AdventureRun: React.FC<Props> = ({
   useEffect(() => {
     if (__DEV__ && Platform.OS === 'web') (window as unknown as { __nshapesLit?: string[] }).__nshapesLit = activeGlowIds ?? [];
   }, [activeGlowIds]);
-  // A passing remark from your fighter (coach.ts fightRemarks): each is said once, and only into silence
+  // [OB-15] Passing remarks from your fighter: queued cleanly and auto-dismiss timer ONLY ticks while actually visible!
   const [remark, setRemark] = useState<string | null>(null);
   const saidRemarks = useRef(new Set<string>());
   const remarks = fightRemarks(run, challenge.met);
@@ -822,10 +1047,19 @@ const AdventureRun: React.FC<Props> = ({
   useEffect(() => {
     if (!nextRemark) return;
     saidRemarks.current.add(nextRemark.key);
-    const { text } = nextRemark;
-    setRemark(text);
-    later(() => setRemark(r => (r === text ? null : r)), 2600);
+    setRemark(nextRemark.text);
   }, [nextRemark?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // [OB-15] Short Boss/Elite mid-fight reaction bark at 50% HP or Staggered
+  const [foeBark, setFoeBark] = useState<string | null>(null);
+  const saidFoeBarks = useRef(new Set<string>());
+  const nextFoeBark = foeMidFightBark(run);
+  useEffect(() => {
+    if (!nextFoeBark || saidFoeBarks.current.has(nextFoeBark.key)) return;
+    saidFoeBarks.current.add(nextFoeBark.key);
+    setFoeBark(nextFoeBark.text);
+  }, [nextFoeBark?.key]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // What went wrong with a pick is said at once (it beats a first-time tip about the same moment);
   // then tips, then guidance, then remarks
   const explaining = liveGuidance?.kind === 'mistake';
@@ -833,7 +1067,7 @@ const AdventureRun: React.FC<Props> = ({
   const coachKind = explaining ? 'mistake' : eventBannerNote ? 'event' : liveGuidance ? liveGuidance.kind : 'cheer';
   // While the rule is new, a strip above the board checks one trait at a time: the cards the companion is talking
   // about, else the Set just made (until the next card is picked)
-  const traitChecks = showsTraitChecks(level);
+  const traitChecks = showsTraitChecks(effectiveLevel);
   const checks =
     liveGuidance?.pills ??
     (boardSelectedCount === 1 && boardSelectedCards[0]
@@ -865,7 +1099,7 @@ const AdventureRun: React.FC<Props> = ({
               Math.max(
                 76,
                 Math.min(
-                  level.id === '1-1' ? STAGE.maxGuide : STAGE.maxSparse,
+                  effectiveLevel.id === '1-1' ? STAGE.maxGuide : STAGE.maxSparse,
                   stage.h - insets.top - chromePx - boardRows * (idealCardH + 5)
                 )
               )
@@ -874,13 +1108,14 @@ const AdventureRun: React.FC<Props> = ({
   const roomyStage = isWide || stageH >= STAGE.roomy;
   const compactStage = !roomyStage;
   const foeSize = roomyStage
-    ? Math.round(Math.min(isWide ? 104 : 80, stageH - (level.isBoss ? 12 : 18)))
+    ? Math.round(Math.min(isWide ? 104 : 80, stageH - (effectiveLevel.isBoss ? 12 : 18)))
     : Math.round(Math.max(36, Math.min(48, stageH - 8)));
   const fighterSize = roomyStage
     ? Math.round(Math.max(52, Math.min(isWide ? 86 : 66, stageH - 30)))
     : Math.round(Math.max(30, Math.min(41, stageH - 13)));
-  // While the foe is taunting it has the floor (a wrong pick is still explained at once)
-  const foeTalking = taunting && !!taunt && !explaining && !ended;
+  // While the foe is taunting (or barking mid-fight), it speaks on its side
+  const foeSpeechText = taunting && taunt ? taunt : foeBark;
+  const foeTalking = !!foeSpeechText && !explaining && !ended;
   // On compact stages, wait until active damage callouts clear before showing transient event tips / passing remarks
   const holdTransientBubble =
     compactStage &&
@@ -889,36 +1124,68 @@ const AdventureRun: React.FC<Props> = ({
     !explaining &&
     coachKind !== 'lesson' &&
     coachKind !== 'rescue';
-  const coachBubble = foeTalking ? (
+
+  // [OB-15] Visibility-gated remark & foe-bark timers so compact-phone cascades never starve passing quips!
+  const remarkVisible = remark !== null && coachText === remark && !ended && !halted && !holdTransientBubble && (isWide || !foeTalking);
+  useEffect(() => {
+    if (!remarkVisible || !remark) return;
+    const text = remark;
+    const t = setTimeout(() => setRemark(cur => (cur === text ? null : cur)), 2600);
+    return () => clearTimeout(t);
+  }, [remarkVisible, remark]);
+
+  const foeBarkVisible = foeBark !== null && !(taunting && taunt) && !ended && !halted && !explaining && !(compactStage && (fx.busy || fx.beats.length > 0));
+  useEffect(() => {
+    if (!foeBarkVisible || !foeBark) return;
+    const text = foeBark;
+    const t = setTimeout(() => setFoeBark(cur => (cur === text ? null : cur)), 2200);
+    return () => clearTimeout(t);
+  }, [foeBarkVisible, foeBark]);
+
+  const fighterBubbleNode =
+    coachText && !ended && !holdTransientBubble ? (
+      <StageBubble
+        testID="run-coach-banner"
+        text={coachText}
+        kind={coachKind}
+        tail={roomyStage ? 'down' : 'left'}
+        compact={compactStage}
+        onPress={
+          // A lesson stays up; anything else can be tapped away
+          coachKind !== 'lesson' && coachKind !== 'rescue'
+            ? () => {
+                setCoachDismissed(true);
+                setEventBannerNote(null);
+                setMistakeNote(null);
+                setMistakeCards(null);
+                setLastSet(null);
+                setRemark(null);
+              }
+            : undefined
+        }
+      />
+    ) : null;
+
+  const foeBubbleNode = foeTalking ? (
     <StageBubble
-      testID="run-foe-taunt"
-      text={`“${taunt}”`}
+      testID={taunting && taunt ? 'run-foe-taunt' : 'run-foe-bark'}
+      text={`“${foeSpeechText}”`}
       kind="foe"
       tail={roomyStage ? 'down-right' : 'right'}
       compact={compactStage}
     />
-  ) : coachText && !ended && !holdTransientBubble ? (
-    <StageBubble
-      testID="run-coach-banner"
-      text={coachText}
-      kind={coachKind}
-      tail={roomyStage ? 'down' : 'left'}
-      compact={compactStage}
-      onPress={
-        // A lesson stays up; anything else can be tapped away
-        coachKind !== 'lesson' && coachKind !== 'rescue'
-          ? () => {
-              setCoachDismissed(true);
-              setEventBannerNote(null);
-              setMistakeNote(null);
-              setMistakeCards(null);
-              setLastSet(null);
-              setRemark(null);
-            }
-          : undefined
-      }
-    />
   ) : null;
+
+  // [OB-15] On wide desktop, render fighter tip (left) and foe taunt/bark (right) simultaneously!
+  const coachBubble =
+    isWide && fighterBubbleNode && foeBubbleNode ? (
+      <View style={st.dualSpeechRow} pointerEvents="box-none">
+        <View style={st.dualSpeechHalf}>{fighterBubbleNode}</View>
+        <View style={st.dualSpeechHalf}>{foeBubbleNode}</View>
+      </View>
+    ) : (
+      foeBubbleNode ?? fighterBubbleNode
+    );
   const hasRichResources =
     (showPassivesHud && run.passives.length > 0) ||
     run.features.has('graces') ||
@@ -1530,6 +1797,7 @@ const AdventureRun: React.FC<Props> = ({
           )}
           <CardBoardProvider overlay={cardBoardOverlay} clockMs={gambleClockMs}>
             <GameBoard
+              key={attemptKey}
               cards={run.board}
               connections={run.connections}
               onMatch={handleMatch}
@@ -1587,6 +1855,12 @@ const AdventureRun: React.FC<Props> = ({
           <Banner rect={anchors.rect('board')!} text={level.isBoss ? 'BOSS FIGHT!' : 'FIGHT!'} color={level.isBoss ? '#9F1239' : COLORS.deepOnyx} delay={120} />
         </View>
       )}
+      {/* Non-blocking wave transition banner for shopless waves (e.g. 3-3) ([OB-16]) */}
+      {autoWaveIntermission && anchors.rect('board') && (
+        <View style={st.openingLayer} pointerEvents="none" testID="run-wave-banner">
+          <Banner rect={anchors.rect('board')!} text={`WAVE ${run.wave + 2}!`} color={COLORS.deepOnyx} delay={0} />
+        </View>
+      )}
       {!ended && fx.cutIn && (
         <EvolutionCutIn
           key={fx.cutIn.key}
@@ -1599,16 +1873,20 @@ const AdventureRun: React.FC<Props> = ({
           hint={evolutionHint ? 'The ring by the HP bar counts down the time left.' : undefined}
         />
       )}
-      {/* Effects off: evolutions get a small banner that does not stop the fight */}
+      {/* Repeat, post-pick, or effects-off evolutions get a crisp non-blocking banner ([OB-08] + [AU-13]) */}
       {!ended && fx.banner && (() => {
         const recipe = recipeFor(fx.banner.recipes[0]);
+        const secs = Math.round(
+          (run.activeEvolutions.find(a => a.id === fx.banner?.recipes[0])?.durationMs ?? EVOLUTION_RULES.durationMs) / 1000
+        );
         return (
           <View style={[st.bannerWrap, { top: insets.top + hudHeight / 2 }]} pointerEvents="none">
             <EvolutionBanner
+              recipeId={fx.banner.recipes[0]}
               name={recipe?.name ?? 'Evolution'}
               icon={recipe?.icon ?? 'lorc/crystal-shine'}
               text={recipe?.activeText ?? ''}
-              seconds={EVOLUTION_RULES.durationMs / 1000}
+              seconds={secs}
               seq={fx.banner.key}
             />
           </View>
@@ -1670,9 +1948,34 @@ const AdventureRun: React.FC<Props> = ({
         />
       )}
 
-      {/* Between waves */}
-      {run.status === 'intermission' && !fx.busy && (
+      {/* Between waves (only shown as a modal when Shop is unlocked; shopless waves auto-advance per [OB-16]) */}
+      {run.status === 'intermission' && !fx.busy && run.features.has('shop') && (
         <Intermission run={run} dispatch={dispatch} onPurchase={() => conductor.triggerPowerup()} />
+      )}
+
+      {/* [OB-13] In-place Defeat Overlay for `<250ms` instant retry without ScreenTransition */}
+      {defeatOverlay && (
+        <DefeatOverlay
+          level={effectiveLevel}
+          run={defeatOverlay.run}
+          result={defeatOverlay.recorded.result}
+          onRetry={() => handleInstantRetry()}
+          onArmRecipeAndRetry={recipeId => handleInstantRetry({ armRecipeId: recipeId })}
+          onFullBreakdown={() => {
+            const cur = defeatOverlay;
+            setDefeatOverlay(null);
+            onShowDefeatBreakdown?.(cur.run, cur.recorded);
+          }}
+          onCamp={tab => {
+            setDefeatOverlay(null);
+            onDefeatCamp?.(tab);
+          }}
+          onMap={() => {
+            setDefeatOverlay(null);
+            onDefeatMap?.();
+          }}
+          onToggleTailwind={onToggleTailwind}
+        />
       )}
 
       <Modal visible={paused} transparent animationType="fade" onRequestClose={() => setPaused(false)}>
@@ -2037,29 +2340,44 @@ const Hearts: React.FC<{ hearts: number; max: number; compact?: boolean }> = ({ 
   );
 };
 
-const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponBuilds?: WeaponBuilds; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponBuilds, onPick, onSkip }) => (
-  <Modal visible transparent animationType="fade" onRequestClose={onSkip}>
-    <View style={st.overlay}>
-      <PopIn style={st.panel}>
-        <Eyebrow text={title} />
-        <Text style={st.panelSub}>{subtitle}</Text>
-        {options.map((w, i) => {
-          const level = weaponBuilds?.[w.id]?.level ?? 1;
-          return (
-            <WeaponOfferRow
-              key={`${w.id}-${i}`}
-              testID={`pick-${i}`}
-              weapon={w}
-              level={level}
-              onPress={() => onPick(w)}
-            />
-          );
-        })}
-        <Btn label="Skip" variant="ghost" small onPress={onSkip} />
-      </PopIn>
-    </View>
-  </Modal>
-);
+const WeaponPick: React.FC<{ title: string; subtitle: string; options: Weapon[]; weaponBuilds?: WeaponBuilds; onPick: (w: Weapon) => void; onSkip: () => void }> = ({ title, subtitle, options, weaponBuilds, onPick, onSkip }) => {
+  // [AU-13] Fire staggered slot-reel clunks right as the level-up options mount on screen
+  useEffect(() => {
+    const b = band as typeof band & { playWeaponPickReelStop?: () => void };
+    if (typeof b.playWeaponPickReelStop === 'function') {
+      b.playWeaponPickReelStop();
+      return;
+    }
+    if (!band?.inFight && typeof band?.cue === 'function') {
+      const ts = [0, 75, 150].map((ms, slot) => setTimeout(() => band.cue('reelStop', { slot }), ms));
+      return () => ts.forEach(clearTimeout);
+    }
+  }, []);
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onSkip}>
+      <View style={st.overlay}>
+        <PopIn style={st.panel}>
+          <Eyebrow text={title} />
+          <Text style={st.panelSub}>{subtitle}</Text>
+          {options.map((w, i) => {
+            const level = weaponBuilds?.[w.id]?.level ?? 1;
+            return (
+              <WeaponOfferRow
+                key={`${w.id}-${i}`}
+                testID={`pick-${i}`}
+                weapon={w}
+                level={level}
+                onPress={() => onPick(w)}
+              />
+            );
+          })}
+          <Btn label="Skip" variant="ghost" small onPress={onSkip} />
+        </PopIn>
+      </View>
+    </Modal>
+  );
+};
 
 const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; onPurchase?: () => void }> = ({ run, dispatch, onPurchase }) => {
   const hasShop = run.features.has('shop');
@@ -2144,6 +2462,8 @@ const st = StyleSheet.create({
   xpBadge: { backgroundColor: COLORS.canvasWhite, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 5, paddingVertical: 0 },
   xpBadgeText: { fontSize: 7.5, lineHeight: 9.5, fontWeight: '900', color: INK, letterSpacing: 0.3 },
   stageSpeechOverlay: { position: 'absolute', top: 4, left: 8, right: 8, zIndex: 20 },
+  dualSpeechRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  dualSpeechHalf: { flex: 1, minWidth: 0 },
   stageFloor: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   stageSide: { alignItems: 'center', gap: 2 },
   stageSideCompact: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },

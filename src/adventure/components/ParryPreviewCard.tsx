@@ -18,10 +18,12 @@ import { INK, TONE } from './ui';
 interface Props {
   spec: ParrySpec;
   compact?: boolean;
+  /** True on a player's first-ever Timing Parry or specific Counter-Parry fight ([OB-10]) */
+  isNew?: boolean;
   testID?: string;
 }
 
-const ParryPreviewCard: React.FC<Props> = ({ spec, compact = false, testID = 'preview-parry-card' }) => {
+const ParryPreviewCard: React.FC<Props> = ({ spec, compact = false, isNew = false, testID = 'preview-parry-card' }) => {
   const colorblind = useColorblind();
   const meta = formatParryCounterMeta(spec.counter, colorblind);
   const isSpecific = spec.counter.kind !== 'any';
@@ -30,6 +32,13 @@ const ParryPreviewCard: React.FC<Props> = ({ spec, compact = false, testID = 'pr
 
   return (
     <View testID={testID} style={[st.box, isSpecific && st.boxSpecific, compact && st.boxCompact]}>
+      {isNew && (
+        <View testID="parry-new-badge" style={st.newBanner}>
+          <Text style={st.newBannerText}>
+            NEW: {isSpecific ? 'Counter-Parry — match the counter rule to Stagger!' : 'Set-Parry — match ANY Set during wind-up!'}
+          </Text>
+        </View>
+      )}
       <View style={st.topRow}>
         <View style={[st.iconBadge, { backgroundColor: meta.color }]}>
           <Icon name={spec.icon} size={16} color={COLORS.canvasWhite} />
@@ -77,6 +86,21 @@ const st = StyleSheet.create({
   boxCompact: {
     padding: 8,
     gap: 5,
+  },
+  newBanner: {
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: INK,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  newBannerText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: INK,
+    letterSpacing: 0.3,
   },
   topRow: {
     flexDirection: 'row',

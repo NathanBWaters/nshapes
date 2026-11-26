@@ -14,6 +14,7 @@ import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
+import { band } from '@/audio';
 import type { EvolutionRecipe } from '../types';
 import { fxMs } from './clock';
 import { EVOLUTION_RULES, inFamily } from '../engine/sources';
@@ -22,9 +23,11 @@ import { DARK } from '../components/ui';
 const INK = COLORS.slateCharcoal;
 /** The cut rises to the right by this much */
 const SLANT_DEG = -9;
-/** Taps before this are ignored, so the tap that made the Set cannot close it */
-const GUARD_MS = 450;
-const CLOSE_MS = 170;
+/** Taps before this are ignored, so the tap that made the Set cannot close it ([OB-08]: tightened to 200ms) */
+const GUARD_MS = 200;
+const CLOSE_MS = 110;
+/** Reveal the TAP TO CONTINUE prompt briskly once the band opens ([OB-08]: 320ms) */
+const PROMPT_REVEAL_MS = 320;
 
 const SPEED_LINES = [
   { top: '12%', width: 220, ms: 760, delay: 0 },
@@ -124,6 +127,20 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
     content.value = withDelay(fxMs(230), withTiming(1, { duration: fxMs(280), easing: Easing.out(Easing.cubic) }));
   }, [slash, flash, open, content]);
 
+  // [AU-13] Fire evolution fanfare synced to cut-in mount (90ms riser hits exact slash-flash frame!)
+  const firstRecipeId = recipes[0]?.id;
+  useEffect(() => {
+    if (!firstRecipeId) return;
+    const b = band as typeof band & {
+      playCutInEvolve?: (id: string, opts?: { immediate?: boolean; leadMs?: number }) => void;
+    };
+    if (typeof b?.playCutInEvolve === 'function') {
+      b.playCutInEvolve(firstRecipeId, { immediate: true, leadMs: 90 });
+    } else if (typeof band?.evolve === 'function' && !band.inFight) {
+      band.evolve(firstRecipeId);
+    }
+  }, [firstRecipeId]);
+
   useEffect(() => {
     if (!appActive) {
       cancelAnimation(prompt);
@@ -131,16 +148,19 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
       return;
     }
     prompt.value = 0;
-    prompt.value = withDelay(fxMs(750), withRepeat(withSequence(withTiming(1, { duration: 500 }), withTiming(0.35, { duration: 500 })), -1, true));
+    prompt.value = withDelay(fxMs(PROMPT_REVEAL_MS), withRepeat(withSequence(withTiming(1, { duration: 500 }), withTiming(0.35, { duration: 500 })), -1, true));
     return () => cancelAnimation(prompt);
   }, [appActive, prompt]);
 
   const close = useCallback(() => {
     if (closing.current || Date.now() - born.current < fxMs(GUARD_MS)) return;
     closing.current = true;
+    // Snap band fully visible if tapped between 200–510ms before briskly sliding shut
+    if (open.value < 1) open.value = 1;
+    if (content.value < 1) content.value = 1;
     out.value = withTiming(1, { duration: CLOSE_MS, easing: Easing.in(Easing.quad) });
     timer.current = setTimeout(() => done.current(), CLOSE_MS);
-  }, [out]);
+  }, [open, content, out]);
 
   useEffect(() => () => {
     if (timer.current) clearTimeout(timer.current);

@@ -153,10 +153,16 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const ring = useSharedValue(0);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const revealing = useRef(false);
+  const soundPlayed = useRef(false);
+  const clearTimers = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  };
   const later = (ms: number, fn: () => void) => { timers.current.push(setTimeout(fn, ms)); };
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(() => () => clearTimers(), []);
 
   useEffect(() => {
+    clearTimers();
     setI(0);
     setRevealed(false);
     setActing(false);
@@ -164,7 +170,11 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     sink.value = 0;
     closing.value = 0;
     press.value = 1;
+    turn.value = 1;
+    face.value = 1;
+    leave.value = 1;
     revealing.current = false;
+    soundPlayed.current = false;
     // The dark screen first, then what is on it: no words over the results' words
     backdrop.value = 0;
     backdrop.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP });
@@ -218,25 +228,53 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const evoId = evolutionsMechanicId();
   const evoMechanic = evo && evoId ? MECHANICS[evoId] : null;
 
+  // A weapon is introduced by its own voice, a recipe by its fanfare: on the frame the reward lands
+  const playUnlockSound = () => {
+    if (soundPlayed.current) return;
+    soundPlayed.current = true;
+    if (u.kind === 'weapon') band.audition(u.id);
+    else if (u.kind === 'evolution') band.auditionEvolution(u.id);
+    else sfx('unlock');
+  };
+
+  /** Unlock CTA responsiveness the instant the face swaps (`SWAP_MS`), never locking until `ACT_MS` ([OB-06]). */
+  const onSwapVisible = () => {
+    setRevealed(true);
+    revealing.current = false;
+  };
+
+  /** Tapping again during the 0–256ms turn snaps immediately to revealed so zero taps are swallowed. */
+  const snapReveal = () => {
+    clearTimers();
+    cancelAnimation(press);
+    cancelAnimation(turn);
+    cancelAnimation(face);
+    press.value = 1;
+    turn.value = 1;
+    face.value = 1;
+    setRevealed(true);
+    setActing(true);
+    revealing.current = false;
+    playUnlockSound();
+  };
+
   const reveal = () => {
-    if (revealing.current || revealed) return;
+    if (revealed) return;
+    if (revealing.current) {
+      snapReveal();
+      return;
+    }
     revealing.current = true;
-    // A weapon is introduced by its own voice, a recipe by its fanfare: on the frame the reward lands
-    const sound = () => {
-      if (u.kind === 'weapon') band.audition(u.id);
-      else if (u.kind === 'evolution') band.auditionEvolution(u.id);
-      else sfx('unlock');
-    };
-    const done = () => { revealing.current = false; };
+    soundPlayed.current = false;
     if (reduced) {
       // The faces cross-fade through the dark: no wind-up, no turn, no ring
       face.value = withSequence(
         KEEP,
-        withTiming(0, { duration: MS.feedback, easing: EASE.ui, reduceMotion: KEEP }, finished => { if (finished) runOnJS(setRevealed)(true); }),
+        withTiming(0, { duration: MS.feedback, easing: EASE.ui, reduceMotion: KEEP }, finished => { if (finished) runOnJS(onSwapVisible)(); }),
         withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP })
       );
-      later(MS.feedback + 16, sound);
-      later(MS.feedback + MS.quick, () => { setActing(true); done(); });
+      later(MS.feedback + 16, () => { onSwapVisible(); playUnlockSound(); });
+      later(MS.feedback + MS.quick, () => setActing(true));
       return;
     }
     // Wind in, turn edge-on (EASE.impact: it speeds into the edge), hold, swap the face, come round on a spring
@@ -248,22 +286,21 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
       WINDUP_MS,
       withSequence(
         // Swapped by the turn itself once it is edge-on, so the old face is never seen to change
-        withTiming(0, { duration: TURN_MS, easing: EASE.impact }, finished => { if (finished) runOnJS(setRevealed)(true); }),
+        withTiming(0, { duration: TURN_MS, easing: EASE.impact }, finished => { if (finished) runOnJS(onSwapVisible)(); }),
         withDelay(EDGE_HOLD_MS, withSpring(1, SPRING.lively))
       )
     );
     ring.value = 0;
     ring.value = withDelay(LAND_MS, withTiming(1, { duration: MS.move, easing: EASE.enter }));
-    // Backstop for the swap, still inside the edge-on hold (where there are no frames, as in tests)
-    later(WINDUP_MS + TURN_MS + EDGE_HOLD_MS, () => setRevealed(true));
-    later(LAND_MS, sound);
-    later(ACT_MS, () => { setActing(true); done(); });
+    // Unlock CTA right at SWAP_MS (256ms) so the footer CTA is 100% live the moment it rises into view!
+    later(SWAP_MS, onSwapVisible);
+    later(LAND_MS, playUnlockSound);
+    later(ACT_MS, () => setActing(true));
   };
 
   const goNext = (next: number) => {
     // Whatever the last reveal still had scheduled (its creature's act) belongs to it, not to the next one
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
+    clearTimers();
     setRevealed(false);
     setActing(false);
     setI(next);
@@ -272,8 +309,24 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     if (!reduced) turn.value = withDelay(EDGE_HOLD_MS / 2, withSpring(1, SPRING.lively));
     face.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP });
     revealing.current = false;
+    soundPlayed.current = false;
+  };
+  const claimAll = () => {
+    if (exiting) return;
+    clearTimers();
+    cancelAnimation(press);
+    cancelAnimation(turn);
+    cancelAnimation(face);
+    cancelAnimation(leave);
+    cancelAnimation(backdrop);
+    revealing.current = true;
+    setExiting(true);
+    sfx('unlock');
+    onDone();
   };
   const advance = () => {
+    // Cancel pending reveal timers immediately so stale setActing/sound callbacks never fire after advancing
+    clearTimers();
     if (i + 1 >= unlocks.length) {
       // The way out: the words go first, the medallion sinks back into the results as the dark lifts,
       // then the results take over (their rows turn over into what was just won)
@@ -310,6 +363,20 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
       {/* Closing, it no longer takes taps: the results' buttons are usable from the first frame of the way out */}
       <View testID="unlock-modal" pointerEvents={exiting ? 'none' : 'auto'} style={[st.overlay, { paddingTop: insets.top }]}>
         <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} pointerEvents="none" />
+        {unlocks.length > 1 && !exiting && (
+          <View style={[st.topActions, { top: Math.max(insets.top, 8) + 6 }]}>
+            <TouchableOpacity
+              testID="unlock-claim-all"
+              onPress={claimAll}
+              style={st.claimAllBtn}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Claim all ${unlocks.length - i} remaining rewards`}
+            >
+              <Text style={st.claimAllText}>Claim All ({unlocks.length - i})</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <ScrollView contentContainerStyle={st.scroll} bounces={false}>
           <Animated.View style={leaveStyle}>
           <Rise key={`heads-${i}`} delay={i === 0 ? OPEN_TEXT_MS : 0} reduced={reduced} style={st.heads}>
@@ -655,8 +722,20 @@ const st = StyleSheet.create({
   // Opaque: whatever is behind it (the results screen) would only be noise
   overlay: { flex: 1 },
   backdrop: { backgroundColor: '#0B0B0C' },
+  topActions: { position: 'absolute', right: 14, zIndex: 20 },
+  claimAllBtn: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: DARK.goldEdge(0.5),
+    backgroundColor: 'rgba(28,27,25,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  claimAllText: { color: GOLD, fontWeight: '800', fontSize: 13, letterSpacing: 0.4 },
   // Top-aligned, so the headline and the medallion stay put when the details arrive under them
-  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'flex-start', padding: 20, paddingTop: 36, paddingBottom: 12, gap: 12, maxWidth: 460, width: '100%', alignSelf: 'center' },
+  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'flex-start', padding: 20, paddingTop: 54, paddingBottom: 12, gap: 12, maxWidth: 460, width: '100%', alignSelf: 'center' },
   footer: { alignSelf: 'center', width: '100%', maxWidth: 460, minHeight: 74, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
   footerInner: { alignSelf: 'stretch', gap: 4, alignItems: 'center' },
   heads: { alignItems: 'center', gap: 12 },

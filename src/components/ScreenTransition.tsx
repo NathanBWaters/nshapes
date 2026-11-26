@@ -67,7 +67,17 @@ export function useScreenTransition({ instant = SCREEN_INSTANT, enterOnMount = t
   const pending = useRef<{ apply: () => void; direction: ScreenDirection } | null>(null);
   const exiting = useRef(false);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearSafetyTimer = useCallback(() => {
+    if (safetyTimerRef.current !== null) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
+  }, []);
+  useEffect(() => () => {
+    alive.current = false;
+    clearSafetyTimer();
+  }, [clearSafetyTimer]);
 
   const enter = useCallback((direction: ScreenDirection) => {
     x.value = reduced ? 0 : direction * ENTER_SHIFT;
@@ -87,6 +97,7 @@ export function useScreenTransition({ instant = SCREEN_INSTANT, enterOnMount = t
   const exitId = useRef(0);
   const swap = useCallback((id: number) => {
     if (id !== exitId.current || !exiting.current) return;
+    clearSafetyTimer();
     exiting.current = false;
     const next = pending.current;
     pending.current = null;
@@ -94,10 +105,11 @@ export function useScreenTransition({ instant = SCREEN_INSTANT, enterOnMount = t
     next.apply();
     setLeaving(false);
     enter(next.direction);
-  }, [enter]);
+  }, [enter, clearSafetyTimer]);
 
   const go = useCallback((apply: () => void, direction: ScreenDirection) => {
     if (instant) {
+      clearSafetyTimer();
       apply();
       return;
     }
@@ -116,8 +128,9 @@ export function useScreenTransition({ instant = SCREEN_INSTANT, enterOnMount = t
       if (finished) runOnJS(swap)(id);
     });
     // If the fade never reports its end (the app went to the background), the change still happens
-    setTimeout(() => swap(id), out + MS.feedback);
-  }, [instant, reduced, x, o, swap]);
+    clearSafetyTimer();
+    safetyTimerRef.current = setTimeout(() => swap(id), out + MS.feedback);
+  }, [instant, reduced, x, o, swap, clearSafetyTimer]);
 
   const style = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateX: x.value }] }));
   return { go, style, leaving };

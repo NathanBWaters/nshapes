@@ -56,7 +56,7 @@ export const STAR_GAP_MS = 340;
 export const STAR_FALL_MS = MS.screen;
 export const starPopDelayMs = (index: number): number => STAR_FIRST_MS + index * STAR_GAP_MS;
 export const starLandMs = (index: number): number => starPopDelayMs(index) + STAR_FALL_MS;
-export const starsLandedMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) + 450 : 600);
+export const starsLandedMs = (stars: number): number => (stars > 0 ? starLandMs(stars - 1) + 240 : 600);
 
 export const Btn: React.FC<{
   label: string;

@@ -88,12 +88,12 @@ export const lessonsDueBefore = (level: LevelDef, save: AdventureSave): LessonPl
 
 /**
  * A lesson the level preview has already given: the level's own mechanic, shown
- * there as the NEW card with its demo. Nothing more is needed before the
- * fight. A lesson with extra pages in front of it (the first evolution), or
- * one about evolutions, still gets its own screen.
+ * there as the NEW card with its demo (including `2-2` Evolutions, eliminating
+ * the double-modal). Nothing more is needed before the fight; only extra
+ * standalone preludes still get their own screen.
  */
 export const taughtOnPreview = (plan: LessonPlan, level: LevelDef): boolean =>
-  !plan.prelude?.length && plan.mechanic.id === level.introduces && plan.mechanic.enables !== 'evolutions';
+  !plan.prelude?.length && plan.mechanic.id === level.introduces;
 
 /** The very first visit: nothing played yet and the first level's lesson not seen. */
 export const isFirstVisit = (save: AdventureSave): boolean =>

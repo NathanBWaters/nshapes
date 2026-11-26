@@ -38,8 +38,8 @@ export const STORY: Record<'welcome', StoryBeat[]> = {
   welcome: [
     {
       scene: 'abduction',
-      title: 'A star fell—critters went wild!',
-      body: 'They caged your friends and scattered Golden Keys across the valley.',
+      title: 'Star shattered—critters went wild!',
+      body: 'They hoarded Star Shards, caged your 5 friends, and dropped Golden Keys.',
     },
     {
       scene: 'keys',
@@ -49,7 +49,7 @@ export const STORY: Record<'welcome', StoryBeat[]> = {
     {
       scene: 'hero',
       title: 'Hang tight—I’m coming!',
-      body: 'Match 3 cards: each trait all the same, or all different.',
+      body: 'Tap 3 cards below: each trait all the same, or all different.',
       spoken: true,
     },
   ],
@@ -61,5 +61,57 @@ export const STORY_RAIDER_LEVELS = ['2-4', '1-10'] as const;
 /** Alias kept for any caller referencing the story's enemy levels */
 export const STORY_CRITTER_LEVELS = STORY_RAIDER_LEVELS;
 
-/** Friends shown getting caged in Beat 1 */
-export const STORY_CAPTIVE_FRIENDS: readonly CharacterName[] = ['Sly Fox', 'Corgi', 'Badger'] as const;
+/** All 5 caged friends shown in Beat 1 (matching the 5 Golden Rescue Keys 1-to-1) */
+export const STORY_CAPTIVE_FRIENDS: readonly CharacterName[] = [
+  'Sly Fox',
+  'Corgi',
+  'Badger',
+  'Emperor Penguin',
+  'Pelican',
+] as const;
+
+/** Raider story callbacks acknowledging the cold-open abduction & stolen Golden Keys ([OB-19]). */
+export const STORY_RAIDER_TAUNTS: Readonly<Record<string, string>> = {
+  '1-10': 'Still hunting our Golden Keys? Nothing cracks this shell.',
+  '2-4': 'Hey, those keys were ours—no free peeks in my woods!',
+};
+
+/** Boss-defeat narrative callbacks as you climb toward the shattered star at Starfall Summit ([OB-19]). */
+export const STORY_BOSS_CALLBACKS: Readonly<Record<string, string>> = {
+  '1-10': 'Iron Shell cracked! The raiders’ Golden Keys trail deeper into Whispering Woods.',
+  '2-10': 'Venom’s web is torn! Warm Star Shards glow ahead in Ember Canyon.',
+  '3-10': 'The Boar stands down! The fallen star’s trail climbs into Frozen Peaks.',
+  '4-11': 'The Ancient Dragon yields! One final ascent remains: Starfall Summit.',
+  '5-5': 'The Hydra falls and the shattered star shines whole over the valley again!',
+};
+
+/** Three-beat campaign finale after clearing 5-5 The Hydra ([OB-20]). */
+export type EndingScene = 'star_restored' | 'reunion' | 'credits';
+
+export interface EndingBeat {
+  scene: EndingScene;
+  eyebrow: string;
+  title: string;
+  body: string;
+}
+
+export const STORY_ENDING_BEATS: readonly EndingBeat[] = [
+  {
+    scene: 'star_restored',
+    eyebrow: 'STARFALL SUMMIT',
+    title: 'The fallen star shines whole!',
+    body: 'Every Star Shard rises back into the summit sky, calming the wild critters across the valley.',
+  },
+  {
+    scene: 'reunion',
+    eyebrow: 'CREW REUNITED',
+    title: 'Home safe together!',
+    body: 'Every rescued friend gathers in Sunny Meadow to celebrate the road you conquered.',
+  },
+  {
+    scene: 'credits',
+    eyebrow: 'THANK YOU FOR PLAYING',
+    title: 'The adventure continues!',
+    body: 'Chase ★★★ across all 59 levels, forge new Evolutions, or test your build in Starfall Summit.',
+  },
+] as const;
