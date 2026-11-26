@@ -1,7 +1,48 @@
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
-import { FighterAvatar } from '@/components/fighters';
+import { render, renderHook, fireEvent, act } from '@testing-library/react-native';
+import type { SharedValue } from 'react-native-reanimated';
+import { FighterAvatar, FIGHTER_MOTION } from '@/components/fighters/FighterAvatar';
+import { EnemyAvatar, ENEMY_MOTION } from '@/components/enemies/EnemyAvatar';
+import { getEnemyPersonality, getEnemyRigPivots } from '@/components/enemies/enemyRegistry';
+import { ReactionChannels, useCreatureMotion } from '@/components/creatures/useCreatureMotion';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
+import { BLINK, CREATURE_ACTING, ENEMY_ATTACK, HIT, THROW, hitstopHoldMs } from '@/utils/motion';
+
+const mockWithTiming = jest.fn();
+const mockWithDelay = jest.fn();
+const mockWithRepeat = jest.fn();
+const mockCancelAnimation = jest.fn();
+
+jest.mock('react-native-reanimated', () => {
+  const actual = jest.requireActual('react-native-reanimated');
+  return {
+    __esModule: true,
+    ...actual,
+    default: actual.default ?? actual,
+    withTiming: (...args: unknown[]) => {
+      mockWithTiming(...args);
+      return actual.withTiming(...args);
+    },
+    withDelay: (...args: unknown[]) => {
+      mockWithDelay(...args);
+      return actual.withDelay(...args);
+    },
+    withRepeat: (...args: unknown[]) => {
+      mockWithRepeat(...args);
+      return actual.withRepeat(...args);
+    },
+    cancelAnimation: (...args: unknown[]) => {
+      mockCancelAnimation(...args);
+      return actual.cancelAnimation(...args);
+    },
+    useFrameCallback: (cb: unknown, autostart = true) => ({
+      setActive: jest.fn(),
+      callbackId: 0,
+      isActive: Boolean(autostart),
+      cb,
+    }),
+  };
+});
 import { CHARACTERS } from '@/utils/gameDefinitions';
 import {
   getFighterHealthState,
@@ -458,25 +499,29 @@ describe('Fighter Animation System', () => {
 
     it('keeps silhouette before reveal and showcases living FighterAvatar upon reveal in UnlockReveal', () => {
       jest.useFakeTimers();
-      const save = createNewSave();
-      const { getByTestId, queryByTestId } = render(
-        <UnlockReveal
-          unlocks={[{ kind: 'fighter', name: 'Sly Fox', star: 1 }]}
-          save={save}
-          onUseFighter={() => {}}
-          onEquipCharm={() => {}}
-          onDone={() => {}}
-        />
-      );
+      try {
+        const save = createNewSave();
+        const { getByTestId, queryByTestId } = render(
+          <UnlockReveal
+            unlocks={[{ kind: 'fighter', name: 'Sly Fox', star: 1 }]}
+            save={save}
+            onUseFighter={() => {}}
+            onEquipCharm={() => {}}
+            onDone={() => {}}
+          />
+        );
 
-      expect(queryByTestId('unlock-revealed-fighter')).toBeNull();
-      // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
-      fireEvent.press(getByTestId('unlock-reveal'));
-      act(() => { jest.advanceTimersByTime(1000); });
-      const revealed = getByTestId('unlock-revealed-fighter');
-      expect(revealed).toBeTruthy();
-      expect(revealed.props.accessibilityLabel).toContain('Sly Fox');
-      expect(getByTestId('fighter-fx-ecstatic')).toBeTruthy();
+        expect(queryByTestId('unlock-revealed-fighter')).toBeNull();
+        // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
+        fireEvent.press(getByTestId('unlock-reveal'));
+        act(() => { jest.advanceTimersByTime(1000); });
+        const revealed = getByTestId('unlock-revealed-fighter');
+        expect(revealed).toBeTruthy();
+        expect(revealed.props.accessibilityLabel).toContain('Sly Fox');
+        expect(getByTestId('fighter-fx-ecstatic')).toBeTruthy();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
@@ -598,6 +643,288 @@ describe('Fighter Animation System', () => {
       );
       expect(getByTestId('fighter-fx-ecstatic')).toBeTruthy();
       expect(getByTestId('fighter-damage-critical')).toBeTruthy();
+    });
+  });
+
+  describe('Wave 4 Game Feel & Creature Acting ([FX-02..13])', () => {
+    const makeChannels = (): ReactionChannels => {
+      const sv = (initial: number) => ({ value: initial }) as unknown as SharedValue<number>;
+      return {
+        bodyTx: sv(0),
+        bodyTy: sv(0),
+        reactionScaleY: sv(1),
+        bodyRotate: sv(0),
+        headRotate: sv(0),
+        headTy: sv(0),
+        leftEarExtra: sv(0),
+        rightEarExtra: sv(0),
+        tailExtra: sv(0),
+        pawBounce: sv(0),
+      };
+    };
+
+    beforeEach(() => {
+      mockWithTiming.mockClear();
+      mockWithDelay.mockClear();
+      mockWithRepeat.mockClear();
+      mockCancelAnimation.mockClear();
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    });
+
+    it('gives FighterAvatar a subtle combat gaze bias facing right and dedicated throw lunge pose ([FX-09], [FX-02])', () => {
+      const idleGaze = FIGHTER_MOTION.resolveGaze({
+        mood: 'idle',
+        healthState: 'pristine',
+        activeReaction: null,
+        idleGaze: { x: 0, y: 0 },
+      });
+      expect(idleGaze.x).toBeCloseTo(CREATURE_ACTING.fighterCombatGazeX, 3);
+      expect(idleGaze.x).toBeGreaterThan(0);
+
+      const throwGaze = FIGHTER_MOTION.resolveGaze({
+        mood: 'idle',
+        healthState: 'pristine',
+        activeReaction: 'throw',
+        idleGaze: { x: 0, y: 0 },
+      });
+      expect(throwGaze.x).toBeGreaterThan(idleGaze.x);
+
+      // Render FighterAvatar with the dedicated 'throw' reaction
+      const { getByTestId } = render(
+        <FighterAvatar
+          character="Orange Tabby"
+          size={64}
+          reaction={{ type: 'throw', id: 1 }}
+          testID="throw-tabby"
+        />
+      );
+      expect(getByTestId('throw-tabby')).toBeTruthy();
+      expect(getByTestId('fighter-fx-throw')).toBeTruthy();
+
+      // Verify throw choreography: grounded bodyTy=0, wind-up coil back -> forward lunge -> light launch recoil
+      mockWithTiming.mockClear();
+      const ch = makeChannels();
+      ch.bodyTy.value = 5;
+      FIGHTER_MOTION.playReaction('throw', ch, 64, { chain: 0, intensity: 0, compact: false });
+      expect(ch.bodyTy.value).toBe(0);
+
+      const timingCalls = mockWithTiming.mock.calls.map(([toValue, cfg]) => ({
+        toValue,
+        duration: (cfg as { duration?: number } | undefined)?.duration,
+      }));
+      // Wind-up coil back (32ms) and forward centerline lunge (32ms) + 16ms light launch recoil
+      expect(timingCalls.some(c => c.toValue === 64 * THROW.windTxRatio && c.duration === THROW.windMs)).toBe(true);
+      expect(timingCalls.some(c => c.toValue === 64 * THROW.lungeTxRatio && c.duration === THROW.lungeMs)).toBe(true);
+      expect(timingCalls.some(c => c.duration === HIT.snapMs)).toBe(true);
+    });
+
+    it('migrates FighterAvatar pain to Sakurai HIT 1-frame snap, hitstop hold, micro-vibration, and single directional recoil ([FX-07])', () => {
+      const ch = makeChannels();
+      ch.bodyTy.value = 4;
+
+      FIGHTER_MOTION.playReaction('pain', ch, 64, { chain: 0, intensity: 0, hitTier: 0, compact: false });
+      expect(ch.bodyTy.value).toBe(0);
+
+      const recoilPx = Math.max(4, 64 * 0.14);
+      const peakTx = -recoilPx * HIT.fighterPainRecoilMult;
+      const timingCalls = mockWithTiming.mock.calls;
+      // Frame-1 snap to left recoil peak, squash, and negative tilt
+      expect(timingCalls.some(([v, cfg]) => v === peakTx && (cfg as { duration?: number })?.duration === HIT.snapMs)).toBe(true);
+      expect(timingCalls.some(([v, cfg]) => v === HIT.fighterPainSquash && (cfg as { duration?: number })?.duration === HIT.snapMs)).toBe(true);
+      expect(timingCalls.some(([v, cfg]) => v === HIT.fighterPainRotateDeg && (cfg as { duration?: number })?.duration === HIT.snapMs)).toBe(true);
+
+      // Zero reverse-wobble positive bodyTx swings: all horizontal micro-vibration stays strictly negative (left of rest)
+      const txSteps = timingCalls
+        .map(([v]) => v as number)
+        .filter(v => Math.abs(v - peakTx) <= recoilPx * 0.5);
+      expect(txSteps.length).toBeGreaterThanOrEqual(4); // 1f snap + 3f hitstop vibration steps
+      expect(txSteps.every(v => v < 0)).toBe(true);
+
+      // Hitstop hold (48ms) and 1-frame head whiplash lag (16ms)
+      const delays = mockWithDelay.mock.calls.map(([ms]) => ms);
+      expect(delays).toContain(HIT.holdMs);
+      expect(delays).toContain(HIT.snapMs);
+    });
+
+    it('honors optional cheerReleaseMs on FighterAvatar and FighterEffectsOverlay ([FX-23])', () => {
+      const ch = makeChannels();
+      FIGHTER_MOTION.playReaction('joy', ch, 64, {
+        chain: 0,
+        intensity: 0.5,
+        cheerReleaseMs: 300,
+      });
+      // Crouch hold = 300 - 60 = 240ms
+      expect(mockWithDelay.mock.calls.map(([ms]) => ms)).toContain(240);
+
+      const { getByTestId } = render(
+        <FighterAvatar
+          character="Corgi"
+          size={64}
+          cheerReleaseMs={300}
+          reaction={{ type: 'joy', id: 1 }}
+          testID="synced-cheer-corgi"
+        />
+      );
+      expect(getByTestId('synced-cheer-corgi')).toBeTruthy();
+      expect(getByTestId('fighter-fx-joy')).toBeTruthy();
+    });
+
+    it('enforces grounded bodyTy=0 on throw/zap enemy hits, airborne lift on blast, and tier-scaled hitstop ([FX-02], [FX-04], [FX-06], [FX-12])', () => {
+      // 1) Grounded 'throw' hit at tier 3 (136ms hitstop) keeps bodyTy === 0
+      const chThrow = makeChannels();
+      chThrow.bodyTy.value = 6;
+      ENEMY_MOTION.playReaction('pain', chThrow, 64, {
+        chain: 0,
+        intensity: 0,
+        hitTier: 3,
+        hitKind: 'throw',
+        compact: false,
+      });
+      expect(chThrow.bodyTy.value).toBe(0);
+      expect(mockWithDelay.mock.calls.map(([ms]) => ms)).toContain(hitstopHoldMs(3));
+
+      // 2) Airborne 'blast' hit lifts bodyTy upward (< 0) with wide back-tumble
+      mockWithTiming.mockClear();
+      mockWithDelay.mockClear();
+      const chBlast = makeChannels();
+      ENEMY_MOTION.playReaction('pain', chBlast, 64, {
+        chain: 0,
+        intensity: 0,
+        hitTier: 2,
+        hitKind: 'blast',
+        compact: false,
+      });
+      const jumpPx = Math.max(6, 64 * 0.16);
+      const expectedLift = -jumpPx * HIT.blastLiftMult * (1 + 2 * 0.1);
+      expect(mockWithTiming.mock.calls.some(([v]) => typeof v === 'number' && Math.abs(v - expectedLift) < 0.01)).toBe(true);
+
+      // 3) Electric 'zap' hit stays grounded (bodyTy === 0) and stretches upright (scaleY > 1)
+      mockWithTiming.mockClear();
+      const chZap = makeChannels();
+      chZap.bodyTy.value = 3;
+      ENEMY_MOTION.playReaction('pain', chZap, 64, {
+        chain: 0,
+        intensity: 0,
+        hitTier: 1,
+        hitKind: 'zap',
+        compact: false,
+      });
+      expect(chZap.bodyTy.value).toBe(0);
+      expect(mockWithTiming.mock.calls.some(([v]) => v === HIT.zapStretchY + 0.02)).toBe(true);
+
+      // 4) Small-screen acting boost (size <= 52) amplifies bodyRotate by +25%
+      mockWithTiming.mockClear();
+      const chCompact = makeChannels();
+      ENEMY_MOTION.playReaction('pain', chCompact, 48, {
+        chain: 0,
+        intensity: 0,
+        hitTier: 0,
+        hitKind: 'throw',
+        compact: true,
+      });
+      const boostedRot = HIT.tierRotateDeg[0] * CREATURE_ACTING.compactRotateBoost;
+      expect(mockWithTiming.mock.calls.some(([v]) => v === boostedRot)).toBe(true);
+
+      // 5) Spring-aligned pain expression hold: 540ms at tier 0, expands with tier 3 hitstop
+      expect(ENEMY_MOTION.resolveReactionHoldMs?.('pain', { chain: 0, intensity: 0, hitTier: 0 })).toBe(540);
+      expect(ENEMY_MOTION.resolveReactionHoldMs?.('pain', { chain: 0, intensity: 0, hitTier: 3 })).toBe(
+        540 + (136 - 48)
+      );
+    });
+
+    it('rebuilds EnemyAvatar attack and regen with snap anticipation, holds, and follow-through ([FX-10])', () => {
+      const chAttack = makeChannels();
+      ENEMY_MOTION.playReaction('attack', chAttack, 64, { chain: 0, intensity: 0, compact: false });
+      const attackDurations = mockWithTiming.mock.calls.map(([, cfg]) => (cfg as { duration?: number })?.duration);
+      expect(attackDurations).toContain(ENEMY_ATTACK.windMs);
+      expect(attackDurations).toContain(ENEMY_ATTACK.strikeMs);
+      expect(mockWithDelay.mock.calls.map(([ms]) => ms)).toContain(ENEMY_ATTACK.coilHoldMs);
+      expect(mockWithDelay.mock.calls.map(([ms]) => ms)).toContain(ENEMY_ATTACK.apexHoldMs);
+
+      mockWithTiming.mockClear();
+      mockWithDelay.mockClear();
+      const chRegen = makeChannels();
+      ENEMY_MOTION.playReaction('regen', chRegen, 64, { chain: 0, intensity: 0, compact: false });
+      expect(mockWithTiming.mock.calls.some(([v]) => v === 0.87)).toBe(true);
+      expect(mockWithTiming.mock.calls.some(([v]) => v === 1.13)).toBe(true);
+    });
+
+    it('supports hideImpactStars, zap rim overlay, lightweight GPU breathing, and smooth 3-step blinks ([FX-12], [FX-13], [FX-15])', () => {
+      // hideImpactStars suppresses built-in EnemyEffectsOverlay hit stars; zap renders electric rim when shown
+      const { queryByTestId, rerender } = render(
+        <EnemyAvatar
+          enemy="Junk Rat"
+          size={64}
+          hitKind="zap"
+          reaction={{ type: 'pain', id: 1 }}
+        />
+      );
+      expect(queryByTestId('enemy-fx-pain')).toBeTruthy();
+      expect(queryByTestId('enemy-fx-zap-rim')).toBeTruthy();
+
+      rerender(
+        <EnemyAvatar
+          enemy="Junk Rat"
+          size={64}
+          hitKind="zap"
+          hideImpactStars
+          reaction={{ type: 'pain', id: 2 }}
+        />
+      );
+      expect(queryByTestId('enemy-fx-pain')).toBeNull();
+
+      // [FX-13] Lightweight enemy rig attaches gentle GPU-only withRepeat breathing & cancels on unmount
+      mockWithRepeat.mockClear();
+      mockCancelAnimation.mockClear();
+      const lw = render(<EnemyAvatar enemy="Dozy Bunny" size={44} lightweight testID="lw-bunny" />);
+      expect(lw.getByTestId('lw-bunny')).toBeTruthy();
+      expect(mockWithRepeat).toHaveBeenCalled();
+      lw.unmount();
+      expect(mockCancelAnimation).toHaveBeenCalled();
+
+      // [FX-12] Smooth 3-step blink lid travel (0 -> 1 -> 2 -> 1 -> 0) in useCreatureMotion
+      jest.useFakeTimers();
+      jest.spyOn(Math, 'random').mockReturnValue(0.5);
+      const hook = renderHook(() =>
+        useCreatureMotion(ENEMY_MOTION, {
+          name: 'Junk Rat',
+          size: 48,
+          mood: 'menacing',
+          healthState: 'pristine',
+          personality: getEnemyPersonality('Junk Rat', 1),
+          pivots: getEnemyRigPivots('Junk Rat'),
+          reaction: null,
+          animate: true,
+          lively: true,
+          interactive: false,
+        })
+      );
+      expect(hook.result.current.blinkStage).toBe(0);
+      expect(hook.result.current.gaze.x).toBeLessThan(0);
+
+      // Advance past initial blink wait (2600 + 0.5*3000 = 4100ms) -> closing stage 1
+      act(() => { jest.advanceTimersByTime(4100); });
+      expect(hook.result.current.blinkStage).toBe(1);
+      expect(hook.result.current.isBlinking).toBe(false);
+
+      // Advance BLINK.closeMs (32ms) -> fully closed stage 2
+      act(() => { jest.advanceTimersByTime(BLINK.closeMs); });
+      expect(hook.result.current.blinkStage).toBe(2);
+      expect(hook.result.current.isBlinking).toBe(true);
+
+      // Advance BLINK.holdMs (48ms) -> opening stage 1
+      act(() => { jest.advanceTimersByTime(BLINK.holdMs); });
+      expect(hook.result.current.blinkStage).toBe(1);
+      expect(hook.result.current.isBlinking).toBe(false);
+
+      // Advance BLINK.openMs (48ms) -> open stage 0
+      act(() => { jest.advanceTimersByTime(BLINK.openMs); });
+      expect(hook.result.current.blinkStage).toBe(0);
+      hook.unmount();
     });
   });
 });

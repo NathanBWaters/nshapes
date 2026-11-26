@@ -5,7 +5,7 @@ import { Svg, Circle, G, Line, Path, Polygon, Text as SvgText } from 'react-nati
 import { useEffectsDriver } from '@/components/creatures/useEffectsDriver';
 import { STROKE, Sparkle4 } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
-import { CHEER, EASE } from '@/utils/motion';
+import { CHEER, CREATURE_FX, EASE, HIT, THROW } from '@/utils/motion';
 import {
   FIGHTER_REACTION_HOLD_MS,
   FighterAmbientMood,
@@ -13,8 +13,10 @@ import {
   FighterReactionType,
 } from '@/utils/fighterAnimations';
 
+export type FighterOverlayReactionType = FighterReactionType | 'throw';
+
 interface FighterEffectsOverlayProps {
-  activeReaction: FighterReactionType | null;
+  activeReaction: FighterOverlayReactionType | null;
   reactionId?: number;
   mood: FighterAmbientMood;
   personality: FighterPersonalityProfile;
@@ -23,6 +25,8 @@ interface FighterEffectsOverlayProps {
   stillBurst?: boolean;
   /** 0..1 how big the moment is (a streak): a big one adds the centre mark to a Set's cheer */
   intensity?: number;
+  /** Optional dynamic release delay (ms) syncing `'joy'` celebration marks to card landing (`[FX-23]`) */
+  cheerReleaseMs?: number;
 }
 
 function HeartShape({
@@ -51,9 +55,9 @@ function HeartShape({
 
 /**
  * Renders creature-specific particle bursts, emotional comic symbols (💢, Phew drop,
- * zZz, lightbulb gleam, healing crosses, affection hearts), and streak sparkles.
+ * zZz, lightbulb gleam, healing crosses, affection hearts), throw swooshes, and streak sparkles.
  *
- * Uses continuous phase integration (`useFrameCallback`) and smooth cross-fade presence
+ * Uses continuous phase integration (`useGuardedFrameCallback`) and smooth cross-fade presence
  * envelopes so ambient indicators glide in/out without popping when moods transition.
  */
 export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
@@ -64,13 +68,23 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
   animate = true,
   stillBurst = false,
   intensity = 0,
+  cheerReleaseMs,
 }) => {
   const showAmbient = !activeReaction;
   // A Set's cheer: its marks appear with the hop (released when the cards land), on a linear clock
   const cheer = activeReaction === 'joy' || activeReaction === 'ecstatic';
-  const holdMs = activeReaction ? FIGHTER_REACTION_HOLD_MS[activeReaction] ?? 850 : 850;
-  const releaseAt = activeReaction === 'joy' ? CHEER.releaseMs / holdMs : 0;
-  const frame = 16 / holdMs;
+  const holdMs =
+    activeReaction === 'throw'
+      ? THROW.expressionHoldMs
+      : activeReaction
+        ? FIGHTER_REACTION_HOLD_MS[activeReaction] ?? 850
+        : 850;
+  const effectiveReleaseMs = Math.max(
+    0,
+    Math.min(holdMs - HIT.snapMs * 4, cheerReleaseMs ?? CHEER.releaseMs)
+  );
+  const releaseAt = activeReaction === 'joy' ? effectiveReleaseMs / holdMs : 0;
+  const frame = HIT.snapMs / holdMs;
   const {
     burstProgress,
     ambientPhase,
@@ -84,7 +98,7 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
       showAmbient && mood === 'urgent' ? 1 : 0,
       showAmbient && (mood === 'streak' || mood === 'victory') ? 1 : 0,
     ],
-    fadeMs: 240,
+    fadeMs: CREATURE_FX.fighterAmbientFadeMs,
     activeReaction,
     reactionId,
     burstMs: holdMs,
@@ -99,13 +113,15 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
     const p = burstProgress.value;
     if (cheer) {
       // Nothing until the hop; full size 2 frames later, settle, rise and fade (no second pop)
-      const on = releaseAt + 2 * frame;
+      const on = Math.min(0.68, releaseAt + 2 * frame);
+      const fadeStart = Math.max(on + frame, 0.72);
+      const settleAt = Math.min(1, on + 4 * frame);
       const t = Math.max(0, (p - releaseAt) / Math.max(0.0001, 1 - releaseAt));
       return {
-        opacity: interpolate(p, [releaseAt, on, 0.72, 1], [0, 1, 1, 0], 'clamp'),
+        opacity: interpolate(p, [releaseAt, on, fadeStart, 1], [0, 1, 1, 0], 'clamp'),
         transform: [
           { translateY: 2 - 9 * (1 - (1 - t) * (1 - t)) },
-          { scale: interpolate(p, [releaseAt, on, on + 4 * frame], [0.8, 1.1, 1], 'clamp') },
+          { scale: interpolate(p, [releaseAt, on, settleAt], [0.8, 1.1, 1], 'clamp') },
         ],
       };
     }
@@ -290,6 +306,26 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
           <Svg width="100%" height="100%" viewBox="0 0 100 100">
             {(activeReaction === 'joy' || activeReaction === 'ecstatic') &&
               renderSignatureJoyMotif(activeReaction === 'ecstatic' || intensity >= 0.5)}
+
+            {activeReaction === 'throw' && (
+              <G>
+                <Path
+                  d="M 62 24 Q 80 34 92 48"
+                  stroke={COLORS.actionYellow}
+                  strokeWidth={3.4}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                <Path
+                  d="M 68 38 Q 84 46 94 56"
+                  stroke={personality.auraColor}
+                  strokeWidth={2.8}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                <Sparkle4 cx={86} cy={28} r={6} fill={COLORS.actionYellow} />
+              </G>
+            )}
 
             {activeReaction === 'pain' && (
               <G>

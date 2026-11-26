@@ -2,8 +2,12 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   SharedValue,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
 import { useGuardedFrameCallback } from '@/hooks/useGuardedFrameCallback';
 import {
@@ -24,8 +28,11 @@ import {
   sampleOverlappingWave,
   stepSecondOrderInPlace,
 } from '@/utils/proceduralMotion';
-import { HIT } from '@/utils/motion';
+import { BLINK, CREATURE_ACTING, EASE, HIT, HitKind, HitTier, MS } from '@/utils/motion';
 import { CreatureJointPivots, GazeOffset } from './types';
+
+/** 3-step blink lid state (`0` open, `1` half-closed travel, `2` fully closed). */
+export type BlinkStage = 0 | 1 | 2;
 
 /**
  * Additive impulse channels that one-shot reactions and idle fidgets animate.
@@ -51,12 +58,22 @@ export interface ReactionChannels {
 export type PartStyle = StyleProp<ViewStyle>;
 const asPart = (style: ReturnType<typeof useAnimatedStyle>): PartStyle => style as PartStyle;
 
-/** What a reaction knows about what came just before it */
+/** What a reaction knows about what came just before it and how strongly it landed */
 export interface ReactionContext {
   /** Same reactions in a row before this one, each within `HIT.chainWindowMs` of the last (capped at `HIT.chainMax`) */
   chain: number;
   /** 0..1: how big the moment is (a fighter's streak); 0 when the creature has no say */
   intensity: number;
+  /** Damage tier (`0..3`) scaling hitstop duration and recoil depth (`[FX-06]`) */
+  hitTier?: HitTier;
+  /** Damage-pose variant: grounded `'throw'`, airborne `'blast'`, or electric `'zap'` (`[FX-12]`) */
+  hitKind?: HitKind;
+  /** Optional move identifier (e.g. `'blast'`, `'perfect_parry'`) for per-move hitstop multiplier (`[FX-06]`) */
+  moveKind?: string;
+  /** Dynamic cheer release delay (ms) synced to Set flight time (`[FX-23]`) */
+  cheerReleaseMs?: number;
+  /** Small-screen acting boost when avatar `size <= CREATURE_ACTING.compactSizePx` (`[FX-12]`) */
+  compact?: boolean;
 }
 
 /** (frequency, damping, response) of one second-order posture channel. */
@@ -77,6 +94,11 @@ export interface CreatureMotionConfig<Mood extends string, Reaction extends stri
   moodMotion: MoodMotionTable<Mood>;
   /** How long each one-shot reaction holds its expression */
   reactionHoldMs: Record<Reaction, number>;
+  /**
+   * Optional dynamic reaction expression hold resolver (e.g. aligning enemy `pain`
+   * expression release to tier-scaled hitstop + recoil settle, `[FX-12]`).
+   */
+  resolveReactionHoldMs?: (type: Reaction, context: ReactionContext) => number;
   /**
    * Starts the choreography of a one-shot reaction on the impulse channels.
    * `context.chain` counts how many of the same reaction landed just before this one
@@ -154,6 +176,17 @@ export interface CreatureMotionConfig<Mood extends string, Reaction extends stri
   };
 }
 
+interface CreatureReactionSignal<Reaction extends string> {
+  type: Reaction;
+  id: number;
+  tier?: HitTier;
+  hitTier?: HitTier;
+  hitKind?: HitKind;
+  hitStyle?: HitKind;
+  moveKind?: string;
+  releaseMs?: number;
+}
+
 interface CreatureMotionInput<Mood extends string, Reaction extends string> {
   name: string;
   size: number;
@@ -170,7 +203,7 @@ interface CreatureMotionInput<Mood extends string, Reaction extends string> {
   };
   pivots: CreatureJointPivots;
   /** Externally triggered one-shot reaction */
-  reaction: { type: Reaction; id: number } | null;
+  reaction: CreatureReactionSignal<Reaction> | null;
   /** Run continuous motion (false = settle straight into the resting pose) */
   animate: boolean;
   /**
@@ -180,6 +213,12 @@ interface CreatureMotionInput<Mood extends string, Reaction extends string> {
   stillReactions?: boolean;
   /** 0..1 handed to reactions as `context.intensity` (e.g. a fighter's streak) */
   reactionIntensity?: number;
+  /** Optional damage tier (`0..3`) forwarded to reactions when not set on `reaction` */
+  hitTier?: HitTier;
+  /** Optional damage-pose variant forwarded to reactions when not set on `reaction` */
+  hitKind?: HitKind;
+  /** Optional dynamic cheer release delay (ms) forwarded to `'joy'`/`'ecstatic'` hops */
+  cheerReleaseMs?: number;
   /** Blink, glance around and fidget while idle */
   lively: boolean;
   interactive: boolean;
@@ -191,6 +230,10 @@ interface CreatureMotion<Reaction extends string> {
   /** Changes every time a reaction plays, so effects can replay identical reactions */
   reactionKey: number;
   isBlinking: boolean;
+  /** 3-step blink lid travel (`0` open, `1` closing/opening, `2` closed) */
+  blinkStage: BlinkStage;
+  /** Smooth 0..1 UI-thread eyelid closure shared value (`[FX-12]`) */
+  lidClose: SharedValue<number>;
   gaze: GazeOffset;
   handlePress: () => void;
   rigRootStyle: PartStyle;
@@ -250,15 +293,31 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   config: CreatureMotionConfig<Mood, Reaction>,
   input: CreatureMotionInput<Mood, Reaction>
 ): CreatureMotion<Reaction> {
-  const { name, size, mood, healthState, personality, pivots, reaction, animate, lively, interactive, onTap } =
-    input;
+  const {
+    name,
+    size,
+    mood,
+    healthState,
+    personality,
+    pivots,
+    reaction,
+    animate,
+    lively,
+    interactive,
+    onTap,
+    hitTier,
+    hitKind,
+    cheerReleaseMs,
+  } = input;
   const stillReactions = input.stillReactions ?? false;
   const reactionIntensity = input.reactionIntensity ?? 0;
+  const isCompact = size <= CREATURE_ACTING.compactSizePx;
 
   const [activeReaction, setActiveReaction] = useState<Reaction | null>(reaction?.type ?? null);
   const [reactionKey, setReactionKey] = useState<number>(reaction ? 1 : 0);
-  const [isBlinking, setIsBlinking] = useState(false);
+  const [blinkStage, setBlinkStage] = useState<BlinkStage>(0);
   const [idleGaze, setIdleGaze] = useState<GazeOffset>(CENTRE_GAZE);
+  const isBlinking = blinkStage === 2;
 
   const reactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapTimestampsRef = useRef<number[]>([]);
@@ -328,6 +387,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   const rightEarExtra = useSharedValue(0);
   const tailExtra = useSharedValue(0);
   const pawBounce = useSharedValue(0);
+  const lidClose = useSharedValue(0);
+  const compactHeadScale = useSharedValue(1);
 
   const channels = useMemo<ReactionChannels>(
     () => ({
@@ -371,7 +432,32 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     targets.value = { rates, pose, bounce: blends.bounce, tremor: blends.tremor };
 
     if (!animate) {
-      // Reduced-motion / static mode: settle directly into the resting pose
+      // Reduced-motion / static mode: settle directly into the resting pose and cancel impulse channels
+      cancelAnimation(bodyTx);
+      cancelAnimation(bodyTy);
+      cancelAnimation(reactionScaleY);
+      cancelAnimation(bodyRotate);
+      cancelAnimation(headRotate);
+      cancelAnimation(headTy);
+      cancelAnimation(leftEarExtra);
+      cancelAnimation(rightEarExtra);
+      cancelAnimation(tailExtra);
+      cancelAnimation(pawBounce);
+      cancelAnimation(lidClose);
+      cancelAnimation(compactHeadScale);
+      bodyTx.value = 0;
+      bodyTy.value = 0;
+      reactionScaleY.value = 1;
+      bodyRotate.value = 0;
+      headRotate.value = 0;
+      headTy.value = 0;
+      leftEarExtra.value = 0;
+      rightEarExtra.value = 0;
+      tailExtra.value = 0;
+      pawBounce.value = 0;
+      lidClose.value = 0;
+      compactHeadScale.value = 1;
+
       sim.value = {
         ...sim.value,
         breathHz: rates.breathHz,
@@ -404,6 +490,18 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     animate,
     targets,
     sim,
+    bodyTx,
+    bodyTy,
+    reactionScaleY,
+    bodyRotate,
+    headRotate,
+    headTy,
+    leftEarExtra,
+    rightEarExtra,
+    tailExtra,
+    pawBounce,
+    lidClose,
+    compactHeadScale,
   ]);
 
   const { easing, drift, poseSprings } = config;
@@ -464,7 +562,15 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   }, animate, 'useCreatureMotion');
 
   const playReaction = useCallback(
-    (type: Reaction) => {
+    (
+      type: Reaction,
+      meta?: {
+        hitTier?: HitTier;
+        hitKind?: HitKind;
+        moveKind?: string;
+        cheerReleaseMs?: number;
+      }
+    ) => {
       if (reactionTimerRef.current) {
         clearTimeout(reactionTimerRef.current);
       }
@@ -472,28 +578,68 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       setActiveReaction(type);
       setReactionKey(playCountRef.current);
 
-      reactionTimerRef.current = setTimeout(() => {
-        setActiveReaction(null);
-      }, config.reactionHoldMs[type] ?? 850);
-
       // A chain: the same reaction again while the last one is still being felt
       const now = Date.now();
       const last = lastPlayRef.current;
       const chain = last.type === type && now - last.at < HIT.chainWindowMs ? Math.min(HIT.chainMax, last.chain + 1) : 0;
       lastPlayRef.current = { type, at: now, chain };
 
+      const context: ReactionContext = {
+        chain,
+        intensity: reactionIntensity,
+        hitTier: meta?.hitTier ?? hitTier,
+        hitKind: meta?.hitKind ?? hitKind,
+        moveKind: meta?.moveKind,
+        cheerReleaseMs: meta?.cheerReleaseMs ?? cheerReleaseMs,
+        compact: isCompact,
+      };
+
+      const holdMs = config.resolveReactionHoldMs?.(type, context) ?? config.reactionHoldMs[type] ?? 850;
+      reactionTimerRef.current = setTimeout(() => {
+        setActiveReaction(null);
+        // Spring-aligned expression settle: relax compact head acting boost smoothly on release
+        if (animate && !stillReactions) {
+          compactHeadScale.value = withTiming(1, { duration: MS.quick, easing: EASE.ui });
+        } else {
+          compactHeadScale.value = 1;
+        }
+      }, holdMs);
+
       if (animate && !stillReactions) {
-        config.playReaction(type, channels, size, { chain, intensity: reactionIntensity });
+        if (isCompact) {
+          compactHeadScale.value = withTiming(CREATURE_ACTING.compactHeadBoostScale, {
+            duration: HIT.snapMs,
+            easing: EASE.enter,
+          });
+        }
+        config.playReaction(type, channels, size, context);
       }
     },
-    [config, animate, stillReactions, reactionIntensity, size, channels]
+    [
+      config,
+      animate,
+      stillReactions,
+      reactionIntensity,
+      size,
+      channels,
+      hitTier,
+      hitKind,
+      cheerReleaseMs,
+      isCompact,
+      compactHeadScale,
+    ]
   );
 
   const lastExternalIdRef = useRef<number | null>(null);
   useEffect(() => {
     if (reaction && reaction.id !== lastExternalIdRef.current) {
       lastExternalIdRef.current = reaction.id;
-      playReaction(reaction.type);
+      playReaction(reaction.type, {
+        hitTier: reaction.tier ?? reaction.hitTier,
+        hitKind: reaction.hitKind ?? reaction.hitStyle,
+        moveKind: reaction.moveKind,
+        cheerReleaseMs: reaction.releaseMs,
+      });
     }
   }, [reaction, playReaction]);
 
@@ -502,13 +648,40 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       if (reactionTimerRef.current) {
         clearTimeout(reactionTimerRef.current);
       }
+      cancelAnimation(bodyTx);
+      cancelAnimation(bodyTy);
+      cancelAnimation(reactionScaleY);
+      cancelAnimation(bodyRotate);
+      cancelAnimation(headRotate);
+      cancelAnimation(headTy);
+      cancelAnimation(leftEarExtra);
+      cancelAnimation(rightEarExtra);
+      cancelAnimation(tailExtra);
+      cancelAnimation(pawBounce);
+      cancelAnimation(lidClose);
+      cancelAnimation(compactHeadScale);
     };
-  }, []);
+  }, [
+    bodyTx,
+    bodyTy,
+    reactionScaleY,
+    bodyRotate,
+    headRotate,
+    headTy,
+    leftEarExtra,
+    rightEarExtra,
+    tailExtra,
+    pawBounce,
+    lidClose,
+    compactHeadScale,
+  ]);
 
-  // Single & double blinks, eye saccades, and idle micro-fidgets
+  // Smooth 3-step single & double blinks (`0 -> 1 -> 2 -> 1 -> 0`), eye saccades, and idle micro-fidgets
   useEffect(() => {
     if (!animate || !lively || healthState === 'knocked_out') {
-      setIsBlinking(false);
+      cancelAnimation(lidClose);
+      lidClose.value = 0;
+      setBlinkStage(0);
       setIdleGaze(CENTRE_GAZE);
       return;
     }
@@ -526,27 +699,39 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     const { blink, gaze: gazeCfg } = config;
 
+    const runSingleBlink = (onDone: () => void) => {
+      setBlinkStage(1);
+      lidClose.value = withSequence(
+        withTiming(1, { duration: BLINK.closeMs, easing: EASE.enter }),
+        withDelay(BLINK.holdMs, withTiming(0, { duration: BLINK.openMs, easing: EASE.ui }))
+      );
+      trackTimeout(() => {
+        setBlinkStage(2);
+        trackTimeout(() => {
+          setBlinkStage(1);
+          trackTimeout(() => {
+            setBlinkStage(0);
+            onDone();
+          }, BLINK.openMs);
+        }, BLINK.holdMs);
+      }, BLINK.closeMs);
+    };
+
     const scheduleNextBlink = () => {
       const nextMs = blink.minGapMs + Math.floor(Math.random() * blink.gapJitterMs);
       trackTimeout(() => {
-        setIsBlinking(true);
         config.idleFidget(Math.random(), channels);
 
         const isDoubleBlink = Math.random() < blink.doubleChance;
-        trackTimeout(() => {
-          setIsBlinking(false);
+        runSingleBlink(() => {
           if (isDoubleBlink) {
             trackTimeout(() => {
-              setIsBlinking(true);
-              trackTimeout(() => {
-                setIsBlinking(false);
-                scheduleNextBlink();
-              }, blink.doubleHoldMs);
-            }, blink.doubleGapMs);
+              runSingleBlink(scheduleNextBlink);
+            }, BLINK.doubleGapMs);
           } else {
             scheduleNextBlink();
           }
-        }, blink.holdMs);
+        });
       }, nextMs);
     };
 
@@ -564,10 +749,12 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     return () => {
       cancelled = true;
+      cancelAnimation(lidClose);
+      lidClose.value = 0;
       timers.forEach(clearTimeout);
       timers.clear();
     };
-  }, [config, animate, lively, healthState, channels]);
+  }, [config, animate, lively, healthState, channels, lidClose]);
 
   // One tap plays the tap reaction; a rapid streak of taps plays the easter egg
   const handlePress = useCallback(() => {
@@ -673,7 +860,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     };
   });
 
-  // Head lags ~0.68 rad behind chest breathing for a natural spine wave
+  // Head lags ~0.68 rad behind chest breathing for a natural spine wave,
+  // with smooth eyelid-blink compression and compact small-screen facial acting boost (`[FX-12]`)
   const headStyle = useAnimatedStyle(() => {
     const s = sim.value;
     const laggedBreath = sampleOverlappingWave(s.breathPhase, 0.68, 0.14) * s.breathAmpScale;
@@ -681,12 +869,16 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     const yOffset = headTy.value + s.headY.y - laggedBreath * size * 0.014;
     const rot = headRotate.value + s.headTilt.y + laggedSway * 1.9;
+    const headScale = compactHeadScale.value;
+    const blinkSquashY = 1 - lidClose.value * CREATURE_ACTING.blinkHeadSquash;
 
     return {
       transform: [
         { translateX: headDx },
         { translateY: headDy + yOffset },
         { rotate: `${rot}deg` },
+        { scaleX: headScale },
+        { scaleY: headScale * blinkSquashY },
         { translateX: -headDx },
         { translateY: -headDy },
       ],
@@ -760,6 +952,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     activeReaction,
     reactionKey,
     isBlinking,
+    blinkStage,
+    lidClose,
     gaze,
     handlePress,
     rigRootStyle: asPart(rigRootStyle),

@@ -5,7 +5,7 @@ import { Svg, Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useEffectsDriver } from '@/components/creatures/useEffectsDriver';
 import { STROKE, StarBurst } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
-import { EASE, HIT } from '@/utils/motion';
+import { CREATURE_FX, EASE, HIT, HitKind } from '@/utils/motion';
 import {
   EnemyAmbientMood,
   EnemyPersonalityProfile,
@@ -20,10 +20,14 @@ interface EnemyEffectsOverlayProps {
   animate?: boolean;
   /** Bursts show still (the Effects switch is off); ambient life still runs */
   stillBurst?: boolean;
+  /** Suppress built-in pain/crit impact stars when FxStage renders edge hit sparks (`[FX-15]`) */
+  hideImpactStars?: boolean;
+  /** Optional damage-pose variant so `'zap'` renders a crisp electric rim highlight (`[FX-12]`) */
+  hitKind?: HitKind;
 }
 
 /** Impact stars of a hit: one frame on progress (they run linearly over `HIT.starsMs`) */
-const STAR_FRAME = 16 / HIT.starsMs;
+const STAR_FRAME = HIT.snapMs / HIT.starsMs;
 
 function AngerVein({ cx, cy, scale = 1 }: { cx: number; cy: number; scale?: number }) {
   return (
@@ -51,10 +55,14 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
   personality,
   animate = true,
   stillBurst = false,
+  hideImpactStars = false,
+  hitKind = 'throw',
 }) => {
   const showAmbient = !activeReaction;
   // A hit's stars are on at full size on the impact frame and leave on their own short clock
   const impact = activeReaction === 'pain' || activeReaction === 'crit_pain';
+  const suppressImpactBurst = hideImpactStars && impact;
+  const effectiveBurstReaction = suppressImpactBurst ? null : activeReaction;
   const {
     burstProgress,
     ambientPhase,
@@ -68,10 +76,10 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
       showAmbient && (mood === 'enraged' || mood === 'victory') ? 1 : 0,
       showAmbient && mood === 'cornered' ? 1 : 0,
     ],
-    fadeMs: 220,
-    activeReaction,
+    fadeMs: CREATURE_FX.ambientFadeMs,
+    activeReaction: effectiveBurstReaction,
     reactionId,
-    burstMs: impact ? HIT.starsMs : 680,
+    burstMs: impact ? HIT.starsMs : CREATURE_FX.enemyBurstMs,
     burstEasing: impact ? EASE.linear : undefined,
     staticBurstProgress: impact ? 0.3 : 0.5,
     stillBurst,
@@ -130,13 +138,37 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
     };
   });
 
-  const renderBurst = () => {
-    if (!activeReaction) return null;
+  const renderZapRim = () => (
+    <G testID="enemy-fx-zap-rim">
+      <Circle cx={50} cy={50} r={45} fill="none" stroke={STROKE} strokeWidth={4.2} strokeDasharray="8 5" />
+      <Circle cx={50} cy={50} r={45} fill="none" stroke={COLORS.logicTeal} strokeWidth={2.2} strokeDasharray="8 5" />
+      <Path
+        d="M 16 20 L 24 27 L 19 30 L 27 38"
+        stroke={COLORS.actionYellow}
+        strokeWidth={2.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Path
+        d="M 84 22 L 76 29 L 81 32 L 73 40"
+        stroke={COLORS.logicTeal}
+        strokeWidth={2.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </G>
+  );
 
-    switch (activeReaction) {
+  const renderBurst = () => {
+    if (!effectiveBurstReaction) return null;
+
+    switch (effectiveBurstReaction) {
       case 'pain':
         return (
           <G testID="enemy-fx-pain">
+            {hitKind === 'zap' && renderZapRim()}
             <StarBurst cx={76} cy={22} outer={11} inner={11 * 0.44} tips={8} fill={COLORS.actionYellow} />
             <StarBurst cx={22} cy={30} outer={7.5} inner={7.5 * 0.44} tips={8} fill={COLORS.impactOrange} />
             <Line x1={12} y1={18} x2={22} y2={24} stroke={COLORS.impactRed} strokeWidth={2.8} strokeLinecap="round" />
@@ -147,6 +179,7 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
       case 'crit_pain':
         return (
           <G testID="enemy-fx-crit_pain">
+            {hitKind === 'zap' && renderZapRim()}
             <Circle
               cx={50}
               cy={50}
@@ -191,7 +224,7 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
       case 'attack':
       case 'rage_spin':
         return (
-          <G testID={`enemy-fx-${activeReaction}`}>
+          <G testID={`enemy-fx-${effectiveBurstReaction}`}>
             {/* Triple crimson claw-slash arcs */}
             <Path d="M 18 22 Q 48 44 80 72" stroke={COLORS.impactRed} strokeWidth={3.6} strokeLinecap="round" fill="none" />
             <Path d="M 26 14 Q 54 36 86 62" stroke={COLORS.impactOrange} strokeWidth={3.2} strokeLinecap="round" fill="none" />
@@ -284,7 +317,7 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
       </Animated.View>
 
       {/* Discrete Combat Reaction Burst */}
-      {activeReaction && (
+      {effectiveBurstReaction && (
         <Animated.View style={[StyleSheet.absoluteFill, burstStyle]}>
           <Svg width="100%" height="100%" viewBox="0 0 100 100">
             {renderBurst()}
