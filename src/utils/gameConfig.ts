@@ -215,10 +215,10 @@ export const ATTRIBUTE_SCALING = {
 } as const;
 
 // Background color hex values
-// Note: "beige" is now medium gray (#808080) for better visual contrast with white
+// Pure White (#FFFFFF), Warm Textured Parchment (#F5E8C8, 81.3% lum), Deep Charcoal (#383838)
 export const BACKGROUND_COLORS = {
   white: '#FFFFFF',
-  beige: '#808080',  // Changed from #F4EFEA (light beige) to medium gray for visibility
+  beige: '#F5E8C8',  // Warm tinted parchment paired with subtle perimeter dot pattern for >=3.1:1 WCAG contrast
   charcoal: '#383838',
 } as const;
 

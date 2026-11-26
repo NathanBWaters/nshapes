@@ -23,6 +23,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { COLORS } from '@/utils/colors';
+import { formatCardTraitValue, formatChallengeText, getColorblindMode, useColorblind } from '@/utils/cardColors';
 import { EASE, MS } from '@/utils/motion';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
 import type { Card, CardReward, CharacterName, Weapon } from '@/types';
@@ -185,6 +186,7 @@ const AdventureRun: React.FC<Props> = ({
   const insets = useSafeAreaInsets();
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
+  const colorblind = useColorblind();
   // The save the fight started from and every action sent to it: enough to replay the fight (engine/replay.ts)
   const [startSave] = useState(save);
   const [run, setRun] = useState(() =>
@@ -572,7 +574,7 @@ const AdventureRun: React.FC<Props> = ({
   const handleInvalid = useCallback((cards: Card[]) => {
     triggerMistake();
     triggerEnemyReaction('taunt');
-    setMistakeNote(explainInvalidPick(cards, runRef.current.attributes, runRef.current.fighter));
+    setMistakeNote(explainInvalidPick(cards, runRef.current.attributes, runRef.current.fighter, getColorblindMode()));
     setMistakeCards(cards);
     setLastSet(null);
     dispatch({ type: 'INVALID', cards });
@@ -690,14 +692,16 @@ const AdventureRun: React.FC<Props> = ({
     [run.board, run.gear.potatoAtMs]
   );
   const gambleClockMs = hasTimedGambleCard ? Math.floor(run.elapsedMs / 1000) * 1000 : null;
+  const hasBackgroundAttribute = run.attributes.includes('background');
   const cardBoardOverlay = useMemo<CardBoardOverlay>(
     () => ({
       mirrorCardIds,
       tightropeCardIds,
       catalystRecipeName: catalystTargetName,
       potatoAtMs,
+      backgroundAttributeActive: hasBackgroundAttribute,
     }),
-    [mirrorCardIds, tightropeCardIds, catalystTargetName, potatoAtMs]
+    [mirrorCardIds, tightropeCardIds, catalystTargetName, potatoAtMs, hasBackgroundAttribute]
   );
   const leavePractice = () => { music.stop(); onFinish(runRef.current, recordingOf()); };
 
@@ -725,17 +729,22 @@ const AdventureRun: React.FC<Props> = ({
     setEventBannerNote(msg);
     later(() => setEventBannerNote(prev => (prev === msg ? null : prev)), 4500);
   }, [showDamageHud, run.power]); // eslint-disable-line react-hooks/exhaustive-deps
+  const effectiveMistakeNote =
+    mistakeCards && mistakeCards.length === 3
+      ? explainInvalidPick(mistakeCards, run.attributes, run.fighter, colorblind)
+      : mistakeNote;
   const liveGuidance = useMemo(
     () =>
       computeLiveGuidance(run, {
         selectedCount: boardSelectedCount,
         selectedCards: boardSelectedCards,
-        mistakeNote,
+        mistakeNote: effectiveMistakeNote,
         mistakeCards,
         seenIntro: coachDismissed,
         noAssist: ui.disableAutoHint === true,
+        colorblind,
       }),
-    [run, boardSelectedCount, boardSelectedCards, mistakeNote, mistakeCards, coachDismissed, ui.disableAutoHint]
+    [run, boardSelectedCount, boardSelectedCards, effectiveMistakeNote, mistakeCards, coachDismissed, ui.disableAutoHint, colorblind]
   );
   const activeGlowIds = useMemo(() => {
     const merged = [...(keenEyeIds ?? []), ...(liveGuidance?.glowIds ?? [])];
@@ -772,9 +781,9 @@ const AdventureRun: React.FC<Props> = ({
   const checks =
     liveGuidance?.pills ??
     (boardSelectedCount === 1 && boardSelectedCards[0]
-      ? describeSingleCardTraits(boardSelectedCards[0], run.attributes)
+      ? describeSingleCardTraits(boardSelectedCards[0], run.attributes, colorblind)
       : boardSelectedCount === 0
-        ? checksOfSet(lastSet, run.attributes)
+        ? checksOfSet(lastSet, run.attributes, colorblind)
         : undefined);
   // Responsive layout: on wide desktop/landscape viewports dock HUD in a clean left rail so the board gets full height
   const isWide = stage.w >= STAGE.wideFrom && stage.w > stage.h;
@@ -958,7 +967,7 @@ const AdventureRun: React.FC<Props> = ({
         >
           <Icon name="lorc/third-eye" size={11} color={TONE.upside} />
           <Text style={st.purityChipText} numberOfLines={1}>
-            All {run.simplified.attribute} {String(run.simplified.value)}{run.simplified.also ? ` + ${run.simplified.also.attribute} ${String(run.simplified.also.value)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
+            All {run.simplified.attribute} {formatCardTraitValue(run.simplified.attribute, run.simplified.value, colorblind)}{run.simplified.also ? ` + ${run.simplified.also.attribute} ${formatCardTraitValue(run.simplified.also.attribute, run.simplified.also.value, colorblind)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
           </Text>
         </TouchableOpacity>
       )}
@@ -1330,7 +1339,7 @@ const AdventureRun: React.FC<Props> = ({
             </TouchableOpacity>
           </View>
         ) : !chrome?.statusBanner && level.id !== '1-1' ? (
-          <ChallengeStrip text={challenge.text} met={challenge.met} failed={challenge.failed} onPress={() => { sfx('click'); setHudInspect({ kind: 'challenge' }); }} />
+          <ChallengeStrip text={formatChallengeText(challenge.text, colorblind)} met={challenge.met} failed={challenge.failed} onPress={() => { sfx('click'); setHudInspect({ kind: 'challenge' }); }} />
         ) : null}
 
         {/* The rule, one cell per trait, while it is new (always the same height: the board never moves) */}
@@ -1687,8 +1696,20 @@ const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, m
   return (
     <View testID="run-foe-hp" style={st.hpTrack} accessibilityLabel={endless ? 'Foe health: endless' : `Foe health ${hp} of ${max}`}>
       <Animated.View style={[st.hpFill, st.hpTrail, trailStyle]} />
-      <Animated.View style={[st.hpFill, { backgroundColor: pct > 0.5 ? COLORS.impactRed : pct > 0.25 ? COLORS.impactOrange : '#E53935' }, fillStyle]} />
-      <Text style={[st.hpText, endless && st.hpEndless]}>{endless ? '∞' : `${hp} / ${max}`}</Text>
+      <Animated.View
+        style={[
+          st.hpFill,
+          { backgroundColor: endless ? COLORS.redSurface : pct > 0.5 ? COLORS.redSurface : pct > 0.25 ? COLORS.orangeSurface : '#B91C1C' },
+          fillStyle,
+        ]}
+      />
+      {endless ? (
+        <Text style={[st.hpText, st.hpEndless]}>∞</Text>
+      ) : (
+        <View style={st.hpTextPill} pointerEvents="none">
+          <Text style={st.hpText}>{`${hp} / ${max}`}</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -2009,9 +2030,10 @@ const st = StyleSheet.create({
   heartsTextCompact: { fontSize: 9.5 },
   foeName: { fontWeight: '900', fontSize: 13.5, color: INK, flexShrink: 1 },
   wave: { fontWeight: '900', fontSize: 10, color: INK, letterSpacing: 0.8 },
-  hpTrack: { height: 17, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center' },
+  hpTrack: { height: 17, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
   hpFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   hpTrail: { backgroundColor: '#FFE9A8' },
+  hpTextPill: { backgroundColor: 'rgba(255, 253, 247, 0.9)', paddingHorizontal: 6, borderRadius: 3 },
   hpText: { textAlign: 'center', fontWeight: '900', fontSize: 10.5, color: INK, fontVariant: ['tabular-nums'] },
   hpEndless: { fontSize: 15, lineHeight: 16, color: COLORS.canvasWhite },
   doneBtn: { backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 1 },
@@ -2020,8 +2042,8 @@ const st = StyleSheet.create({
   idleFill: { height: '100%', backgroundColor: COLORS.impactOrange },
   counters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 1, paddingHorizontal: 4 },
   counter: { fontSize: 10.5, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
-  counterHot: { color: COLORS.impactOrange },
-  comboPill: { backgroundColor: COLORS.impactOrange, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
+  counterHot: { color: COLORS.orangeSurface },
+  comboPill: { backgroundColor: COLORS.orangeSurface, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
   comboText: { fontSize: 11.5, fontWeight: '900', color: COLORS.canvasWhite, fontVariant: ['tabular-nums'] },
   counterDim: { fontSize: 10, fontWeight: '800', color: 'rgba(56, 56, 56, 0.86)', fontVariant: ['tabular-nums'] },
   glow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 14, backgroundColor: '#FDE68A' },

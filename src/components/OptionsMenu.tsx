@@ -162,7 +162,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
                 <Icon name="lorc/spectacles" size={22} color={COLORS.slateCharcoal} />
                 <View style={styles.labelCol}>
                   <Text style={styles.settingText}>Colorblind Mode</Text>
-                  <Text style={styles.settingSubtext}>High-contrast palette & R/B/P labels</Text>
+                  <Text style={styles.settingSubtext}>High-contrast palette & O/B/P labels</Text>
                 </View>
               </View>
               <TouchableOpacity
@@ -226,7 +226,7 @@ const OptionsMenu: React.FC<OptionsMenuProps> = ({ visible, onClose, onResetGame
             <View style={[styles.settingRow, { borderBottomWidth: 0, flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
               <View style={styles.resetHeaderRow}>
                 <View style={[styles.settingLabel, { flex: 1 }]}>
-                  <Icon name="lorc/recycle" size={22} color={COLORS.impactRed} />
+                  <Icon name="lorc/recycle" size={22} color={COLORS.redSurface} />
                   <View style={styles.labelCol}>
                     <Text style={styles.settingText}>Reset Game</Text>
                     <Text style={styles.resetSubtext}>Erase all stars, unlocks & saved progress</Text>
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   header: {
-    backgroundColor: COLORS.logicTeal,
+    backgroundColor: COLORS.tealSurface,
     paddingVertical: 14,
     paddingHorizontal: 18,
     flexDirection: 'row',
@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toggleButtonOn: {
-    backgroundColor: COLORS.logicTeal,
+    backgroundColor: COLORS.tealSurface,
   },
   toggleButtonOff: {
     backgroundColor: COLORS.paperBeige,
@@ -415,21 +415,21 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   resetOutlineButton: {
-    backgroundColor: '#FFF1F0',
+    backgroundColor: COLORS.canvasWhite,
     borderWidth: 1.5,
-    borderColor: COLORS.impactRed,
+    borderColor: COLORS.redSurface,
   },
   resetOutlineText: {
-    color: COLORS.impactRed,
+    color: COLORS.redSurface,
   },
   resetDoneBadge: {
-    backgroundColor: COLORS.logicTeal,
+    backgroundColor: COLORS.tealSurface,
   },
   confirmBox: {
     backgroundColor: '#FFF5F5',
     borderRadius: RADIUS.button,
     borderWidth: 1.5,
-    borderColor: COLORS.impactRed,
+    borderColor: COLORS.redSurface,
     padding: 12,
     gap: 10,
   },
@@ -450,12 +450,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dangerSolidButton: {
-    backgroundColor: COLORS.impactRed,
+    backgroundColor: COLORS.redSurface,
   },
   resetDoneText: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.logicTeal,
+    color: COLORS.tealSurface,
   },
   doneButton: {
     backgroundColor: COLORS.actionYellow,

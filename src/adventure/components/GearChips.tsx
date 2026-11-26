@@ -8,6 +8,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import { cardBgPatternMeta, cardColorCode, cardColorHex, cardColorLabel, useColorblind } from '@/utils/cardColors';
 import type { AttributeName } from '@/types';
 import type { RunState } from '../types';
 import type { Modifiers } from '../rules/types';
@@ -16,14 +17,24 @@ import { modifiersOf } from '../engine/sources';
 import { albumTraits } from '../engine/gear';
 
 const INK = COLORS.slateCharcoal;
-const CARD_COLORS: Record<string, string> = { red: '#EF4444', green: '#16A34A', purple: '#7C3AED' };
 
-/** "purple", "ovals", "2s", "striped": the wanted value in the words a player would use. */
-export const wantedLabel = (attribute: AttributeName, value: string | number): string => {
+/** "purple", "ovals", "2s", "striped" (or Colorblind "blue (B)", "orange (O)", "plum (P)"): the wanted value in player words. */
+export const wantedLabel = (
+  attribute: AttributeName,
+  value: string | number,
+  colorblind = false
+): string => {
   switch (attribute) {
     case 'number': return `${value}s`;
     case 'shape': return `${value}s`;
-    case 'background': return `${value} backs`;
+    case 'color': {
+      const name = cardColorLabel(String(value), colorblind);
+      return colorblind ? `${name} (${cardColorCode(String(value), true)})` : name;
+    }
+    case 'background': {
+      const meta = cardBgPatternMeta(String(value), colorblind);
+      return colorblind ? `${meta.word} (${meta.code}) backs` : `${meta.word} backs`;
+    }
     default: return String(value);
   }
 };
@@ -59,6 +70,7 @@ export const GearChips: React.FC<{
   mods: Modifiers;
   onInspectWeapon?: (weaponId: string) => void;
 }> = ({ run, mods: m, onInspectWeapon }) => {
+  const colorblind = useColorblind();
   const g = run.gear;
   const glassWindowMs = (m.glassWindowMs ?? 0) > 0
     ? (m.glassWindowMs ?? 0) + 1500 * Math.max(0, run.attributes.length - 3)
@@ -80,6 +92,8 @@ export const GearChips: React.FC<{
     ) : (
       <View testID={testID} accessibilityLabel={accessibilityLabel} style={style}>{children}</View>
     );
+  const bountyText = g.bounty ? wantedLabel(g.bounty.attribute, g.bounty.value, colorblind) : '';
+  const bountyColorHex = g.bounty?.attribute === 'color' ? cardColorHex(String(g.bounty.value), 'white', colorblind) : INK;
   return (
     <>
       {(m.bountyDamage ?? 0) > 0 && g.bounty && wrap(
@@ -88,14 +102,16 @@ export const GearChips: React.FC<{
         [st.chip, st.wanted],
         <>
           <Icon name="delapouite/wanted-reward" size={11} color={INK} />
-          {g.bounty.attribute === 'color' && <View style={[st.dot, { backgroundColor: CARD_COLORS[String(g.bounty.value)] ?? INK }]} />}
+          {g.bounty.attribute === 'color' && (
+            <View testID="run-bounty-color-dot" style={[st.dot, { backgroundColor: bountyColorHex }]} />
+          )}
           <Text style={st.text} numberOfLines={1}>
             {g.bounty.attribute === 'number'
               ? `#${g.bounty.value} · ${g.bounty.left}`
-              : `${wantedLabel(g.bounty.attribute, g.bounty.value)} · ${g.bounty.left}`}
+              : `${bountyText} · ${g.bounty.left}`}
           </Text>
         </>,
-        `Wanted: ${wantedLabel(g.bounty.attribute, g.bounty.value)}, ${g.bounty.left} left`
+        `Wanted: ${bountyText}, ${g.bounty.left} left`
       )}
       {(m.snowballStep ?? 0) > 0 && wrap(
         'snowball',
