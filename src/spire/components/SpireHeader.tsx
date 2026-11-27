@@ -7,11 +7,12 @@ import { StyleSheet, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
-import { CoinPill, Heart, INK, TONE } from '@/adventure/components/ui';
+import { MONO_FONT } from '@/utils/fonts';
+import { Heart, INK, TONE } from '@/adventure/components/ui';
 import { spireArmedRecipes } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
-import { SpireLightweightBreath, SpireStatPop, SpireTactilePressable } from './SpireMotion';
+import { SpireCountUp, SpireLightweightBreath, SpireStatPop, SpireTactilePressable } from './SpireMotion';
 
 interface Props {
   run: SpireRun;
@@ -111,7 +112,10 @@ const SpireHeader: React.FC<Props> = ({
 
       <View style={st.right}>
         <SpireStatPop value={run.coins} testID="spire-header-coins">
-          <CoinPill coins={run.coins} compact />
+          <View style={st.coinPill}>
+            <Icon name="lorc/crown-coin" size={14} color={TONE.coinBright} />
+            <SpireCountUp target={run.coins} animateChanges ticks={6} style={st.coinText} />
+          </View>
         </SpireStatPop>
         {onToggleAudio && (
           <SpireTactilePressable
@@ -253,6 +257,24 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  coinPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: COLORS.canvasWhite,
+    borderColor: INK,
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  coinText: {
+    fontFamily: MONO_FONT,
+    fontSize: 12,
+    fontWeight: '900',
+    color: INK,
+    fontVariant: ['tabular-nums'],
   },
   audioBtn: {
     width: 36,

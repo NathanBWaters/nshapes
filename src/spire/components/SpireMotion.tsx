@@ -638,9 +638,14 @@ export const SpireCountUp: React.FC<{
 
 export const SpireCrossfadeSwap: React.FC<{
   swapKey: string | number;
+  /** Optional minimum opacity floor during in-place card swaps so a card never flashes hollow. */
+  minOpacity?: number;
+  /** Uses snappy `exitMs(MS.feedback)` (78ms) instead of `exitMs(MS.quick)` (104ms) for rapid selector swaps. */
+  fast?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
   children: React.ReactNode;
-}> = ({ swapKey, style, children }) => {
+}> = ({ swapKey, minOpacity = 0, fast = false, style, testID, children }) => {
   const reduced = useReducedMotion();
   const [shownKey, setShownKey] = useState(swapKey);
   const [shownChildren, setShownChildren] = useState(children);
@@ -668,14 +673,16 @@ export const SpireCrossfadeSwap: React.FC<{
 
     if (timerRef.current) clearTimeout(timerRef.current);
     // Decelerate exit cleanly to zero velocity (EASE.ui) before swapping content: zero HARD-STOP, zero FADE-ONLY
-    const outDur = reduced ? reducedMs(exitMs(MS.quick)) : exitMs(MS.quick);
+    const baseOut = fast ? exitMs(MS.feedback) : exitMs(MS.quick);
+    const outDur = reduced ? reducedMs(baseOut) : baseOut;
     const inDur = reduced ? reducedMs(MS.quick) : MS.quick;
+    const floorOp = Math.max(0, Math.min(0.45, minOpacity));
 
     if (!reduced) {
-      y.value = withTiming(-10, { duration: outDur, easing: EASE.ui });
-      s.value = withTiming(0.97, { duration: outDur, easing: EASE.ui });
+      y.value = withTiming(fast ? -7 : -10, { duration: outDur, easing: EASE.ui });
+      s.value = withTiming(fast ? 0.985 : 0.97, { duration: outDur, easing: EASE.ui });
     }
-    o.value = withTiming(0, { duration: outDur, easing: EASE.ui, ...STAYS });
+    o.value = withTiming(floorOp, { duration: outDur, easing: EASE.ui, ...STAYS });
 
     timerRef.current = setTimeout(() => {
       setShownKey(swapKey);
@@ -685,14 +692,14 @@ export const SpireCrossfadeSwap: React.FC<{
         s.value = 1;
         o.value = withTiming(1, { duration: inDur, easing: EASE.ui, ...STAYS });
       } else {
-        y.value = 12;
-        s.value = 0.97;
+        y.value = fast ? 8 : 12;
+        s.value = fast ? 0.985 : 0.97;
         y.value = withTiming(0, { duration: inDur, easing: EASE.enter });
         s.value = withTiming(1, { duration: inDur, easing: EASE.enter });
         o.value = withTiming(1, { duration: Math.round(inDur * 0.8), easing: EASE.ui, ...STAYS });
       }
     }, outDur + 16);
-  }, [swapKey, shownKey, children, reduced, o, y, s]);
+  }, [swapKey, shownKey, children, reduced, fast, minOpacity, o, y, s]);
 
   useEffect(
     () => () => {
@@ -709,7 +716,11 @@ export const SpireCrossfadeSwap: React.FC<{
     transform: [{ translateY: y.value }, { scale: s.value }],
   }));
 
-  return <Animated.View style={[anim, style]}>{shownChildren}</Animated.View>;
+  return (
+    <Animated.View testID={testID} style={[anim, style]}>
+      {shownChildren}
+    </Animated.View>
+  );
 };
 
 /* -------------------------------------------------------------------------- */

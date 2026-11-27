@@ -184,7 +184,7 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
                 <Icon name="lorc/crown-coin" size={16} color={TONE.coinBright} />
                 <SpireCountUp
                   target={doubledCoins ? treasure.coins + extraCoins : treasure.coins}
-                  delayMs={MS.quick}
+                  delayMs={MS.feedback}
                   ticks={8}
                   animateChanges={doubledCoins}
                   style={st.coinCountText}
@@ -194,19 +194,21 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
           </SpireStaggerItem>
         </SpireStaggerItem>
 
-        <SpireCrossfadeSwap swapKey={treasure.claimed ? 'claimed' : 'choices'}>
-          {treasure.claimed ? (
-            <View style={st.card} testID="spire-treasure-claimed">
-              <Text style={st.claimedTitle}>Vault Claimed!</Text>
-              <Text style={st.claimedText}>{treasure.outcomeText}</Text>
-              <Btn testID="spire-treasure-leave" label="Return to Map" icon="lorc/mountaintop" onPress={() => { sfx('confirm'); onLeave(); }} />
-            </View>
-          ) : (
-            <View style={st.card}>
-              <Text style={st.sec}>CHOOSE YOUR BONUS TREASURE</Text>
+        {/* Stage choices container after chest pop-open so no hollow white card slab ever sits empty */}
+        <SpireStaggerItem index={0} count={1} baseDelayMs={MS.feedback} distance={14}>
+          <SpireCrossfadeSwap swapKey={treasure.claimed ? 'claimed' : 'choices'}>
+            {treasure.claimed ? (
+              <View style={st.card} testID="spire-treasure-claimed">
+                <Text style={st.claimedTitle}>Vault Claimed!</Text>
+                <Text style={st.claimedText}>{treasure.outcomeText}</Text>
+                <Btn testID="spire-treasure-leave" label="Return to Map" icon="lorc/mountaintop" onPress={() => { sfx('confirm'); onLeave(); }} />
+              </View>
+            ) : (
+              <View style={st.card}>
+                <Text style={st.sec}>CHOOSE YOUR BONUS TREASURE</Text>
 
                 {w && (
-                  <SpireStaggerItem index={0} count={3} baseDelayMs={MS.quick} gapMs={STAGGER.item} distance={10}>
+                  <SpireStaggerItem index={0} count={3} baseDelayMs={MS.feedback + OVERLAP.uiContentMs} gapMs={STAGGER.card} distance={10}>
                     <View style={{ gap: 10 }}>
                       <WeaponOfferRow
                         testID="spire-treasure-weapon"
@@ -248,7 +250,7 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
                 )}
 
                 {availArcana && (
-                  <SpireStaggerItem index={1} count={3} baseDelayMs={MS.quick} gapMs={STAGGER.item} distance={10}>
+                  <SpireStaggerItem index={1} count={3} baseDelayMs={MS.feedback + OVERLAP.uiContentMs} gapMs={STAGGER.card} distance={10}>
                     <ArcanaCard
                       testID="spire-treasure-arcana"
                       arcanaId={availArcana}
@@ -258,7 +260,7 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
                   </SpireStaggerItem>
                 )}
 
-                <SpireStaggerItem index={2} count={3} baseDelayMs={MS.quick} gapMs={STAGGER.item} distance={10}>
+                <SpireStaggerItem index={2} count={3} baseDelayMs={MS.feedback + OVERLAP.uiContentMs} gapMs={STAGGER.card} distance={10}>
                   <SpireTactilePressable
                     testID="spire-treasure-coins"
                     onPress={() => {
@@ -277,8 +279,9 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
                   </SpireTactilePressable>
                 </SpireStaggerItem>
               </View>
-          )}
-        </SpireCrossfadeSwap>
+            )}
+          </SpireCrossfadeSwap>
+        </SpireStaggerItem>
       </ScrollView>
     </View>
   );

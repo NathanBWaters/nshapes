@@ -208,27 +208,29 @@ const SpireRewardScreen: React.FC<Props> = ({
           </View>
           <Text style={st.title}>{reward.foeName} Knocked Out!</Text>
           <View style={st.statsRow}>
-            <View style={st.coinCountPill} testID="spire-reward-coins">
-              <Icon name="lorc/crown-coin" size={16} color={TONE.coinBright} />
-              <SpireCountUp
-                target={reward.coinsEarned}
-                delayMs={MS.feedback}
-                ticks={Math.min(12, Math.max(5, Math.round(reward.coinsEarned / 10)))}
-                style={st.coinCountText}
-              />
-            </View>
-            <SpireStaggerItem index={0} count={3} baseDelayMs={MS.quick} gapMs={STAGGER.card} distance={8}>
+            <SpireStaggerItem index={0} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.card} distance={8}>
+              <View style={st.coinCountPill} testID="spire-reward-coins">
+                <Icon name="lorc/crown-coin" size={16} color={TONE.coinBright} />
+                <SpireCountUp
+                  target={reward.coinsEarned}
+                  delayMs={OVERLAP.secondaryMs}
+                  ticks={Math.min(12, Math.max(5, Math.round(reward.coinsEarned / 10)))}
+                  style={st.coinCountText}
+                />
+              </View>
+            </SpireStaggerItem>
+            <SpireStaggerItem index={1} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.card} distance={8}>
               <View style={st.statPill}>
                 <Text style={st.statText}>DPM {Math.round(reward.dpm).toLocaleString()}</Text>
               </View>
             </SpireStaggerItem>
-            <SpireStaggerItem index={1} count={3} baseDelayMs={MS.quick} gapMs={STAGGER.card} distance={8}>
+            <SpireStaggerItem index={2} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.card} distance={8}>
               <View style={st.statPill}>
                 <Text style={st.statText}>Best {Math.round(reward.biggestHit).toLocaleString()}</Text>
               </View>
             </SpireStaggerItem>
             {reward.parries > 0 && (
-              <SpireStaggerItem index={2} count={3} baseDelayMs={MS.quick} gapMs={STAGGER.card} distance={8}>
+              <SpireStaggerItem index={3} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.card} distance={8}>
                 <View style={[st.statPill, { backgroundColor: '#CCFBF1', borderColor: TONE.upside }]}>
                   <Text style={[st.statText, { color: TONE.upside }]}>
                     Parries {reward.parries}{reward.perfectParries > 0 ? ` (★${reward.perfectParries})` : ''}

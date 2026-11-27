@@ -97,9 +97,9 @@ const SpireEndScreen: React.FC<Props> = ({
   // Beat 5 (+340ms): Share card & actions settle calmly last
   const crestScale = useSharedValue(SPIRE_MOTION_INSTANT || reduced ? 1 : victory ? SCALE.slam : 0.78);
   const crestY = useSharedValue(SPIRE_MOTION_INSTANT || reduced ? 0 : victory ? -12 : -6);
-  const crestOp = useSharedValue(SPIRE_MOTION_INSTANT ? 1 : 0);
+  const crestOp = useSharedValue(SPIRE_MOTION_INSTANT || reduced ? 1 : 0.35);
   const raysScale = useSharedValue(SPIRE_MOTION_INSTANT || reduced ? 1 : 0.78);
-  const raysOp = useSharedValue(SPIRE_MOTION_INSTANT || reduced ? (victory ? 0.2 : 0) : 0);
+  const raysOp = useSharedValue(SPIRE_MOTION_INSTANT || reduced ? (victory ? 0.2 : 0) : victory ? 0.14 : 0);
   const barFill = useSharedValue(SPIRE_MOTION_INSTANT || reduced ? rating.percentile / 100 : 0);
   const [barW, setBarW] = useState(0);
 
@@ -191,8 +191,8 @@ const SpireEndScreen: React.FC<Props> = ({
   return (
     <View style={[st.root, { paddingTop: insets.top }]} testID={victory ? 'spire-victory' : 'spire-defeat'}>
       <ScrollView contentContainerStyle={[st.body, { paddingBottom: Math.max(insets.bottom, 20) + 16 }]}>
-        {/* Beat 1 & 2: Hero Crest, Ceremonial Sunburst & Living Champion */}
-        <SpireStaggerItem index={0} count={1} distance={22} hero style={[st.hero, victory ? st.heroWin : st.heroLose]}>
+        {/* Beat 1 & 2: Hero Crest, Ceremonial Sunburst & Living Champion — screenTx carries hero shell opacity (zero blank brown blink on mount!) */}
+        <View style={[st.hero, victory ? st.heroWin : st.heroLose]}>
           {victory && (
             <Animated.View pointerEvents="none" style={[st.raysWrap, raysAnim]}>
               <Svg width={320} height={220} viewBox="0 0 320 220">
@@ -240,7 +240,7 @@ const SpireEndScreen: React.FC<Props> = ({
               reaction={victory && heroReactionId > 0 ? { type: 'ecstatic', id: heroReactionId } : null}
             />
           </SpireStaggerItem>
-        </SpireStaggerItem>
+        </View>
 
         {/* Beat 3: Summit Rating & GPU Percentile Bar (`[TP-19]`) */}
         <SpireStaggerItem index={0} count={4} baseDelayMs={MS.quick} gapMs={STAGGER.item}>

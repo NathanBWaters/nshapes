@@ -346,40 +346,38 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
                 })}
               </View>
 
-              {/* Selected Fighter Kit */}
-              <View style={st.kitCard} testID="spire-starter-kit">
-                <SpireCrossfadeSwap swapKey={fighter}>
-                  <View style={{ gap: 8 }}>
-                    <View style={st.kitTop}>
-                      <Text style={st.kitTitle}>{fighter}</Text>
-                      <View style={st.kitStats}>
-                        <Heart size={13} />
-                        <Text style={st.kitStatText}>{kit.maxHearts}</Text>
-                        <Icon name="lorc/crown-coin" size={13} color={TONE.coinBright} />
-                        <Text style={st.kitStatText}>{kit.startingCoins}¢</Text>
-                      </View>
-                    </View>
-                    <Text style={st.kitBlurb}>{kit.tagline}</Text>
-
-                    <FighterPassivesList fighter={fighter} compact />
-
-                    <Text style={st.subSection}>STARTER WEAPONS (LV 2)</Text>
-                    <View style={st.starterRow}>
-                      {[w1, w2].map(w =>
-                        w ? (
-                          <View key={w.id} style={st.starterChip}>
-                            <WeaponAvatar weapon={w} size={24} />
-                            <View style={{ flex: 1, minWidth: 0 }}>
-                              <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
-                              <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
-                            </View>
-                          </View>
-                        ) : null
-                      )}
+              {/* Selected Fighter Kit — whole card shifts softly as one cohesive piece (zero hollow white box!) */}
+              <SpireCrossfadeSwap swapKey={fighter} fast minOpacity={0.22} style={st.kitCard} testID="spire-starter-kit">
+                <View style={{ gap: 8 }}>
+                  <View style={st.kitTop}>
+                    <Text style={st.kitTitle}>{fighter}</Text>
+                    <View style={st.kitStats}>
+                      <Heart size={13} />
+                      <Text style={st.kitStatText}>{kit.maxHearts}</Text>
+                      <Icon name="lorc/crown-coin" size={13} color={TONE.coinBright} />
+                      <Text style={st.kitStatText}>{kit.startingCoins}¢</Text>
                     </View>
                   </View>
-                </SpireCrossfadeSwap>
-              </View>
+                  <Text style={st.kitBlurb}>{kit.tagline}</Text>
+
+                  <FighterPassivesList fighter={fighter} compact />
+
+                  <Text style={st.subSection}>STARTER WEAPONS (LV 2)</Text>
+                  <View style={st.starterRow}>
+                    {[w1, w2].map(w =>
+                      w ? (
+                        <View key={w.id} style={st.starterChip}>
+                          <WeaponAvatar weapon={w} size={24} />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
+                            <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                          </View>
+                        </View>
+                      ) : null
+                    )}
+                  </View>
+                </View>
+              </SpireCrossfadeSwap>
 
               {/* Focused Draft Pool Theme Packs (`[GP-25]`) */}
               <View style={st.packCard} testID="spire-theme-packs">
