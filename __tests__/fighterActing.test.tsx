@@ -8,6 +8,10 @@ import { FighterAvatar } from '@/components/fighters/FighterAvatar';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { FighterEffectsOverlay } from '@/components/fighters/FighterEffectsOverlay';
 import {
+  FIGHTER_SPRITE_ATLASES,
+  hasFighterSpriteAtlas,
+} from '@/components/fighters/FighterSpriteRig';
+import {
   getFighterMassClass,
   getFighterPersonality,
   getFighterSpeciesChoreography,
@@ -399,6 +403,46 @@ describe('Lane 1 — Hero Fighter Species Acting, 3-Step Blinks, Lightweight Bre
         jest.advanceTimersByTime(ACCESSIBLE.fadeMs + HIT.snapMs + 16);
       });
       expect(queryByTestId('fighter-fx-throw')).toBeNull();
+    });
+  });
+
+  describe('5. Nano Banana 4x3 Sprite-Loop Atlas Rig (`FighterSpriteRig.tsx`)', () => {
+    it('runs GPU-only 6-frame idle sprite loop for all 6 heroes, halts on background/reduced-motion, and cancels cleanly', () => {
+      const { getByTestId, unmount } = render(
+        <FighterAvatar character="Orange Tabby" size={74} mood="idle" animate={true} />
+      );
+      expect(getByTestId('fighter-sprite-viewport')).toBeTruthy();
+      expect(getByTestId('fighter-sprite-atlas')).toBeTruthy();
+      expect(mockWithRepeat).toHaveBeenCalled();
+
+      mockCancelAnimation.mockClear();
+      unmount();
+      expect(mockCancelAnimation).toHaveBeenCalled();
+
+      // Backgrounding immediately halts sprite loop without starting a new withRepeat
+      mockWithRepeat.mockClear();
+      mockAppActive = false;
+      const bgView = render(<FighterAvatar character="Sly Fox" size={64} mood="idle" animate={true} />);
+      expect(bgView.getByTestId('fighter-sprite-atlas')).toBeTruthy();
+      expect(mockWithRepeat).not.toHaveBeenCalled();
+      bgView.unmount();
+
+      // Reduced motion keeps static neutral pose with zero infinite loops
+      mockAppActive = true;
+      mockReducedMotion = true;
+      mockWithRepeat.mockClear();
+      const rmView = render(<FighterAvatar character="Pelican" size={64} mood="idle" animate={true} />);
+      expect(rmView.getByTestId('fighter-sprite-atlas')).toBeTruthy();
+      expect(mockWithRepeat).not.toHaveBeenCalled();
+      rmView.unmount();
+    });
+
+    it('reports sprite atlas availability for all 6 heroes and false for unregistered names', () => {
+      for (const hero of ['Orange Tabby', 'Sly Fox', 'Badger', 'Corgi', 'Emperor Penguin', 'Pelican']) {
+        expect(hasFighterSpriteAtlas(hero)).toBe(true);
+        expect(FIGHTER_SPRITE_ATLASES[hero]).toBeDefined();
+      }
+      expect(hasFighterSpriteAtlas('Mystery Capybara')).toBe(false);
     });
   });
 });

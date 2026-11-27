@@ -138,3 +138,14 @@ Every shot's `report.md` was inspected; zero unresolved Lane 1 defects remain:
 - `motion-out/fighter-sleepy-zzz/{before,r1,r2,reduced}` · `motion-out/fighter-sleepy-zzz/r2/compare-before-vs-r2.png`
 - `motion-out/fighter-streak-pill/{before,r1,r2,reduced}` · `motion-out/fighter-streak-pill/r2/compare-before-vs-r2.png`
 - `motion-out/fighter-aura-loop/{before,r1,r2,reduced}` · `motion-out/fighter-aura-loop/r2/compare-before-vs-r2.png`
+
+---
+
+## 6. Nano Banana 2D Illustrated Sprite-Loop Upgrade (`v0.1.187`)
+
+Upgraded all 6 Hero Fighters (`Orange Tabby`, `Sly Fox`, `Badger`, `Corgi`, `Emperor Penguin`, `Pelican`) from flat geometric SVGs to real **Nano Banana Pro (`gemini-3-pro-image`) illustrated 4×3 WebP sprite atlases** (`assets/fighters/*.webp`, 1024×768 = 12 retina 256×256 frames per hero, 745 KB total across all 72 frames):
+- **6-frame seamless Disney idle loop (`0..5`):** Species-tuned on 2s/3s (`680–960 ms` cycles), chroma-keyed on `#00FF00` with flood-fill despill + adaptive green-gutter slicing + baseline registration, animated via GPU-only `transform: translateX/translateY` in `FighterSpriteRig.tsx` (`0` React re-renders, `0` extra frame loops, `contain: 'layout style paint'`, gated on `useAppActive()` + `!reducedMotion` + `cancelAnimation`).
+- **6 bespoke hand-drawn acting poses (`6..11`):** Natural randomized `blink`, coiled `windup`, explosive `attack` (two-beat `windup → attack` synced to `THROW.windMs`), airborne `cheer` (synced to `cheerReleaseMs`), comic `hurt` (including Emperor Penguin's popped-up crown!), and `sleepy` loaf/droop.
+- **Silhouette Audit (`[UI-07]`):** Solid-black `#121212` silhouette flattening (`filter: brightness(0)` on web, `tintColor` on native), visually verified at 36px & 80px in `/dev/fighters`.
+- **Stage Framing:** Lifted Main Menu Hero Card mascot (`58 → 74px`) and roomy Battle Stage fighter size (`66 → 74px` mobile / `86 → 92px` wide) while keeping all layouts overflow-free.
+- **Captures verified (`r1`):** `motion-out/fighter-sprite-idle-loop/r1/contact.png`, `motion-out/fighter-tabby-pounce/r1/contact.png`, `motion-out/fighter-badger-jab/r1/contact.png` (`0` hints on `fighter-badger-jab`).

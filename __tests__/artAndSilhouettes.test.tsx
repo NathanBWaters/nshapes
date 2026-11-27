@@ -7,6 +7,11 @@ import { BiomeScenery } from '@/adventure/components/BiomeScenery';
 import CritterGallery from '@/adventure/components/CritterGallery';
 import { EnemyAvatar } from '@/components/enemies/EnemyAvatar';
 import { FighterAvatar } from '@/components/fighters/FighterAvatar';
+import {
+  FIGHTER_ATLAS_COLS,
+  FIGHTER_ATLAS_ROWS,
+  FIGHTER_SPRITE_ATLASES,
+} from '@/components/fighters/FighterSpriteRig';
 import { SILHOUETTE_INK } from '@/components/illustration/primitives';
 import RewardReveal from '@/components/RewardReveal';
 import { PRISM_COLORS } from '@/prism/components/prismTheme';
@@ -188,10 +193,11 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
   });
 
   describe('[UI-05] + [UI-06] + [UI-07] 6 Fighter 3/4 Silhouettes, Overhead Lighting & Boss Shadows', () => {
-    it('renders all 6 fighters with distinct asymmetric SVG silhouettes and 2-tone LinearGradients', () => {
-      const pathSignatures = new Set<string>();
+    it('renders all 6 fighters with distinct 4x3 Nano Banana storybook sprite atlases', () => {
+      const atlasSources = new Set<unknown>();
 
       for (const char of CHARACTERS) {
+        expect(FIGHTER_SPRITE_ATLASES[char.name]).toBeDefined();
         const view = render(
           <FighterAvatar
             character={char}
@@ -201,27 +207,27 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
             testID={`fighter-${char.name}`}
           />
         );
-        const paths: string[] = [];
-        let linearGradients = 0;
-
-        walkJson(view.toJSON() as JsonNode, (node) => {
-          if (node.type === 'LinearGradient') linearGradients += 1;
-          if (node.type === 'Path' && typeof node.props?.d === 'string') {
-            paths.push(node.props.d);
-          }
-        });
-
-        expect(linearGradients).toBeGreaterThanOrEqual(3);
-        expect(paths.length).toBeGreaterThanOrEqual(4);
-        pathSignatures.add(paths.slice(0, 4).join('|'));
+        const viewport = view.getByTestId('fighter-sprite-viewport');
+        const atlas = view.getByTestId('fighter-sprite-atlas');
+        expect(viewport).toBeTruthy();
+        expect(atlas.props.source).toBe(FIGHTER_SPRITE_ATLASES[char.name]);
+        const flatStyle = Array.isArray(atlas.props.style)
+          ? Object.assign({}, ...atlas.props.style.filter(Boolean))
+          : atlas.props.style;
+        expect(flatStyle.width).toBe(80 * FIGHTER_ATLAS_COLS);
+        expect(flatStyle.height).toBe(80 * FIGHTER_ATLAS_ROWS);
+        atlasSources.add(atlas.props.source);
         view.unmount();
       }
 
-      // Every one of the 6 fighters must have a completely distinct SVG silhouette signature
-      expect(pathSignatures.size).toBe(CHARACTERS.length);
+      // Every one of the 6 fighters has its own distinct illustrated sprite atlas on disk
+      expect(atlasSources.size).toBe(CHARACTERS.length);
+      for (const slug of ['orange-tabby', 'sly-fox', 'badger', 'corgi', 'emperor-penguin', 'pelican']) {
+        expect(fs.existsSync(path.join(ROOT, 'assets', 'fighters', `${slug}.webp`))).toBe(true);
+      }
     });
 
-    it('flattens all 6 fighters to solid #121212 black with zero gradients in silhouette mode', () => {
+    it('flattens all 6 fighters to solid #121212 silhouette mode cleanly', () => {
       for (const char of CHARACTERS) {
         const view = render(
           <FighterAvatar
@@ -233,24 +239,17 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
           />
         );
 
-        let solidBlackCount = 0;
-        let gradientCount = 0;
-        const nonBlackFills: string[] = [];
-
-        walkJson(view.toJSON() as JsonNode, (node) => {
-          if (node.type === 'LinearGradient' || node.type === 'Defs') {
-            gradientCount += 1;
-          }
-          const fill = node.props?.fill;
-          if (typeof fill === 'string' && fill !== 'none' && fill !== 'transparent') {
-            if (fill === SILHOUETTE_INK) solidBlackCount += 1;
-            else nonBlackFills.push(fill);
-          }
-        });
-
-        expect(gradientCount).toBe(0);
-        expect(nonBlackFills).toEqual([]);
-        expect(solidBlackCount).toBeGreaterThanOrEqual(5);
+        const silViewport = view.getByTestId('fighter-sprite-silhouette');
+        const atlas = view.getByTestId('fighter-sprite-atlas');
+        expect(silViewport).toBeTruthy();
+        // On native test env (jest-expo), tintColor flattens the alpha-masked sprite to SILHOUETTE_INK;
+        // on web, CSS filter brightness(0) applies the solid silhouette transform.
+        const flatStyle = Array.isArray(atlas.props.style)
+          ? Object.assign({}, ...atlas.props.style.filter(Boolean))
+          : atlas.props.style;
+        expect(
+          atlas.props.tintColor === SILHOUETTE_INK || flatStyle?.filter === 'brightness(0)'
+        ).toBe(true);
         view.unmount();
       }
     });

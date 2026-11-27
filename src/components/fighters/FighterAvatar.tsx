@@ -54,6 +54,7 @@ import {
 } from '@/utils/fighterAnimations';
 import { FallbackFighterRig } from './creatures/FallbackFighterRig';
 import { FighterEffectsOverlay, FighterOverlayReactionType } from './FighterEffectsOverlay';
+import { FighterSpriteRig, hasFighterSpriteAtlas } from './FighterSpriteRig';
 import {
   getFighterCreature,
   getFighterMassClass,
@@ -766,6 +767,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
     silhouette,
   };
   const Rig = getFighterCreature(characterName)?.Rig;
+  const usesSpriteAtlas = hasFighterSpriteAtlas(characterName);
 
   const isCriticalFrame = healthState === 'critical' || healthState === 'knocked_out';
   const isStreakFrame = streak >= 3 || mood === 'streak' || mood === 'victory';
@@ -980,7 +982,26 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
       rigRootStyle={lightweight ? lightweightRigStyle : motion.rigRootStyle}
       rig={
         <RigVisualProvider silhouette={silhouette} facing="right">
-          {Rig ? <Rig {...rigProps} /> : <FallbackFighterRig {...rigProps} icon={characterIcon} />}
+          {usesSpriteAtlas ? (
+            <FighterSpriteRig
+              characterName={characterName}
+              size={size}
+              mood={mood}
+              healthState={healthState}
+              activeReaction={motion.activeReaction}
+              reactionKey={motion.reactionKey}
+              cheerReleaseMs={effectiveCheerReleaseMs}
+              blinkStage={effectiveBlinkStage}
+              animate={animate}
+              lightweight={lightweight}
+              quiet={quiet}
+              silhouette={silhouette}
+            />
+          ) : Rig ? (
+            <Rig {...rigProps} />
+          ) : (
+            <FallbackFighterRig {...rigProps} icon={characterIcon} />
+          )}
           {!silhouette && (
             <CreatureDamageOverlay
               healthState={healthState}

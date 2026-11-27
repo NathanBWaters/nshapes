@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.186",
+  "version": "0.1.187",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {

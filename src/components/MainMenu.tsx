@@ -651,9 +651,9 @@ const MainMenu: React.FC<MainMenuProps> = ({
                   style={[
                     {
                       position: 'absolute',
-                      width: 62,
-                      height: 62,
-                      borderRadius: 31,
+                      width: 78,
+                      height: 78,
+                      borderRadius: 39,
                       borderWidth: 3.5,
                       borderColor: COLORS.actionYellow,
                     },
@@ -663,7 +663,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
                 <Animated.View style={mascotWrapStyle}>
                   <FighterAvatar
                     character={mascotCharacter}
-                    size={58}
+                    size={74}
                     mood={heroPressed ? 'anticipation' : 'idle'}
                     reaction={mascotReaction}
                     testID="main-menu-mascot"
@@ -987,12 +987,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 58,
+    minHeight: 74,
     gap: 8,
   },
   heroAvatarBadge: {
-    minWidth: 58,
-    minHeight: 58,
+    minWidth: 74,
+    minHeight: 74,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -179,6 +179,25 @@ export default {
     ambient: 0,
   },
 
+  'fighter-sprite-idle-loop': {
+    id: 'fighter-sprite-idle-loop',
+    about: 'Orange Tabby Nano Banana 6-frame seamless sprite idle loop (780ms cycle) on /dev/fighters',
+    path: '/dev/fighters',
+    ready: (page, h) => h.until('studio-tab-fighters'),
+    prepare: async (page, h) => {
+      await page.evaluate(
+        sel => document.querySelector(sel).scrollIntoView({ block: 'center', behavior: 'instant' }),
+        `[data-testid="${cardOf(0)}"]`
+      );
+      await h.advance(400);
+    },
+    trigger: async () => {},
+    clip: cardOf(0),
+    frames: 54,
+    ambient: 0,
+    mute: ['DEAD-STRETCH'],
+  },
+
   'fighter-aura-loop': {
     id: 'fighter-aura-loop',
     about: 'FighterBuildAura in Camp with equipped charms & 2 Arcana: organic breathing halo & orbiting glints',

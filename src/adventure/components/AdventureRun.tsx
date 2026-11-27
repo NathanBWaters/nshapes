@@ -1478,11 +1478,11 @@ const AdventureRun: React.FC<Props> = ({
   const fighterSize = roomyStage
     ? Math.round(
         Math.max(
-          50,
-          Math.min(isWide ? (effectiveLevel.isBoss ? 80 : 86) : (effectiveLevel.isBoss ? 62 : 66), stageH - 30)
+          54,
+          Math.min(isWide ? (effectiveLevel.isBoss ? 84 : 92) : (effectiveLevel.isBoss ? 64 : 74), stageH - 22)
         )
       )
-    : Math.round(Math.max(30, Math.min(effectiveLevel.isBoss ? 38 : 41, stageH - 12)));
+    : Math.round(Math.max(34, Math.min(effectiveLevel.isBoss ? 40 : 44, stageH - 10)));
   // [UI-06] Amplify Boss foeSize differential (>=1.4x fighterSize on all viewports) & Elite boost (1.2x).
   const baseFoeSize = roomyStage
     ? Math.round(Math.min(isWide ? 104 : 80, stageH - 18))
