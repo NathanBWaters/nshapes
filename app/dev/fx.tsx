@@ -42,7 +42,7 @@ import {
   useAnchors,
   useFightFx,
 } from '@/adventure/fx';
-import { combatShakeKindOf } from '@/adventure/fx/catalog';
+import { combatShakeKindOf, hitKindOf } from '@/adventure/fx/catalog';
 import type { Beat } from '@/adventure/fx/types';
 
 const INK = COLORS.slateCharcoal;
@@ -196,9 +196,11 @@ export default function FxStudio() {
           setFlashTrigger(t => t + 1);
         }
         const foeAct = beat.row.enemy;
-        if (foeAct === 'criticalHit') enemyConductor.triggerReaction('crit_pain');
-        else if (foeAct === 'hit') enemyConductor.triggerReaction('pain');
-        else if (foeAct === 'attack') enemyConductor.triggerReaction('attack');
+        if (foeAct === 'criticalHit') {
+          enemyConductor.triggerReaction('crit_pain', { hitTier: beat.tier, hitKind: hitKindOf(beat.event.type), moveKind: beat.event.type });
+        } else if (foeAct === 'hit') {
+          enemyConductor.triggerReaction('pain', { hitTier: beat.tier, hitKind: hitKindOf(beat.event.type), moveKind: beat.event.type });
+        } else if (foeAct === 'attack') enemyConductor.triggerReaction('attack');
         else if (foeAct === 'gloat') enemyConductor.triggerReaction('taunt');
         else if (foeAct === 'regen') enemyConductor.triggerReaction('regen');
         else if (foeAct === 'entrance') enemyConductor.triggerReaction('entrance');
@@ -272,6 +274,9 @@ export default function FxStudio() {
                     maxHp={STUDIO_MAX_HP}
                     mood={enemyConductor.mood}
                     reaction={enemyConductor.reaction}
+                    hitTier={enemyConductor.reaction?.hitTier}
+                    hitKind={enemyConductor.reaction?.hitKind}
+                    hideImpactStars={true}
                     animate={appActive}
                     quiet={reduced}
                   />

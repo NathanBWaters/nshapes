@@ -20,6 +20,7 @@ import { FighterAvatar } from '@/components/fighters';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useCombatShake } from '@/hooks/useCombatShake';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
@@ -82,7 +83,8 @@ import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
 import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
 import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FX_TIMING, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, recipeIdOfEvent, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
-import { SLOWMO_BOSS_EXTRA_HOLD_MS, SLOWMO_BRISK_TOTAL_MS, resolveKillCamMode, viewportShakeScale } from '../fx/KillCamOverlay';
+import { combatShakeKindOf, hitKindOf } from '../fx/catalog';
+import { SLOWMO_BOSS_EXTRA_HOLD_MS, SLOWMO_BRISK_TOTAL_MS, resolveKillCamMode } from '../fx/KillCamOverlay';
 import { flightFor } from '../fx/script';
 import { counterForWeapon } from '../fx/GearBelt';
 import { Banner } from '../fx/visuals';
@@ -298,7 +300,6 @@ const AdventureRun: React.FC<Props> = ({
   const [leadImpactMs, setLeadImpactMs] = useState<number>(FX_TIMING.flightMs);
   const [lethalLanded, setLethalLanded] = useState(false);
   const pendingDamageRef = useRef(0);
-  const shakeParityRef = useRef<1 | -1>(1);
   // [OB-11] Dynamic 1-4D Back Field resolves only traits & features unlocked in save
   const effectiveLevel = useMemo(() => resolvePracticeLevel(level, startSave), [level, startSave]);
   const [run, setRun] = useState(() => {
@@ -521,72 +522,22 @@ const AdventureRun: React.FC<Props> = ({
   }, [triggerEntrance, triggerEnemyReaction]);
 
   // [FX-01] Foe impact transform collision removed: EnemyAvatar is the single transform owner.
-  // [FX-08] Deterministic viewport-scaled, pattern-varied combat screen shake + victory push-in.
-  const screenShakeX = useSharedValue(0);
-  const screenShakeY = useSharedValue(0);
-  const screenShakeRot = useSharedValue(0);
+  // [FX-18] Unified deterministic, viewport-scaled, ScreenShakeStorage- & ReducedMotion-gated combat shake + victory push-in.
+  const { triggerCombatShake, cancelCombatShake, shakeValues } = useCombatShake({
+    enabled: effects,
+    reduced: reducedMotion,
+    stageW: stage.w || 375,
+  });
   const victoryZoom = useSharedValue(1);
   const victoryPanY = useSharedValue(0);
 
   useEffect(() => () => {
-    cancelAnimation(screenShakeX);
-    cancelAnimation(screenShakeY);
-    cancelAnimation(screenShakeRot);
+    cancelCombatShake();
     cancelAnimation(victoryZoom);
     cancelAnimation(victoryPanY);
     if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
     if (finaleTimerRef.current) clearTimeout(finaleTimerRef.current);
-  }, [screenShakeX, screenShakeY, screenShakeRot, victoryZoom, victoryPanY]);
-
-  const triggerStageShake = useCallback(
-    (kind: 'small' | 'medium' | 'large') => {
-      if (!effects || reducedMotion) return;
-      const scale = viewportShakeScale(stageWidthRef.current);
-      const sign = shakeParityRef.current;
-      shakeParityRef.current = sign === 1 ? -1 : 1;
-
-      const decayLegs = (amp: number, legs: number, legSign: 1 | -1) => {
-        const out: number[] = [];
-        let cur = amp * scale;
-        let dir = legSign;
-        for (let i = 0; i < legs; i++) {
-          out.push(Math.round(cur * dir * 100) / 100);
-          cur *= 0.7;
-          dir = dir === 1 ? -1 : 1;
-        }
-        out.push(0);
-        return out;
-      };
-      const toSeq = (vals: number[], legMs: number) =>
-        withSequence(
-          ...vals.map((v, i) =>
-            withTiming(v, {
-              duration: i === 0 ? 24 : i === vals.length - 1 ? 44 : legMs,
-              easing: i === 0 ? EASE.enter : i === vals.length - 1 ? EASE.enterSoft : EASE.ui,
-            })
-          )
-        );
-
-      cancelAnimation(screenShakeX);
-      cancelAnimation(screenShakeY);
-      cancelAnimation(screenShakeRot);
-
-      if (kind === 'small') {
-        screenShakeX.value = 0;
-        screenShakeY.value = toSeq(decayLegs(3, 4, sign), 24);
-        screenShakeRot.value = 0;
-      } else if (kind === 'medium') {
-        screenShakeX.value = toSeq(decayLegs(6, 5, sign), 32);
-        screenShakeY.value = toSeq(decayLegs(4, 5, sign === 1 ? -1 : 1), 32);
-        screenShakeRot.value = 0;
-      } else {
-        screenShakeX.value = toSeq(decayLegs(10, 6, sign), 36);
-        screenShakeY.value = toSeq(decayLegs(6, 6, sign === 1 ? -1 : 1), 36);
-        screenShakeRot.value = toSeq(decayLegs(0.7, 6, sign), 36);
-      }
-    },
-    [effects, reducedMotion, screenShakeX, screenShakeY, screenShakeRot]
-  );
+  }, [cancelCombatShake, victoryZoom, victoryPanY]);
 
   // [FX-23] Unified Beat.onLand sync bus: coordinates MultiplierIgnition slam, KillCamOverlay,
   // viewport-scaled combat shake, creature reactions, fighter vocal calls, and impact haptics.
@@ -607,14 +558,9 @@ const AdventureRun: React.FC<Props> = ({
       setLethalLanded(true);
     }
 
-    if (effects && !reducedMotion) {
-      if (tier === 3 || evType === 'perfect_parry' || evType === 'foe_defeated') {
-        triggerStageShake('large');
-      } else if (tier === 2 || evType === 'blast' || evType === 'parry') {
-        triggerStageShake('medium');
-      } else if (tier === 1 || evType === 'foe_strike' || evType === 'hurt') {
-        triggerStageShake('small');
-      }
+    const shakeKind = combatShakeKindOf(evType, tier);
+    if (shakeKind) {
+      triggerCombatShake(shakeKind, stageWidthRef.current);
     }
     if (tier === 3 && effects && !reducedMotion && runRef.current.status === 'playing') setMegaFlash(f => f + 1);
     switch (row.fighter) {
@@ -625,8 +571,12 @@ const AdventureRun: React.FC<Props> = ({
       case 'entrance': triggerEntrance(); break;
     }
     switch (row.enemy) {
-      case 'criticalHit': triggerEnemyReaction('crit_pain'); break;
-      case 'hit': triggerEnemyReaction('pain'); break;
+      case 'criticalHit':
+        triggerEnemyReaction('crit_pain', { hitTier: tier, hitKind: hitKindOf(evType), moveKind: evType });
+        break;
+      case 'hit':
+        triggerEnemyReaction('pain', { hitTier: tier, hitKind: hitKindOf(evType), moveKind: evType });
+        break;
       case 'gloat': triggerEnemyReaction('taunt'); break;
       case 'attack': triggerEnemyReaction('attack'); break;
       case 'regen': triggerEnemyReaction('regen'); break;
@@ -804,7 +754,7 @@ const AdventureRun: React.FC<Props> = ({
   const handleKillCamImpact = useCallback(() => {
     if (!slowMoCinema || killCamMode !== 'full') return;
     if (level.isBoss) {
-      triggerStageShake('large');
+      triggerCombatShake('large', stageWidthRef.current);
     }
     victoryZoom.value = withSequence(
       withTiming(1.045, { duration: MS.hero * 0.72, easing: EASE.enterSoft }),
@@ -819,7 +769,7 @@ const AdventureRun: React.FC<Props> = ({
       finaleTimerRef.current = null;
       fireFinaleOnce(true);
     }, killCamHoldMs);
-  }, [slowMoCinema, killCamMode, level.isBoss, triggerStageShake, victoryZoom, victoryPanY, killCamHoldMs, fireFinaleOnce]);
+  }, [slowMoCinema, killCamMode, level.isBoss, triggerCombatShake, victoryZoom, victoryPanY, killCamHoldMs, fireFinaleOnce]);
 
   const handleKillCamSkip = useCallback(() => {
     if (finishedFiredRef.current) return;
@@ -1038,7 +988,12 @@ const AdventureRun: React.FC<Props> = ({
       Boolean(effects?.ricochetCards.length) ||
       cards.length > 3;
     const didHeal = rewards.some(r => (r.healing ?? 0) > 0) || Boolean(effects?.bonusHealing);
-    triggerMatch({ isGraceMatch: graceUsed, isMegaMatch, didHeal });
+    triggerMatch({
+      isGraceMatch: graceUsed,
+      isMegaMatch,
+      didHeal,
+      useThrow: !graceUsed && !didHeal && !isMegaMatch,
+    });
     dispatch({ type: 'MATCH', cards, rewards, effects, hinted: info?.hinted });
     // [FX-21] Picked Set cards refill right after thrown flight (260 ms); collateral weapon blasts refill at 460 ms
     const picked = cards.slice(0, 3);
@@ -1100,9 +1055,9 @@ const AdventureRun: React.FC<Props> = ({
 
   const screenStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: screenShakeX.value },
-      { translateY: screenShakeY.value + victoryPanY.value },
-      { rotate: `${screenShakeRot.value}deg` },
+      { translateX: shakeValues.translateX.value },
+      { translateY: shakeValues.translateY.value + victoryPanY.value },
+      { rotate: `${shakeValues.rotateDeg.value}deg` },
       { scale: victoryZoom.value },
     ],
   }));
@@ -1696,7 +1651,7 @@ const AdventureRun: React.FC<Props> = ({
   ) : null;
 
   return (
-    <AnchorsProvider value={anchors}>
+    <AnchorsProvider value={anchors} quiet={!effects}>
     <Animated.View
       style={[st.root, isWide && st.rootWide, { backgroundColor: biome.colors.sky, paddingTop: insets.top }, screenStyle]}
       onLayout={e => setStage({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
@@ -1795,6 +1750,7 @@ const AdventureRun: React.FC<Props> = ({
                     mood={fighterMood}
                     reaction={conductor.reaction}
                     streak={conductor.streak}
+                    cheerReleaseMs={leadImpactMs}
                     animate={appActive}
                     quiet={!effects}
                     interactive
@@ -1840,6 +1796,9 @@ const AdventureRun: React.FC<Props> = ({
                 maxHp={run.foeMaxHp}
                 mood={enemyMood}
                 reaction={enemyConductor.reaction}
+                hitTier={enemyConductor.reaction?.hitTier}
+                hitKind={enemyConductor.reaction?.hitKind}
+                hideImpactStars={true}
                 animate={appActive}
                 quiet={!effects}
                 interactive
@@ -2190,7 +2149,7 @@ const AdventureRun: React.FC<Props> = ({
 
       {/* Everything that is playing right now */}
       {!(isDevBuild && devOverrides.layers.hideFx) && (
-        <FxStage fx={fx} anchors={anchors} size={stage} hideWeaponNameTags suppressKoBanner={fightVictory && !practice} />
+        <FxStage fx={fx} anchors={anchors} size={stage} effects={effects} hideWeaponNameTags suppressKoBanner={fightVictory && !practice} />
       )}
       <KillCamOverlay
         ignition={run.lastSetIgnition}
@@ -2265,7 +2224,7 @@ const AdventureRun: React.FC<Props> = ({
           </View>
         );
       })()}
-      <MegaFlash trigger={megaFlash} />
+      <MegaFlash trigger={megaFlash} enabled={effects} stageW={stage.w || 375} />
 
       {/* Tip: pauses the fight until accepted. The part it talks about stays lit. */}
       {tip && !ended && (() => {

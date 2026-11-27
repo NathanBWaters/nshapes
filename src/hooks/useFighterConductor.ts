@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FighterAmbientMood,
-  FighterReactionEvent,
   FighterReactionType,
   resolveFighterAmbientMood,
 } from '@/utils/fighterAnimations';
@@ -15,6 +14,14 @@ interface UseFighterConductorOptions {
   isActiveRound?: boolean;
 }
 
+export type FighterConductorReactionType = FighterReactionType | 'throw';
+
+export interface FighterConductorReactionEvent {
+  type: FighterConductorReactionType;
+  id: number;
+  releaseMs?: number;
+}
+
 interface TriggerMatchOptions {
   /** Match used a Grace to forgive 1 mismatched attribute */
   isGraceMatch?: boolean;
@@ -22,6 +29,10 @@ interface TriggerMatchOptions {
   isMegaMatch?: boolean;
   /** Match also healed the fighter */
   didHeal?: boolean;
+  /** Fire dedicated Set-launch `'throw'` lunge on normal Sets (`[FX-09]`) */
+  useThrow?: boolean;
+  /** Dynamic cheer release delay (ms) synced to Set flight time (`[FX-23]`) */
+  releaseMs?: number;
 }
 
 interface TriggerMistakeOptions {
@@ -41,7 +52,7 @@ export function useFighterConductor({
   targetScore = 0,
   isActiveRound = true,
 }: UseFighterConductorOptions) {
-  const [reaction, setReaction] = useState<FighterReactionEvent | null>(null);
+  const [reaction, setReaction] = useState<FighterConductorReactionEvent | null>(null);
   const [selectedCount, setSelectedCount] = useState<number>(0);
   const [isBoardIdle, setIsBoardIdle] = useState<boolean>(false);
   const [streak, setStreak] = useState<number>(0);
@@ -51,11 +62,18 @@ export function useFighterConductor({
   const lastManualReactionAtRef = useRef<number>(0);
   const streakRef = useRef<number>(0);
 
-  const fireReaction = useCallback((type: FighterReactionType) => {
-    reactionCounterRef.current += 1;
-    lastManualReactionAtRef.current = Date.now();
-    setReaction({ type, id: reactionCounterRef.current });
-  }, []);
+  const fireReaction = useCallback(
+    (type: FighterConductorReactionType, meta?: { releaseMs?: number }) => {
+      reactionCounterRef.current += 1;
+      lastManualReactionAtRef.current = Date.now();
+      setReaction(
+        meta?.releaseMs !== undefined
+          ? { type, id: reactionCounterRef.current, releaseMs: meta.releaseMs }
+          : { type, id: reactionCounterRef.current }
+      );
+    },
+    []
+  );
 
   // Automatically react to external HP changes (bomb/enemy tick damage or passive heal)
   useEffect(() => {
@@ -95,8 +113,12 @@ export function useFighterConductor({
       } else if (opts.isGraceMatch) {
         // Near-miss saved by Grace!
         fireReaction('relief');
+      } else if (opts.useThrow && !opts.isMegaMatch && nextStreak < 3) {
+        // [FX-09]: Dedicated directional Set-launch throw lunge on normal Sets;
+        // streaks >= 3 & mega-matches celebrate with an impact-synced cheer hop ([FX-23]).
+        fireReaction('throw');
       } else {
-        fireReaction('joy');
+        fireReaction('joy', opts.releaseMs !== undefined ? { releaseMs: opts.releaseMs } : undefined);
       }
     },
     [fireReaction]

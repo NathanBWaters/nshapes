@@ -485,20 +485,21 @@ const ExplosionEmberShard: React.FC<{ at: Point; deg: number; dist: number; size
   delay,
   spin,
 }) => {
-  const p = useProgress(EXPLOSION_TIMING.emberMs, delay, EASE.out);
+  const p = useProgress(EXPLOSION_TIMING.emberMs, delay, MOTION.enter);
   const rad = (deg * Math.PI) / 180;
   const dx = Math.cos(rad) * dist;
   const dy = Math.sin(rad) * dist;
   const half = size / 2;
   const style = useAnimatedStyle(() => {
     const t = p.value;
+    const inv = 1 - t;
     return {
-      opacity: t <= 0 ? 0 : seg(t, [0, 0.65, 1], [1, 0.95, 0]),
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.55, 0.92, 1], [1, 0.9, 0, 0]),
       transform: [
         { translateX: dx * t },
-        // subtle upward lift then gravity curve across dissipation
-        { translateY: dy * t - 6 * Math.sin(Math.PI * t) },
-        { scale: seg(t, [0, 0.2, 1], [0.95, 1, 0]) },
+        // subtle upward arc that settles to zero vertical velocity at t = 1 (no hard stop)
+        { translateY: dy * t - 8 * t * inv * inv },
+        { scale: seg(t, [0, 0.18, 0.92, 1], [0.95, 1, 0.15, 0]) },
         { rotate: `${deg + spin * t}deg` },
       ],
     };
@@ -1056,7 +1057,8 @@ export const SwishRibbon: React.FC<{
   testID?: string;
 }> = ({ from, to, bend, color, delay = 0, ms, testID }) => {
   const reduced = useReducedMotion();
-  const total = Math.max(80, ms + 70);
+  const total = Math.max(80, ms + 48);
+  const flightRatio = Math.min(1, ms / total);
   const p = useProgress(total, delay, EASE.linear);
 
   const dx = to.x - from.x;
@@ -1080,38 +1082,65 @@ export const SwishRibbon: React.FC<{
   const lctrl: Point = { x: ctrl.x - minX, y: ctrl.y - minY };
   const lp2: Point = { x: to.x - minX, y: to.y - minY };
 
-  const segTail = subCurvePath(lp0, lctrl, lp2, 0.04, 0.42);
-  const segMid = subCurvePath(lp0, lctrl, lp2, 0.34, 0.76);
-  const segHead = subCurvePath(lp0, lctrl, lp2, 0.66, 0.99);
+  const segTail = subCurvePath(lp0, lctrl, lp2, 0.04, 0.38);
+  const segMid = subCurvePath(lp0, lctrl, lp2, 0.3, 0.7);
+  const segHead = subCurvePath(lp0, lctrl, lp2, 0.62, 0.99);
 
-  const style = useAnimatedStyle(() => {
+  // Each segment reveals strictly BEHIND the accelerating thrown Ghost card
+  // (never ahead of it during wind-up or early flight) and whips cleanly out after passage.
+  const tailStyle = useAnimatedStyle(() => {
     const t = p.value;
+    const f = flightRatio;
     return {
-      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.16, 0.68, 1], [0, 0.9, 0.8, 0]),
+      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.28 * f, 0.46 * f, 0.78 * f, 1], [0, 0, 0.72, 0, 0]),
+      transform: [{ scale: seg(t, [0, 0.28 * f, 0.56 * f, 1], [0.96, 0.96, 1, 1]) }],
+    };
+  });
+  const midStyle = useAnimatedStyle(() => {
+    const t = p.value;
+    const f = flightRatio;
+    return {
+      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.54 * f, 0.74 * f, Math.min(0.98, 0.98 * f + 0.08), 1], [0, 0, 0.78, 0, 0]),
+      transform: [{ scale: seg(t, [0, 0.54 * f, 0.78 * f, 1], [0.96, 0.96, 1, 1]) }],
+    };
+  });
+  const headStyle = useAnimatedStyle(() => {
+    const t = p.value;
+    const f = flightRatio;
+    return {
+      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.76 * f, 0.94 * f, 1], [0, 0, 0.84, 0]),
+      transform: [{ scale: seg(t, [0, 0.76 * f, 0.96 * f, 1], [0.97, 0.97, 1, 1]) }],
     };
   });
 
   if (reduced) return null;
 
   return (
-    <Animated.View
+    <View
       pointerEvents="none"
       testID={testID ?? 'fx-swish-ribbon'}
-      style={[st.abs, { left: minX, top: minY, width: w, height: h }, style]}
+      style={[st.abs, { left: minX, top: minY, width: w, height: h }]}
     >
-      <Svg width={w} height={h}>
-        {/* Crisp 1.5 px ink outer outline along the tapered swish */}
-        <Path d={segTail} fill="none" stroke={CHARCOAL_INK} strokeWidth={7} strokeLinecap="round" opacity={0.45} />
-        <Path d={segMid} fill="none" stroke={CHARCOAL_INK} strokeWidth={11} strokeLinecap="round" opacity={0.75} />
-        <Path d={segHead} fill="none" stroke={CHARCOAL_INK} strokeWidth={15} strokeLinecap="round" opacity={0.92} />
-        {/* Color-matched tapered ribbon body */}
-        <Path d={segTail} fill="none" stroke={color} strokeWidth={4} strokeLinecap="round" opacity={0.55} />
-        <Path d={segMid} fill="none" stroke={color} strokeWidth={8} strokeLinecap="round" opacity={0.85} />
-        <Path d={segHead} fill="none" stroke={color} strokeWidth={11.5} strokeLinecap="round" opacity={0.96} />
-        {/* Bright cream gleam on the leading swish head */}
-        <Path d={segHead} fill="none" stroke="#FFFDF5" strokeWidth={3.5} strokeLinecap="round" opacity={0.85} />
-      </Svg>
-    </Animated.View>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, tailStyle]}>
+        <Svg width={w} height={h}>
+          <Path d={segTail} fill="none" stroke={CHARCOAL_INK} strokeWidth={4.5} strokeLinecap="round" opacity={0.42} />
+          <Path d={segTail} fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" opacity={0.55} />
+        </Svg>
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, midStyle]}>
+        <Svg width={w} height={h}>
+          <Path d={segMid} fill="none" stroke={CHARCOAL_INK} strokeWidth={7.5} strokeLinecap="round" opacity={0.68} />
+          <Path d={segMid} fill="none" stroke={color} strokeWidth={4.8} strokeLinecap="round" opacity={0.82} />
+        </Svg>
+      </Animated.View>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, headStyle]}>
+        <Svg width={w} height={h}>
+          <Path d={segHead} fill="none" stroke={CHARCOAL_INK} strokeWidth={10.5} strokeLinecap="round" opacity={0.86} />
+          <Path d={segHead} fill="none" stroke={color} strokeWidth={7.5} strokeLinecap="round" opacity={0.92} />
+          <Path d={segHead} fill="none" stroke="#FFFDF5" strokeWidth={2.2} strokeLinecap="round" opacity={0.8} />
+        </Svg>
+      </Animated.View>
+    </View>
   );
 };
 

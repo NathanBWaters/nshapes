@@ -3,8 +3,9 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Character, PlayerStats } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
-import { FighterAmbientMood, FighterReactionEvent } from '@/utils/fighterAnimations';
+import { FighterAmbientMood } from '@/utils/fighterAnimations';
 import { FighterAvatar } from './fighters';
+import type { FighterAvatarReactionEvent } from './fighters/FighterAvatar';
 import Icon from './Icon';
 import type { FunRating } from '@/analytics/fightEvent';
 
@@ -12,7 +13,7 @@ interface FreePlayHeaderProps {
   character: Character;
   playerStats: PlayerStats;
   fighterMood: FighterAmbientMood;
-  fighterReaction: FighterReactionEvent | null;
+  fighterReaction: FighterAvatarReactionEvent | null;
   fighterStreak: number;
   hasActiveHint: boolean;
   onHintPress: () => void;

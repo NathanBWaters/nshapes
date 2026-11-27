@@ -112,7 +112,7 @@ type ActiveOverlay =
   | { kind: 'none' }
   | { kind: 'preview'; level: LevelDef }
   | { kind: 'teaching'; teaching: Teaching }
-  | { kind: 'reference'; mechanic: MechanicDef }
+  | { kind: 'reference'; mechanic: MechanicDef; returnPreviewLevel?: LevelDef }
   | { kind: 'unlocks'; unlocks: Unlock[]; pendingEnding?: boolean }
   | { kind: 'rescue'; keyId: string }
   | { kind: 'ending' };
@@ -217,7 +217,11 @@ const AdventureMode: React.FC<Props> = ({
 
   useAndroidBackHandler(() => {
     if (overlay.kind === 'reference') {
-      setOverlay({ kind: 'none' });
+      setOverlay(
+        overlay.returnPreviewLevel
+          ? { kind: 'preview', level: overlay.returnPreviewLevel }
+          : { kind: 'none' }
+      );
       return true;
     }
     if (overlay.kind === 'preview') {
@@ -737,7 +741,13 @@ const AdventureMode: React.FC<Props> = ({
                 }
               : undefined
           }
-          onShowMechanic={id => setOverlay({ kind: 'reference', mechanic: MECHANICS[id] })}
+          onShowMechanic={id =>
+            setOverlay({
+              kind: 'reference',
+              mechanic: MECHANICS[id],
+              returnPreviewLevel: previewLevel ?? undefined,
+            })
+          }
           onOpenCamp={tab => {
             // The lesson was read and is being acted on: it counts as seen, and the fight waits on the map
             sfx('confirm');
@@ -758,7 +768,20 @@ const AdventureMode: React.FC<Props> = ({
           onClose={() => finishLesson(activeTeaching)}
         />
       ) : (
-        <MechanicIntro mechanic={activeReference} fighter={save.selectedFighter} cta="Close" quiz={false} dismissible onClose={() => setOverlay({ kind: 'none' })} />
+        <MechanicIntro
+          mechanic={activeReference}
+          fighter={save.selectedFighter}
+          cta="Close"
+          quiz={false}
+          dismissible
+          onClose={() =>
+            setOverlay(
+              overlay.kind === 'reference' && overlay.returnPreviewLevel
+                ? { kind: 'preview', level: overlay.returnPreviewLevel }
+                : { kind: 'none' }
+            )
+          }
+        />
       )}
       {activeUnlocks.length > 0 && (
         <UnlockReveal

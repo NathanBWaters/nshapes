@@ -61,7 +61,7 @@ export const CARD_MOTION = {
   missWashOpacity: 0.3,
   missWashColor: '#EF4444',
   /** ...and steps out before the board replaces it (Adventure replaces a wrong pick 380 ms after it) */
-  missLeaveAtMs: 300,
+  missLeaveAtMs: 240,
   missLeaveScale: 0.88,
   /** If nothing replaced it (a tutorial board keeps its cards), it comes back after this long */
   missReturnAtMs: 700,
@@ -243,9 +243,9 @@ const CardMotion: React.FC<Props> = ({
         ReduceMotion.Never
       )
     );
-    const leaveMs = exitMs(MS.move);
+    const leaveMs = exitMs(MS.quick);
     missLeave.value = withSequence(
-      withDelay(CARD_MOTION.missLeaveAtMs, withTiming(1, { duration: leaveMs, easing: EASE.exit, ...keep }), ReduceMotion.Never),
+      withDelay(CARD_MOTION.missLeaveAtMs, withTiming(1, { duration: leaveMs, easing: EASE.exitSoft, ...keep }), ReduceMotion.Never),
       withDelay(
         CARD_MOTION.missReturnAtMs - CARD_MOTION.missLeaveAtMs - leaveMs,
         withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }),

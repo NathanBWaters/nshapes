@@ -476,7 +476,14 @@ describe('Fighter Animation System', () => {
       expect(avatar.props.accessibilityLabel).toContain('pristine');
       expect(queryByTestId('fighter-damage-knocked_out')).toBeNull();
 
-      // Match triggers joy reaction on the HUD fighter
+      // Normal Set launch triggers dedicated directional 'throw' pose ([FX-09]);
+      // hitting a 3+ streak transitions into the impact-synced 'joy' cheer hop ([FX-23]).
+      fireEvent.press(getByTestId('mock-board-match'));
+      expect(getByTestId('fighter-fx-throw')).toBeTruthy();
+
+      fireEvent.press(getByTestId('mock-board-match'));
+      expect(getByTestId('fighter-fx-throw')).toBeTruthy();
+
       fireEvent.press(getByTestId('mock-board-match'));
       expect(getByTestId('fighter-fx-joy')).toBeTruthy();
 

@@ -6,6 +6,15 @@ import {
   resolveEnemyAmbientMood,
 } from '@/utils/enemyAnimations';
 import { isNaturallySleepyEnemy } from '@/components/enemies/enemyRegistry';
+import type { HitKind, HitTier } from '@/utils/motion';
+
+export interface EnemyConductorReactionMeta {
+  hitTier?: HitTier;
+  hitKind?: HitKind;
+  moveKind?: string;
+}
+
+export interface EnemyConductorReactionEvent extends EnemyReactionEvent, EnemyConductorReactionMeta {}
 
 interface UseEnemyConductorOptions {
   enemyName?: string | null;
@@ -18,8 +27,8 @@ interface UseEnemyConductorOptions {
 
 interface EnemyConductorState {
   mood: EnemyAmbientMood;
-  reaction: EnemyReactionEvent | null;
-  triggerReaction: (type: EnemyReactionType) => void;
+  reaction: EnemyConductorReactionEvent | null;
+  triggerReaction: (type: EnemyReactionType, meta?: EnemyConductorReactionMeta) => void;
 }
 
 /**
@@ -36,14 +45,14 @@ export function useEnemyConductor(options: UseEnemyConductorOptions): EnemyCondu
     isActiveCombat = true,
   } = options;
 
-  const [reaction, setReaction] = useState<EnemyReactionEvent | null>(null);
+  const [reaction, setReaction] = useState<EnemyConductorReactionEvent | null>(null);
   const reactionCounterRef = useRef(0);
 
   const naturallySleepy = isNaturallySleepyEnemy(enemyName);
 
-  const emitReaction = useCallback((type: EnemyReactionType) => {
+  const emitReaction = useCallback((type: EnemyReactionType, meta?: EnemyConductorReactionMeta) => {
     reactionCounterRef.current += 1;
-    setReaction({ type, id: reactionCounterRef.current });
+    setReaction(meta ? { type, id: reactionCounterRef.current, ...meta } : { type, id: reactionCounterRef.current });
   }, []);
 
   const mood = useMemo(

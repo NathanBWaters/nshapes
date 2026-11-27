@@ -152,10 +152,9 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
         await assertAllTextVisible(page, `Story beat ${beat} (${vp.width}x${vp.height})`);
         await page.getByTestId('story-next').click();
       }
-      // The foe has the first word (its taunt), then the fighter says what to do
-      await expect(page.getByTestId('run-foe-taunt')).toBeVisible({ timeout: 10000 });
-      await assertAllTextVisible(page, `1-1 Foe Taunt (${vp.width}x${vp.height})`);
+      // [OB-15] Coaching-first opening: 1-1 suppresses the foe taunt and opens straight onto live coaching
       await expect(page.getByTestId('run-coach-banner')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByTestId('run-foe-taunt')).toHaveCount(0);
       await expect(page.getByTestId('run-stage')).toBeVisible();
       await page.waitForTimeout(400);
       await assertAllTextVisible(page, `1-1 Guided Board (${vp.width}x${vp.height})`);
