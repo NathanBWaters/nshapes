@@ -35,16 +35,37 @@
  * animation's test: it is how the next agent sees what you saw.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { studio } from './shot-kit.mjs';
-import board from './shots/board.mjs';
-import creatures from './shots/creatures.mjs';
-import fight from './shots/fight.mjs';
-import fx from './shots/fx.mjs';
-import pr from './shots/pr.mjs';
-import results from './shots/results.mjs';
-import screens from './shots/screens.mjs';
 
-const AREAS = { fx, fight, board, creatures, results, screens, pr };
+const SHOTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'shots');
+
+// Keep canonical display order for core areas; auto-discovered lane files follow alphabetically.
+const PREFERRED_AREA_ORDER = ['fx', 'fight', 'board', 'creatures', 'results', 'screens', 'pr'];
+
+const areaFiles = fs
+  .readdirSync(SHOTS_DIR)
+  .filter(file => file.endsWith('.mjs'))
+  .sort((a, b) => {
+    const areaA = a.slice(0, -4);
+    const areaB = b.slice(0, -4);
+    const idxA = PREFERRED_AREA_ORDER.indexOf(areaA);
+    const idxB = PREFERRED_AREA_ORDER.indexOf(areaB);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return areaA.localeCompare(areaB);
+  });
+
+const AREAS = {};
+for (const file of areaFiles) {
+  const area = file.slice(0, -4);
+  const mod = await import(pathToFileURL(path.join(SHOTS_DIR, file)).href);
+  AREAS[area] = mod.default ?? {};
+}
+
 const SHOTS = {};
 for (const [area, shots] of Object.entries(AREAS)) {
   for (const [name, shot] of Object.entries(shots)) {

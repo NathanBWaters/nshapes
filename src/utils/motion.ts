@@ -57,10 +57,18 @@ export const CURVE = {
   enter: [0.16, 1, 0.3, 1],
   enterSoft: [0.22, 1, 0.36, 1],
   ui: [0.33, 1, 0.68, 1],
+  /** Bidirectional in-place UI state swaps (toggles, tabs, chips) */
+  state: [0.4, 0, 0.2, 1],
   move: [0.76, 0, 0.24, 1],
   exit: [0.7, 0, 0.84, 0],
   exitSoft: [0.32, 0, 0.67, 0],
   pop: [0.34, 1.56, 0.64, 1],
+  /** Gentle ~7% friendly overshoot pop (badges, companion bubbles, tooltips) */
+  popSoft: [0.175, 0.885, 0.32, 1.275],
+  /** Pure pullback anticipation dip before launch or dismissal */
+  anticipate: [0.36, 0, 0.66, -0.56],
+  /** Built-in pullback anticipation + playful overshoot (rewards, easter eggs) */
+  snapBack: [0.68, -0.55, 0.265, 1.55],
   drift: [0.37, 0, 0.63, 1],
   impact: [0.3, 0, 0.75, 0.3],
 } as const;
@@ -79,6 +87,8 @@ export const EASE = {
   enterSoft: bezier(CURVE.enterSoft),
   /** Small interface parts (ease-out-cubic) */
   ui: bezier(CURVE.ui),
+  /** Bidirectional in-place UI state swaps (toggles, tabs) */
+  state: bezier(CURVE.state),
   /** From one place on screen to another (ease-in-out-quart) */
   move: bezier(CURVE.move),
   /** Leaving: slow start, gone fast (ease-in-expo) */
@@ -92,6 +102,12 @@ export const EASE = {
   exitSoft: bezier(CURVE.exitSoft),
   /** A pop that visibly overshoots (ease-out-back). Position and scale only, never opacity. */
   pop: bezier(CURVE.pop),
+  /** Friendly gentle ~7% overshoot pop (badges, companion bubbles). Position and scale only. */
+  popSoft: bezier(CURVE.popSoft),
+  /** Pullback anticipation wind-up before launch or exit. Position and scale only. */
+  anticipate: bezier(CURVE.anticipate),
+  /** Pullback anticipation + playful overshoot snap in one timing. Position and scale only. */
+  snapBack: bezier(CURVE.snapBack),
   /** Ambient drift, breathing (ease-in-out-sine) */
   drift: bezier(CURVE.drift),
   /** Falling or thrown INTO a hit: gathers speed and lands at full speed (the hit is the stop). Never an entrance that just arrives. */
@@ -118,6 +134,8 @@ export const SPRING = {
   settle: { stiffness: 170, damping: 26, mass: 1 },
   /** Big things (a banner, a sheet, a boss): ratio 1.05, about 0.68 s */
   heavy: { stiffness: 90, damping: 20, mass: 1 },
+  /** Massive Tier-4 bosses & heavy stone slams: ratio 0.93, weighty inertia, ~0.82 s */
+  boss: { stiffness: 110, damping: 23, mass: 1.4 },
   /** A little life (a dealt card, a counted coin): ratio 0.6, about 10% overshoot */
   lively: { stiffness: 260, damping: 19.5, mass: 1 },
   /** Rewards, mascots, stars: ratio 0.47, about 19% overshoot, about 0.56 s */
@@ -507,3 +525,278 @@ export const cheerIntensity = (streak: number): number =>
 
 /** How long a line of text must stay still to be read: half a second to find it, 0.3 s a word. */
 export const textHoldMs = (words: number): number => 500 + 300 * Math.max(1, words);
+
+/* -------------------------------------------------------------------------- */
+/* Disney-12 × Sakurai Phase 0 Tokens & Pure Worklets                         */
+/* -------------------------------------------------------------------------- */
+
+/** Curved motion path ratios (Disney #7 Arcs + Sakurai Ep. #037 fast-fall gravity). */
+export const ARC = {
+  /** Subtle organic UI bow as a share of travel distance (10–20%) */
+  subtleRatio: 0.14,
+  /** Sweeping hero/projectile arc as a share of travel distance (30–40%) */
+  dramaticRatio: 0.34,
+  /** Standard UI tooltip/card/modal subtle perpendicular bow (px) */
+  uiBowPx: 12,
+  /** Asymmetric jump apex position along normalized time (0.46 = faster fall than rise) */
+  jumpApexT: 0.46,
+  /** Descent duration share vs ascent for punchy landings (Sakurai Ep. #037) */
+  fallToRiseRatio: 0.85,
+} as const;
+
+/**
+ * Pure worklet: evaluates a curved 2D point from `from` to `to` at `t ∈ [0, 1]`
+ * bowing perpendicular to the chord by `bowPx` (`skew ∈ [-0.4, 0.4]` shifts apex
+ * earlier for ease-out arcs or later for ease-in arcs).
+ */
+export const sampleArcPoint = (
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  t: number,
+  bowPx: number,
+  skew = 0
+): { x: number; y: number } => {
+  'worklet';
+  const ct = Math.max(0, Math.min(1, t));
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const warped = ct + skew * ct * (1 - ct);
+  const bow = Math.sin(Math.PI * Math.max(0, Math.min(1, warped))) * bowPx;
+  return { x: fromX + dx * ct + nx * bow, y: fromY + dy * ct + ny * bow };
+};
+
+/**
+ * Pure worklet: asymmetric gravity parabola (`0` at `t=0` and `t=1`, `-liftPx` at apex).
+ * `apexT < 0.5` makes descent sharper and heavier than ascent.
+ */
+export const sampleJumpArcY = (t: number, liftPx: number, apexT: number = ARC.jumpApexT): number => {
+  'worklet';
+  const ct = Math.max(0, Math.min(1, t));
+  if (ct <= apexT) {
+    const u = 1 - ct / Math.max(0.05, apexT);
+    return -liftPx * (1 - u * u);
+  }
+  const u = (ct - apexT) / Math.max(0.05, 1 - apexT);
+  return -liftPx * (1 - u * u);
+};
+
+/**
+ * Volume-preserving squash & stretch tiers (`scaleX = (1 / scaleY)^conserve`).
+ * Matches Disney elasticity spectrum from rigid cardstock UI to cartoon celebrations.
+ */
+export const SQUASH_TIER = {
+  /** Tactile cardstock / buttons / panels: 2–4% deformation prevents dead mechanical feel */
+  ui: { squashY: 0.96, stretchY: 1.03, conserve: 0.75, holdMs: 32 },
+  /** Heavy / Boss / Badger mass: deep compression on impact, minimal upward stretch */
+  heavy: { squashY: 0.82, stretchY: 1.09, conserve: 1.0, holdMs: 48 },
+  /** Standard creature hops, throws, medium landings */
+  lively: { squashY: 0.85, stretchY: 1.15, conserve: 1.0, holdMs: 32 },
+  /** Hero rewards, Corgi/Tabby leaps, Friend Rescues */
+  playful: { squashY: 0.78, stretchY: 1.22, conserve: 1.0, holdMs: 48 },
+  /** Max cartoon exaggeration (clamped safely to preserve 3px ink outlines) */
+  cartoon: { squashY: 0.7, stretchY: 1.32, conserve: 1.0, holdMs: 64 },
+} as const;
+
+/** Exact constant-area (or damped UI) volume-preserving scale pair. */
+export const volumeScale = (
+  scaleY: number,
+  conserve = 1.0,
+  minY = 0.68,
+  maxY = 1.35
+): { scaleX: number; scaleY: number } => {
+  'worklet';
+  const y = Math.max(minY, Math.min(maxY, scaleY));
+  const x = conserve === 1 ? 1 / y : Math.pow(1 / y, conserve);
+  return { scaleX: x, scaleY: y };
+};
+
+/**
+ * Anticipation & Follow-Through phase contracts (Disney #2/#5 + Sakurai Ep. #036/#049/#077).
+ * Player combat actions snap on frame 1; enemy/boss telegraphs hold longer for parry readability.
+ */
+export const PHASE = {
+  /** Skip anticipation below this total duration (ms) so micro-taps stay instant */
+  skipAnticipationUnderMs: 150,
+  /** Standard anticipation share of total move (never exceed 0.33 for combat attacks) */
+  anticipationMaxShare: 0.33,
+  /** Minimum follow-through + recovery share so aftermath defines the move's impression */
+  followThroughMinShare: 0.58,
+  /** Subtle UI card/button pre-expansion gather */
+  uiGatherMs: 48,
+  uiGatherScale: 0.97,
+  /** Boss extended telegraph wind-up & dread hold (ms) */
+  bossWindMs: 48,
+  bossCoilHoldMs: 144,
+  bossApexHoldMs: 80,
+  /** Expressive "moving hold" micro-drift (1.5% scale or ±1.5px tremor) so non-hitstop holds never look dead */
+  movingHoldScaleDelta: 0.015,
+  movingHoldTremorPx: 1.5,
+} as const;
+
+/** 4-tier overlapping-action drag delays (ms at 60fps) & asymmetric phase lags (rad, anti-twinning). */
+export const OVERLAP = {
+  /** Discrete reaction / UI choreography lag offsets (ms) */
+  rootMs: 0,
+  primaryMs: 32, // Head / limbs / primary icon behind torso or card (2f)
+  secondaryMs: 64, // Ears / paws / modal body behind container (4f)
+  tertiaryMs: 96, // Tail tip / cloak / badge / reward label (6f)
+  uiContentMs: 48, // Card/modal interior trailing its frame (3f)
+  exitContentLeadMs: 48, // Content starts exiting 3f BEFORE its container collapses
+  /** Continuous spine/appendage wave phase lags (radians) — L !== R bans twinning */
+  headRad: 0.68,
+  swayRad: 0.52,
+  leftAppendageRad: 1.28,
+  rightAppendageRad: 1.44,
+  tailWhipRad: 0.35,
+  cloakTipRad: 1.72,
+} as const;
+
+/** Mass-class timing & inertia multipliers across nimble critters, fighters, bruisers, and bosses. */
+export const MASS_CLASS = {
+  nimble: { timeMult: 0.82, recoilMult: 1.12, squashTier: 'playful' as const, spring: 'lively' as const },
+  standard: { timeMult: 1.0, recoilMult: 1.0, squashTier: 'lively' as const, spring: 'lively' as const },
+  heavy: { timeMult: 1.25, recoilMult: 0.8, squashTier: 'heavy' as const, spring: 'settle' as const },
+  boss: { timeMult: 1.45, recoilMult: 0.65, squashTier: 'heavy' as const, spring: 'boss' as const },
+} as const;
+
+export type MassClass = keyof typeof MASS_CLASS;
+
+/** Seam-free continuous loop guardrails (Disney #4/#9/#12 + battery/fatigue safety). */
+export const IDLE_LOOP = {
+  /** Max vertical scale delta for creature breathing (±4%) */
+  creatureBreathMax: 0.04,
+  /** Max scale delta for subtle UI ambient pulse (±2%) */
+  uiAmbientScaleMax: 0.02,
+  /** Max ambient travel as a share of hero travel (<5%) */
+  maxAmbientTravelRatio: 0.05,
+  /** Golden-ratio frequency offset preventing sway from locking to breath */
+  goldenSwayRatio: 0.618,
+  /** Incommensurate prime-ish periods (ms) so ambient siblings never sync up */
+  primePeriodsMs: [2900, 3700, 5300, 7100, 11300] as const,
+  /** 120° phase spread (rad) for 3-element orbital/dot loops */
+  triadPhaseRad: (Math.PI * 2) / 3,
+} as const;
+
+/**
+ * Pure deterministic PRNG step (LCG) for repeatable blink, gaze & fidget schedules
+ * so creatures stay organic while `npm run motion:capture -- --twice` matches frame-for-frame.
+ */
+export const nextDeterministicUnit = (seed: number): { value: number; nextSeed: number } => {
+  'worklet';
+  const nextSeed = (Math.imul(seed | 0, 1664525) + 1013904223) >>> 0;
+  return { value: nextSeed / 4294967296, nextSeed };
+};
+
+/** Deterministic FNV-1a 32-bit string hash for seeding repeatable ambient schedules. */
+export const seedFromKey = (key: string): number => {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h || 1;
+};
+
+/** 1–2 frame directional velocity smears for crisp 2D snap on fast strikes & flights (Sakurai Ep. #148/#177/#190). */
+export const SMEAR = {
+  /** Smear lives 1–2 frames only — longer reads as muddy blur */
+  durationMs: 32,
+  /** Stretch along velocity axis, inverse squash perpendicular */
+  strikeScaleX: 1.24,
+  strikeScaleY: 0.81,
+  /** Forward shear leaning into swing direction (deg) */
+  strikeSkewDeg: 11,
+  /** Flying card/projectile peak velocity stretch */
+  flightScaleX: 1.16,
+  flightScaleY: 0.86,
+} as const;
+
+/** Sakurai Ep. #056 4-stage explosion & Ep. #130 hit-spark timing tokens (ms). */
+export const IMPACT_FX = {
+  /** Stage 1: high-contrast dark+bright flash (2 frames, never full-screen white) */
+  flashMs: 32,
+  /** Stage 2: forceful outward fireball / spark burst (animates DURING hitstop!) */
+  fireballMs: 144,
+  /** Stage 3: dark-outlined storybook smoke hand-off */
+  smokeMs: 260,
+  /** Stage 4: ember afterglow & clean dissipation */
+  dissipateMs: 180,
+  /** Max simultaneous active particles per beat (battery + readability cap) */
+  maxParticlesPerBeat: 12,
+} as const;
+
+/** Secondary action subordination bounds (Disney #3 Staging & #8 Secondary Action). */
+export const SECONDARY = {
+  /** Support starts this long after hero beat (ms) */
+  startAfterMinMs: 96,
+  startAfterMaxMs: 192,
+  /** Support travel capped at 50–70% of hero travel */
+  travelRatio: 0.6,
+  /** Amplitude ceiling by context (ratio of primary) */
+  uiAmpMax: 0.25,
+  cardAmpMax: 0.4,
+  combatAmpMax: 0.6,
+  heroAmpMax: 0.7,
+  /** One-Third Rule: max fraction of on-screen siblings moving at once */
+  maxSimultaneousShare: 1 / 3,
+} as const;
+
+/** Vestibular & WCAG 2.1 safety constants (2.2.2, 2.3.1, 2.3.3). */
+export const ACCESSIBLE = {
+  /** Reduced-motion replacement cross-fade duration (ms, always paired with STAYS) */
+  fadeMs: 120,
+  /** Max allowed subtle scale change under gentle reduced-motion fallback */
+  maxSafeScaleDelta: 0.05,
+  /** WCAG 2.3.1 hard ceiling: never flash more than 3 times per second */
+  maxFlashesPerSec: 3,
+} as const;
+
+/** Halves duration for reduced-motion meaning-preserving fades (clamped to crisp floor). */
+export const reducedMs = (ms: number): number =>
+  Math.max(64, Math.min(ACCESSIBLE.fadeMs, Math.round(ms * 0.5)));
+
+/** Tactile 3D storybook button push-down tokens (`ui.tsx` `Btn` & tabletop CTAs). */
+export const BTN_PRESS = {
+  /** Press-in compression duration (ms, instant tactile answer <100ms) */
+  pressInMs: 60,
+  /** Pressed scale (matches `SCALE.press`) */
+  scale: SCALE.press,
+  /** Vertical push-down mimicking bottom-ledge compression (px) */
+  translateY: 2,
+  /** Compact/small button push-down (px) */
+  smallTranslateY: 1.5,
+  /** Reduced-motion fallback pressed opacity delta */
+  reducedOpacity: 0.86,
+} as const;
+
+/** Shared modal & `PopIn` enter/exit choreography tokens (content lags enter, leads exit). */
+export const MODAL_MOTION = {
+  backdropEnterMs: MS.feedback,
+  backdropExitMs: exitMs(MS.feedback),
+  enterMs: MS.quick,
+  exitMs: exitMs(MS.quick),
+  sheetEnterMs: MS.panel,
+  sheetExitMs: exitMs(MS.panel),
+  popInFromScale: 0.94,
+  popOutToScale: 0.96,
+  contentLagMs: OVERLAP.uiContentMs,
+  exitContentLeadMs: OVERLAP.exitContentLeadMs,
+} as const;
+
+/** Tokenized weapon tap flourish & burst overlay timings (`WeaponAvatar.tsx`, Lane 3). */
+export const WEAPON_FX = {
+  windMs: 64,
+  strikeMs: 120,
+  holdMs: 80,
+  settleMs: 260,
+  burstMs: 440,
+  particleStaggerMs: 48,
+  idleGlintScale: 1.02,
+  flourishScale: 1.14,
+  recoilDeg: 14,
+} as const;

@@ -28,28 +28,28 @@ import {
   sampleOverlappingWave,
   stepSecondOrderInPlace,
 } from '@/utils/proceduralMotion';
-import { BLINK, CREATURE_ACTING, EASE, HIT, HitKind, HitTier, MS } from '@/utils/motion';
-import { CreatureJointPivots, GazeOffset } from './types';
+import {
+  BLINK,
+  CREATURE_ACTING,
+  EASE,
+  HIT,
+  HitKind,
+  HitTier,
+  MASS_CLASS,
+  MS,
+  OVERLAP,
+  nextDeterministicUnit,
+  seedFromKey,
+} from '@/utils/motion';
+import {
+  BlinkStage,
+  CreatureJointPivots,
+  CreatureMassClass,
+  GazeOffset,
+  ReactionChannels,
+} from './types';
 
-/** 3-step blink lid state (`0` open, `1` half-closed travel, `2` fully closed). */
-export type BlinkStage = 0 | 1 | 2;
-
-/**
- * Additive impulse channels that one-shot reactions and idle fidgets animate.
- * They layer on top of the continuous simulation without resetting it.
- */
-export interface ReactionChannels {
-  bodyTx: SharedValue<number>;
-  bodyTy: SharedValue<number>;
-  reactionScaleY: SharedValue<number>;
-  bodyRotate: SharedValue<number>;
-  headRotate: SharedValue<number>;
-  headTy: SharedValue<number>;
-  leftEarExtra: SharedValue<number>;
-  rightEarExtra: SharedValue<number>;
-  tailExtra: SharedValue<number>;
-  pawBounce: SharedValue<number>;
-}
+export type { BlinkStage, CreatureMassClass, ReactionChannels };
 
 /**
  * Reanimated types animated styles as text-capable styles, but these only carry
@@ -74,6 +74,8 @@ export interface ReactionContext {
   cheerReleaseMs?: number;
   /** Small-screen acting boost when avatar `size <= CREATURE_ACTING.compactSizePx` (`[FX-12]`) */
   compact?: boolean;
+  /** Physical inertia class (`nimble` | `standard` | `heavy` | `boss`) */
+  massClass?: CreatureMassClass;
 }
 
 /** (frequency, damping, response) of one second-order posture channel. */
@@ -92,6 +94,8 @@ interface MotionBlends {
  */
 export interface CreatureMotionConfig<Mood extends string, Reaction extends string> {
   moodMotion: MoodMotionTable<Mood>;
+  /** Optional default mass class scaling posture inertia and timings (`standard` when omitted) */
+  massClass?: CreatureMassClass;
   /** How long each one-shot reaction holds its expression */
   reactionHoldMs: Record<Reaction, number>;
   /**
@@ -223,6 +227,21 @@ interface CreatureMotionInput<Mood extends string, Reaction extends string> {
   lively: boolean;
   interactive: boolean;
   onTap?: (reaction: Reaction) => void;
+  /** Optional creature mass class override (`nimble` | `standard` | `heavy` | `boss`) */
+  massClass?: CreatureMassClass;
+  /**
+   * Optional species-specific choreography override. Return `true` to indicate the
+   * reaction was fully choreographed (skipping `config.playReaction`), or `false`/`void`
+   * to fall back to `config.playReaction`.
+   */
+  speciesChoreography?: (
+    type: Reaction,
+    channels: ReactionChannels,
+    size: number,
+    context: ReactionContext
+  ) => boolean | void;
+  /** Optional species-specific idle fidget override; return `true` to skip `config.idleFidget`. */
+  speciesFidget?: (roll: number, channels: ReactionChannels, size: number) => boolean | void;
 }
 
 interface CreatureMotion<Reaction extends string> {
@@ -238,11 +257,17 @@ interface CreatureMotion<Reaction extends string> {
   handlePress: () => void;
   rigRootStyle: PartStyle;
   groundShadowStyle: PartStyle;
+  /** Soft outer penumbra grounding shadow style (coupled to lift, squash, and upper-left key light) */
+  groundPenumbraStyle: PartStyle;
   headStyle: PartStyle;
   leftEarStyle: PartStyle;
   rightEarStyle: PartStyle;
   tailStyle: PartStyle;
   pawStyle: PartStyle;
+  /** Live vertical impulse offset (`<0` lift, `>0` stomp) for stage/shadow coupling */
+  bodyTy: SharedValue<number>;
+  /** Live reaction vertical squash/stretch multiplier for stage/shadow coupling */
+  reactionScaleY: SharedValue<number>;
 }
 
 interface SimState {
@@ -308,10 +333,16 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     hitTier,
     hitKind,
     cheerReleaseMs,
+    massClass,
+    speciesChoreography,
+    speciesFidget,
   } = input;
   const stillReactions = input.stillReactions ?? false;
   const reactionIntensity = input.reactionIntensity ?? 0;
   const isCompact = size <= CREATURE_ACTING.compactSizePx;
+  const resolvedMassClass: CreatureMassClass = massClass ?? config.massClass ?? 'standard';
+  const massTimeMult = MASS_CLASS[resolvedMassClass].timeMult;
+  const springFreqScale = massTimeMult === 1 ? 1 : 1 / Math.sqrt(massTimeMult);
 
   const [activeReaction, setActiveReaction] = useState<Reaction | null>(reaction?.type ?? null);
   const [reactionKey, setReactionKey] = useState<number>(reaction ? 1 : 0);
@@ -320,6 +351,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   const isBlinking = blinkStage === 2;
 
   const reactionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reactionLeadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reactionFinishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tapTimestampsRef = useRef<number[]>([]);
   const playCountRef = useRef(0);
   const lastPlayRef = useRef<{ type: Reaction | null; at: number; chain: number }>({ type: null, at: 0, chain: 0 });
@@ -387,6 +420,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   const rightEarExtra = useSharedValue(0);
   const tailExtra = useSharedValue(0);
   const pawBounce = useSharedValue(0);
+  const pawTx = useSharedValue(0);
+  const pawRotate = useSharedValue(0);
+  const headTx = useSharedValue(0);
+  const scaleX = useSharedValue(1);
+  const bodySkewX = useSharedValue(0);
   const lidClose = useSharedValue(0);
   const compactHeadScale = useSharedValue(1);
 
@@ -402,6 +440,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       rightEarExtra,
       tailExtra,
       pawBounce,
+      pawTx,
+      pawRotate,
+      headTx,
+      scaleX,
+      bodySkewX,
     }),
     [
       bodyTx,
@@ -414,6 +457,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       rightEarExtra,
       tailExtra,
       pawBounce,
+      pawTx,
+      pawRotate,
+      headTx,
+      scaleX,
+      bodySkewX,
     ]
   );
 
@@ -443,6 +491,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       cancelAnimation(rightEarExtra);
       cancelAnimation(tailExtra);
       cancelAnimation(pawBounce);
+      cancelAnimation(pawTx);
+      cancelAnimation(pawRotate);
+      cancelAnimation(headTx);
+      cancelAnimation(scaleX);
+      cancelAnimation(bodySkewX);
       cancelAnimation(lidClose);
       cancelAnimation(compactHeadScale);
       bodyTx.value = 0;
@@ -455,6 +508,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       rightEarExtra.value = 0;
       tailExtra.value = 0;
       pawBounce.value = 0;
+      pawTx.value = 0;
+      pawRotate.value = 0;
+      headTx.value = 0;
+      scaleX.value = 1;
+      bodySkewX.value = 0;
       lidClose.value = 0;
       compactHeadScale.value = 1;
 
@@ -500,6 +558,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     rightEarExtra,
     tailExtra,
     pawBounce,
+    pawTx,
+    pawRotate,
+    headTx,
+    scaleX,
+    bodySkewX,
     lidClose,
     compactHeadScale,
   ]);
@@ -536,18 +599,18 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
       const p = tgt.pose;
       const k = poseSprings;
-      stepSecondOrderInPlace(cur.leanX, p.leanX, dt, k.leanX[0], k.leanX[1], k.leanX[2]);
-      stepSecondOrderInPlace(cur.leanY, p.leanY, dt, k.leanY[0], k.leanY[1], k.leanY[2]);
-      stepSecondOrderInPlace(cur.bodyTilt, p.bodyTiltDeg, dt, k.bodyTilt[0], k.bodyTilt[1], k.bodyTilt[2]);
-      stepSecondOrderInPlace(cur.headTilt, p.headTiltDeg, dt, k.headTilt[0], k.headTilt[1], k.headTilt[2]);
-      stepSecondOrderInPlace(cur.headY, p.headY, dt, k.headY[0], k.headY[1], k.headY[2]);
-      stepSecondOrderInPlace(cur.leftEar, p.leftEarDeg, dt, k.leftEar[0], k.leftEar[1], k.leftEar[2]);
-      stepSecondOrderInPlace(cur.rightEar, p.rightEarDeg, dt, k.rightEar[0], k.rightEar[1], k.rightEar[2]);
+      stepSecondOrderInPlace(cur.leanX, p.leanX, dt, k.leanX[0] * springFreqScale, k.leanX[1], k.leanX[2]);
+      stepSecondOrderInPlace(cur.leanY, p.leanY, dt, k.leanY[0] * springFreqScale, k.leanY[1], k.leanY[2]);
+      stepSecondOrderInPlace(cur.bodyTilt, p.bodyTiltDeg, dt, k.bodyTilt[0] * springFreqScale, k.bodyTilt[1], k.bodyTilt[2]);
+      stepSecondOrderInPlace(cur.headTilt, p.headTiltDeg, dt, k.headTilt[0] * springFreqScale, k.headTilt[1], k.headTilt[2]);
+      stepSecondOrderInPlace(cur.headY, p.headY, dt, k.headY[0] * springFreqScale, k.headY[1], k.headY[2]);
+      stepSecondOrderInPlace(cur.leftEar, p.leftEarDeg, dt, k.leftEar[0] * springFreqScale, k.leftEar[1], k.leftEar[2]);
+      stepSecondOrderInPlace(cur.rightEar, p.rightEarDeg, dt, k.rightEar[0] * springFreqScale, k.rightEar[1], k.rightEar[2]);
       stepSecondOrderInPlace(
         cur.postureStretchY,
         p.postureStretchY,
         dt,
-        k.postureStretchY[0],
+        k.postureStretchY[0] * springFreqScale,
         k.postureStretchY[1],
         k.postureStretchY[2]
       );
@@ -573,6 +636,15 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     ) => {
       if (reactionTimerRef.current) {
         clearTimeout(reactionTimerRef.current);
+        reactionTimerRef.current = null;
+      }
+      if (reactionLeadTimerRef.current) {
+        clearTimeout(reactionLeadTimerRef.current);
+        reactionLeadTimerRef.current = null;
+      }
+      if (reactionFinishTimerRef.current) {
+        clearTimeout(reactionFinishTimerRef.current);
+        reactionFinishTimerRef.current = null;
       }
       playCountRef.current += 1;
       setActiveReaction(type);
@@ -592,14 +664,39 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
         moveKind: meta?.moveKind,
         cheerReleaseMs: meta?.cheerReleaseMs ?? cheerReleaseMs,
         compact: isCompact,
+        massClass: resolvedMassClass,
       };
 
-      const holdMs = config.resolveReactionHoldMs?.(type, context) ?? config.reactionHoldMs[type] ?? 850;
+      const rawHoldMs = config.resolveReactionHoldMs?.(type, context) ?? config.reactionHoldMs[type] ?? 850;
+      const holdMs =
+        config.resolveReactionHoldMs || massTimeMult === 1
+          ? rawHoldMs
+          : Math.round(rawHoldMs * massTimeMult);
+
+      // Soft blink-through release avoids jarring 1-frame snap-cuts when returning to idle expression
+      const canSoftBlinkRelease =
+        animate && !stillReactions && lively && healthState !== 'knocked_out' && holdMs > BLINK.closeMs * 3;
+      if (canSoftBlinkRelease) {
+        reactionLeadTimerRef.current = setTimeout(() => {
+          reactionLeadTimerRef.current = null;
+          setBlinkStage(1);
+          lidClose.value = withTiming(0.75, { duration: BLINK.closeMs, easing: EASE.enter });
+        }, holdMs - BLINK.closeMs);
+      }
+
       reactionTimerRef.current = setTimeout(() => {
+        reactionTimerRef.current = null;
         setActiveReaction(null);
-        // Spring-aligned expression settle: relax compact head acting boost smoothly on release
+        // Spring-aligned expression settle: relax compact head acting boost & lift release lid smoothly
         if (animate && !stillReactions) {
           compactHeadScale.value = withTiming(1, { duration: MS.quick, easing: EASE.ui });
+          if (canSoftBlinkRelease) {
+            lidClose.value = withTiming(0, { duration: BLINK.openMs, easing: EASE.ui });
+            reactionFinishTimerRef.current = setTimeout(() => {
+              reactionFinishTimerRef.current = null;
+              setBlinkStage(0);
+            }, BLINK.openMs);
+          }
         } else {
           compactHeadScale.value = 1;
         }
@@ -612,13 +709,18 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
             easing: EASE.enter,
           });
         }
-        config.playReaction(type, channels, size, context);
+        const handled = speciesChoreography?.(type, channels, size, context) === true;
+        if (!handled) {
+          config.playReaction(type, channels, size, context);
+        }
       }
     },
     [
       config,
       animate,
       stillReactions,
+      lively,
+      healthState,
       reactionIntensity,
       size,
       channels,
@@ -626,7 +728,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       hitKind,
       cheerReleaseMs,
       isCompact,
+      resolvedMassClass,
+      massTimeMult,
+      speciesChoreography,
       compactHeadScale,
+      lidClose,
     ]
   );
 
@@ -648,6 +754,12 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       if (reactionTimerRef.current) {
         clearTimeout(reactionTimerRef.current);
       }
+      if (reactionLeadTimerRef.current) {
+        clearTimeout(reactionLeadTimerRef.current);
+      }
+      if (reactionFinishTimerRef.current) {
+        clearTimeout(reactionFinishTimerRef.current);
+      }
       cancelAnimation(bodyTx);
       cancelAnimation(bodyTy);
       cancelAnimation(reactionScaleY);
@@ -658,6 +770,11 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       cancelAnimation(rightEarExtra);
       cancelAnimation(tailExtra);
       cancelAnimation(pawBounce);
+      cancelAnimation(pawTx);
+      cancelAnimation(pawRotate);
+      cancelAnimation(headTx);
+      cancelAnimation(scaleX);
+      cancelAnimation(bodySkewX);
       cancelAnimation(lidClose);
       cancelAnimation(compactHeadScale);
     };
@@ -672,11 +789,16 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     rightEarExtra,
     tailExtra,
     pawBounce,
+    pawTx,
+    pawRotate,
+    headTx,
+    scaleX,
+    bodySkewX,
     lidClose,
     compactHeadScale,
   ]);
 
-  // Smooth 3-step single & double blinks (`0 -> 1 -> 2 -> 1 -> 0`), eye saccades, and idle micro-fidgets
+  // Deterministic 3-step single & double blinks (`0 -> 1 -> 2 -> 1 -> 0`), eye saccades, and idle micro-fidgets
   useEffect(() => {
     if (!animate || !lively || healthState === 'knocked_out') {
       cancelAnimation(lidClose);
@@ -688,6 +810,19 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     const timers = new Set<ReturnType<typeof setTimeout>>();
     let cancelled = false;
+    let blinkSeed = seedFromKey(`${name}:blink:${Math.round(size)}:${personality.breathCycleMs}`);
+    let gazeSeed = seedFromKey(`${name}:gaze:${Math.round(size)}:${personality.tailCycleMs}`);
+
+    const nextBlinkUnit = () => {
+      const step = nextDeterministicUnit(blinkSeed);
+      blinkSeed = step.nextSeed;
+      return step.value;
+    };
+    const nextGazeUnit = () => {
+      const step = nextDeterministicUnit(gazeSeed);
+      gazeSeed = step.nextSeed;
+      return step.value;
+    };
 
     const trackTimeout = (fn: () => void, ms: number) => {
       const id = setTimeout(() => {
@@ -717,12 +852,23 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       }, BLINK.closeMs);
     };
 
+    let isFirstBlink = true;
     const scheduleNextBlink = () => {
-      const nextMs = blink.minGapMs + Math.floor(Math.random() * blink.gapJitterMs);
+      // Anchor the initial blink near the natural midpoint with a small deterministic
+      // phase offset (0..24 ms) so creatures never blink abruptly on mount, then use the
+      // full deterministic jitter range for every subsequent blink.
+      const nextMs = isFirstBlink
+        ? blink.minGapMs + Math.floor(blink.gapJitterMs * 0.5) - Math.floor(nextBlinkUnit() * 24)
+        : blink.minGapMs + Math.floor(nextBlinkUnit() * blink.gapJitterMs);
+      isFirstBlink = false;
       trackTimeout(() => {
-        config.idleFidget(Math.random(), channels);
+        const fidgetRoll = nextBlinkUnit();
+        const handledFidget = speciesFidget?.(fidgetRoll, channels, size) === true;
+        if (!handledFidget) {
+          config.idleFidget(fidgetRoll, channels);
+        }
 
-        const isDoubleBlink = Math.random() < blink.doubleChance;
+        const isDoubleBlink = nextBlinkUnit() < blink.doubleChance;
         runSingleBlink(() => {
           if (isDoubleBlink) {
             trackTimeout(() => {
@@ -737,9 +883,9 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     // Eyes dart first; the head follows through the posture springs
     const scheduleNextGaze = () => {
-      const nextGazeMs = gazeCfg.minGapMs + Math.floor(Math.random() * gazeCfg.gapJitterMs);
+      const nextGazeMs = gazeCfg.minGapMs + Math.floor(nextGazeUnit() * gazeCfg.gapJitterMs);
       trackTimeout(() => {
-        setIdleGaze(gazeCfg.candidates[Math.floor(Math.random() * gazeCfg.candidates.length)]);
+        setIdleGaze(gazeCfg.candidates[Math.floor(nextGazeUnit() * gazeCfg.candidates.length)]);
         scheduleNextGaze();
       }, nextGazeMs);
     };
@@ -754,7 +900,19 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       timers.forEach(clearTimeout);
       timers.clear();
     };
-  }, [config, animate, lively, healthState, channels, lidClose]);
+  }, [
+    config,
+    name,
+    size,
+    personality.breathCycleMs,
+    personality.tailCycleMs,
+    animate,
+    lively,
+    healthState,
+    channels,
+    speciesFidget,
+    lidClose,
+  ]);
 
   // One tap plays the tap reaction; a rapid streak of taps plays the easter egg
   const handlePress = useCallback(() => {
@@ -782,6 +940,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   const rightDy = ((pivots.rightEar.y - 50) / 100) * size;
   const tailDx = ((pivots.tail.x - 50) / 100) * size;
   const tailDy = ((pivots.tail.y - 50) / 100) * size;
+  const pawDx = ((pivots.paws.x - 50) / 100) * size;
+  const pawDy = ((pivots.paws.y - 50) / 100) * size;
   // Ground contact line at the bottom of the feet (~y=85 in 0..100 SVG space)
   const footAnchorY = size * 0.35;
 
@@ -803,32 +963,71 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     pawTapGain,
   } = config.look;
 
-  // Contact shadow: widens on squash, shrinks & fades as the body leaves the ground
+  // Core contact shadow: widens & deepens on squash/stomp, shrinks & fades crisply on lift
   const groundShadowStyle = useAnimatedStyle(() => {
     const s = sim.value;
     const breathWave = sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
     const celebrationHop = -Math.abs(Math.sin(s.breathPhase)) * size * hop * s.bounceBlend;
     const totalTy = bodyTy.value + s.leanY.y + celebrationHop;
     const liftPx = Math.max(0, -totalTy);
+    const stompPx = Math.max(0, totalTy);
     const liftNorm = Math.min(1, liftPx / Math.max(8, size * 0.28));
+    const stompNorm = Math.min(1, stompPx / Math.max(6, size * 0.14));
 
     const combinedScaleY =
       reactionScaleY.value *
       s.postureStretchY.y *
       (1 + breathWave * baseBreathAmp);
     const { scaleX: volScaleX } = computeVolumePreservedScale(combinedScaleY);
+    const finalScaleX = Math.max(0.68, Math.min(1.45, volScaleX * scaleX.value));
+    const squashBoost = Math.max(0, 1 - combinedScaleY);
 
     return {
-      opacity: Math.max(0.06, shadowOpacity * (1 - liftNorm * 0.62)),
+      opacity: Math.min(
+        1,
+        Math.max(0.06, shadowOpacity * (1 + squashBoost * 0.25 + stompNorm * 0.18) * (1 - liftNorm * 0.65))
+      ),
       transform: [
         { translateX: (bodyTx.value + s.leanX.y) * 0.55 },
-        { scaleX: volScaleX * (1 - liftNorm * shadowLiftShrinkX) },
-        { scaleY: Math.max(0.55, 1 - liftNorm * shadowLiftShrinkY) },
+        { scaleX: finalScaleX * (1 + squashBoost * 0.22 + stompNorm * 0.12) * (1 - liftNorm * shadowLiftShrinkX) },
+        { scaleY: Math.max(0.55, (1 + squashBoost * 0.1 + stompNorm * 0.08) * (1 - liftNorm * shadowLiftShrinkY)) },
       ],
     };
   });
 
-  // Whole rig: breathing, inertial posture, and volume-preserving squash & stretch
+  // Outer soft penumbra shadow: shifts gently away from upper-left key light and diffuses softly on lift
+  const groundPenumbraStyle = useAnimatedStyle(() => {
+    const s = sim.value;
+    const breathWave = sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
+    const celebrationHop = -Math.abs(Math.sin(s.breathPhase)) * size * hop * s.bounceBlend;
+    const totalTy = bodyTy.value + s.leanY.y + celebrationHop;
+    const liftPx = Math.max(0, -totalTy);
+    const stompPx = Math.max(0, totalTy);
+    const liftNorm = Math.min(1, liftPx / Math.max(8, size * 0.28));
+    const stompNorm = Math.min(1, stompPx / Math.max(6, size * 0.14));
+
+    const combinedScaleY =
+      reactionScaleY.value *
+      s.postureStretchY.y *
+      (1 + breathWave * baseBreathAmp);
+    const { scaleX: volScaleX } = computeVolumePreservedScale(combinedScaleY);
+    const finalScaleX = Math.max(0.68, Math.min(1.45, volScaleX * scaleX.value));
+    const squashBoost = Math.max(0, 1 - combinedScaleY);
+
+    return {
+      opacity: Math.min(
+        1,
+        Math.max(0.04, shadowOpacity * (1 + squashBoost * 0.2 + stompNorm * 0.14) * (1 - liftNorm * 0.45))
+      ),
+      transform: [
+        { translateX: (bodyTx.value + s.leanX.y) * 0.55 + liftNorm * size * 0.045 },
+        { scaleX: finalScaleX * (1 + squashBoost * 0.28 + stompNorm * 0.16 + liftNorm * 0.06) },
+        { scaleY: Math.max(0.65, (1 + squashBoost * 0.12 + stompNorm * 0.08) * (1 - liftNorm * shadowLiftShrinkY * 0.55)) },
+      ],
+    };
+  });
+
+  // Whole rig: breathing, inertial posture, volume-preserving squash/stretch, and 1-2f strike smear
   const rigRootStyle = useAnimatedStyle(() => {
     const s = sim.value;
     const breathWave = sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
@@ -844,37 +1043,42 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       reactionScaleY.value *
       s.postureStretchY.y *
       (1 + breathWave * baseBreathAmp);
-    const { scaleX, scaleY } = computeVolumePreservedScale(rawScaleY);
+    const { scaleX: volScaleX, scaleY } = computeVolumePreservedScale(rawScaleY);
+    const finalScaleX = Math.max(0.65, Math.min(1.48, volScaleX * scaleX.value));
 
     return {
       transform: [
         { translateX: bodyTx.value + s.leanX.y + tremorX },
         { translateY: bodyTy.value + s.leanY.y + celebrationHop },
         { rotate: `${bodyRotate.value + s.bodyTilt.y + ambientTilt + danceTilt}deg` },
-        // Anchor squash & stretch at the ground contact line so feet stay planted
+        // Anchor squash, stretch & directional velocity smear at ground contact line so feet stay planted
         { translateY: footAnchorY },
-        { scaleX },
+        { skewX: `${bodySkewX.value}deg` },
+        { scaleX: finalScaleX },
         { scaleY },
         { translateY: -footAnchorY },
       ],
     };
   });
 
-  // Head lags ~0.68 rad behind chest breathing for a natural spine wave,
-  // with smooth eyelid-blink compression and compact small-screen facial acting boost (`[FX-12]`)
+  // Head lags `OVERLAP.headRad` (0.68 rad) behind chest breathing for a natural spine wave,
+  // with dual-axis 2.5D orbital parallax (`headTx`), smooth blink compression, and compact acting boost
   const headStyle = useAnimatedStyle(() => {
     const s = sim.value;
-    const laggedBreath = sampleOverlappingWave(s.breathPhase, 0.68, 0.14) * s.breathAmpScale;
-    const laggedSway = sampleOverlappingWave(s.swayPhase, 0.52, 0.1) * s.swayAmpScale;
+    const laggedBreath = sampleOverlappingWave(s.breathPhase, OVERLAP.headRad, 0.14) * s.breathAmpScale;
+    const laggedSway = sampleOverlappingWave(s.swayPhase, OVERLAP.swayRad, 0.1) * s.swayAmpScale;
 
-    const yOffset = headTy.value + s.headY.y - laggedBreath * size * 0.014;
     const rot = headRotate.value + s.headTilt.y + laggedSway * 1.9;
+    // Sakurai Ep. #249 dual-axis turn illusion: subtle orbital X shift paired with Z rotation
+    const orbitalTx = (rot / 14) * size * 0.018;
+    const xOffset = headTx.value + orbitalTx;
+    const yOffset = headTy.value + s.headY.y - laggedBreath * size * 0.014;
     const headScale = compactHeadScale.value;
     const blinkSquashY = 1 - lidClose.value * CREATURE_ACTING.blinkHeadSquash;
 
     return {
       transform: [
-        { translateX: headDx },
+        { translateX: headDx + xOffset },
         { translateY: headDy + yOffset },
         { rotate: `${rot}deg` },
         { scaleX: headScale },
@@ -885,10 +1089,10 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     };
   });
 
-  // Left appendage lags ~1.28 rad behind the chest for soft tip follow-through
+  // Left appendage lags `OVERLAP.leftAppendageRad` (1.28 rad) behind the chest for soft tip follow-through
   const leftEarStyle = useAnimatedStyle(() => {
     const s = sim.value;
-    const laggedEarWave = sampleOverlappingWave(s.breathPhase, 1.28, 0.22) * s.breathAmpScale;
+    const laggedEarWave = sampleOverlappingWave(s.breathPhase, OVERLAP.leftAppendageRad, 0.22) * s.breathAmpScale;
     const rot = laggedEarWave * earAmp + s.leftEar.y + leftEarExtra.value;
 
     return {
@@ -902,10 +1106,10 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     };
   });
 
-  // Right appendage uses a slightly different lag (1.42 rad) to avoid mirrored "twinning"
+  // Right appendage uses `OVERLAP.rightAppendageRad` (1.44 rad) to prevent mirrored "twinning"
   const rightEarStyle = useAnimatedStyle(() => {
     const s = sim.value;
-    const laggedEarWave = sampleOverlappingWave(s.breathPhase, 1.42, 0.22) * s.breathAmpScale;
+    const laggedEarWave = sampleOverlappingWave(s.breathPhase, OVERLAP.rightAppendageRad, 0.22) * s.breathAmpScale;
     const rot = -laggedEarWave * earAmp + s.rightEar.y + rightEarExtra.value;
 
     return {
@@ -921,7 +1125,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
   const tailStyle = useAnimatedStyle(() => {
     const s = sim.value;
-    const whipWave = sampleOverlappingWave(s.wagPhase, 0.35, 0.26) * s.wagAmpScale;
+    const whipWave = sampleOverlappingWave(s.wagPhase, OVERLAP.tailWhipRad, 0.26) * s.wagAmpScale;
     const rot = whipWave * tailAmp + tailExtra.value;
 
     return {
@@ -935,7 +1139,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     };
   });
 
-  // Feet tap when celebrating or when the tail is wagging hard
+  // Paws/limbs support vertical tap/bounce, horizontal jab/swipe (`pawTx`), and pivot rotation (`pawRotate`)
   const pawStyle = useAnimatedStyle(() => {
     const s = sim.value;
     const excitement = Math.max(
@@ -944,7 +1148,13 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     );
     const tap = -Math.abs(Math.sin(s.wagPhase)) * size * pawTap * excitement;
     return {
-      transform: [{ translateY: pawBounce.value + tap }],
+      transform: [
+        { translateX: pawDx + pawTx.value },
+        { translateY: pawDy + pawBounce.value + tap },
+        { rotate: `${pawRotate.value}deg` },
+        { translateX: -pawDx },
+        { translateY: -pawDy },
+      ],
     };
   });
 
@@ -958,10 +1168,13 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     handlePress,
     rigRootStyle: asPart(rigRootStyle),
     groundShadowStyle: asPart(groundShadowStyle),
+    groundPenumbraStyle: asPart(groundPenumbraStyle),
     headStyle: asPart(headStyle),
     leftEarStyle: asPart(leftEarStyle),
     rightEarStyle: asPart(rightEarStyle),
     tailStyle: asPart(tailStyle),
     pawStyle: asPart(pawStyle),
+    bodyTy,
+    reactionScaleY,
   };
 }

@@ -113,6 +113,8 @@ interface RigLayerProps {
   part?: RigPartRole;
   /** Disable automatic overhead shade overlay for layers with bespoke gradients */
   skipAutoLighting?: boolean;
+  /** Disable automatic left-facing viewBox translation for true 3/4 left-drawn rigs */
+  skipFacingOffset?: boolean;
   children: React.ReactNode;
 }
 
@@ -130,7 +132,7 @@ export const RigLayer: React.FC<RigLayerProps> = (props) => {
       : props.children;
 
   const partTransform =
-    facing === 'left'
+    facing === 'left' && !props.skipFacingOffset
       ? props.part
         ? LEFT_FACING_TRANSFORMS[props.part]
         : 'translate(-2.0, 0)'
@@ -151,7 +153,7 @@ export const RigLayer: React.FC<RigLayerProps> = (props) => {
 };
 
 interface RigLayersProps {
-  /** Object carrying the five animated part styles (rig props can be passed as-is). */
+  /** Object carrying the animated part styles (rig props can be passed as-is). */
   partStyles: CreaturePartStyles;
   tail: React.ReactNode;
   body: React.ReactNode;
@@ -161,10 +163,16 @@ interface RigLayersProps {
   paws: React.ReactNode;
   /** Draw the left/right appendages over the body instead of behind it. */
   earsInFront?: boolean;
+  /** Disable node-doubling `applyOverheadLightingTree` across all 6 layers (for bespoke 3-stop rigs). */
+  skipAutoLighting?: boolean;
+  /** Disable automatic `LEFT_FACING_TRANSFORMS` offset across all 6 layers (for true 3/4 left rigs). */
+  skipFacingOffset?: boolean;
 }
 
 /**
  * Standard six-layer rig: tail, (ears), body, (ears), head, paws — back to front.
+ * Applies `headStyle` (including `headTx` + 2.5D orbital parallax), `pawStyle` (including
+ * `pawTx` + `pawRotate` around anatomical `pivots.paws`), and optional `bodyStyle` cleanly.
  */
 export const RigLayers: React.FC<RigLayersProps> = ({
   partStyles,
@@ -175,14 +183,26 @@ export const RigLayers: React.FC<RigLayersProps> = ({
   head,
   paws,
   earsInFront = false,
+  skipAutoLighting,
+  skipFacingOffset,
 }) => {
-  const { tailStyle, leftEarStyle, rightEarStyle, headStyle, pawStyle } = partStyles;
+  const { bodyStyle, tailStyle, leftEarStyle, rightEarStyle, headStyle, pawStyle } = partStyles;
   const ears = (
     <>
-      <RigLayer part="leftEar" style={leftEarStyle}>
+      <RigLayer
+        part="leftEar"
+        style={leftEarStyle}
+        skipAutoLighting={skipAutoLighting}
+        skipFacingOffset={skipFacingOffset}
+      >
         {leftEar}
       </RigLayer>
-      <RigLayer part="rightEar" style={rightEarStyle}>
+      <RigLayer
+        part="rightEar"
+        style={rightEarStyle}
+        skipAutoLighting={skipAutoLighting}
+        skipFacingOffset={skipFacingOffset}
+      >
         {rightEar}
       </RigLayer>
     </>
@@ -190,16 +210,48 @@ export const RigLayers: React.FC<RigLayersProps> = ({
 
   return (
     <RigLayerStack>
-      <RigLayer part="tail" style={tailStyle}>
+      <RigLayer
+        part="tail"
+        style={tailStyle}
+        skipAutoLighting={skipAutoLighting}
+        skipFacingOffset={skipFacingOffset}
+      >
         {tail}
       </RigLayer>
       {!earsInFront && ears}
-      <RigLayer part="body">{body}</RigLayer>
+      {bodyStyle !== undefined ? (
+        <RigLayer
+          part="body"
+          style={bodyStyle}
+          skipAutoLighting={skipAutoLighting}
+          skipFacingOffset={skipFacingOffset}
+        >
+          {body}
+        </RigLayer>
+      ) : (
+        <RigLayer
+          part="body"
+          skipAutoLighting={skipAutoLighting}
+          skipFacingOffset={skipFacingOffset}
+        >
+          {body}
+        </RigLayer>
+      )}
       {earsInFront && ears}
-      <RigLayer part="head" style={headStyle}>
+      <RigLayer
+        part="head"
+        style={headStyle}
+        skipAutoLighting={skipAutoLighting}
+        skipFacingOffset={skipFacingOffset}
+      >
         {head}
       </RigLayer>
-      <RigLayer part="paws" style={pawStyle}>
+      <RigLayer
+        part="paws"
+        style={pawStyle}
+        skipAutoLighting={skipAutoLighting}
+        skipFacingOffset={skipFacingOffset}
+      >
         {paws}
       </RigLayer>
     </RigLayerStack>

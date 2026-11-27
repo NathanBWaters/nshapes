@@ -1,17 +1,19 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, {
-  Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useGuardedFrameCallback } from '@/hooks/useGuardedFrameCallback';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Svg, Circle, Ellipse, G, Line, Path, Rect } from 'react-native-svg';
 import { COLORS } from '@/utils/colors';
 import { STROKE, StarBurst } from '@/components/illustration/primitives';
 import { CreatureHealthState } from '@/utils/creatureAnimations';
+import { ACCESSIBLE, EASE, MS, SPRING, STAYS, exitMs, reducedMs } from '@/utils/motion';
 import { advancePhase } from '@/utils/proceduralMotion';
 
 interface CreatureDamageOverlayProps {
@@ -31,8 +33,9 @@ const HEALTH_SEVERITY: Record<CreatureHealthState, number> = {
 
 /**
  * Renders progressive cartoon battle-wear over a fighter or enemy rig with continuous
- * phase-integrated KO star orbits, smooth gravity-eased sweat drips, and spring pop-in:
- * - pristine: none
+ * phase-integrated KO star orbits, smooth gravity-eased sweat drips, spring pop-in,
+ * and graceful mount-until-exited fade-outs (preserving meaning with `STAYS` under reduced motion):
+ * - pristine: fades bandages/KO out cleanly before unmounting
  * - scuffed: cheek band-aid + minor fur/feather scuff marks
  * - battered: + brow X-plaster + temple sweat drop + heavier torso scuffs
  * - critical: + wrapped white gauze forehead bandage + dripping sweat
@@ -44,55 +47,156 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
   animate = true,
   testID,
 }) => {
+  const reducedMotion = useReducedMotion();
+  const motionEnabled = animate && !reducedMotion;
+  const shouldFadeTransition = animate || reducedMotion;
+
+  const [mountDamage, setMountDamage] = useState(healthState !== 'pristine');
+  const [mountKO, setMountKO] = useState(healthState === 'knocked_out');
+  const [displayState, setDisplayState] = useState<CreatureHealthState>(healthState);
+
   const orbitPhase = useSharedValue(0);
   const sweatPhase = useSharedValue(0);
   const badgePop = useSharedValue(1);
+  const damagePresence = useSharedValue(healthState === 'pristine' ? 0 : 1);
   const koPresence = useSharedValue(healthState === 'knocked_out' ? 1 : 0);
+
   const prevSeverityRef = useRef<number>(HEALTH_SEVERITY[healthState]);
+  const damageExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const koExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasSweat = displayState === 'battered' || displayState === 'critical';
+  const frameActive = motionEnabled && (hasSweat || mountKO);
 
   useGuardedFrameCallback((frameInfo) => {
     'worklet';
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
     const dt = Math.min(dtMs / 1000, 0.05);
-    if (healthState === 'knocked_out') {
+    if (mountKO) {
       orbitPhase.value = advancePhase(orbitPhase.value, 0.58, dt);
     }
-    sweatPhase.value = advancePhase(sweatPhase.value, 0.92, dt);
-  }, animate && (healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out'), 'CreatureDamageOverlay');
+    if (hasSweat) {
+      sweatPhase.value = advancePhase(sweatPhase.value, 0.92, dt);
+    }
+  }, frameActive, 'CreatureDamageOverlay');
 
   useEffect(() => {
     const nextSev = HEALTH_SEVERITY[healthState];
     const prevSev = prevSeverityRef.current;
     prevSeverityRef.current = nextSev;
 
-    if (!animate) {
+    if (damageExitTimerRef.current) {
+      clearTimeout(damageExitTimerRef.current);
+      damageExitTimerRef.current = null;
+    }
+    if (koExitTimerRef.current) {
+      clearTimeout(koExitTimerRef.current);
+      koExitTimerRef.current = null;
+    }
+
+    if (healthState !== 'pristine') {
+      setDisplayState(healthState);
+      setMountDamage(true);
+      if (shouldFadeTransition) {
+        const enterDur = motionEnabled ? MS.feedback : reducedMs(MS.feedback);
+        damagePresence.value = withTiming(1, {
+          duration: enterDur,
+          easing: EASE.ui,
+          ...STAYS,
+        });
+      } else {
+        damagePresence.value = 1;
+      }
+
+      if (motionEnabled && nextSev > prevSev && nextSev > 0) {
+        // Tactile cartoon pop-in whenever new battle bandages/plasters appear
+        badgePop.value = 0.88;
+        badgePop.value = withSpring(1, SPRING.playful);
+      } else {
+        badgePop.value = 1;
+      }
+    } else {
+      // Transitioning to pristine: fade bandages out gracefully before unmounting
       badgePop.value = 1;
-      koPresence.value = healthState === 'knocked_out' ? 1 : 0;
-      return;
+      if (shouldFadeTransition && prevSev > 0) {
+        const outDur = motionEnabled ? exitMs(MS.quick) : reducedMs(MS.quick);
+        damagePresence.value = withTiming(0, {
+          duration: outDur,
+          easing: EASE.exitSoft,
+          ...STAYS,
+        });
+        damageExitTimerRef.current = setTimeout(() => {
+          damageExitTimerRef.current = null;
+          setMountDamage(false);
+          setDisplayState('pristine');
+        }, outDur);
+      } else {
+        damagePresence.value = 0;
+        setMountDamage(false);
+        setDisplayState('pristine');
+      }
     }
 
-    if (nextSev > prevSev && nextSev > 0) {
-      // Tactile cartoon pop-in whenever new battle bandages/plasters appear!
-      badgePop.value = 0.88;
-      badgePop.value = withSpring(1, { damping: 10, stiffness: 240 });
+    if (healthState === 'knocked_out') {
+      setMountKO(true);
+      if (shouldFadeTransition) {
+        const koEnterDur = motionEnabled ? MS.quick : ACCESSIBLE.fadeMs;
+        koPresence.value = withTiming(1, {
+          duration: koEnterDur,
+          easing: EASE.enter,
+          ...STAYS,
+        });
+      } else {
+        koPresence.value = 1;
+      }
+    } else if (prevSev === HEALTH_SEVERITY.knocked_out || mountKO) {
+      // Fade KO stars out gracefully before hiding (fixes previously dead koPresence fade-out)
+      if (shouldFadeTransition) {
+        const koOutDur = motionEnabled ? exitMs(MS.panel) : ACCESSIBLE.fadeMs;
+        koPresence.value = withTiming(0, {
+          duration: koOutDur,
+          easing: EASE.exitSoft,
+          ...STAYS,
+        });
+        koExitTimerRef.current = setTimeout(() => {
+          koExitTimerRef.current = null;
+          setMountKO(false);
+        }, koOutDur);
+      } else {
+        koPresence.value = 0;
+        setMountKO(false);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [healthState, motionEnabled, shouldFadeTransition, badgePop, damagePresence, koPresence]);
 
-    koPresence.value = withTiming(healthState === 'knocked_out' ? 1 : 0, {
-      duration: 240,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [healthState, animate, badgePop, koPresence]);
+  useEffect(() => {
+    return () => {
+      if (damageExitTimerRef.current) clearTimeout(damageExitTimerRef.current);
+      if (koExitTimerRef.current) clearTimeout(koExitTimerRef.current);
+      cancelAnimation(badgePop);
+      cancelAnimation(damagePresence);
+      cancelAnimation(koPresence);
+    };
+  }, [badgePop, damagePresence, koPresence]);
+
+  const damageFadeStyle = useAnimatedStyle(() => ({
+    opacity: damagePresence.value,
+  }));
 
   const badgePopStyle = useAnimatedStyle(() => ({
+    opacity: damagePresence.value,
     transform: [{ scale: badgePop.value }],
   }));
 
   const dizzyStarsStyle = useAnimatedStyle(() => {
-    const tx = Math.sin(orbitPhase.value) * 4.5;
-    const ty = Math.cos(orbitPhase.value * 2) * 1.3;
-    const rot = Math.sin(orbitPhase.value) * 7.5;
-    const scale = 0.85 + 0.15 * koPresence.value + Math.cos(orbitPhase.value) * 0.04;
+    const tx = motionEnabled ? Math.sin(orbitPhase.value) * 4.5 : 0;
+    const ty = motionEnabled ? Math.cos(orbitPhase.value * 2) * 1.3 : 0;
+    const rot = motionEnabled ? Math.sin(orbitPhase.value) * 7.5 : 0;
+    const scale = motionEnabled
+      ? 0.85 + 0.15 * koPresence.value + Math.cos(orbitPhase.value) * 0.04
+      : 1;
     return {
       opacity: koPresence.value,
       transform: [{ translateX: tx }, { translateY: ty }, { rotate: `${rot}deg` }, { scale }],
@@ -104,22 +208,26 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
     const norm = sweatPhase.value / (Math.PI * 2);
     const dropCurve = norm * norm;
     const ty = dropCurve * 3.4;
-    const opacity = norm < 0.15 ? norm / 0.15 : norm > 0.85 ? (1 - norm) / 0.15 : 1;
+    const dropOpacity = norm < 0.15 ? norm / 0.15 : norm > 0.85 ? (1 - norm) / 0.15 : 1;
     return {
-      opacity: animate ? opacity : 1,
-      transform: [{ translateY: animate ? ty : 0 }],
+      opacity: (motionEnabled ? dropOpacity : 1) * damagePresence.value,
+      transform: [{ translateY: motionEnabled ? ty : 0 }],
     };
   });
 
-  if (healthState === 'pristine') {
+  if (!mountDamage && !mountKO) {
     return null;
   }
 
-  const showScuffed = true;
+  const effectiveState = displayState === 'pristine' ? healthState : displayState;
+  const showScuffed = mountDamage && effectiveState !== 'pristine';
   const showBattered =
-    healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
-  const showCritical = healthState === 'critical' || healthState === 'knocked_out';
-  const showKO = healthState === 'knocked_out';
+    mountDamage &&
+    (effectiveState === 'battered' ||
+      effectiveState === 'critical' ||
+      effectiveState === 'knocked_out');
+  const showCritical =
+    mountDamage && (effectiveState === 'critical' || effectiveState === 'knocked_out');
 
   return (
     <View
@@ -127,7 +235,7 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
       pointerEvents="none"
       testID={testID ?? `fighter-damage-${healthState}`}
     >
-      <View style={StyleSheet.absoluteFill}>
+      <Animated.View style={[StyleSheet.absoluteFill, damageFadeStyle]}>
         <Svg width="100%" height="100%" viewBox="0 0 100 100">
           {showScuffed && (
             <G stroke={STROKE} strokeWidth={2} strokeLinecap="round" opacity={0.75}>
@@ -143,7 +251,7 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
             </G>
           )}
         </Svg>
-      </View>
+      </Animated.View>
 
       {/* Head-mounted Band-Aids, X-Plasters & Critical Gauze Headband (moves with headStyle!) */}
       <Animated.View style={[StyleSheet.absoluteFill, headStyle, badgePopStyle]}>
@@ -207,7 +315,7 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
       </Animated.View>
 
       {/* Dripping Temple Sweat Drop for Battered / Critical */}
-      {(healthState === 'battered' || healthState === 'critical') && (
+      {mountDamage && (effectiveState === 'battered' || effectiveState === 'critical') && (
         <Animated.View style={[StyleSheet.absoluteFill, headStyle, sweatStyle]}>
           <Svg width="100%" height="100%" viewBox="0 0 100 100">
             <Path
@@ -221,9 +329,12 @@ export const CreatureDamageOverlay: React.FC<CreatureDamageOverlayProps> = ({
         </Animated.View>
       )}
 
-      {/* 4. Knocked Out: Orbiting Cartoon Dizzy Halo & Stars! */}
-      {showKO && (
-        <Animated.View style={[StyleSheet.absoluteFill, dizzyStarsStyle]}>
+      {/* 4. Knocked Out: Orbiting Cartoon Dizzy Halo & Stars (stays mounted through fade-out!) */}
+      {mountKO && (
+        <Animated.View
+          style={[StyleSheet.absoluteFill, dizzyStarsStyle]}
+          testID="creature-ko-stars"
+        >
           <Svg width="100%" height="100%" viewBox="0 0 100 100">
             <Ellipse
               cx={50}

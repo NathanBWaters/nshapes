@@ -7,32 +7,61 @@
 import fs from 'fs';
 import path from 'path';
 import {
+  ACCESSIBLE,
+  ARC,
   BLINK,
+  BTN_PRESS,
   CHEER,
   CREATURE_ACTING,
+  CURVE,
+  EASE,
   ENEMY_ATTACK,
   ENEMY_REGEN,
   FOE_ATTACK,
   FOE_REGEN,
   HIT,
+  IDLE_LOOP,
+  IMPACT_FX,
+  MASS_CLASS,
+  MODAL_MOTION,
   MS,
+  OVERLAP,
+  PHASE,
   SCALE,
+  SECONDARY,
   SHAKE,
+  SMEAR,
   SPRING,
   SQUASH,
+  SQUASH_TIER,
   STAGGER,
   THROW,
+  WEAPON_FX,
   cascadeDelay,
   dampingRatio,
   exitMs,
   geometricShake,
   geometricShakeKeyframes,
   hitstopHoldMs,
+  nextDeterministicUnit,
+  reducedMs,
+  sampleArcPoint,
+  sampleJumpArcY,
+  seedFromKey,
   staggerDelay,
   textHoldMs,
   travelMs,
   viewportShakeScale,
+  volumeScale,
 } from '@/utils/motion';
+import {
+  TAU,
+  sampleBurstArcX,
+  sampleBurstArcY,
+  sampleFollowThroughWave,
+  sampleOrganicBreath,
+  sampleStaggeredProgress,
+} from '@/utils/proceduralMotion';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -198,6 +227,147 @@ describe('motion tokens', () => {
     expect(CREATURE_ACTING.enemyCombatGazeX).toBeLessThan(0);
     expect(HIT.painHoldMs).toBe(540);
     expect(CHEER.releaseMs).toBe(240);
+  });
+
+  it('exposes Disney-12 curves, SPRING.boss, ARC, SQUASH_TIER, PHASE, OVERLAP, MASS_CLASS, SMEAR, IMPACT_FX, SECONDARY, ACCESSIBLE, and UI/Weapon tokens', () => {
+    // New curves & easing definitions (Reanimated Easing.bezier returns an EasingFunctionFactory object)
+    expect(CURVE.state).toEqual([0.4, 0, 0.2, 1]);
+    expect(CURVE.popSoft).toEqual([0.175, 0.885, 0.32, 1.275]);
+    expect(CURVE.anticipate).toEqual([0.36, 0, 0.66, -0.56]);
+    expect(CURVE.snapBack).toEqual([0.68, -0.55, 0.265, 1.55]);
+    for (const ease of [EASE.state, EASE.popSoft, EASE.anticipate, EASE.snapBack]) {
+      expect(ease).toBeDefined();
+      expect(typeof ease === 'function' || typeof (ease as { factory?: unknown }).factory === 'function').toBe(true);
+    }
+
+    // Boss spring mass & near-critical damping
+    expect(SPRING.boss).toEqual({ stiffness: 110, damping: 23, mass: 1.4 });
+    expect(dampingRatio(SPRING.boss)).toBeGreaterThan(0.88);
+    expect(dampingRatio(SPRING.boss)).toBeLessThan(1.0);
+
+    // Curved arc evaluation & asymmetric gravity jump parabola
+    expect(ARC.jumpApexT).toBeLessThan(0.5);
+    expect(ARC.fallToRiseRatio).toBeLessThan(1);
+    const start = sampleArcPoint(0, 0, 100, 0, 0, 20);
+    const mid = sampleArcPoint(0, 0, 100, 0, 0.5, 20);
+    const end = sampleArcPoint(0, 0, 100, 0, 1, 20);
+    expect(start).toEqual({ x: 0, y: 0 });
+    expect(end.x).toBeCloseTo(100, 5);
+    expect(end.y).toBeCloseTo(0, 5);
+    expect(mid.x).toBeCloseTo(50, 5);
+    expect(mid.y).toBeCloseTo(20, 5);
+    const skewed = sampleArcPoint(0, 0, 100, 0, 0.3, 20, 0.35);
+    const unskewed = sampleArcPoint(0, 0, 100, 0, 0.3, 20, 0);
+    expect(skewed.y).toBeGreaterThan(unskewed.y);
+
+    expect(sampleJumpArcY(0, 40)).toBeCloseTo(0, 5);
+    expect(sampleJumpArcY(1, 40)).toBeCloseTo(0, 5);
+    expect(sampleJumpArcY(ARC.jumpApexT, 40)).toBeCloseTo(-40, 5);
+    // Asymmetric parabola reaches apex earlier than midpoint
+    expect(Math.abs(sampleJumpArcY(0.25, 40))).toBeGreaterThan(Math.abs(sampleJumpArcY(0.75, 40)));
+
+    // Volume-preserving squash & stretch tiers
+    for (const key of ['heavy', 'lively', 'playful', 'cartoon'] as const) {
+      const tier = SQUASH_TIER[key];
+      const sq = volumeScale(tier.squashY, tier.conserve);
+      const st = volumeScale(tier.stretchY, tier.conserve);
+      expect(sq.scaleX * sq.scaleY).toBeCloseTo(1, 5);
+      expect(st.scaleX * st.scaleY).toBeCloseTo(1, 5);
+    }
+    const clampedLow = volumeScale(0.2);
+    expect(clampedLow.scaleY).toBe(0.68);
+    expect(clampedLow.scaleX * clampedLow.scaleY).toBeCloseTo(1, 5);
+    const uiSq = volumeScale(SQUASH_TIER.ui.squashY, SQUASH_TIER.ui.conserve);
+    expect(uiSq.scaleX).toBeGreaterThan(1);
+    expect(uiSq.scaleX).toBeLessThan(1 / SQUASH_TIER.ui.squashY);
+
+    // Phase, overlap anti-twinning, and mass-class ordering
+    expect(PHASE.skipAnticipationUnderMs).toBe(150);
+    expect(PHASE.anticipationMaxShare).toBeLessThanOrEqual(0.33);
+    expect(PHASE.bossCoilHoldMs).toBeGreaterThan(ENEMY_ATTACK.coilHoldMs);
+    expect(OVERLAP.rootMs).toBe(0);
+    expect(OVERLAP.primaryMs).toBeLessThan(OVERLAP.secondaryMs);
+    expect(OVERLAP.secondaryMs).toBeLessThan(OVERLAP.tertiaryMs);
+    expect(OVERLAP.leftAppendageRad).not.toBe(OVERLAP.rightAppendageRad);
+    expect(OVERLAP.leftAppendageRad).toBe(1.28);
+    expect(OVERLAP.rightAppendageRad).toBe(1.44);
+
+    expect(MASS_CLASS.nimble.timeMult).toBeLessThan(MASS_CLASS.standard.timeMult);
+    expect(MASS_CLASS.standard.timeMult).toBeLessThan(MASS_CLASS.heavy.timeMult);
+    expect(MASS_CLASS.heavy.timeMult).toBeLessThan(MASS_CLASS.boss.timeMult);
+    expect(MASS_CLASS.boss.recoilMult).toBeLessThan(MASS_CLASS.standard.recoilMult);
+    expect(MASS_CLASS.boss.spring).toBe('boss');
+
+    // Idle loop, smear, impact fx, secondary, accessible, button/modal/weapon tokens
+    expect(IDLE_LOOP.creatureBreathMax).toBeLessThanOrEqual(0.05);
+    expect(IDLE_LOOP.primePeriodsMs.length).toBeGreaterThanOrEqual(5);
+    expect(SMEAR.durationMs).toBeLessThanOrEqual(32);
+    expect(SMEAR.strikeScaleX * SMEAR.strikeScaleY).toBeCloseTo(1, 1);
+    expect(IMPACT_FX.flashMs).toBe(32);
+    expect(SECONDARY.maxSimultaneousShare).toBeCloseTo(1 / 3, 5);
+    expect(ACCESSIBLE.maxFlashesPerSec).toBe(3);
+    expect(reducedMs(280)).toBe(ACCESSIBLE.fadeMs);
+    expect(reducedMs(180)).toBe(90);
+    expect(reducedMs(40)).toBe(64);
+    expect(BTN_PRESS.pressInMs).toBe(60);
+    expect(BTN_PRESS.scale).toBe(SCALE.press);
+    expect(BTN_PRESS.translateY).toBe(2);
+    expect(MODAL_MOTION.exitMs).toBe(exitMs(MODAL_MOTION.enterMs));
+    expect(WEAPON_FX.burstMs).toBeGreaterThan(WEAPON_FX.strikeMs);
+  });
+
+  it('produces 100% deterministic sequences from nextDeterministicUnit & seedFromKey', () => {
+    const seedA = seedFromKey('Orange Tabby:blink:80:2600');
+    const seedB = seedFromKey('Orange Tabby:blink:80:2600');
+    const seedC = seedFromKey('Sly Fox:blink:80:2300');
+    expect(seedA).toBe(seedB);
+    expect(seedA).not.toBe(seedC);
+
+    let s1 = seedA;
+    let s2 = seedB;
+    const seq1: number[] = [];
+    const seq2: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const r1 = nextDeterministicUnit(s1);
+      const r2 = nextDeterministicUnit(s2);
+      expect(r1.value).toBeGreaterThanOrEqual(0);
+      expect(r1.value).toBeLessThan(1);
+      seq1.push(r1.value);
+      seq2.push(r2.value);
+      s1 = r1.nextSeed;
+      s2 = r2.nextSeed;
+    }
+    expect(seq1).toEqual(seq2);
+    expect(new Set(seq1).size).toBeGreaterThan(8);
+  });
+
+  it('maintains C0+C1 loop continuity across 2π wraps in proceduralMotion (integer harmonic fix)', () => {
+    const eps = 1e-5;
+    for (const phase of [0, 0.7, 1.5, Math.PI, 4.9, TAU - 0.1]) {
+      const atZero = sampleOrganicBreath(phase, 0);
+      const atTau = sampleOrganicBreath(phase, TAU);
+      expect(atZero).toBeCloseTo(atTau, 10);
+
+      // C1 derivative continuity across driftPhase wrap (0 vs TAU)
+      const slopeZero = (sampleOrganicBreath(phase, eps) - sampleOrganicBreath(phase, -eps)) / (2 * eps);
+      const slopeTau =
+        (sampleOrganicBreath(phase, TAU + eps) - sampleOrganicBreath(phase, TAU - eps)) / (2 * eps);
+      expect(slopeZero).toBeCloseTo(slopeTau, 6);
+    }
+
+    // Burst arc, staggered progress, and follow-through pure worklets
+    expect(sampleBurstArcX(0, 20, 4)).toBe(0);
+    expect(sampleBurstArcX(1, 20, 4)).toBeCloseTo(20, 6);
+    expect(sampleBurstArcX(0.5, 20, 4)).toBeCloseTo(14, 6);
+    expect(sampleBurstArcY(0, 24, 8)).toBe(0);
+    expect(sampleBurstArcY(0.5, 24, 8)).toBeCloseTo(-22, 6);
+    expect(sampleBurstArcY(1, 24, 8)).toBeCloseTo(8, 6);
+    expect(sampleStaggeredProgress(0.2, 0, 5, 0.28)).toBeGreaterThan(
+      sampleStaggeredProgress(0.2, 4, 5, 0.28)
+    );
+    expect(sampleStaggeredProgress(1, 4, 5, 0.28)).toBe(1);
+    expect(sampleFollowThroughWave(0)).toBe(0);
+    expect(sampleFollowThroughWave(1)).toBeCloseTo(0, 6);
   });
 });
 

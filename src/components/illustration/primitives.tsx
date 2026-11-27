@@ -63,7 +63,112 @@ export function TwoToneGradient({ id, lit, base, shadow }: TwoToneGradientProps)
   );
 }
 
-const SKIP_SILHOUETTE_TYPES = new Set(['Defs', 'LinearGradient', 'RadialGradient', 'Stop', 'ClipPath']);
+export interface StorybookTone {
+  id: string;
+  /** Warm upper-left sunlit highlight stop */
+  lit: string;
+  /** Core storybook mid-tone stop */
+  base: string;
+  /** Cool bottom-right bounce shadow stop */
+  shadow: string;
+  /** Optional midpoint offset (default `0.52`) */
+  midOffset?: number;
+}
+
+export interface StorybookGradientProps extends StorybookTone {
+  x1?: string;
+  y1?: string;
+  x2?: string;
+  y2?: string;
+}
+
+/**
+ * Shared 3-stop Tactile Tabletop Storybook `<LinearGradient>` matching Hero Fighters'
+ * warm upper-left (`#FFFDF5`) → cool lower-right (`#1E293B`) lighting without runtime
+ * node-doubling via `applyOverheadLightingTree`.
+ */
+export function StorybookGradient({
+  id,
+  lit,
+  base,
+  shadow,
+  midOffset = 0.52,
+  x1 = '0.15',
+  y1 = '0.05',
+  x2 = '0.85',
+  y2 = '0.95',
+}: StorybookGradientProps) {
+  return (
+    <LinearGradient id={id} x1={x1} y1={y1} x2={x2} y2={y2}>
+      <Stop offset="0" stopColor={lit} stopOpacity={1} />
+      <Stop offset={String(midOffset)} stopColor={base} stopOpacity={1} />
+      <Stop offset="1" stopColor={shadow} stopOpacity={1} />
+    </LinearGradient>
+  );
+}
+
+/** Convenience `<Defs>` wrapper declaring multiple 3-stop storybook gradients cleanly in one pass. */
+export function StorybookToneDefs({ tones }: { tones: readonly StorybookTone[] }) {
+  return (
+    <Defs>
+      {tones.map((t) => (
+        <StorybookGradient
+          key={t.id}
+          id={t.id}
+          lit={t.lit}
+          base={t.base}
+          shadow={t.shadow}
+          midOffset={t.midOffset}
+        />
+      ))}
+    </Defs>
+  );
+}
+
+export interface SunlitRimStrokeProps {
+  /** SVG path tracing the upper-left backlit edge of the form */
+  d: string;
+  /** Warm sunlit rim ink (default `#FFFDF5` per `style_guide.md` Pillar 4) */
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+}
+
+/**
+ * Crisp upper-left warm sunlit rim stroke matching Hero Fighters' painted lighting.
+ * Automatically stripped by `toSilhouetteTree` in Silhouette Audit mode (`#121212`).
+ */
+export function SunlitRimStroke({
+  d,
+  stroke = '#FFFDF5',
+  strokeWidth = 2.4,
+  opacity = 0.55,
+}: SunlitRimStrokeProps) {
+  return (
+    <Path
+      d={d}
+      stroke={stroke}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+      opacity={opacity}
+    />
+  );
+}
+
+const SKIP_SILHOUETTE_TYPES = new Set([
+  'Defs',
+  'LinearGradient',
+  'RadialGradient',
+  'Stop',
+  'ClipPath',
+  'OverheadShadeDefs',
+  'TwoToneGradient',
+  'StorybookGradient',
+  'StorybookToneDefs',
+  'SunlitRimStroke',
+]);
 
 function elementTypeName(type: unknown): string {
   if (typeof type === 'string') return type;

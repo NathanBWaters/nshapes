@@ -137,7 +137,8 @@ export function stepSecondOrderInPlace(
  * Evaluates an organic, asymmetric multi-harmonic breath wave in `[-1, 1]`.
  * - Phase skewing (`phase + skew * sin(phase)`) creates a fuller inhale and gentler exhale.
  * - Second harmonic adds subtle upper-chest/shoulder settle.
- * - Incommensurate `driftPhase` modulates depth so no two breaths repeat identically.
+ * - Integer harmonics on `driftPhase` (whose frequency itself is incommensurate with `phase`)
+ *   keep wrapping `driftPhase` at `2π` 100% C0+C1 seamless with zero loop snap.
  */
 export function sampleOrganicBreath(
   phase: number,
@@ -148,7 +149,7 @@ export function sampleOrganicBreath(
   const skewed = phase + skew * Math.sin(phase);
   const fundamental = Math.sin(skewed);
   const secondHarmonic = 0.22 * Math.sin(2 * skewed - 0.55);
-  const depthMod = 1 + 0.13 * Math.sin(driftPhase) + 0.06 * Math.cos(driftPhase * 1.618);
+  const depthMod = 1 + 0.13 * Math.sin(driftPhase) + 0.06 * Math.cos(driftPhase * 2);
   const raw = ((fundamental + secondHarmonic) / 1.18) * depthMod;
   return Math.max(-1.15, Math.min(1.15, raw));
 }
@@ -182,4 +183,57 @@ export function computeVolumePreservedScale(
   const scaleY = Math.max(minScaleY, Math.min(maxScaleY, rawScaleY));
   const scaleX = 1 / scaleY;
   return { scaleX, scaleY };
+}
+
+/**
+ * Pure worklet (zero allocations): horizontal travel along a curved burst arc.
+ * `spreadX` is target horizontal distance; `bowX` bends mid-flight trajectory outward.
+ */
+export function sampleBurstArcX(progress: number, spreadX: number, bowX = 0): number {
+  'worklet';
+  const t = Math.max(0, Math.min(1, progress));
+  return spreadX * t + bowX * Math.sin(Math.PI * t);
+}
+
+/**
+ * Pure worklet (zero allocations): vertical parabolic burst arc with lift and gravity drop.
+ * Returns `0` at `t=0`, lifts by `-liftY` around mid-flight, then settles by `gravityY * t^2`.
+ */
+export function sampleBurstArcY(progress: number, liftY: number, gravityY = 0): number {
+  'worklet';
+  const t = Math.max(0, Math.min(1, progress));
+  return -liftY * (4 * t * (1 - t)) + gravityY * t * t;
+}
+
+/**
+ * Pure worklet (zero allocations): maps a single normalized burst clock `progress ∈ [0, 1]`
+ * into a staggered sub-progress for particle `index` of `count`.
+ */
+export function sampleStaggeredProgress(
+  progress: number,
+  index: number,
+  count: number,
+  staggerShare = 0.28
+): number {
+  'worklet';
+  if (count <= 1) return Math.max(0, Math.min(1, progress));
+  const clampedShare = Math.max(0, Math.min(0.75, staggerShare));
+  const start = (index / (count - 1)) * clampedShare;
+  const span = Math.max(0.05, 1 - clampedShare);
+  return Math.max(0, Math.min(1, (progress - start) / span));
+}
+
+/**
+ * Pure worklet (zero allocations): decaying follow-through settle wave that
+ * overshoots briefly and lands cleanly at `0` when `progress === 1`.
+ */
+export function sampleFollowThroughWave(
+  progress: number,
+  overshoot = 0.16,
+  cycles = 1.5
+): number {
+  'worklet';
+  const t = Math.max(0, Math.min(1, progress));
+  const decay = (1 - t) * (1 - t);
+  return Math.sin(t * cycles * TAU) * overshoot * decay;
 }

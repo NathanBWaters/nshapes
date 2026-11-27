@@ -1,12 +1,24 @@
 /** Small shared UI primitives for Adventure screens (Tactile Tabletop Storybook). */
-import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, cancelAnimation, Easing } from 'react-native-reanimated';
+import React, { useCallback, useEffect } from 'react';
+import { View, Text, Pressable, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+  withDelay,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { DISPLAY_FONT, MONO_FONT } from '@/utils/fonts';
-import { MS } from '@/utils/motion';
+import { BTN_PRESS, EASE, MODAL_MOTION, MS, SPRING, STAYS, reducedMs } from '@/utils/motion';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export const INK = COLORS.slateCharcoal;
 
@@ -73,20 +85,82 @@ export const Btn: React.FC<{
   small?: boolean;
   testID?: string;
 }> = ({ label, onPress, variant = 'primary', icon, disabled, style, small, testID }) => {
+  const reducedMotion = useReducedMotion();
+  const pressed = useSharedValue(0);
   const bg = variant === 'primary' ? COLORS.actionYellow : variant === 'dark' ? COLORS.deepOnyx : variant === 'ghost' ? 'transparent' : COLORS.canvasWhite;
   const fg = variant === 'dark' ? COLORS.canvasWhite : INK;
+  const pushY = small ? BTN_PRESS.smallTranslateY : BTN_PRESS.translateY;
+
+  useEffect(() => {
+    if (disabled) {
+      cancelAnimation(pressed);
+      pressed.value = 0;
+    }
+  }, [disabled, pressed]);
+
+  useEffect(() => () => cancelAnimation(pressed), [pressed]);
+
+  const handlePressIn = useCallback(() => {
+    if (disabled) return;
+    pressed.value = withTiming(1, {
+      duration: BTN_PRESS.pressInMs,
+      easing: EASE.ui,
+      ...(reducedMotion ? STAYS : {}),
+    });
+  }, [disabled, pressed, reducedMotion]);
+
+  const handlePressOut = useCallback(() => {
+    if (reducedMotion) {
+      pressed.value = withTiming(0, {
+        duration: BTN_PRESS.pressInMs,
+        easing: EASE.ui,
+        ...STAYS,
+      });
+    } else {
+      pressed.value = withSpring(0, SPRING.snappy);
+    }
+  }, [pressed, reducedMotion]);
+
+  const pressStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      const baseOpacity = disabled ? 0.45 : 1;
+      const targetOpacity = disabled ? 0.45 : BTN_PRESS.reducedOpacity;
+      return {
+        opacity: baseOpacity + (targetOpacity - baseOpacity) * pressed.value,
+        transform: [{ translateY: 0 }, { scale: 1 }],
+      };
+    }
+    const scale = 1 - pressed.value * (1 - BTN_PRESS.scale);
+    const translateY = pressed.value * pushY;
+    return {
+      transform: [{ translateY }, { scale }],
+    };
+  });
+
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       testID={testID}
       accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={disabled}
-      activeOpacity={0.8}
-      style={[styles.btn, small && styles.btnSmall, { backgroundColor: bg, opacity: disabled ? 0.45 : 1, borderColor: variant === 'ghost' ? 'transparent' : INK }, style]}
+      style={[
+        styles.btn,
+        small && styles.btnSmall,
+        {
+          backgroundColor: bg,
+          opacity: disabled ? 0.45 : 1,
+          borderColor: variant === 'ghost' ? 'transparent' : INK,
+        },
+        style,
+        pressStyle,
+      ]}
     >
       {icon && <Icon name={icon} size={small ? 14 : 18} color={fg} />}
       <Text style={[styles.btnText, small && styles.btnTextSmall, { color: fg }]}>{label}</Text>
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 };
 
@@ -99,12 +173,31 @@ export const StarRow: React.FC<{ stars: number; size?: number; max?: number; ani
 );
 
 const AnimatedStar: React.FC<{ filled: boolean; size: number; delay: number; color: string }> = ({ filled, size, delay, color }) => {
-  const scale = useSharedValue(delay >= 0 ? 0 : 1);
+  const reducedMotion = useReducedMotion();
+  const scale = useSharedValue(delay >= 0 && !reducedMotion ? 0 : 1);
+  const opacity = useSharedValue(delay >= 0 && reducedMotion ? 0 : 1);
   useEffect(() => {
+    if (delay < 0) return;
+    if (reducedMotion) {
+      scale.value = 1;
+      opacity.value = withDelay(
+        delay,
+        withTiming(1, { duration: reducedMs(MS.quick), easing: EASE.ui, ...STAYS }),
+        STAYS.reduceMotion
+      );
+      return;
+    }
     // one quick pop, no wobble
-    if (delay >= 0) scale.value = withDelay(delay, withSequence(withTiming(1.25, { duration: 140, easing: Easing.out(Easing.cubic) }), withTiming(1, { duration: 120, easing: Easing.inOut(Easing.quad) })));
-  }, [delay, scale]);
-  const st = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+    scale.value = withDelay(
+      delay,
+      withSequence(
+        withTiming(1.25, { duration: 140, easing: EASE.ui }),
+        withTiming(1, { duration: MS.feedback, easing: EASE.drift })
+      )
+    );
+  }, [delay, reducedMotion, scale, opacity]);
+  useEffect(() => () => { cancelAnimation(scale); cancelAnimation(opacity); }, [scale, opacity]);
+  const st = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ scale: scale.value }] }));
   const glyph = { fontSize: size, lineHeight: size * 1.1, width: size * 1.05, textAlign: 'center' as const };
   return (
     <View style={{ width: size * 1.05, height: size * 1.1 }}>
@@ -134,40 +227,120 @@ export const Eyebrow: React.FC<{ text: string; color?: string }> = ({ text, colo
   </View>
 );
 
-/** Gentle bob for "play me next" nodes. */
-export const Bob: React.FC<{ children: React.ReactNode; active?: boolean; amount?: number }> = ({ children, active = true, amount = 4 }) => {
+/** Gentle bob for "play me next" nodes (reduced-motion & app-active gated, with phase desync). */
+export const Bob: React.FC<{
+  children: React.ReactNode;
+  active?: boolean;
+  amount?: number;
+  /** Phase offset in radians (`0..2π`) so sibling map/spire nodes never bob in lockstep */
+  phase?: number;
+  /** Explicit start delay in ms (overrides `phase` when provided) */
+  delayMs?: number;
+  /** Full cycle duration in ms (default `1200`) */
+  periodMs?: number;
+}> = ({ children, active = true, amount = 4, phase = 0, delayMs, periodMs = 1200 }) => {
   const appActive = useAppActive();
+  const reducedMotion = useReducedMotion();
   const y = useSharedValue(0);
-  const running = active && appActive;
+  const running = active && appActive && !reducedMotion;
+
   useEffect(() => {
     if (running) {
-      y.value = withRepeat(
+      const safePeriod = Math.max(320, periodMs);
+      const halfMs = Math.round(safePeriod / 2);
+      const offsetMs =
+        delayMs !== undefined
+          ? Math.max(0, Math.round(delayMs))
+          : phase !== 0
+            ? Math.round(((((phase % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2)) * safePeriod)
+            : 0;
+      const loop = withRepeat(
         withSequence(
-          withTiming(-amount, { duration: 600, easing: Easing.inOut(Easing.sin) }),
-          withTiming(0, { duration: 600, easing: Easing.inOut(Easing.sin) })
+          withTiming(-amount, { duration: halfMs, easing: EASE.drift }),
+          withTiming(0, { duration: halfMs, easing: EASE.drift })
         ),
         -1
       );
+      y.value = offsetMs > 0 ? withDelay(offsetMs, loop) : loop;
       return () => cancelAnimation(y);
     }
     cancelAnimation(y);
     y.value = 0;
-  }, [running, amount, y]);
+  }, [running, amount, phase, delayMs, periodMs, y]);
+
   const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   return <Animated.View style={st}>{children}</Animated.View>;
 };
 
-/** Pop-in wrapper. */
-export const PopIn: React.FC<{ children: React.ReactNode; delay?: number; style?: StyleProp<ViewStyle> }> = ({ children, delay = 0, style }) => {
-  const s = useSharedValue(0.94);
+/**
+ * Pop-in wrapper with reduced-motion fade (`STAYS`, zero bounce) and optional `visible`
+ * exit transition (`MODAL_MOTION.exitMs` / `EASE.exitSoft`).
+ */
+export const PopIn: React.FC<{
+  children: React.ReactNode;
+  delay?: number;
+  /** Toggle to `false` to animate out cleanly with `EASE.exitSoft` (`exitMs`). Defaults to `true`. */
+  visible?: boolean;
+  /** Optional callback fired once the `visible={false}` exit transition finishes. */
+  onExited?: () => void;
+  style?: StyleProp<ViewStyle>;
+}> = ({ children, delay = 0, visible = true, onExited, style }) => {
+  const reducedMotion = useReducedMotion();
+  const s = useSharedValue(
+    visible ? (reducedMotion ? 1 : MODAL_MOTION.popInFromScale) : MODAL_MOTION.popOutToScale
+  );
   const o = useSharedValue(0);
+
   useEffect(() => {
-    // Short ease-out, no overshoot: panels should appear, not bounce
-    s.value = withDelay(delay, withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) }));
-    o.value = withDelay(delay, withTiming(1, { duration: 140 }));
-  }, [delay, s, o]);
-  const st = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ scale: s.value }] }));
-  return <Animated.View style={[st, style]}>{children}</Animated.View>;
+    if (visible) {
+      if (reducedMotion) {
+        s.value = 1;
+        const dur = reducedMs(MODAL_MOTION.enterMs);
+        const fadeIn = withTiming(1, { duration: dur, easing: EASE.ui, ...STAYS });
+        o.value = delay > 0 ? withDelay(delay, fadeIn, STAYS.reduceMotion) : fadeIn;
+      } else {
+        // Short ease-out, no overshoot: panels should appear, not bounce
+        const scaleIn = withTiming(1, { duration: MODAL_MOTION.enterMs, easing: EASE.enter });
+        const fadeIn = withTiming(1, {
+          duration: Math.round(MODAL_MOTION.enterMs * 0.78),
+          easing: EASE.ui,
+        });
+        s.value = delay > 0 ? withDelay(delay, scaleIn) : scaleIn;
+        o.value = delay > 0 ? withDelay(delay, fadeIn) : fadeIn;
+      }
+      return;
+    }
+
+    const outDur = reducedMotion ? reducedMs(MODAL_MOTION.exitMs) : MODAL_MOTION.exitMs;
+    if (reducedMotion) {
+      s.value = 1;
+      o.value = withTiming(0, { duration: outDur, easing: EASE.exitSoft, ...STAYS });
+    } else {
+      s.value = withTiming(MODAL_MOTION.popOutToScale, { duration: outDur, easing: EASE.exitSoft });
+      o.value = withTiming(0, { duration: outDur, easing: EASE.exitSoft });
+    }
+
+    if (onExited) {
+      const timer = setTimeout(onExited, outDur);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, delay, reducedMotion, onExited, s, o]);
+
+  useEffect(() => () => {
+    cancelAnimation(s);
+    cancelAnimation(o);
+  }, [s, o]);
+
+  const st = useAnimatedStyle(() => ({
+    opacity: o.value,
+    transform: [{ scale: s.value }],
+  }));
+
+  return (
+    <Animated.View style={[st, style]} pointerEvents={visible ? 'auto' : 'none'}>
+      {children}
+    </Animated.View>
+  );
 };
 
 export const Skulls: React.FC<{ n: number; size?: number }> = ({ n, size = 14 }) => (
