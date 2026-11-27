@@ -1,15 +1,21 @@
-import React from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Linking } from 'react-native';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { MONO_FONT } from '@/utils/fonts';
+import { DISCORD_URL } from '@/utils/storeUrls';
 import { triggerHaptic } from '@/utils/haptics';
 import { playSound } from '@/utils/sounds';
 import { band } from '@/audio';
+import { useKeyboardActive } from '@/utils/keybindings';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import Icon, { IconName } from './Icon';
 import { FighterAvatar } from './fighters';
+import { EnemyAvatar } from './enemies';
 import { CHARACTERS } from '@/utils/gameDefinitions';
 import { LabsStorage } from '@/utils/freePlayStorage';
 import { loadAdventureSave } from '@/adventure/save';
 import { SUMMIT_UNLOCK_LEVEL_ID, isSummitUnlocked } from '@/adventure/data/features';
+import { MAIN_LEVELS } from '@/adventure/data/levels';
 import { getFrontierLevel, totalStars } from '@/adventure/progress';
 import { levelFoe } from '@/adventure/data/foes';
 import { STORY_TAGLINE } from '@/adventure/data/story';
@@ -17,7 +23,11 @@ import { loadSpireMeta, loadSpireRun } from '@/spire/save';
 import { loadPrismMeta, loadPrismRun } from '@/prism/save';
 import { version } from '../../package.json';
 
-const DISCORD_URL = 'https://discord.gg/JFkUmp54Sp';
+export const UNIFIED_ELEVATOR_PITCH =
+  'Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike.';
+
+const DOJO_WEB_PATH = '/dojo/index.html';
+const DOJO_PUBLIC_URL = 'https://nathanbwaters.github.io/nshapes/dojo/index.html';
 
 interface MainMenuProps {
   onSelectAdventure: () => void;
@@ -29,7 +39,7 @@ interface MainMenuProps {
   onSelectOptions: () => void;
 }
 
-function MenuButton({
+function ModeCard({
   onPress,
   variant,
   icon,
@@ -40,7 +50,7 @@ function MenuButton({
   accessibilityLabel,
 }: {
   onPress?: () => void;
-  variant: 'adventure' | 'spire' | 'spire_locked' | 'prism' | 'freeplay' | 'options';
+  variant: 'spire' | 'spire_locked' | 'prism' | 'freeplay';
   icon: IconName;
   title: string;
   subtitle: string;
@@ -56,18 +66,10 @@ function MenuButton({
   };
 
   const variantStyles = {
-    adventure: {
-      button: styles.adventureButton,
-      iconBg: COLORS.paperBeige,
-      iconColor: COLORS.slateCharcoal,
-      textColor: COLORS.slateCharcoal,
-      badgeBg: COLORS.deepOnyx,
-      badgeColor: COLORS.actionYellow,
-    },
     spire: {
       button: styles.spireButton,
-      iconBg: COLORS.paperBeige,
-      iconColor: COLORS.slateCharcoal,
+      iconBg: 'rgba(255, 255, 255, 0.16)',
+      iconColor: COLORS.canvasWhite,
       textColor: COLORS.canvasWhite,
       badgeBg: COLORS.deepOnyx,
       badgeColor: COLORS.actionYellow,
@@ -82,22 +84,14 @@ function MenuButton({
     },
     prism: {
       button: styles.prismButton,
-      iconBg: '#195440',
-      iconColor: '#F2C94C',
+      iconBg: '#1E4C46',
+      iconColor: '#FFDE00',
       textColor: COLORS.canvasWhite,
-      badgeBg: '#F2C94C',
-      badgeColor: '#0B1F19',
+      badgeBg: '#FFDE00',
+      badgeColor: '#121212',
     },
     freeplay: {
       button: styles.freeplayButton,
-      iconBg: COLORS.paperBeige,
-      iconColor: COLORS.slateCharcoal,
-      textColor: COLORS.slateCharcoal,
-      badgeBg: COLORS.deepOnyx,
-      badgeColor: COLORS.actionYellow,
-    },
-    options: {
-      button: styles.optionsButton,
       iconBg: COLORS.paperBeige,
       iconColor: COLORS.slateCharcoal,
       textColor: COLORS.slateCharcoal,
@@ -129,10 +123,11 @@ function MenuButton({
           styles.buttonIconContainer,
           { backgroundColor: v.iconBg },
           variant === 'prism' && styles.prismIconContainer,
+          variant === 'spire' && styles.spireIconContainer,
           variant === 'spire_locked' && styles.lockedIconContainer,
         ]}
       >
-        <Icon name={icon} size={26} color={v.iconColor} />
+        <Icon name={icon} size={22} color={v.iconColor} noShadow />
       </View>
       <View style={styles.buttonTextContainer}>
         <View style={styles.buttonTitleRow}>
@@ -146,7 +141,7 @@ function MenuButton({
         <Text
           style={[
             styles.menuButtonSubtext,
-            { color: v.textColor, opacity: variant === 'prism' ? 0.88 : 0.74 },
+            { color: v.textColor, opacity: variant === 'spire' || variant === 'prism' ? 0.92 : 0.78 },
           ]}
         >
           {subtitle}
@@ -164,7 +159,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectFreeplay,
   onSelectOptions,
 }) => {
-  const adventureSave = React.useMemo(() => {
+  const adventureSave = useMemo(() => {
     try {
       return loadAdventureSave();
     } catch {
@@ -172,14 +167,16 @@ const MainMenu: React.FC<MainMenuProps> = ({
     }
   }, []);
 
-  const initialMascotIdx = React.useMemo(() => {
+  const initialMascotIdx = useMemo(() => {
     const idx = adventureSave
       ? CHARACTERS.findIndex(c => c.name === adventureSave.selectedFighter)
       : -1;
     return idx >= 0 ? idx : 0;
   }, [adventureSave]);
 
-  const [mascotIndex, setMascotIndex] = React.useState(initialMascotIdx);
+  const [mascotIndex, setMascotIndex] = useState(initialMascotIdx);
+  const [otherModesExpanded, setOtherModesExpanded] = useState(false);
+  const keyboardActive = useKeyboardActive();
 
   // [AU-20]: Warm drumless title theme on Main Menu; stop cleanly on unmount if still playing title
   React.useEffect(() => {
@@ -193,28 +190,68 @@ const MainMenu: React.FC<MainMenuProps> = ({
     };
   }, []);
 
-  // The Adventure button says where you are: a first invitation, or the foe that is waiting for you
-  const adventure = React.useMemo(() => {
+  const handleAdventurePress = useCallback(() => {
+    triggerHaptic('light');
+    playSound('click');
+    onSelectAdventure();
+  }, [onSelectAdventure]);
+
+  // [UI-23]: Web mash-to-play (`Enter` / `Space` launches Hero Adventure CTA when no modal is open)
+  useKeyboardNav({
+    enabled: true,
+    priority: KEY_PRIORITY.SCREEN,
+    onConfirm: handleAdventurePress,
+  });
+
+  // Hero Adventure summary: first invitation on 0-star save, or next frontier foe & star tally
+  const adventure = useMemo(() => {
+    const fallbackLevel = MAIN_LEVELS[0];
+    const fallbackFoe = levelFoe(fallbackLevel);
     if (!adventureSave) {
-      return { title: 'Adventure', subtitle: 'Free your caged friends · Map, foes & stars', isFresh: false };
+      return {
+        title: 'Adventure',
+        subtitle: 'Free your caged friends · Map, foes & stars',
+        isFresh: false,
+        stars: 0,
+        frontierLevel: fallbackLevel,
+        frontierFoe: fallbackFoe,
+      };
     }
     try {
       const stars = totalStars(adventureSave);
-      if (stars === 0 && Object.keys(adventureSave.plays).length === 0) {
-        return { title: 'Play', subtitle: STORY_TAGLINE, isFresh: true };
-      }
       const next = getFrontierLevel(adventureSave);
+      const foe = levelFoe(next);
+      if (stars === 0 && Object.keys(adventureSave.plays).length === 0) {
+        return {
+          title: 'Play',
+          subtitle: STORY_TAGLINE,
+          isFresh: true,
+          stars: 0,
+          frontierLevel: next,
+          frontierFoe: foe,
+        };
+      }
       return {
         title: 'Continue',
-        subtitle: `${next.id} · ${levelFoe(next).name} is waiting   ★ ${stars}`,
+        subtitle: `${next.id} · ${foe.name} is waiting   ★ ${stars}`,
         isFresh: false,
+        stars,
+        frontierLevel: next,
+        frontierFoe: foe,
       };
     } catch {
-      return { title: 'Adventure', subtitle: 'Free your caged friends · Map, foes & stars', isFresh: false };
+      return {
+        title: 'Adventure',
+        subtitle: 'Free your caged friends · Map, foes & stars',
+        isFresh: false,
+        stars: 0,
+        frontierLevel: fallbackLevel,
+        frontierFoe: fallbackFoe,
+      };
     }
   }, [adventureSave]);
 
-  const spire = React.useMemo(() => {
+  const spire = useMemo(() => {
     try {
       const active = loadSpireRun();
       const hasActiveRun = Boolean(active && active.phase !== 'defeat' && active.phase !== 'victory');
@@ -237,7 +274,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
         return {
           unlocked: true,
           title: 'Starfall Summit',
-          subtitle: `Resume ${actLabel} · Floor ${active.floor} · ♥ ${active.hearts}/${active.maxHearts}`,
+          subtitle: `Resume ${actLabel} · Floor ${active.floor} · ${active.hearts}/${active.maxHearts} HP`,
           badge: 'LIVE RUN',
         };
       }
@@ -267,7 +304,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
 
   const prismVisible = Boolean(onSelectPrism && LabsStorage.isEnabled(showPrismLabs));
 
-  const prism = React.useMemo(() => {
+  const prism = useMemo(() => {
     if (!prismVisible) return null;
     try {
       const active = loadPrismRun();
@@ -298,6 +335,17 @@ const MainMenu: React.FC<MainMenuProps> = ({
   }, [prismVisible]);
 
   const mascotCharacter = CHARACTERS[mascotIndex % CHARACTERS.length];
+  const useCompactFreshShelf = adventure.isFresh && !spire.unlocked && !prismVisible;
+  const showFullSecondaryCards = !useCompactFreshShelf || otherModesExpanded;
+
+  const handleOpenDojo = () => {
+    triggerHaptic('light');
+    playSound('click');
+    const url = Platform.OS === 'web' ? DOJO_WEB_PATH : DOJO_PUBLIC_URL;
+    void Linking.openURL(url).catch(() => {
+      /* ignore if browser handler unavailable */
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -306,70 +354,22 @@ const MainMenu: React.FC<MainMenuProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Title Section with Living Mascot */}
-        <View style={styles.titleSection}>
-          <FighterAvatar
-            character={mascotCharacter}
-            size={56}
-            interactive
-            onPet={(type) => {
-              if (type === 'dizzy_joy') {
-                setMascotIndex(i => (i + 1) % CHARACTERS.length);
-              }
-            }}
-            testID="main-menu-mascot"
-          />
-          <Text style={styles.title}>NSHAPES</Text>
-          <Text style={styles.subtitle}>Pattern-Matching Roguelike</Text>
-        </View>
-
-        <View style={styles.menuSection}>
-          <MenuButton
-            onPress={onSelectAdventure}
-            variant="adventure"
-            icon="lorc/crossed-swords"
-            title={adventure.title}
-            subtitle={adventure.subtitle}
-            badge={adventure.isFresh ? 'START HERE' : undefined}
-            accessibilityLabel={`Adventure: ${adventure.title}`}
-          />
-
-          {onSelectSpire && (
-            <MenuButton
-              onPress={spire.unlocked ? onSelectSpire : undefined}
-              disabled={!spire.unlocked}
-              variant={spire.unlocked ? 'spire' : 'spire_locked'}
-              icon={spire.unlocked ? 'lorc/mountaintop' : 'lorc/padlock'}
-              title={spire.title}
-              subtitle={spire.subtitle}
-              badge={spire.badge}
-              accessibilityLabel={
-                spire.unlocked
-                  ? `Starfall Summit: ${spire.subtitle}`
-                  : `Starfall Summit locked: ${spire.subtitle}`
-              }
-            />
-          )}
-
-          {prismVisible && prism && onSelectPrism && (
-            <MenuButton
-              onPress={onSelectPrism}
-              variant="prism"
-              icon="lorc/crystal-shine"
-              title={prism.title}
-              subtitle={prism.subtitle}
-              badge={prism.badge}
-              accessibilityLabel={`Prism Deck: ${prism.subtitle}`}
-            />
-          )}
-
-          <MenuButton
-            onPress={onSelectFreeplay}
-            variant="freeplay"
-            icon="lorc/archery-target"
-            title="Free Play"
-            subtitle="1-tap practice · No clock, no hearts"
-          />
+        {/* Top Utility Bar: DOJO Guide + Settings (>=44x44px) */}
+        <View style={styles.topUtilityBar}>
+          <Pressable
+            testID="menu-dojo-link"
+            onPress={handleOpenDojo}
+            accessibilityRole="link"
+            accessibilityLabel="Open NShapes DOJO Guide"
+            style={({ pressed }) => [
+              styles.utilityPill,
+              pressed && styles.menuButtonPressed,
+              Platform.OS === 'web' && { cursor: 'pointer' as any },
+            ]}
+          >
+            <Icon name="lorc/open-book" size={16} color={COLORS.slateCharcoal} noShadow />
+            <Text style={styles.utilityPillText}>Guide</Text>
+          </Pressable>
 
           <Pressable
             onPress={() => {
@@ -381,23 +381,218 @@ const MainMenu: React.FC<MainMenuProps> = ({
             accessibilityLabel="Options"
             testID="menu-options"
             style={({ pressed }) => [
-              styles.secondaryButton,
-              styles.optionsButtonSmall,
+              styles.utilityPill,
+              styles.settingsUtilityPill,
               pressed && styles.menuButtonPressed,
               Platform.OS === 'web' && { cursor: 'pointer' as any },
             ]}
           >
-            <Icon name="lorc/gear-hammer" size={18} color={COLORS.slateCharcoal} />
-            <Text style={[styles.secondaryButtonText, { color: COLORS.slateCharcoal }]}>Options</Text>
+            <Icon name="lorc/gear-hammer" size={17} color={COLORS.slateCharcoal} noShadow />
+            <Text style={styles.utilityPillText}>Settings</Text>
           </Pressable>
         </View>
 
+        {/* Title & Unified 1-Sentence Pitch (Title "NSHAPES" preserved untouched) */}
+        <View style={styles.titleSection}>
+          <Text style={styles.title}>NSHAPES</Text>
+          <Text style={styles.pitch} testID="menu-pitch">
+            {UNIFIED_ELEVATOR_PITCH}
+          </Text>
+        </View>
+
+        {/* Dominant 2x Hero Play / Continue Storybook Card */}
+        <View style={styles.menuSection}>
+          <Pressable
+            onPress={handleAdventurePress}
+            accessibilityRole="button"
+            accessibilityLabel={`Adventure: ${adventure.title}`}
+            testID="menu-adventure"
+            style={({ pressed }) => [
+              styles.heroCard,
+              pressed && styles.heroCardPressed,
+              Platform.OS === 'web' && { cursor: 'pointer' as any },
+            ]}
+          >
+            {/* Live Storybook Matchup Stage: Fighter vs Frontier Foe */}
+            <View style={styles.heroStage}>
+              <View style={styles.heroAvatarBadge}>
+                <FighterAvatar
+                  character={mascotCharacter}
+                  size={58}
+                  interactive
+                  onPet={type => {
+                    if (type === 'dizzy_joy') {
+                      setMascotIndex(i => (i + 1) % CHARACTERS.length);
+                    }
+                  }}
+                  testID="main-menu-mascot"
+                />
+              </View>
+
+              <View style={styles.heroVsCrest}>
+                <Icon name="lorc/crossed-swords" size={18} color={COLORS.actionYellow} noShadow />
+                <Text style={styles.heroStageTag}>{adventure.frontierLevel.id}</Text>
+              </View>
+
+              <View style={styles.heroFoeBadge}>
+                <EnemyAvatar
+                  enemy={adventure.frontierFoe}
+                  size={50}
+                  mood="idle"
+                  animate={false}
+                  lightweight
+                  testID="menu-frontier-foe"
+                />
+              </View>
+            </View>
+
+            {/* Dominant Hero CTA Copy */}
+            <View style={styles.heroBody}>
+              <View style={styles.heroTitleRow}>
+                <Text style={styles.heroTitle}>{adventure.title}</Text>
+                {adventure.isFresh ? (
+                  <View style={styles.heroBadge}>
+                    <Text style={styles.heroBadgeText}>START HERE</Text>
+                  </View>
+                ) : (
+                  <View style={styles.heroStarPill} testID="menu-star-count">
+                    <Icon name="lorc/flat-star" size={13} color={COLORS.actionYellow} noShadow />
+                    <Text style={styles.heroStarPillText}>{adventure.stars}</Text>
+                  </View>
+                )}
+                {keyboardActive && Platform.OS === 'web' && (
+                  <View style={styles.keycapBadge} testID="menu-enter-keycap">
+                    <Text style={styles.keycapBadgeText}>ENTER</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.heroSubtitle}>{adventure.subtitle}</Text>
+            </View>
+          </Pressable>
+
+          {/* Secondary Mode Shelf */}
+          <View style={styles.secondaryShelf}>
+            {useCompactFreshShelf && (
+              <View style={styles.otherModesHeader}>
+                <Text style={styles.otherModesTitle}>OTHER MODES</Text>
+                <Pressable
+                  testID="menu-other-modes-toggle"
+                  onPress={() => {
+                    triggerHaptic('light');
+                    playSound('click');
+                    setOtherModesExpanded(prev => !prev);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: otherModesExpanded }}
+                  style={({ pressed }) => [
+                    styles.otherModesToggle,
+                    pressed && styles.menuButtonPressed,
+                    Platform.OS === 'web' && { cursor: 'pointer' as any },
+                  ]}
+                >
+                  <Text style={styles.otherModesToggleText}>
+                    {otherModesExpanded ? 'Compact' : 'Details'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+
+            {!showFullSecondaryCards ? (
+              /* Compact 1-row collapsed shelf for 0-star fresh saves */
+              <View style={styles.compactModesRow} testID="menu-other-modes-compact">
+                <Pressable
+                  testID="menu-freeplay"
+                  onPress={() => {
+                    triggerHaptic('light');
+                    playSound('click');
+                    onSelectFreeplay();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Free Play"
+                  style={({ pressed }) => [
+                    styles.compactModeChip,
+                    styles.freeplayButton,
+                    pressed && styles.menuButtonPressed,
+                    Platform.OS === 'web' && { cursor: 'pointer' as any },
+                  ]}
+                >
+                  <Icon name="lorc/archery-target" size={18} color={COLORS.slateCharcoal} noShadow />
+                  <View style={styles.compactChipCol}>
+                    <Text style={styles.compactChipTitle}>Free Play</Text>
+                    <Text style={styles.compactChipSub}>1-tap practice</Text>
+                  </View>
+                </Pressable>
+
+                {onSelectSpire && (
+                  <Pressable
+                    testID="menu-spire"
+                    disabled
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: true }}
+                    accessibilityLabel={`Starfall Summit locked: ${spire.subtitle}`}
+                    style={[styles.compactModeChip, styles.spireLockedButton]}
+                  >
+                    <Icon name="lorc/padlock" size={16} color="#6B655D" noShadow />
+                    <View style={styles.compactChipCol}>
+                      <Text style={styles.compactChipTitle}>{spire.title}</Text>
+                      <Text style={styles.compactChipSub}>Unlocks after {SUMMIT_UNLOCK_LEVEL_ID}</Text>
+                    </View>
+                  </Pressable>
+                )}
+              </View>
+            ) : (
+              /* Expanded / Returning Secondary Mode Shelf (restrained 3-tone tabletop palette) */
+              <View style={styles.expandedModesStack}>
+                {onSelectSpire && (
+                  <ModeCard
+                    onPress={spire.unlocked ? onSelectSpire : undefined}
+                    disabled={!spire.unlocked}
+                    variant={spire.unlocked ? 'spire' : 'spire_locked'}
+                    icon={spire.unlocked ? 'lorc/mountaintop' : 'lorc/padlock'}
+                    title={spire.title}
+                    subtitle={spire.subtitle}
+                    badge={spire.badge}
+                    accessibilityLabel={
+                      spire.unlocked
+                        ? `Starfall Summit: ${spire.subtitle}`
+                        : `Starfall Summit locked: ${spire.subtitle}`
+                    }
+                  />
+                )}
+
+                {prismVisible && prism && onSelectPrism && (
+                  <ModeCard
+                    onPress={onSelectPrism}
+                    variant="prism"
+                    icon="lorc/crystal-shine"
+                    title={prism.title}
+                    subtitle={prism.subtitle}
+                    badge={prism.badge}
+                    accessibilityLabel={`Prism Deck: ${prism.subtitle}`}
+                  />
+                )}
+
+                <ModeCard
+                  onPress={onSelectFreeplay}
+                  variant="freeplay"
+                  icon="lorc/archery-target"
+                  title="Free Play"
+                  subtitle="1-tap practice · No clock, no hearts"
+                />
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Restrained Footer: Discord + Version */}
         <View style={styles.bottomSection}>
           <Pressable
             onPress={() => {
               triggerHaptic('light');
               playSound('click');
-              Linking.openURL(DISCORD_URL);
+              void Linking.openURL(DISCORD_URL).catch(() => {
+                /* ignore */
+              });
             }}
             style={({ pressed }) => [
               styles.discordButtonSmall,
@@ -431,58 +626,278 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    gap: 12,
+    gap: 10,
+  },
+  topUtilityBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
+    gap: 8,
+  },
+  utilityPill: {
+    minHeight: 44,
+    minWidth: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.canvasWhite,
+    borderWidth: 1.5,
+    borderBottomWidth: 3,
+    borderColor: COLORS.slateCharcoal,
+  },
+  settingsUtilityPill: {
+    backgroundColor: '#FFFDF7',
+  },
+  utilityPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.slateCharcoal,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   titleSection: {
     alignItems: 'center',
-    paddingTop: 6,
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
+    gap: 4,
   },
   title: {
-    fontSize: 40,
-    fontWeight: '700',
+    fontSize: 38,
+    fontWeight: '800',
     color: COLORS.slateCharcoal,
     letterSpacing: 3.5,
     textTransform: 'uppercase',
-    marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 12,
-    fontWeight: '500',
+  pitch: {
+    fontSize: 12.5,
+    lineHeight: 17.5,
+    fontWeight: '600',
     color: COLORS.slateCharcoal,
-    opacity: 0.72,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    opacity: 0.84,
     textAlign: 'center',
+    paddingHorizontal: 6,
   },
   menuSection: {
-    gap: 9,
-    paddingHorizontal: 2,
+    gap: 12,
     width: '100%',
     maxWidth: 520,
     alignSelf: 'center',
   },
+  heroCard: {
+    minHeight: 136,
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderBottomWidth: 7,
+    borderColor: COLORS.slateCharcoal,
+    padding: 14,
+    gap: 10,
+  },
+  heroCardPressed: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.95,
+  },
+  heroStage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFDF7',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: COLORS.slateCharcoal,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  heroAvatarBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroVsCrest: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  heroStageTag: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: MONO_FONT,
+    color: COLORS.canvasWhite,
+    letterSpacing: 0.6,
+  },
+  heroFoeBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroBody: {
+    gap: 4,
+  },
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  heroTitle: {
+    flexShrink: 1,
+    fontSize: 24,
+    fontWeight: '900',
+    color: COLORS.deepOnyx,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  heroBadge: {
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  heroBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.9,
+    color: COLORS.actionYellow,
+  },
+  heroStarPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  heroStarPillText: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: MONO_FONT,
+    color: COLORS.actionYellow,
+  },
+  keycapBadge: {
+    backgroundColor: COLORS.canvasWhite,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderBottomWidth: 3,
+    borderColor: COLORS.slateCharcoal,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  keycapBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    fontFamily: MONO_FONT,
+    color: COLORS.deepOnyx,
+  },
+  heroSubtitle: {
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: COLORS.slateCharcoal,
+  },
+  secondaryShelf: {
+    gap: 8,
+  },
+  otherModesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingHorizontal: 2,
+  },
+  otherModesTitle: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    color: COLORS.slateCharcoal,
+    opacity: 0.72,
+  },
+  otherModesToggle: {
+    minHeight: 44,
+    paddingHorizontal: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otherModesToggleText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.tealSurface,
+    textDecorationLine: 'underline',
+  },
+  compactModesRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  compactModeChip: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: RADIUS.module,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    borderColor: COLORS.slateCharcoal,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  compactChipCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactChipTitle: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.slateCharcoal,
+  },
+  compactChipSub: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.slateCharcoal,
+    opacity: 0.76,
+  },
+  expandedModesStack: {
+    gap: 8,
+  },
   menuButton: {
+    minHeight: 62,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.canvasWhite,
     borderRadius: RADIUS.module,
     borderWidth: 2,
+    borderBottomWidth: 4,
     borderColor: COLORS.slateCharcoal,
-    padding: 11,
-    gap: 12,
+    padding: 10,
+    gap: 11,
   },
   menuButtonPressed: {
     transform: [{ scale: 0.985 }],
     opacity: 0.92,
   },
-  adventureButton: {
-    backgroundColor: COLORS.actionYellow,
-  },
   spireButton: {
-    backgroundColor: COLORS.logicTeal,
+    backgroundColor: COLORS.tealSurface,
     borderColor: COLORS.slateCharcoal,
+  },
+  spireIconContainer: {
+    borderColor: 'rgba(255, 255, 255, 0.35)',
   },
   spireLockedButton: {
     backgroundColor: '#EDE7DC',
@@ -493,27 +908,23 @@ const styles = StyleSheet.create({
     borderColor: '#9E968A',
   },
   prismButton: {
-    backgroundColor: '#0F3D2E',
+    backgroundColor: '#163A36',
     borderColor: '#D4A73A',
   },
   prismIconContainer: {
-    borderColor: '#F2C94C',
+    borderColor: '#FFDE00',
   },
   freeplayButton: {
     backgroundColor: COLORS.canvasWhite,
   },
-  optionsButton: {
-    backgroundColor: COLORS.paperBeige,
-    borderColor: COLORS.slateCharcoal,
-  },
   buttonIconContainer: {
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
     borderRadius: 8,
     backgroundColor: COLORS.paperBeige,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.slateCharcoal,
   },
   buttonTextContainer: {
@@ -528,11 +939,11 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   menuButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: COLORS.slateCharcoal,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
     flexShrink: 1,
   },
   menuBadge: {
@@ -542,63 +953,42 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   menuBadgeText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
     color: COLORS.actionYellow,
   },
   menuButtonSubtext: {
-    fontSize: 11.5,
-    fontWeight: '400',
+    fontSize: 12,
+    fontWeight: '500',
     color: COLORS.slateCharcoal,
-    opacity: 0.72,
     flexShrink: 1,
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: RADIUS.button,
-    borderWidth: 2,
-    borderColor: COLORS.slateCharcoal,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    gap: 6,
-    minHeight: 44,
-  },
-  optionsButtonSmall: {
-    backgroundColor: COLORS.paperBeige,
-  },
-  secondaryButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.canvasWhite,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   bottomSection: {
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
+    paddingTop: 4,
   },
   discordButtonSmall: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
     backgroundColor: '#5865F2',
     borderRadius: RADIUS.button,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.slateCharcoal,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     gap: 6,
   },
   discordButtonPressed: {
     backgroundColor: '#4752C4',
   },
   discordTitleSmall: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: COLORS.canvasWhite,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -608,10 +998,10 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   footerText: {
-    fontSize: 10,
-    fontWeight: '400',
+    fontSize: 11,
+    fontWeight: '500',
     color: COLORS.slateCharcoal,
-    opacity: 0.5,
+    opacity: 0.55,
     letterSpacing: 1,
   },
 });

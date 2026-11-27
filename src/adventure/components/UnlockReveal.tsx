@@ -21,6 +21,7 @@ import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { COLORS } from '@/utils/colors';
 import { band, sfx } from '@/audio';
 import type { CharacterName } from '@/types';
@@ -44,6 +45,21 @@ import CompanionBubble from './CompanionBubble';
 import { REVEAL_EXIT_MS } from './ResultsMotion';
 
 const NO_INSETS = { top: 0, bottom: 0, left: 0, right: 0 };
+
+/** [UI-23] Dedicated keyboard controller mounted while UnlockReveal is active (React Compiler safe). */
+const UnlockRevealKeyHandler: React.FC<{
+  enabled: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({ enabled, onConfirm, onCancel }) => {
+  useKeyboardNav({
+    enabled,
+    priority: KEY_PRIORITY.OVERLAY,
+    onConfirm,
+    onCancel,
+  });
+  return null;
+};
 
 const GOLD = DARK.gold;
 const TEXT = DARK.text;
@@ -358,8 +374,65 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   const charmsFull = equippedCharms(save).length >= charmSlots(save);
   const arcanaEquipped = u.kind === 'arcana' && equippedArcanaOf(save).includes(u.id);
   const sourceLabel = path ? 'Secret' : isSummit ? 'New mode' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
+
+  const handlePrimaryConfirm = () => {
+    if (!revealed) {
+      reveal();
+      return;
+    }
+    sfx('confirm');
+    if (fighter) {
+      onUseFighter(fighter.name);
+      advance();
+      return;
+    }
+    if (w) {
+      if (!charmEquipped && !charmsFull) {
+        onEquipCharm(w.id);
+      }
+      advance();
+      return;
+    }
+    if (feature && openFeature) {
+      onDone();
+      onOpenFeature?.(feature.id);
+      return;
+    }
+    if (path && last && onShowPath) {
+      onDone();
+      onShowPath(path.id);
+      return;
+    }
+    if (arcana) {
+      if (!arcanaEquipped) {
+        onEquipArcana?.(arcana.id);
+      }
+      advance();
+      return;
+    }
+    if (isSummit && last && onOpenSummit) {
+      onDone();
+      onOpenSummit();
+      return;
+    }
+    advance();
+  };
+
+  const handleCancelKey = () => {
+    if (!revealed) {
+      reveal();
+      return;
+    }
+    advance();
+  };
+
   return (
-    <Modal visible transparent animationType="none">
+    <Modal visible transparent animationType="none" onRequestClose={handleCancelKey}>
+      <UnlockRevealKeyHandler
+        enabled={!exiting}
+        onConfirm={handlePrimaryConfirm}
+        onCancel={handleCancelKey}
+      />
       {/* Closing, it no longer takes taps: the results' buttons are usable from the first frame of the way out */}
       <View testID="unlock-modal" pointerEvents={exiting ? 'none' : 'auto'} style={[st.overlay, { paddingTop: insets.top }]}>
         <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} pointerEvents="none" />

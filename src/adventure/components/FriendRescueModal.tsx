@@ -33,6 +33,7 @@ import Animated, {
 import { band, sfx } from '@/audio';
 import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { COLORS } from '@/utils/colors';
 import { EASE, exitMs, MS, SCALE, SPRING, STAGGER, STAYS } from '@/utils/motion';
 import type { CharacterName } from '@/types';
@@ -189,6 +190,21 @@ const RescuePicker: React.FC<{
 }> = ({ keyDef, caged, selected, onSelect, onConfirm, onLater }) => {
   const chosen = caged.find(f => f.name === selected) ?? caged[0];
 
+  // [UI-23]: Web keyboard controls for Friend Rescue picker (Arrow cycle, Enter/Space confirm, Esc defer)
+  useKeyboardNav({
+    enabled: caged.length > 0,
+    priority: KEY_PRIORITY.OVERLAY,
+    onConfirm,
+    onCancel: onLater,
+    onNavigate: dir => {
+      if (caged.length <= 1) return;
+      const curIdx = Math.max(0, caged.findIndex(f => f.name === chosen?.name));
+      const delta = dir === 'up' || dir === 'left' ? -1 : 1;
+      const next = caged[(curIdx + delta + caged.length) % caged.length];
+      if (next) onSelect(next.name);
+    },
+  });
+
   return (
     <View style={st.pickerRoot} testID="rescue-picker">
       {/* Header crest */}
@@ -313,6 +329,14 @@ const RescueCelebration: React.FC<{
   const voice = companionVoice(fighter);
   const [freed, setFreed] = useState(reduced);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // [UI-23]: Web keyboard controls on celebration screen (Enter/Space play as rescued friend, Esc keep current)
+  useKeyboardNav({
+    enabled: true,
+    priority: KEY_PRIORITY.OVERLAY,
+    onConfirm: onUse,
+    onCancel: onKeep,
+  });
 
   // Animated values (strictly GPU transform + opacity)
   const keyY = useSharedValue(reduced ? 0 : 22);
