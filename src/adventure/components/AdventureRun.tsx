@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
 import Animated, { cancelAnimation, useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Svg, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { CardBoardProvider, type CardBoardOverlay } from '@/components/Card';
 import GameBoard from '@/components/GameBoard';
 import Icon, { type IconName } from '@/components/Icon';
@@ -36,11 +37,12 @@ import {
 import { formatCardTraitValue, formatChallengeText, getColorblindMode, useColorblind } from '@/utils/cardColors';
 import { EASE, MS } from '@/utils/motion';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
+import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import { getAdjacentIndices, type WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
+import type { AdventureSave, BiomeId, EvolutionRecipe, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { activeEnemyCounters, computeStars, createRun, isSacrificeUnlocked, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
 import { formatPowerGain } from '../data/weaponPower';
@@ -58,7 +60,7 @@ import { foeDisplay } from '../data/foes';
 import { MAIN_LEVELS } from '../data/levels';
 import { STORY_RAIDER_TAUNTS } from '../data/story';
 import { comboWindowFor, getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
-import { getArcana } from '../data/arcana';
+import { arcanaShortName, getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
@@ -142,17 +144,34 @@ const LAST_SET_MS = 3200;
  * edge by a few pixels rather than pushing anything.)
  */
 const STAGE = {
-  minShort: 48,
-  min: 56,
-  minMid: 64,
+  minShort: 44,
+  min: 52,
+  minMid: 62,
   wideH: 156,
   wideFrom: 900,
   maxGuide: 112,
   maxSparse: 98,
-  chromePx: 120,
+  chromePx: 112,
   roomy: 94,
   speechPx: 38,
 } as const;
+
+/** [UI-17]/[UI-15] Compute >=44x44px touch target hitSlop; portrait lower-rail uses bottom: 0 to protect row-0 cards. */
+const hitSlopFor = (w: number, h: number, noBottomBleed = false) => {
+  const dx = Math.max(0, Math.ceil((44 - w) / 2));
+  const needY = Math.max(0, 44 - h);
+  if (noBottomBleed) return { top: needY, bottom: 0, left: dx, right: dx };
+  const dy = Math.ceil(needY / 2);
+  return { top: dy, bottom: dy, left: dx, right: dx };
+};
+
+/** 1-time session flag for the unobtrusive hold-to-inspect mid-Set tooltip ([UI-15]). */
+let hudInspectTipShown = false;
+const NOOP = () => {};
+
+export const resetHudInspectTipForTest = () => {
+  hudInspectTipShown = false;
+};
 
 /** Mode-agnostic HUD & pause chrome overrides so any higher-level mode can wrap AdventureRun. */
 export interface FightChromeOptions {
@@ -282,6 +301,7 @@ const AdventureRun: React.FC<Props> = ({
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const colorblind = useColorblind();
+  const textScale = useTextScale();
   // The save the fight started from and every action sent to it: enough to replay the fight (engine/replay.ts)
   const [startSave, setStartSave] = useState(save);
   const [activeRelief, setActiveRelief] = useState(relief);
@@ -342,6 +362,8 @@ const AdventureRun: React.FC<Props> = ({
   const [powerInfo, setPowerInfo] = useState(false);
   /** Another HUD chip/bar/goal was tapped to inspect (the fight waits) */
   const [hudInspect, setHudInspect] = useState<HudInspectTarget | null>(null);
+  /** [UI-15] 1-time subtle tip teaching hold-to-inspect mid-Set on portrait touchscreens */
+  const [showInspectGuardTip, setShowInspectGuardTip] = useState(false);
   /** The first evolution ever: its cut-in also points at the countdown ring */
   const [evolutionHint, setEvolutionHint] = useState(false);
   const [boardSelectedCount, setBoardSelectedCount] = useState(0);
@@ -700,7 +722,7 @@ const AdventureRun: React.FC<Props> = ({
       if (e.type === 'power_up' && !seenCoach.current.has(COACH_KEYS.weaponGrowth)) {
         seenCoach.current.add(COACH_KEYS.weaponGrowth);
         onCoachMarkSeen(COACH_KEYS.weaponGrowth);
-        const msg = 'Charm grew stronger for this fight! Tap your belt to see how.';
+        const msg = 'Weapon grew stronger for this fight! Tap your belt to see how.';
         setEventBannerNote(msg);
         later(() => setEventBannerNote(prev => (prev === msg ? null : prev)), 4500);
       }
@@ -1358,16 +1380,18 @@ const AdventureRun: React.FC<Props> = ({
       ? stage.w
       : 375;
 
-  // The stage height is fixed for the fight so the board never jumps while playing
+  // The stage height is fixed for the fight so the board never jumps while playing.
+  // [UI-13] Reserve generous >=72px card height on 5-6 row mobile portrait boards.
   const boardRows = Math.max(1, Math.ceil(run.board.length / 3));
+  const compactBoardRows = !isWide && boardRows >= 5;
   const idealCardH = stage.w > 0 ? (Math.min(stage.w, 560) - 36) / 3 / 0.82 : 140;
-  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 4 : 0) + (showDamageHud ? 44 : 0) + (run.parry || run.surge ? 26 : 0);
+  const chromePx = STAGE.chromePx + (traitChecks ? TRAIT_CHECKS_HEIGHT + 4 : 0) + (showDamageHud ? 28 : 0) + (run.parry || run.surge ? 25 : 0);
   const stageH = isWide
     ? STAGE.wideH
     : boardRows >= 5
       ? (isShortPhone ? STAGE.minShort : STAGE.min)
       : boardRows === 4
-        ? (isShortPhone ? 54 : STAGE.minMid)
+        ? (isShortPhone ? 52 : STAGE.minMid)
         : stage.h > 0
           ? Math.round(
               Math.max(
@@ -1381,12 +1405,26 @@ const AdventureRun: React.FC<Props> = ({
           : 96;
   const roomyStage = isWide || stageH >= STAGE.roomy;
   const compactStage = !roomyStage;
-  const foeSize = roomyStage
-    ? Math.round(Math.min(isWide ? 104 : 80, stageH - (effectiveLevel.isBoss ? 12 : 18)))
-    : Math.round(Math.max(36, Math.min(48, stageH - 8)));
   const fighterSize = roomyStage
-    ? Math.round(Math.max(52, Math.min(isWide ? 86 : 66, stageH - 30)))
-    : Math.round(Math.max(30, Math.min(41, stageH - 13)));
+    ? Math.round(
+        Math.max(
+          50,
+          Math.min(isWide ? (effectiveLevel.isBoss ? 80 : 86) : (effectiveLevel.isBoss ? 62 : 66), stageH - 30)
+        )
+      )
+    : Math.round(Math.max(30, Math.min(effectiveLevel.isBoss ? 38 : 41, stageH - 12)));
+  // [UI-06] Amplify Boss foeSize differential (>=1.4x fighterSize on all viewports) & Elite boost (1.2x).
+  const baseFoeSize = roomyStage
+    ? Math.round(Math.min(isWide ? 104 : 80, stageH - 18))
+    : Math.round(Math.max(36, Math.min(48, stageH - 8)));
+  const foeSize = effectiveLevel.isBoss
+    ? Math.max(
+        Math.ceil(fighterSize * 1.4),
+        roomyStage ? Math.round(Math.min(isWide ? 124 : 96, stageH - 4)) : Math.round(Math.min(62, stageH + 8))
+      )
+    : isEliteFight
+      ? Math.max(Math.ceil(fighterSize * 1.2), baseFoeSize)
+      : baseFoeSize;
   // While the foe is taunting (or barking mid-fight), it speaks on its side
   const foeSpeechText = taunting && taunt ? taunt : foeBark;
   const foeTalking = !!foeSpeechText && !explaining && !ended;
@@ -1491,8 +1529,40 @@ const AdventureRun: React.FC<Props> = ({
     run.nextSetMultiplier > 1 ||
     hasTrickGearChips(gearMods);
   const hasSynergyChips = !inlineSynergyOnBelt && hasAnySynergyItems;
+  // [UI-15] Protect mobile portrait thumb-zone during active Parry wind-ups or card selection
+  const thumbZoneGuarded = !isWide && (run.parry?.phase === 'windup' || boardSelectedCount > 0);
+  const openHudInspect = useCallback(
+    (target: HudInspectTarget) => {
+      sfx('click');
+      if (!isWide && !hudInspectTipShown) {
+        hudInspectTipShown = true;
+        setShowInspectGuardTip(true);
+      } else {
+        setShowInspectGuardTip(false);
+      }
+      setHudInspect(target);
+    },
+    [isWide]
+  );
+  const openWeaponInspect = useCallback(
+    (weapon: Weapon) => {
+      sfx('click');
+      if (!isWide && !hudInspectTipShown) {
+        hudInspectTipShown = true;
+        setShowInspectGuardTip(true);
+      } else {
+        setShowInspectGuardTip(false);
+      }
+      setInspect(weapon);
+    },
+    [isWide]
+  );
+  // [UI-13] Collapse ChallengeStrip into top-bar star badge once met/failed on 5-6 row portrait boards
+  const collapseChallengeToTopBar =
+    !practice && !chrome?.statusBanner && level.id !== '1-1' && compactBoardRows && (challenge.met || challenge.failed);
+
   const beltReservedRightPx =
-    run.arcana.length * 42 +
+    run.arcana.length * 64 +
     run.activeEvolutions.length * 54 +
     (useSingleSparseRow && (run.movesLeft !== null || practice || secondsLeft !== null) ? 84 : 0);
   const dualThreat = Boolean(run.parry && run.surge) && !isWide;
@@ -1508,28 +1578,35 @@ const AdventureRun: React.FC<Props> = ({
     () => ({ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }),
     [run.foeName, run.foeIcon, run.foe.tier]
   );
+  const railHitSlop = hitSlopFor(44, 24, !isWide);
 
   const renderSynergyItems = () => (
     <>
       <GearChips
         run={run}
         mods={gearMods}
+        guardPress={thumbZoneGuarded}
+        noBottomBleed={!isWide}
         onInspectWeapon={id => {
           const w = run.weapons.find(x => x.id === id);
-          if (w) { sfx('click'); setInspect(w); }
+          if (w) openWeaponInspect(w);
         }}
       />
       {purityLive && (
         <TouchableOpacity
           testID="run-purity-chip"
           style={[st.purityChip, run.purityChain >= 2 && st.purityChipHot]}
-          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'purity' }); }}
-          activeOpacity={0.75}
+          onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'buff', which: 'purity' })}
+          onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'buff', which: 'purity' }) : undefined}
+          delayLongPress={250}
+          hitSlop={railHitSlop}
+          activeOpacity={thumbZoneGuarded ? 1 : 0.75}
           accessibilityRole="button"
+          accessibilityLabel={`Purity chain times ${Math.max(1, run.purityChain)}, next needs ${run.lastDiffCount + 1} or more varied traits`}
         >
-          <Icon name="lorc/lightning-branches" size={11} color={run.purityChain >= 2 ? TONE.upside : INK} />
-          <Text style={st.purityChipText} numberOfLines={1}>
-            {run.purityChain >= 2 ? `×${run.purityChain}` : 'Purity 1'} · &gt;{run.lastDiffCount} diff
+          <Icon name="lorc/lightning-branches" size={12} color={run.purityChain >= 2 ? TONE.upside : INK} />
+          <Text style={[st.purityChipText, { fontSize: scaleText(11, textScale) }]} numberOfLines={1}>
+            Purity ×{Math.max(1, run.purityChain)} · {run.lastDiffCount + 1}+ varied
           </Text>
         </TouchableOpacity>
       )}
@@ -1537,34 +1614,43 @@ const AdventureRun: React.FC<Props> = ({
         <TouchableOpacity
           testID="run-double-chip"
           style={[st.purityChip, st.purityChipHot]}
-          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'double' }); }}
-          activeOpacity={0.75}
+          onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'buff', which: 'double' })}
+          onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'buff', which: 'double' }) : undefined}
+          delayLongPress={250}
+          hitSlop={railHitSlop}
+          activeOpacity={thumbZoneGuarded ? 1 : 0.75}
           accessibilityRole="button"
         >
-          <Text style={st.purityChipText}>NEXT ×2{run.doubleNext > 1 ? ` (${run.doubleNext})` : ''}</Text>
+          <Text style={[st.purityChipText, { fontSize: scaleText(11, textScale) }]}>NEXT ×2{run.doubleNext > 1 ? ` (${run.doubleNext})` : ''}</Text>
         </TouchableOpacity>
       )}
       {run.nextSetMultiplier > 1 && (
         <TouchableOpacity
           testID="run-charged-chip"
           style={[st.purityChip, { backgroundColor: '#FFE8CC', borderColor: COLORS.impactOrange }]}
-          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'charged' }); }}
-          activeOpacity={0.75}
+          onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'buff', which: 'charged' })}
+          onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'buff', which: 'charged' }) : undefined}
+          delayLongPress={250}
+          hitSlop={railHitSlop}
+          activeOpacity={thumbZoneGuarded ? 1 : 0.75}
           accessibilityRole="button"
         >
-          <Text style={st.purityChipText}>SET ×{run.nextSetMultiplier}</Text>
+          <Text style={[st.purityChipText, { fontSize: scaleText(11, textScale) }]}>SET ×{run.nextSetMultiplier}</Text>
         </TouchableOpacity>
       )}
       {run.simplified && (
         <TouchableOpacity
           testID="run-simplified-chip"
           style={[st.purityChip, st.purityChipHot]}
-          onPress={() => { sfx('click'); setHudInspect({ kind: 'buff', which: 'simplified' }); }}
-          activeOpacity={0.75}
+          onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'buff', which: 'simplified' })}
+          onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'buff', which: 'simplified' }) : undefined}
+          delayLongPress={250}
+          hitSlop={railHitSlop}
+          activeOpacity={thumbZoneGuarded ? 1 : 0.75}
           accessibilityRole="button"
         >
-          <Icon name="lorc/third-eye" size={11} color={TONE.upside} />
-          <Text style={st.purityChipText} numberOfLines={1}>
+          <Icon name="lorc/third-eye" size={12} color={TONE.upside} />
+          <Text style={[st.purityChipText, { fontSize: scaleText(11, textScale) }]} numberOfLines={1}>
             All {run.simplified.attribute} {formatCardTraitValue(run.simplified.attribute, run.simplified.value, colorblind)}{run.simplified.also ? ` + ${run.simplified.also.attribute} ${formatCardTraitValue(run.simplified.also.attribute, run.simplified.also.value, colorblind)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
           </Text>
         </TouchableOpacity>
@@ -1572,8 +1658,11 @@ const AdventureRun: React.FC<Props> = ({
       {evolutionsOn && (
         <TouchableOpacity
           testID="run-evo-chip"
-          onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
-          activeOpacity={0.75}
+          onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'evolutions' })}
+          onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'evolutions' }) : undefined}
+          delayLongPress={250}
+          hitSlop={railHitSlop}
+          activeOpacity={thumbZoneGuarded ? 1 : 0.75}
           accessibilityRole="button"
           accessibilityLabel={
             catalystOnBoard
@@ -1590,8 +1679,8 @@ const AdventureRun: React.FC<Props> = ({
           }
           style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
         >
-          <Icon name="lorc/crystal-shine" size={11} color={catalystOnBoard ? INK : TONE.arcana} />
-          <Text style={st.evoChipText} numberOfLines={1}>
+          <Icon name="lorc/crystal-shine" size={12} color={catalystOnBoard ? INK : TONE.arcana} />
+          <Text style={[st.evoChipText, { fontSize: scaleText(11, textScale) }]} numberOfLines={1}>
             {evolutionsLeft <= 0
               ? `Evos ${evolutionsUsed}`
               : catalystOnBoard
@@ -1606,12 +1695,45 @@ const AdventureRun: React.FC<Props> = ({
                     ? `Pick 1 of ${evoChoiceCount} · ${Math.round(run.evolutionLikelihood)}%`
                     : nextEvoRecipe
                       ? `Next: ${nextEvoRecipe.name} · ${Math.round(run.evolutionLikelihood)}%`
-                      : `${idleArmed} armed · ${Math.round(run.evolutionLikelihood)}%`}
+                      : `Evo ${Math.round(run.evolutionLikelihood)}%`}
           </Text>
         </TouchableOpacity>
       )}
     </>
   );
+
+  const parryBarNode = run.parry ? (
+    thumbZoneGuarded ? (
+      <TouchableOpacity
+        testID="run-parry-guard"
+        onPress={NOOP}
+        onLongPress={() => openHudInspect({ kind: 'foe' })}
+        delayLongPress={250}
+        hitSlop={{ top: 18, bottom: 0, left: 4, right: 4 }}
+        activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityLabel="Hold to inspect foe parry details"
+        style={dualThreat ? { flex: 1.45, minWidth: 0 } : { flex: 1, minWidth: 0 }}
+      >
+        <ParryIntentBar
+          parry={run.parry}
+          active={playing && appActive}
+          counterAvailable={parryCounterAvailable}
+          compact={dualThreat}
+          effects={effects}
+        />
+      </TouchableOpacity>
+    ) : (
+      <ParryIntentBar
+        parry={run.parry}
+        active={playing && appActive}
+        counterAvailable={parryCounterAvailable}
+        compact={dualThreat}
+        effects={effects}
+        onPress={() => openHudInspect({ kind: 'foe' })}
+      />
+    )
+  ) : null;
 
   const threatRail = (run.parry || run.surge) ? (
     isWide ? (
@@ -1623,7 +1745,7 @@ const AdventureRun: React.FC<Props> = ({
               active={playing && appActive}
               counterAvailable={parryCounterAvailable}
               effects={effects}
-              onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
+              onPress={() => openHudInspect({ kind: 'foe' })}
             />
           </View>
         )}
@@ -1635,16 +1757,7 @@ const AdventureRun: React.FC<Props> = ({
       </View>
     ) : (
       <View style={st.threatRail}>
-        {run.parry && (
-          <ParryIntentBar
-            parry={run.parry}
-            active={playing && appActive}
-            counterAvailable={parryCounterAvailable}
-            compact={dualThreat}
-            effects={effects}
-            onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
-          />
-        )}
+        {parryBarNode}
         {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} compact={dualThreat} effects={effects} />}
       </View>
     )
@@ -1660,26 +1773,47 @@ const AdventureRun: React.FC<Props> = ({
       <View ref={anchors.rootRef} collapsable={false} pointerEvents="none" style={StyleSheet.absoluteFill} />
       {/* ── HUD ─────────────────────────────────────────── */}
       <View
-        style={[st.hud, isShortPhone && st.hudCompact, isWide && [st.hudWide, { width: hudPanelW }]]}
+        style={[st.hud, (isShortPhone || compactBoardRows) && st.hudCompact, isWide && [st.hudWide, { width: hudPanelW }]]}
         onLayout={e => setHudHeight(e.nativeEvent.layout.height)}
       >
         {/* Who you are fighting, inline Summit act/floor badge, and HP */}
         <View style={st.hudTop}>
-          <TouchableOpacity onPress={() => setPaused(true)} style={st.pauseBtn} accessibilityLabel="Pause">
+          <TouchableOpacity
+            testID="run-pause"
+            onPress={() => setPaused(true)}
+            hitSlop={hitSlopFor(36, 36)}
+            style={st.pauseBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Pause"
+          >
             <Text style={st.pauseText}>II</Text>
           </TouchableOpacity>
           <TouchableOpacity
             testID="run-foe-inspect"
-            onPress={() => { sfx('click'); setHudInspect({ kind: 'foe' }); }}
+            onPress={() => openHudInspect({ kind: 'foe' })}
+            hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
             style={{ flex: 1, minWidth: 0, gap: 2 }}
             activeOpacity={0.75}
             accessibilityRole="button"
             accessibilityLabel={`Inspect foe: ${run.foeName}`}
           >
             <View style={st.foeNameRow}>
-              <Text style={st.foeName} numberOfLines={1}>{run.foeName}</Text>
+              <Text style={[st.foeName, { fontSize: scaleText(13.5, textScale) }]} numberOfLines={1}>{run.foeName}</Text>
               {level.isBoss && <Text style={st.bossTag}>BOSS</Text>}
               {level.foes.length > 1 && <Text style={st.wave}>W{run.wave + 1}/{level.foes.length}</Text>}
+              {collapseChallengeToTopBar && (
+                <TouchableOpacity
+                  testID="run-challenge-collapsed"
+                  onPress={() => openHudInspect({ kind: 'challenge' })}
+                  hitSlop={hitSlopFor(44, 22)}
+                  style={[st.collapsedChallengePill, challenge.met && st.challengeMet, challenge.failed && { opacity: 0.6 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Three star goal: ${formatChallengeText(challenge.text, colorblind)}${challenge.met ? ', met' : ', missed'}`}
+                >
+                  <Text style={st.challengeStar}>★★★</Text>
+                  {challenge.met && <Icon name="lorc/checked-shield" size={12} color={COLORS.tealSurface} />}
+                </TouchableOpacity>
+              )}
               {chrome?.statusBanner && (
                 <View style={st.statusPill} testID={chrome.statusBanner.testID}>
                   <Icon name={chrome.statusBanner.icon} size={11} color={TONE.upside} />
@@ -1705,10 +1839,16 @@ const AdventureRun: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Battle stage (with XP progress rim docked cleanly along its inner bottom edge!) */}
+        {/* Battle stage (with atmospheric SVG gradient sky + distant biome silhouette + XP progress rim) */}
         <View testID="run-stage" style={[st.stage, compactStage && st.stageCompact, run.features.has('xp') && st.stageWithXp, { height: stageH, backgroundColor: biome.colors.sky }]}>
           <View pointerEvents="none" style={st.stageClip}>
-            <View style={[st.stageGround, compactStage && st.stageGroundCompact, { backgroundColor: biome.colors.ground }]} />
+            <StageSkyBackdrop
+              biomeId={effectiveLevel.biome}
+              skyColor={biome.colors.sky}
+              groundColor={biome.colors.ground}
+              inkColor={biome.colors.ink}
+              compact={compactStage}
+            />
             {run.features.has('xp') && (
               <View style={st.xpRimTrack}>
                 <View
@@ -1765,9 +1905,8 @@ const AdventureRun: React.FC<Props> = ({
             <View style={[st.stageMiddle, compactStage && st.stageMiddleCompact]}>
               {compactStage && coachBubble ? (
                 <View style={st.compactBubbleSlot} pointerEvents="box-none">{coachBubble}</View>
-              ) : (showDamageHud || (run.combo > 1 && comboLive) || practice) ? (
+              ) : ((showDamageHud && run.power > 0) || (run.combo > 1 && comboLive) || (practice && run.matches > 0)) ? (
                 <View style={st.counters}>
-                  {showDamageHud && <Text testID="run-total-damage" style={st.counter} accessibilityLabel={`${run.totalDamage} total damage`}>⚔ {run.totalDamage}</Text>}
                   {showDamageHud && run.power > 0 && (
                     <View style={st.powerWrap}>
                       <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />
@@ -1781,28 +1920,43 @@ const AdventureRun: React.FC<Props> = ({
                       </View>
                     </Anchor>
                   )}
-                  {showDamageHud && run.biggestHit > 0 && <Text testID="run-biggest-hit" style={st.counterDim}>best {run.biggestHit}</Text>}
                   {practice && run.matches > 0 && <Text testID="run-per-set" style={st.counterDim} accessibilityLabel={`${Math.round(run.totalDamage / run.matches)} damage per Set on average`}>avg {Math.round(run.totalDamage / run.matches)}</Text>}
                 </View>
               ) : null}
             </View>
 
             <Anchor name="foe">
-              <EnemyAvatar
-                testID="adventure-run-enemy"
-                enemy={foeAvatarEnemy}
-                size={foeSize}
-                hp={run.foeHp}
-                maxHp={run.foeMaxHp}
-                mood={enemyMood}
-                reaction={enemyConductor.reaction}
-                hitTier={enemyConductor.reaction?.hitTier}
-                hitKind={enemyConductor.reaction?.hitKind}
-                hideImpactStars={true}
-                animate={appActive}
-                quiet={!effects}
-                interactive
-              />
+              <View style={st.foeStageWrap}>
+                {effectiveLevel.isBoss && (
+                  <View
+                    testID="run-boss-aura"
+                    pointerEvents="none"
+                    style={[
+                      st.bossShadowHalo,
+                      {
+                        width: Math.round(foeSize * 0.88),
+                        height: Math.max(9, Math.round(foeSize * 0.16)),
+                        borderRadius: Math.round(foeSize * 0.44),
+                      },
+                    ]}
+                  />
+                )}
+                <EnemyAvatar
+                  testID="adventure-run-enemy"
+                  enemy={foeAvatarEnemy}
+                  size={foeSize}
+                  hp={run.foeHp}
+                  maxHp={run.foeMaxHp}
+                  mood={enemyMood}
+                  reaction={enemyConductor.reaction}
+                  hitTier={enemyConductor.reaction?.hitTier}
+                  hitKind={enemyConductor.reaction?.hitKind}
+                  hideImpactStars={true}
+                  animate={appActive}
+                  quiet={!effects}
+                  interactive
+                />
+              </View>
             </Anchor>
           </View>
         </View>
@@ -1839,7 +1993,9 @@ const AdventureRun: React.FC<Props> = ({
               reduced={!effects}
               width={hudPanelW}
               reservedRightPx={beltReservedRightPx}
-              onInspect={setInspect}
+              guardPress={thumbZoneGuarded}
+              noBottomBleed={!isWide}
+              onInspect={openWeaponInspect}
             />
           </View>
         ) : (
@@ -1868,13 +2024,34 @@ const AdventureRun: React.FC<Props> = ({
                       </View>
                     </Anchor>
                   )}
-                  {showPassivesHud && run.passives.map(id => <Anchor key={id} name={`passive:${id}`}><PassiveChip id={id} run={run} onPress={() => { sfx('click'); setHudInspect({ kind: 'passive', id }); }} /></Anchor>)}
+                  {showPassivesHud && run.passives.map(id => (
+                    <Anchor key={id} name={`passive:${id}`}>
+                      <PassiveChip
+                        id={id}
+                        run={run}
+                        collapseIdle={!isWide}
+                        guardPress={thumbZoneGuarded}
+                        noBottomBleed={!isWide}
+                        onPress={() => openHudInspect({ kind: 'passive', id })}
+                      />
+                    </Anchor>
+                  ))}
                   {run.features.has('graces') && (
                     <Anchor name="graces">
-                      <View style={st.stat}>
-                        <Icon name="lorc/clover" size={13} color={COLORS.logicTeal} />
+                      <TouchableOpacity
+                        testID="run-graces-chip"
+                        style={st.stat}
+                        onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'buff', which: 'graces' })}
+                        onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'buff', which: 'graces' }) : undefined}
+                        delayLongPress={250}
+                        hitSlop={hitSlopFor(38, 24, !isWide)}
+                        activeOpacity={thumbZoneGuarded ? 1 : 0.75}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${run.stats.graces} Graces (forgive 1-trait near-miss)`}
+                      >
+                        <Icon name="lorc/clover" size={13} color={COLORS.tealSurface} />
                         <Text style={st.statText}>{run.stats.graces}</Text>
-                      </View>
+                      </TouchableOpacity>
                     </Anchor>
                   )}
                 </View>
@@ -1885,6 +2062,7 @@ const AdventureRun: React.FC<Props> = ({
                       testID="run-sacrifice"
                       onPress={handleSacrifice}
                       disabled={!canSacrifice}
+                      hitSlop={hitSlopFor(44, 30, !isWide)}
                       activeOpacity={0.75}
                       style={[
                         st.sacrificeBtn,
@@ -1917,7 +2095,9 @@ const AdventureRun: React.FC<Props> = ({
                       <TouchableOpacity
                         testID="run-hint"
                         onPress={() => run.stats.hints > 0 && !ui.disableManualHint && setHintTrigger(t => t + 1)}
+                        hitSlop={hitSlopFor(44, 30, !isWide)}
                         style={[st.hintBtn, (run.stats.hints <= 0 || ui.disableManualHint) && { opacity: 0.4 }]}
+                        accessibilityRole="button"
                         accessibilityLabel="Use hint"
                       >
                         <Icon name="lorc/light-bulb" size={14} color={INK} />
@@ -1939,33 +2119,45 @@ const AdventureRun: React.FC<Props> = ({
                   reduced={!effects}
                   width={hudPanelW}
                   reservedRightPx={beltReservedRightPx}
-                  onInspect={setInspect}
+                  guardPress={thumbZoneGuarded}
+                  noBottomBleed={!isWide}
+                  onInspect={openWeaponInspect}
                 />
                 {inlineSynergyOnBelt && hasAnySynergyItems ? (
                   <View style={st.inlineSynergyDock}>{renderSynergyItems()}</View>
                 ) : (run.arcana.length > 0 || run.activeEvolutions.length > 0) ? (
                   <View style={st.rightDock}>
-                    {run.arcana.map(id => (
-                      <TouchableOpacity
-                        key={id}
-                        testID="run-arcana-chip"
-                        style={st.arcanaChip}
-                        onPress={() => { sfx('click'); setHudInspect({ kind: 'arcana', id }); }}
-                        activeOpacity={0.75}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Inspect ${getArcana(id).name}`}
-                      >
-                        <Icon name={getArcana(id).icon} size={11} color={TONE.arcana} />
-                        <Text style={st.arcanaChipText}>{getArcana(id).numeral}</Text>
-                      </TouchableOpacity>
-                    ))}
+                    {run.arcana.map(id => {
+                      const arc = getArcana(id);
+                      const short = arcanaShortName(id);
+                      return (
+                        <TouchableOpacity
+                          key={id}
+                          testID="run-arcana-chip"
+                          style={st.arcanaChip}
+                          onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'arcana', id })}
+                          onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'arcana', id }) : undefined}
+                          delayLongPress={250}
+                          hitSlop={railHitSlop}
+                          activeOpacity={thumbZoneGuarded ? 1 : 0.75}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Inspect ${arc.name}`}
+                        >
+                          <Icon name={arc.icon} size={12} color={TONE.arcana} />
+                          <Text style={st.arcanaChipText} numberOfLines={1}>{short}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                     {run.activeEvolutions.map(a => {
                       const recipe = recipeFor(a.id);
                       return (
                         <Anchor key={a.id} name={`evo:${a.id}`}>
                           <TouchableOpacity
-                            onPress={() => { sfx('click'); setHudInspect({ kind: 'evolutions' }); }}
-                            activeOpacity={0.75}
+                            onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'evolutions' })}
+                            onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'evolutions' }) : undefined}
+                            delayLongPress={250}
+                            hitSlop={railHitSlop}
+                            activeOpacity={thumbZoneGuarded ? 1 : 0.75}
                             accessibilityRole="button"
                             accessibilityLabel={`Inspect ${recipe?.name ?? a.id} evolution`}
                           >
@@ -1998,8 +2190,8 @@ const AdventureRun: React.FC<Props> = ({
               // Nothing to win here: where the ★★★ goal would be, the way out
               <View style={st.challenge} testID="run-practice-bar">
                 <Icon name="lorc/target-dummy" size={13} color={INK} />
-                <Text style={st.challengeText} numberOfLines={1}>Practice: nothing to win, nothing to lose</Text>
-                <TouchableOpacity testID="run-done" onPress={leavePractice} style={st.doneBtn} accessibilityRole="button" accessibilityLabel="Done practising">
+                <Text style={[st.challengeText, { fontSize: scaleText(11, textScale) }]} numberOfLines={1}>Practice: nothing to win, nothing to lose</Text>
+                <TouchableOpacity testID="run-done" onPress={leavePractice} hitSlop={hitSlopFor(56, 26, !isWide)} style={st.doneBtn} accessibilityRole="button" accessibilityLabel="Done practising">
                   <Text style={st.doneText}>DONE</Text>
                 </TouchableOpacity>
               </View>
@@ -2012,14 +2204,21 @@ const AdventureRun: React.FC<Props> = ({
               actions={trainingLabActions}
             />
           </>
-        ) : !chrome?.statusBanner && level.id !== '1-1' ? (
-          <ChallengeStrip text={formatChallengeText(challenge.text, colorblind)} met={challenge.met} failed={challenge.failed} onPress={() => { sfx('click'); setHudInspect({ kind: 'challenge' }); }} />
+        ) : !chrome?.statusBanner && level.id !== '1-1' && !collapseChallengeToTopBar ? (
+          <ChallengeStrip
+            text={formatChallengeText(challenge.text, colorblind)}
+            met={challenge.met}
+            failed={challenge.failed}
+            guardPress={thumbZoneGuarded}
+            noBottomBleed={!isWide}
+            onPress={() => openHudInspect({ kind: 'challenge' })}
+          />
         ) : null}
 
         {/* The rule, one cell per trait, while it is new (always the same height: the board never moves) */}
         {traitChecks && <TraitChecks attributes={run.attributes} checks={ended ? null : checks} added={traitAddedBy(level)} />}
 
-        {/* Docked Balatro-style Score Equation Bar (never covers cards; shows live primed math + real-time tally + receipt) */}
+        {/* Docked Balatro-style Score Equation Bar (slim 1-row pill at rest on mobile; expands floating receipt during tally beat) */}
         {showDamageHud && (
           <MultiplierIgnition
             ignition={run.lastSetIgnition}
@@ -2028,19 +2227,20 @@ const AdventureRun: React.FC<Props> = ({
             wide={isWide}
             landSeq={leadLandSeq}
             impactMs={leadImpactMs}
-            onPress={() => { sfx('click'); setHudInspect({ kind: 'score' }); }}
+            guardPress={thumbZoneGuarded}
+            onPress={() => openHudInspect({ kind: 'score' })}
           />
         )}
 
         {/* Unified Threat Rail docked cleanly inside the HUD frame (zero gap moat above the board!) */}
         {threatRail}
 
-        {/* Desktop landscape sidebar: Live Build & Arcana Console fills lower sidebar cleanly (tap any charm for canonical WeaponExplainer) */}
+        {/* Desktop landscape sidebar: Live Build & Arcana Console fills lower sidebar cleanly (tap any weapon for canonical WeaponExplainer) */}
         {isWide && (run.weapons.length > 0 || run.arcana.length > 0) && (
           <View style={st.wideConsole}>
             {run.weapons.length > 0 && (
               <View style={st.wideConsoleBlock}>
-                <Text style={st.wideConsoleEyebrow}>EQUIPPED CHARMS ({run.weapons.length}) · TAP TO INSPECT</Text>
+                <Text style={st.wideConsoleEyebrow}>EQUIPPED WEAPONS ({run.weapons.length}) · TAP TO INSPECT</Text>
                 <View style={st.wideWeaponGrid}>
                   {run.weapons.map(w => {
                     const lv = run.weaponBuilds[w.id]?.level ?? 1;
@@ -2050,7 +2250,7 @@ const AdventureRun: React.FC<Props> = ({
                       <TouchableOpacity
                         key={w.id}
                         style={[st.wideWeaponRow, ctr && st.wideWeaponRowCountered]}
-                        onPress={() => { sfx('click'); setInspect(w); }}
+                        onPress={() => openWeaponInspect(w)}
                         activeOpacity={0.75}
                         accessibilityRole="button"
                         accessibilityLabel={`Inspect ${w.name}`}
@@ -2077,13 +2277,13 @@ const AdventureRun: React.FC<Props> = ({
                       <TouchableOpacity
                         key={id}
                         style={st.wideArcanaRow}
-                        onPress={() => { sfx('click'); setHudInspect({ kind: 'arcana', id }); }}
+                        onPress={() => openHudInspect({ kind: 'arcana', id })}
                         activeOpacity={0.75}
                         accessibilityRole="button"
                         accessibilityLabel={`Inspect ${arc.name}`}
                       >
                         <Icon name={arc.icon} size={13} color={TONE.arcana} />
-                        <Text style={st.wideArcanaName} numberOfLines={1}>{arc.numeral} · {arc.name}</Text>
+                        <Text style={st.wideArcanaName} numberOfLines={1}>{arc.name}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -2097,10 +2297,11 @@ const AdventureRun: React.FC<Props> = ({
       {/* ── Board ───────────────────────────────────────── */}
       <View
         ref={anchors.ref('board')}
+        testID="run-board-wrap"
         collapsable={false}
         style={[st.boardWrap, isWide && st.boardWrapWide]}
       >
-        <View style={[st.boardInner, boardMaxWidth ? { maxWidth: boardMaxWidth } : null, isDevBuild && devOverrides.layers.dimBoard && { opacity: 0.35 }]}>
+        <View style={[st.boardInner, !isWide && st.boardInnerPortraitClip, boardMaxWidth ? { maxWidth: boardMaxWidth } : null, isDevBuild && devOverrides.layers.dimBoard && { opacity: 0.35 }]}>
           {/* Evolution pulse: a glow behind the cards, never a card border */}
           {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} effects={effects} />}
           {run.surge?.active && <SurgeGlow active={playing && appActive} effects={effects} />}
@@ -2312,20 +2513,45 @@ const AdventureRun: React.FC<Props> = ({
 
       <Modal visible={paused} transparent animationType="fade" onRequestClose={() => setPaused(false)}>
         <View style={st.overlay}>
+          <TouchableOpacity testID="pause-backdrop" style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPaused(false)} accessibilityLabel="Resume fight" />
           <PopIn style={st.panel}>
             <Text style={st.panelTitle}>PAUSED</Text>
-            <Text style={st.panelSub}>
+            <Text style={[st.panelSub, { fontSize: scaleText(14, textScale) }]}>
               {chrome?.pauseSubtitle ?? `${practice ? 'Practice' : level.id} · ${level.name}`}
             </Text>
+            {/* [UI-13]/[UI-03] Fight stats moved out of active play into Pause summary with registered Icon */}
+            {showDamageHud && (run.totalDamage > 0 || run.biggestHit > 0 || run.matches > 0) && (
+              <View style={st.pauseStatsRow} testID="pause-battle-summary">
+                <View style={st.pauseStatPill} testID="pause-total-damage">
+                  <Icon name="lorc/crossed-swords" size={14} color={INK} />
+                  <Text style={st.pauseStatText}>{run.totalDamage} dmg</Text>
+                </View>
+                {run.biggestHit > 0 && (
+                  <View style={st.pauseStatPill} testID="pause-biggest-hit">
+                    <Text style={st.pauseStatText}>best {run.biggestHit}</Text>
+                  </View>
+                )}
+                <View style={st.pauseStatPill}>
+                  <Text style={st.pauseStatText}>{run.matches} Sets</Text>
+                </View>
+              </View>
+            )}
             {run.weapons.length > 0 && (
               <View style={st.gearRow}>
                 {run.weapons.map((w, i) => {
-                  const level = run.weaponBuilds[w.id]?.level ?? 1;
+                  const wLv = run.weaponBuilds[w.id]?.level ?? 1;
                   return (
-                    <View key={i} style={st.gearChip}>
+                    <TouchableOpacity
+                      key={i}
+                      style={st.gearChip}
+                      onPress={() => { setPaused(false); openWeaponInspect(w); }}
+                      activeOpacity={0.75}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Inspect ${w.name}`}
+                    >
                       <WeaponAvatar weapon={w} size={20} interactive />
-                      <Text style={st.gearText} numberOfLines={1}>{w.name}{weaponLevelSuffix(level)}</Text>
-                    </View>
+                      <Text style={st.gearText} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLv)}</Text>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -2365,9 +2591,10 @@ const AdventureRun: React.FC<Props> = ({
         </View>
       </Modal>
 
-      {/* A weapon from the belt, explained (the fight waits) */}
+      {/* A weapon from the belt, explained (the fight waits; 1-tap dimmed backdrop dismiss per [UI-15]) */}
       <Modal visible={!!inspect} transparent animationType="fade" onRequestClose={() => setInspect(null)}>
-        <View style={st.overlay}>
+        <View style={st.overlay} testID="weapon-inspect-modal">
+          <TouchableOpacity testID="inspect-backdrop" style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setInspect(null)} accessibilityLabel="Close weapon details" />
           <PopIn style={[st.panel, { padding: 12 }]}>
             {inspect && (() => {
               const liveWeapon = run.weapons.find(w => w.id === inspect.id) ?? inspect;
@@ -2381,14 +2608,21 @@ const AdventureRun: React.FC<Props> = ({
                 />
               );
             })()}
+            {showInspectGuardTip && (
+              <View style={st.inspectGuardTip} testID="hud-inspect-guard-tip">
+                <Icon name="lorc/light-bulb" size={14} color="#92400E" />
+                <Text style={st.inspectGuardTipText}>Tip: Hold any chip or tap ? to inspect mid-Set.</Text>
+              </View>
+            )}
             <Btn testID="inspect-close" label="Back to the fight" onPress={() => setInspect(null)} />
           </PopIn>
         </View>
       </Modal>
 
-      {/* Power meter, explained (the fight waits) */}
+      {/* Power meter, explained (the fight waits; 1-tap dimmed backdrop dismiss per [UI-15]) */}
       <Modal visible={powerInfo} transparent animationType="fade" onRequestClose={() => setPowerInfo(false)}>
-        <View style={st.overlay}>
+        <View style={st.overlay} testID="power-info-modal">
+          <TouchableOpacity testID="power-info-backdrop" style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPowerInfo(false)} accessibilityLabel="Close Power details" />
           <PopIn style={[st.panel, { padding: 12 }]}>
             <PowerExplainer points={run.power} weapons={run.weapons} evolutionsTriggered={run.evolutionsTriggered} />
             <Btn testID="power-info-close" label="Back to the fight" onPress={() => setPowerInfo(false)} />
@@ -2412,6 +2646,7 @@ const AdventureRun: React.FC<Props> = ({
         shownHp={shownHp}
         challenge={challenge}
         knownEvolutions={new Set([...startSave.unlockedEvolutions, ...startSave.discoveredEvolutions, ...run.forgedRecipes])}
+        showGuardTip={showInspectGuardTip}
         onClose={() => setHudInspect(null)}
       />
     </Animated.View>
@@ -2537,12 +2772,73 @@ const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, m
   );
 };
 
+/** [UI-05] Atmospheric 2-stop sky gradient + distant biome horizon silhouette + shaded ground curve. */
+const BIOME_SKY_STOPS: Readonly<Record<BiomeId, [string, string, string]>> = {
+  meadow: ['#C9EBC0', '#F2FAEC', '#8FC97E'],
+  woods: ['#B7D6BE', '#E5F2E4', '#5F966D'],
+  canyon: ['#F2C69E', '#FFF1E0', '#D98E52'],
+  peaks: ['#C0D9F0', '#EEF6FC', '#87AFD4'],
+  summit: ['#C9BCEB', '#F2ECFA', '#8D7EC2'],
+};
+
+const BIOME_HORIZON_PATH: Readonly<Record<BiomeId, string>> = {
+  meadow: 'M0,78 Q60,52 130,66 T260,60 T400,68 L400,100 L0,100 Z',
+  woods: 'M0,80 L28,54 L46,72 L78,46 L104,70 L146,52 L176,72 L220,44 L254,70 L300,50 L334,70 L372,54 L400,76 L400,100 L0,100 Z',
+  canyon: 'M0,78 L36,78 L46,54 L106,54 L116,76 L174,76 L186,48 L256,48 L268,74 L322,74 L334,58 L382,58 L400,74 L400,100 L0,100 Z',
+  peaks: 'M0,82 L56,44 L106,74 L172,38 L228,72 L292,42 L348,70 L400,48 L400,100 L0,100 Z',
+  summit: 'M0,80 L48,54 L82,70 L138,42 L176,66 L210,36 L248,66 L310,46 L354,68 L400,52 L400,100 L0,100 Z',
+};
+
+const StageSkyBackdrop: React.FC<{
+  biomeId: BiomeId;
+  skyColor: string;
+  groundColor: string;
+  inkColor: string;
+  compact: boolean;
+}> = ({ biomeId, skyColor, groundColor, inkColor, compact }) => {
+  const [skyTop, skyHorizon, groundDeep] = BIOME_SKY_STOPS[biomeId] ?? [skyColor, skyColor, groundColor];
+  const horizonPath = BIOME_HORIZON_PATH[biomeId] ?? BIOME_HORIZON_PATH.meadow;
+  const gradSkyId = `stageSky-${biomeId}`;
+  const gradGroundId = `stageGround-${biomeId}`;
+  return (
+    <View testID="run-stage-backdrop" pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%" viewBox="0 0 400 100" preserveAspectRatio="none">
+        <Defs>
+          <LinearGradient id={gradSkyId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={skyTop} stopOpacity="1" />
+            <Stop offset="0.72" stopColor={skyHorizon} stopOpacity="1" />
+            <Stop offset="1" stopColor={skyColor} stopOpacity="1" />
+          </LinearGradient>
+          <LinearGradient id={gradGroundId} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={groundColor} stopOpacity={compact ? '0.78' : '0.88'} />
+            <Stop offset="1" stopColor={groundDeep} stopOpacity={compact ? '0.86' : '0.96'} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="400" height="100" fill={`url(#${gradSkyId})`} />
+        <Path d={horizonPath} fill={inkColor} opacity={compact ? 0.14 : 0.19} />
+        <Path
+          d={compact ? 'M-20,76 Q200,56 420,76 L420,105 L-20,105 Z' : 'M-20,70 Q200,48 420,70 L420,105 L-20,105 Z'}
+          fill={`url(#${gradGroundId})`}
+        />
+      </Svg>
+    </View>
+  );
+};
+
 /**
  * The ★★★ goal, under the fight. It jumps each time it moves forward ("1/2"),
  * and turns teal with a tick when it is met, so progress toward the third
  * star is felt as it happens and not only read on the results screen.
  */
-const ChallengeStrip: React.FC<{ text: string; met: boolean; failed: boolean; onPress?: () => void }> = ({ text, met, failed, onPress }) => {
+const ChallengeStrip: React.FC<{
+  text: string;
+  met: boolean;
+  failed: boolean;
+  guardPress?: boolean;
+  noBottomBleed?: boolean;
+  onPress?: () => void;
+}> = ({ text, met, failed, guardPress = false, noBottomBleed = false, onPress }) => {
+  const textScale = useTextScale();
   const pop = useSharedValue(1);
   const first = useRef(true);
   useEffect(() => {
@@ -2559,16 +2855,19 @@ const ChallengeStrip: React.FC<{ text: string; met: boolean; failed: boolean; on
   return (
     <TouchableOpacity
       testID="run-challenge"
-      onPress={onPress}
+      onPress={guardPress ? NOOP : onPress}
+      onLongPress={guardPress ? onPress : undefined}
+      delayLongPress={250}
+      hitSlop={hitSlopFor(180, 24, noBottomBleed)}
       disabled={!onPress}
-      activeOpacity={0.75}
+      activeOpacity={guardPress ? 1 : 0.75}
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={`Three star goal: ${text}${met ? ', done' : ''}`}
     >
       <Animated.View style={[st.challenge, met && st.challengeMet, failed && { opacity: 0.55 }, style]}>
         <Text style={st.challengeStar}>★★★</Text>
-        <Text style={[st.challengeText, failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{text}</Text>
-        {met && <Icon name="lorc/checked-shield" size={14} color={COLORS.logicTeal} />}
+        <Text style={[st.challengeText, { fontSize: scaleText(11, textScale) }, failed && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{text}</Text>
+        {met && <Icon name="lorc/checked-shield" size={14} color={COLORS.tealSurface} />}
       </Animated.View>
     </TouchableOpacity>
   );
@@ -2580,8 +2879,16 @@ const tune = (id: PassiveId, key: string): number => (PASSIVE_TUNING[id] as Reco
 const comboWindowMs = (run: RunState): number =>
   comboWindowFor(run.passives.includes('combo') ? tune('combo', 'combo.windowMs') : DEFAULT_COMBO_WINDOW_MS, run.attributes.length);
 
-/** One passive's live state. Lit when it is about to matter. */
-const PassiveChip: React.FC<{ id: PassiveId; run: RunState; onPress?: () => void }> = ({ id, run, onPress }) => {
+/** One passive's live state. Lit when primed/active; collapses idle state into a compact dim indicator on portrait ([UI-13]). */
+const PassiveChip: React.FC<{
+  id: PassiveId;
+  run: RunState;
+  collapseIdle?: boolean;
+  guardPress?: boolean;
+  noBottomBleed?: boolean;
+  onPress?: () => void;
+}> = ({ id, run, collapseIdle = false, guardPress = false, noBottomBleed = false, onPress }) => {
+  const textScale = useTextScale();
   const def = getPassive(id);
   const p = run.passive;
   const sinceSet = run.elapsedMs - run.lastMatchAtMs;
@@ -2602,26 +2909,38 @@ const PassiveChip: React.FC<{ id: PassiveId; run: RunState; onPress?: () => void
     case 'thick_hide': label = p.thickHideLeft > 0 ? `${p.thickHideLeft} free` : 'spent'; lit = p.thickHideLeft > 0; break;
     case 'patience': {
       const wait = tune('patience', 'patience.msPerTrait') * run.attributes.length - sinceSet;
-      label = run.matches === 0 || wait <= 0 ? 'ready' : `${Math.ceil(wait / 1000)}s`; lit = run.matches > 0 && wait <= 0; break;
+      label = run.matches === 0 || wait <= 0 ? 'ready' : `${Math.ceil(wait / 1000)}s`;
+      lit = run.matches > 0 && wait <= 2000;
+      break;
     }
     case 'deep_freeze': label = run.frozenMs > 0 ? `${Math.ceil(run.frozenMs / 1000)}s` : 'rainbow'; lit = run.frozenMs > 0; break;
-    case 'zoomies': label = `in ${p.zoomiesIn}`; lit = p.zoomiesIn <= 1; break;
+    case 'zoomies': label = `in ${p.zoomiesIn}`; lit = p.zoomiesIn <= 2; break;
     case 'fetch': label = 'fetch'; lit = false; break;
-    case 'big_scoop': label = `in ${p.scoopIn}`; lit = p.scoopIn <= 1; break;
+    case 'big_scoop': label = `in ${p.scoopIn}`; lit = p.scoopIn <= 2; break;
     case 'keen_eye': label = p.keenEyeCardId ? 'look!' : 'eye'; lit = !!p.keenEyeCardId; break;
   }
+  const compactIdle = collapseIdle && !lit;
   return (
     <TouchableOpacity
       testID={`run-passive-${id}`}
-      onPress={onPress}
+      onPress={guardPress ? NOOP : onPress}
+      onLongPress={guardPress ? onPress : undefined}
+      delayLongPress={250}
+      hitSlop={hitSlopFor(compactIdle ? 24 : 44, 24, noBottomBleed)}
       disabled={!onPress}
-      activeOpacity={0.75}
+      activeOpacity={guardPress ? 1 : 0.75}
       accessibilityRole={onPress ? 'button' : undefined}
-      style={[st.stat, lit && { backgroundColor: '#FFF1C7' }, !lit && { opacity: 0.6 }]}
+      accessibilityState={{ expanded: !compactIdle }}
+      style={[
+        st.stat,
+        lit && { backgroundColor: '#FFF1C7' },
+        compactIdle && st.passiveIdlePip,
+        !lit && !compactIdle && { opacity: 0.6 },
+      ]}
       accessibilityLabel={`${def.name}: ${label}`}
     >
       <Icon name={def.icon} size={13} color={INK} />
-      <Text style={st.statText} numberOfLines={1}>{label}</Text>
+      {!compactIdle && <Text style={[st.statText, { fontSize: scaleText(11, textScale) }]} numberOfLines={1}>{label}</Text>}
     </TouchableOpacity>
   );
 };
@@ -2879,27 +3198,26 @@ const Intermission: React.FC<{ run: RunState; dispatch: (a: RunAction) => void; 
 const st = StyleSheet.create({
   root: { flex: 1 },
   rootWide: { flexDirection: 'row' },
-  hud: { backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK, paddingHorizontal: 8, paddingTop: 5, paddingBottom: 4, gap: 4 },
-  hudCompact: { paddingTop: 4, paddingBottom: 3, gap: 3 },
+  hud: { backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 3, gap: 3.5, zIndex: 20 },
+  hudCompact: { paddingTop: 3, paddingBottom: 2, gap: 2.5 },
   hudWide: { borderBottomWidth: 0, borderRightWidth: 2, borderRightColor: INK, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12, gap: 8, justifyContent: 'flex-start' },
   hudTop: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   foeNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  bossTag: { fontWeight: '900', fontSize: 9.5, letterSpacing: 1.2, color: INK, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: INK, borderRadius: 4, paddingHorizontal: 4.5, overflow: 'hidden' },
+  bossTag: { fontWeight: '900', fontSize: 11, letterSpacing: 1, color: INK, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: INK, borderRadius: 4, paddingHorizontal: 4.5, overflow: 'hidden' },
+  collapsedChallengePill: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 2.5, backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 1 },
   statusPill: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '58%', backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1, borderColor: '#C9C2B8', paddingHorizontal: 6, paddingVertical: 1 },
-  statusPillText: { flexShrink: 1, fontSize: 9.5, fontWeight: '800', color: INK },
+  statusPillText: { flexShrink: 1, fontSize: 11, fontWeight: '800', color: INK },
   // The battle stage: a strip of the world the fight happens in
   stage: { borderRadius: 12, borderWidth: 2, borderColor: INK, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 3, overflow: 'visible' },
   stageCompact: { borderRadius: 10, paddingHorizontal: 7, paddingTop: 2, paddingBottom: 2 },
   stageWithXp: { paddingBottom: 6 },
-  // (the ground and embedded XP rim are clipped cleanly to the stage's rounded corners)
+  // (the sky gradient, horizon silhouette, ground and embedded XP rim are clipped cleanly to the stage's rounded corners)
   stageClip: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 10, overflow: 'hidden' },
-  stageGround: { position: 'absolute', left: -30, right: -30, bottom: -52, height: 74, borderRadius: 200, opacity: 0.72 },
-  stageGroundCompact: { bottom: -58, height: 74, opacity: 0.62 },
   xpRimTrack: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, backgroundColor: 'rgba(241, 233, 224, 0.85)', borderTopWidth: 1, borderTopColor: 'rgba(56, 56, 56, 0.35)', overflow: 'hidden' },
   xpRimFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#5EB8FF', transformOrigin: 'left center' },
   xpBadgeWrap: { position: 'absolute', bottom: 1, left: 0, right: 0, alignItems: 'center', zIndex: 8 },
-  xpBadge: { backgroundColor: COLORS.canvasWhite, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 5, paddingVertical: 0 },
-  xpBadgeText: { fontSize: 7.5, lineHeight: 9.5, fontWeight: '900', color: INK, letterSpacing: 0.3 },
+  xpBadge: { backgroundColor: COLORS.canvasWhite, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
+  xpBadgeText: { fontSize: 11, lineHeight: 13, fontWeight: '900', color: INK, letterSpacing: 0.2 },
   stageSpeechOverlay: { position: 'absolute', top: 4, left: 8, right: 8, zIndex: 20 },
   dualSpeechRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   dualSpeechHalf: { flex: 1, minWidth: 0 },
@@ -2909,33 +3227,35 @@ const st = StyleSheet.create({
   stageMiddle: { flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'center', paddingBottom: 3 },
   stageMiddleCompact: { justifyContent: 'flex-start', paddingTop: 2, paddingBottom: 10 },
   compactBubbleSlot: { width: '100%', zIndex: 25, alignItems: 'center', justifyContent: 'center' },
-  pauseBtn: { width: 30, height: 30, borderRadius: 6, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
-  pauseText: { fontWeight: '900', fontSize: 12, color: INK, letterSpacing: -1 },
+  foeStageWrap: { position: 'relative', alignItems: 'center', justifyContent: 'flex-end' },
+  bossShadowHalo: { position: 'absolute', bottom: -1, backgroundColor: 'rgba(18, 18, 18, 0.32)' },
+  pauseBtn: { width: 36, height: 36, borderRadius: 8, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
+  pauseText: { fontWeight: '900', fontSize: 13, color: INK, letterSpacing: -1 },
   heartsPill: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
   heartsPillCompact: { paddingHorizontal: 4.5, paddingVertical: 0.5, marginBottom: 3, marginLeft: 2 },
-  heartsText: { fontWeight: '900', color: INK, fontSize: 10.5, fontVariant: ['tabular-nums'] },
-  heartsTextCompact: { fontSize: 9.5 },
+  heartsText: { fontWeight: '900', color: INK, fontSize: 11, fontVariant: ['tabular-nums'] },
+  heartsTextCompact: { fontSize: 11 },
   foeName: { fontWeight: '900', fontSize: 13.5, color: INK, flexShrink: 1 },
-  wave: { fontWeight: '900', fontSize: 10, color: INK, letterSpacing: 0.8 },
-  hpTrack: { height: 17, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  wave: { fontWeight: '900', fontSize: 11, color: INK, letterSpacing: 0.5 },
+  hpTrack: { height: 18, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: '#F1E9E0', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
   hpFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, transformOrigin: 'left center' },
   hpTrail: { backgroundColor: '#FFE9A8' },
   hpTextPill: { backgroundColor: 'rgba(255, 253, 247, 0.9)', paddingHorizontal: 6, borderRadius: 3 },
-  hpText: { textAlign: 'center', fontWeight: '900', fontSize: 10.5, color: INK, fontVariant: ['tabular-nums'] },
+  hpText: { textAlign: 'center', fontWeight: '900', fontSize: 11, color: INK, fontVariant: ['tabular-nums'] },
   hpEndless: { fontSize: 15, lineHeight: 16, color: COLORS.canvasWhite },
-  doneBtn: { backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 1 },
+  doneBtn: { backgroundColor: COLORS.actionYellow, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 2 },
   doneText: { fontWeight: '900', fontSize: 11, letterSpacing: 1, color: INK },
   idleTrack: { height: 4, borderRadius: 2, backgroundColor: '#EEE', overflow: 'hidden', position: 'relative' },
   idleFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: COLORS.impactOrange, transformOrigin: 'left center' },
   counters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 1, paddingHorizontal: 4 },
   powerWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  powerDelta: { backgroundColor: COLORS.actionYellow, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 4.5, paddingVertical: 0.5 },
-  powerDeltaText: { fontSize: 9, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
-  counter: { fontSize: 10.5, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  powerDelta: { backgroundColor: COLORS.actionYellow, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 5, paddingVertical: 0.5 },
+  powerDeltaText: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  counter: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counterHot: { color: COLORS.orangeSurface },
   comboPill: { backgroundColor: COLORS.orangeSurface, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
   comboText: { fontSize: 11.5, fontWeight: '900', color: COLORS.canvasWhite, fontVariant: ['tabular-nums'] },
-  counterDim: { fontSize: 10, fontWeight: '800', color: 'rgba(56, 56, 56, 0.86)', fontVariant: ['tabular-nums'] },
+  counterDim: { fontSize: 11, fontWeight: '800', color: 'rgba(56, 56, 56, 0.86)', fontVariant: ['tabular-nums'] },
   glow: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, borderRadius: 14, backgroundColor: '#FDE68A' },
   bannerWrap: { position: 'absolute', left: 0, right: 0, zIndex: 250 },
   openingLayer: { ...StyleSheet.absoluteFillObject, zIndex: 245 },
@@ -2947,55 +3267,58 @@ const st = StyleSheet.create({
   beltDockRowWrap: { flexWrap: 'wrap', justifyContent: 'flex-start', rowGap: 3 },
   inlineSynergyDock: { flex: 1, minWidth: 120, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 3.5 },
   rightDock: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 3.5, flexShrink: 0 },
-  stat: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite, flexShrink: 1 },
+  stat: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 24, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite, flexShrink: 1 },
+  passiveIdlePip: { width: 24, height: 24, paddingHorizontal: 0, justifyContent: 'center', opacity: 0.45, flexShrink: 0 },
   statWarn: { backgroundColor: '#FFE1DE', borderColor: COLORS.impactRed },
   statHeld: { backgroundColor: '#D4F4EE', borderColor: COLORS.logicTeal },
   statText: { flexShrink: 1, fontWeight: '900', color: INK, fontSize: 11, fontVariant: ['tabular-nums'] },
-  hintBtn: { flexDirection: 'row', alignItems: 'center', gap: 2.5, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1.5, borderBottomWidth: 2.5, borderColor: INK, backgroundColor: COLORS.actionYellow },
-  sacrificeBtn: { flexDirection: 'row', alignItems: 'center', gap: 2.5, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1.5, borderBottomWidth: 2.5, borderColor: '#991B1B', backgroundColor: '#FEE2E2' },
+  hintBtn: { flexDirection: 'row', alignItems: 'center', gap: 2.5, minHeight: 30, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, borderWidth: 1.5, borderBottomWidth: 2.5, borderColor: INK, backgroundColor: COLORS.actionYellow },
+  sacrificeBtn: { flexDirection: 'row', alignItems: 'center', gap: 2.5, minHeight: 30, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1.5, borderBottomWidth: 2.5, borderColor: '#991B1B', backgroundColor: '#FEE2E2' },
   sacrificeBtnArmed: { backgroundColor: '#FECACA', borderColor: '#7F1D1D' },
-  sacrificeText: { flexShrink: 1, fontWeight: '900', color: '#991B1B', fontSize: 10.5, fontVariant: ['tabular-nums'] },
+  sacrificeText: { flexShrink: 1, fontWeight: '900', color: '#991B1B', fontSize: 11, fontVariant: ['tabular-nums'] },
   synergyRow: { flexDirection: 'row', alignItems: 'center', gap: 3.5, flexWrap: 'wrap' },
-  arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 2.5, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 5.5, paddingVertical: 1.5 },
-  arcanaChipText: { fontSize: 9.5, fontWeight: '900', color: TONE.arcana },
-  purityChip: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%', backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 5.5, paddingVertical: 1 },
+  arcanaChip: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 22, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 6.5, paddingVertical: 1.5 },
+  arcanaChipText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: TONE.arcana },
+  purityChip: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 22, maxWidth: '100%', backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6.5, paddingVertical: 1.5 },
   purityChipHot: { backgroundColor: '#CCFBF1', borderColor: TONE.upside },
-  purityChipText: { flexShrink: 1, fontSize: 9.5, fontWeight: '800', color: INK },
-  evoChip: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%', backgroundColor: TONE.comboPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 5.5, paddingVertical: 1 },
+  purityChipText: { flexShrink: 1, fontSize: 11, fontWeight: '800', color: INK },
+  evoChip: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 22, maxWidth: '100%', backgroundColor: TONE.comboPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 6.5, paddingVertical: 1.5 },
   evoChipReady: { backgroundColor: COLORS.actionYellow, borderColor: INK },
-  evoChipText: { flexShrink: 1, fontSize: 9.5, fontWeight: '900', color: INK },
+  evoChipText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: INK },
   frozen: { position: 'absolute', top: 10, alignSelf: 'center', zIndex: 60, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#DBEAFE', borderWidth: 2, borderColor: '#1D4ED8', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 4 },
-  frozenText: { fontWeight: '900', color: '#1D4ED8', letterSpacing: 1 },
-  challenge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.paperBeige, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
+  frozenText: { fontWeight: '900', fontSize: 12, color: '#1D4ED8', letterSpacing: 1 },
+  challenge: { flexDirection: 'row', alignItems: 'center', gap: 5, minHeight: 22, backgroundColor: COLORS.paperBeige, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 2 },
   challengeMet: { backgroundColor: '#D4F4EE' },
-  challengeStar: { color: '#E0A800', fontSize: 10, fontWeight: '900' },
+  challengeStar: { color: '#E0A800', fontSize: 11, fontWeight: '900' },
   challengeText: { flex: 1, fontSize: 11, fontWeight: '700', color: INK },
   threatRail: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   threatRailStacked: { flexDirection: 'column', gap: 5 },
   threatRowSlot: { flexDirection: 'row', width: '100%' },
   wideConsole: { flex: 1, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 10, gap: 10 },
   wideConsoleBlock: { gap: 5 },
-  wideConsoleEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 1.1, color: TONE.spent },
+  wideConsoleEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: TONE.spent },
   wideWeaponGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  wideWeaponRow: { width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 4 },
+  wideWeaponRow: { width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 5, minHeight: 34 },
   wideWeaponRowCountered: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
-  wideWeaponName: { flex: 1, minWidth: 0, fontSize: 10.5, fontWeight: '800', color: INK },
-  wideWeaponCounter: { fontSize: 8.5, fontWeight: '900', color: '#B91C1C', fontVariant: ['tabular-nums'] },
-  wideWeaponStack: { fontSize: 8.5, fontWeight: '900', color: INK, backgroundColor: COLORS.actionYellow, borderRadius: 4, paddingHorizontal: 3, overflow: 'hidden', fontVariant: ['tabular-nums'] },
+  wideWeaponName: { flex: 1, minWidth: 0, fontSize: 11, fontWeight: '800', color: INK },
+  wideWeaponCounter: { fontSize: 11, fontWeight: '900', color: '#B91C1C', fontVariant: ['tabular-nums'] },
+  wideWeaponStack: { fontSize: 11, fontWeight: '900', color: INK, backgroundColor: COLORS.actionYellow, borderRadius: 4, paddingHorizontal: 3.5, overflow: 'hidden', fontVariant: ['tabular-nums'] },
   wideArcanaList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  wideArcanaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 8, paddingVertical: 3 },
-  wideArcanaName: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: TONE.arcana },
-  boardWrap: { flex: 1, paddingHorizontal: 4, paddingTop: 3, paddingBottom: 4 },
+  wideArcanaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 8, paddingVertical: 4 },
+  wideArcanaName: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: TONE.arcana },
+  // [UI-15] 8px non-interactive dead-zone buffer below st.hud on mobile portrait + top clip on boardInner
+  boardWrap: { flex: 1, paddingHorizontal: 4, paddingTop: 8, paddingBottom: 4 },
   boardWrapWide: { padding: 12, alignItems: 'center', justifyContent: 'center' },
   boardInner: { flex: 1, width: '100%', position: 'relative' },
-  surgeBar: { flex: 1, minWidth: 0, height: 22, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: TONE.surgePale, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, gap: 4 },
+  boardInnerPortraitClip: { overflow: 'hidden' },
+  surgeBar: { flex: 1, minWidth: 0, minHeight: 22, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: TONE.surgePale, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 1, gap: 4 },
   surgeBarCompact: { flex: 1, paddingHorizontal: 6 },
   surgeBarSoon: { borderColor: TONE.surge },
   surgeBarLive: { borderColor: TONE.surge, backgroundColor: '#9D174D' },
   surgeFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#FBCFE8', transformOrigin: 'left center' },
   surgeFillLive: { backgroundColor: TONE.surge },
-  surgeText: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: INK, letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
-  surgeTextCompact: { fontSize: 10, letterSpacing: 0.1 },
+  surgeText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: INK, letterSpacing: 0.2, fontVariant: ['tabular-nums'] },
+  surgeTextCompact: { fontSize: 11, letterSpacing: 0.1 },
   tipDim: { position: 'absolute', left: 0, right: 0, zIndex: 299, backgroundColor: 'rgba(10,10,10,0.5)' },
   tipWrap: { position: 'absolute', left: 0, right: 0, zIndex: 300, alignItems: 'center', paddingHorizontal: 12 },
   tipArrow: { width: 18, height: 18, backgroundColor: COLORS.actionYellow, transform: [{ rotate: '45deg' }], marginBottom: -11, alignSelf: 'flex-start', marginLeft: 70 },
@@ -3004,7 +3327,7 @@ const st = StyleSheet.create({
   tipBody: { padding: 16, gap: 12 },
   tipHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   tipIcon: { width: 42, height: 42, borderRadius: 10, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },
-  tipEyebrow: { color: COLORS.actionYellow, fontWeight: '800', letterSpacing: 2, fontSize: 10, textTransform: 'uppercase' },
+  tipEyebrow: { color: COLORS.actionYellow, fontWeight: '800', letterSpacing: 2, fontSize: 11, textTransform: 'uppercase' },
   tipTitle: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 20 },
   tipText: { color: DARK.text, fontSize: 16, lineHeight: 23 },
   tipBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
@@ -3013,14 +3336,19 @@ const st = StyleSheet.create({
   panel: { width: '100%', maxWidth: 420, backgroundColor: COLORS.canvasWhite, borderRadius: 14, borderWidth: 3, borderBottomWidth: 7, borderColor: INK, padding: 18, gap: 10 },
   panelTitle: { fontSize: 24, fontWeight: '900', color: INK, textAlign: 'center' },
   panelSub: { fontSize: 14, color: INK, textAlign: 'center', opacity: 0.85 },
-  panelHint: { fontSize: 12, color: INK, opacity: 0.6, textAlign: 'center' },
+  panelHint: { fontSize: 12, color: INK, opacity: 0.65, textAlign: 'center' },
+  pauseStatsRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  pauseStatPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 9, paddingVertical: 3 },
+  pauseStatText: { fontSize: 12, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
+  inspectGuardTip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF3C7', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 10, paddingVertical: 6 },
+  inspectGuardTipText: { flex: 1, flexShrink: 1, fontSize: 11.5, fontWeight: '800', color: '#92400E' },
   gearRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
-  gearChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 2, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, maxWidth: 160 },
+  gearChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 2, borderColor: INK, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 4, maxWidth: 170, minHeight: 32 },
   gearText: { flexShrink: 1, fontSize: 11, fontWeight: '800', color: INK },
   pickCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 2.5, borderBottomWidth: 4, borderRadius: 10, padding: 10, backgroundColor: COLORS.canvasWhite },
   pickIcon: { width: 46, height: 46, borderRadius: 8, borderWidth: 1.5, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   pickName: { fontWeight: '900', color: INK, fontSize: 15 },
-  pickRarity: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  pickRarity: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   pickDesc: { fontSize: 13, color: INK, opacity: 0.85 },
 });
 

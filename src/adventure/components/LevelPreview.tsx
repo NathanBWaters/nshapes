@@ -23,6 +23,7 @@ import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
+import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, ArcanaId, LevelDef, MechanicDef } from '../types';
 import { getBiome } from '../data/biomes';
@@ -89,9 +90,9 @@ const ATTR_ICONS = { shape: 'lorc/diamond-hard', color: 'lorc/crystal-shine', nu
 
 type PreviewTab = 'briefing' | 'loadout';
 
-const QUICK_FILTERS: { id: ArmoryQuickFilter; label: string }[] = [
+const QUICK_FILTERS: { id: ArmoryQuickFilter; label: string; icon?: IconName }[] = [
   { id: 'all', label: 'All' },
-  { id: 'fuses', label: '✦ Fuses' },
+  { id: 'fuses', label: 'Fuses', icon: 'lorc/crystal-shine' },
   { id: 'equipped', label: 'Equipped' },
   { id: 'lv2plus', label: 'Lv 2+' },
 ];
@@ -262,6 +263,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
   initialTab = 'briefing',
   foeCue,
 }) => {
+  const textScale = useTextScale();
   const [activeTab, setActiveTab] = useState<PreviewTab>(initialTab);
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   /** Single focused weapon explained below the shelf (never stacks 6 open explainers) */
@@ -435,7 +437,16 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
           <Text style={[st.levelId, { color: biome.colors.ink }]} numberOfLines={1}>
             {biome.name.toUpperCase()}{practice ? ' · PRACTICE' : ` · ${level.id}${level.isBoss ? ' · BOSS' : ''}${level.branchOf ? (isFighterTrial(level) ? ' · TRIAL' : ' · ELITE') : ''}`}
           </Text>
-          <TouchableOpacity testID="preview-close" onPress={onClose} style={st.close}><Text style={st.closeText}>✕</Text></TouchableOpacity>
+          <TouchableOpacity
+            testID="preview-close"
+            onPress={onClose}
+            style={st.close}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel="Close level preview"
+          >
+            <Text style={st.closeText}>✕</Text>
+          </TouchableOpacity>
         </View>
         <View style={st.foeRow}>
           <View style={[st.foePortrait, level.isBoss && st.foeBoss, level.branchOf && !practice && st.foeElite, practice && st.foePractice]}>
@@ -449,13 +460,13 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
             />
           </View>
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={st.levelName}>{level.name}</Text>
-            <Text style={st.foeName}>vs {level.foes.length > 1 ? `${level.foes.length} waves` : foe.name}</Text>
+            <Text style={[st.levelName, { fontSize: scaleText(24, textScale) }]}>{level.name}</Text>
+            <Text style={[st.foeName, { fontSize: scaleText(14, textScale) }]}>vs {level.foes.length > 1 ? `${level.foes.length} waves` : foe.name}</Text>
             {practice ? <Text style={st.practiceTag}>NO STARS · NO CLOCK · NO LOSING</Text> : <Skulls n={level.difficulty} />}
           </View>
         </View>
         {level.foes[level.foes.length - 1].taunt && (
-          <View style={st.bubble}><Text style={st.bubbleText}>“{level.foes[level.foes.length - 1].taunt}”</Text></View>
+          <View style={st.bubble}><Text style={[st.bubbleText, { fontSize: scaleText(13, textScale) }]}>“{level.foes[level.foes.length - 1].taunt}”</Text></View>
         )}
       </View>
 
@@ -745,6 +756,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                           key={i}
                           testID={`preview-slot-${i}`}
                           onPress={() => setActiveTab('loadout')}
+                          hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                           style={[st.slot, st.slotSmall, { borderColor: INK, borderStyle: 'solid', backgroundColor: COLORS.canvasWhite }]}
                           accessibilityLabel={`${w.name} equipped in slot ${i + 1}`}
                         >
@@ -755,6 +767,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                           key={i}
                           testID={`preview-slot-${i}`}
                           onPress={() => setActiveTab('loadout')}
+                          hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                           style={[st.slot, st.slotSmall]}
                           accessibilityLabel={`Empty weapon slot ${i + 1}`}
                         >
@@ -859,6 +872,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                       <View key={i} style={{ alignItems: 'center', gap: 2 }}>
                         <TouchableOpacity
                           testID={`preview-slot-${i}`}
+                          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                           onPress={() => {
                             setFocusCharm(id);
                             if (selectedSlot === i) {
@@ -884,6 +898,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                             <TouchableOpacity
                               testID={`preview-slot-left-${i}`}
                               disabled={i === 0}
+                              hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
                               onPress={() => handleReorder(i, i - 1)}
                               style={[st.nudgeBtn, i === 0 && st.nudgeBtnDisabled]}
                               accessibilityLabel={`Move ${w.name} left`}
@@ -893,6 +908,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                             <TouchableOpacity
                               testID={`preview-slot-right-${i}`}
                               disabled={i >= charms.length - 1}
+                              hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
                               onPress={() => handleReorder(i, i + 1)}
                               style={[st.nudgeBtn, i >= charms.length - 1 && st.nudgeBtnDisabled]}
                               accessibilityLabel={`Move ${w.name} right`}
@@ -991,9 +1007,11 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                       <TouchableOpacity
                         key={f.id}
                         testID={`preview-filter-${f.id}`}
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                         onPress={() => setQuickFilter(f.id)}
                         style={[st.filterChip, quickFilter === f.id && st.filterChipOn]}
                       >
+                        {f.icon && <Icon name={f.icon} size={11} color={INK} />}
                         <Text style={st.filterChipText}>{f.label}</Text>
                       </TouchableOpacity>
                     ))}
@@ -1001,6 +1019,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                       <TouchableOpacity
                         key={m.id}
                         testID={`preview-sort-${m.id}`}
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                         onPress={() => setSortMode(m.id)}
                         style={[st.sortChip, sortMode === m.id && st.sortChipOn]}
                       >
@@ -1011,6 +1030,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.chipStrip}>
                     <TouchableOpacity
                       testID="preview-role-all"
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                       onPress={() => setRoleFilter('all')}
                       style={[st.roleChip, roleFilter === 'all' && st.roleChipOn]}
                     >
@@ -1020,6 +1040,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                       <TouchableOpacity
                         key={r.id}
                         testID={`preview-role-${r.id}`}
+                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                         onPress={() => setRoleFilter(r.id)}
                         style={[st.roleChip, roleFilter === r.id && st.roleChipOn]}
                       >
@@ -1057,7 +1078,8 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                         </View>
                         {synergy && (
                           <View style={st.fusesTag} testID={`preview-fuses-${id}`}>
-                            <Text style={st.fusesText}>✦ FUSES</Text>
+                            <Icon name="lorc/crystal-shine" size={11} color={COLORS.canvasWhite} />
+                            <Text style={st.fusesText}>FUSES</Text>
                           </View>
                         )}
                       </TouchableOpacity>
@@ -1097,8 +1119,8 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                   return <ArmedEvolutionRow key={r.id} recipe={r} known={known} testID={`preview-recipe-${r.id}`} />;
                 })}
                 {armed.length > 0 ? (
-                  <Text style={st.evoHintSub} testID="preview-evo-likelihood">
-                    Catalyst chance {Math.round(loadout.evolutionLikelihood)}% per refill · {Number.isFinite(loadout.evolutionCap) ? `up to ${loadout.evolutionCap} evolutions this fight` : 'as many evolutions as you like'}. Match the Catalyst to evolve for 30 s.
+                  <Text style={[st.evoHintSub, { fontSize: scaleText(11, textScale) }]} testID="preview-evo-likelihood">
+                    {Math.round(loadout.evolutionLikelihood)}% chance for a Catalyst on new cards · {Number.isFinite(loadout.evolutionCap) ? `up to ${loadout.evolutionCap} evolutions this fight` : 'as many evolutions as you like'}. Match the Catalyst to evolve for 30 s.
                   </Text>
                 ) : (() => {
                   const armable = armableRecipesFromArmory(save);
@@ -1230,14 +1252,14 @@ const st = StyleSheet.create({
   sheet: { width: '100%', maxWidth: 520, maxHeight: '94%', backgroundColor: COLORS.canvasWhite, borderTopLeftRadius: 18, borderTopRightRadius: 18, borderWidth: 3, borderColor: INK, overflow: 'hidden' },
   header: { padding: 16, gap: 10, borderBottomWidth: 2, borderBottomColor: INK },
   levelId: { flex: 1, flexShrink: 1, marginRight: 8, fontWeight: '900', letterSpacing: 1.5, fontSize: 12 },
-  close: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
-  closeText: { fontWeight: '900', color: INK },
+  close: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  closeText: { fontSize: 15, fontWeight: '900', color: INK },
   foeRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   foePortrait: { width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderBottomWidth: 6, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
   foeBoss: { width: 96, height: 96, borderRadius: 48, backgroundColor: COLORS.actionYellow },
   foeElite: { backgroundColor: '#5B2333', borderColor: COLORS.deepOnyx },
   foePractice: { backgroundColor: '#F6E3A8' },
-  practiceTag: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: INK, opacity: 0.75 },
+  practiceTag: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: INK, opacity: 0.8 },
   practiceBox: { gap: 4, backgroundColor: '#FBF3D6', borderRadius: 8, padding: 10, borderWidth: 1.5, borderColor: '#8A6420' },
   practiceTitle: { fontWeight: '900', fontSize: 14, color: INK },
   levelName: { fontSize: 24, fontWeight: '900', color: INK },
@@ -1245,12 +1267,12 @@ const st = StyleSheet.create({
   bubble: { alignSelf: 'flex-start', backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderColor: INK, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginLeft: 20 },
   bubbleText: { fontStyle: 'italic', color: INK, fontSize: 13 },
   tabBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: COLORS.paperBeige, borderBottomWidth: 2, borderBottomColor: INK },
-  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 38, borderRadius: 9, borderWidth: 2, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
+  tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, borderRadius: 9, borderWidth: 2, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
   tabBtnOn: { backgroundColor: COLORS.actionYellow, borderColor: INK, borderBottomWidth: 4 },
   tabBtnText: { fontSize: 12, fontWeight: '900', letterSpacing: 1, color: INK },
   body: { padding: 16, gap: 12 },
   summaryCard: { backgroundColor: COLORS.paperBeige, borderRadius: 12, borderWidth: 2, borderColor: INK, padding: 10, gap: 8 },
-  summaryHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  summaryHead: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   summaryTitle: { fontSize: 14, fontWeight: '900', color: INK, flexShrink: 1 },
   summaryHint: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.65, flexShrink: 1 },
   summaryCta: { backgroundColor: COLORS.actionYellow, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 9, paddingVertical: 5 },
@@ -1262,43 +1284,43 @@ const st = StyleSheet.create({
   beltHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   slotSmall: { width: 34, height: 34 },
   slotSelected: { borderColor: COLORS.actionYellow, borderWidth: 3, backgroundColor: '#FFFBEB' },
-  nudgeRow: { flexDirection: 'row', gap: 3 },
-  nudgeBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 4, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 5, paddingVertical: 1 },
+  nudgeRow: { flexDirection: 'row', gap: 4 },
+  nudgeBtn: { minWidth: 28, minHeight: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.actionYellow, borderRadius: 5, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 2 },
   nudgeBtnDisabled: { opacity: 0.35 },
-  nudgeText: { fontSize: 10, fontWeight: '900', color: INK },
+  nudgeText: { fontSize: 11, fontWeight: '900', color: INK },
   understudyWarn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF3C7', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 9, paddingVertical: 5 },
   understudyWarnText: { flex: 1, flexShrink: 1, fontSize: 11, fontWeight: '800', color: '#92400E' },
   understudyLink: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#CCFBF1', borderRadius: 8, borderWidth: 1.5, borderColor: '#0F766E', paddingHorizontal: 9, paddingVertical: 5 },
   understudyLinkText: { flex: 1, flexShrink: 1, fontSize: 11, fontWeight: '800', color: '#0F766E' },
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  autoEquipBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
+  autoEquipBtn: { flex: 1, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
   autoEquipText: { flexShrink: 1, fontSize: 12, fontWeight: '900', color: INK },
-  undoBtn: { backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 2, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
+  undoBtn: { minHeight: 44, justifyContent: 'center', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 2, borderColor: INK, paddingHorizontal: 12, paddingVertical: 7 },
   undoText: { fontSize: 12, fontWeight: '900', color: INK },
   autoNote: { fontSize: 11, fontWeight: '800', color: '#0F766E' },
   presetStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  presetChip: { backgroundColor: COLORS.paperBeige, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 9, paddingVertical: 4 },
+  presetChip: { minHeight: 34, justifyContent: 'center', backgroundColor: COLORS.paperBeige, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 5 },
   presetChipText: { fontSize: 11, fontWeight: '800', color: INK },
   filterBox: { backgroundColor: COLORS.paperBeige, borderRadius: 9, borderWidth: 1.5, borderColor: '#C5BCB0', padding: 7, gap: 6 },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1, borderColor: '#C5BCB0', paddingHorizontal: 7, paddingVertical: 3 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1, borderColor: '#C5BCB0', paddingHorizontal: 7, paddingVertical: 3 },
   searchInput: { flex: 1, fontSize: 12, fontWeight: '600', color: INK, paddingVertical: 2 },
   chipStrip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  filterChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 32, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite },
   filterChipOn: { backgroundColor: COLORS.actionYellow },
-  filterChipText: { fontSize: 10.5, fontWeight: '800', color: INK },
-  sortChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, borderWidth: 1.5, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
-  sortChipOn: { backgroundColor: COLORS.logicTeal, borderColor: INK },
-  sortChipText: { fontSize: 10, fontWeight: '800', color: INK },
+  filterChipText: { fontSize: 11, fontWeight: '800', color: INK },
+  sortChip: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1.5, borderColor: '#B8B0A4', backgroundColor: COLORS.canvasWhite },
+  sortChipOn: { backgroundColor: COLORS.tealSurface, borderColor: INK },
+  sortChipText: { fontSize: 11, fontWeight: '800', color: INK },
   sortChipTextOn: { color: COLORS.canvasWhite },
-  roleChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#C5BCB0', backgroundColor: COLORS.canvasWhite },
+  roleChip: { minHeight: 32, justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#C5BCB0', backgroundColor: COLORS.canvasWhite },
   roleChipOn: { backgroundColor: INK, borderColor: INK },
-  roleChipText: { fontSize: 10, fontWeight: '700', color: INK },
+  roleChipText: { fontSize: 11, fontWeight: '700', color: INK },
   roleChipTextOn: { color: COLORS.canvasWhite, fontWeight: '900' },
   lesson: { gap: 8, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: TONE.spentEdge, backgroundColor: COLORS.paperBeige },
   lessonNew: { borderColor: INK, borderBottomWidth: 4, backgroundColor: '#FFFBEB' },
   lessonHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   lessonIcon: { width: 36, height: 36, borderRadius: 9, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
-  lessonEyebrow: { fontSize: 10, fontWeight: '900', letterSpacing: 2, color: '#9A5B00' },
+  lessonEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5, color: '#9A5B00' },
   lessonTitle: { flexShrink: 1, fontSize: 17, fontWeight: '900', color: INK },
   lessonMore: { fontSize: 12, fontWeight: '800', color: INK, opacity: 0.6 },
   lessonText: { flexShrink: 1, fontSize: 14, lineHeight: 19, fontWeight: '700', color: INK },
@@ -1324,18 +1346,18 @@ const st = StyleSheet.create({
   section: { fontWeight: '900', letterSpacing: 2, fontSize: 12, color: INK, marginTop: 4 },
   sectionHint: { fontWeight: '600', letterSpacing: 0, fontSize: 11, opacity: 0.7 },
   note: { fontSize: 12, color: INK, opacity: 0.7 },
-  fighter: { width: 92, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, borderColor: TONE.spentEdge, backgroundColor: COLORS.paperBeige, gap: 2 },
+  fighter: { width: 96, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, borderColor: TONE.spentEdge, backgroundColor: COLORS.paperBeige, gap: 2 },
   fighterSel: { borderColor: INK, backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
   fighterName: { fontSize: 11, fontWeight: '800', color: INK },
-  fighterLvl: { fontSize: 10, fontWeight: '700', color: INK, opacity: 0.7 },
-  rec: { position: 'absolute', top: -6, right: -4, backgroundColor: COLORS.logicTeal, borderRadius: 4, paddingHorizontal: 4, borderWidth: 1, borderColor: INK },
-  recText: { fontSize: 8, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 1 },
-  charm: { width: 96, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
+  fighterLvl: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.75 },
+  rec: { position: 'absolute', top: -6, right: -4, backgroundColor: COLORS.tealSurface, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: INK },
+  recText: { fontSize: 11, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 0.6 },
+  charm: { width: 104, alignItems: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 3 },
   charmSel: { backgroundColor: COLORS.actionYellow, borderBottomWidth: 4 },
   kindDot: { borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1, marginTop: 2 },
-  kindDotText: { fontSize: 8, fontWeight: '900', letterSpacing: 0.4, color: COLORS.canvasWhite },
-  fusesTag: { backgroundColor: TONE.combo, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, borderWidth: 1, borderColor: INK },
-  fusesText: { fontSize: 8, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 0.5 },
+  kindDotText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.2, color: COLORS.canvasWhite },
+  fusesTag: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: TONE.combo, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: INK },
+  fusesText: { fontSize: 11, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 0.3 },
   trialNudge: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.actionYellow },
   evoBox: { gap: 6, backgroundColor: TONE.comboPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.combo, padding: 8 },
   evoName: { fontSize: 12, fontWeight: '900', color: INK },
@@ -1345,13 +1367,13 @@ const st = StyleSheet.create({
   slotEmpty: { color: TONE.spent, fontWeight: '900', fontSize: 18 },
   evoHintTitle: { flexShrink: 1, fontSize: 12, fontWeight: '900', color: INK },
   evoHintSub: { fontSize: 11, color: INK, opacity: 0.85 },
-  arcanaItem: { width: 102, alignItems: 'center', justifyContent: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
-  arcanaNum: { fontSize: 9, fontWeight: '900', letterSpacing: 1, color: TONE.arcana },
+  arcanaItem: { width: 106, alignItems: 'center', justifyContent: 'center', padding: 8, borderRadius: 10, borderWidth: 2, backgroundColor: COLORS.paperBeige, gap: 2 },
+  arcanaNum: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: TONE.arcana },
   reliefCard: { gap: 6, padding: 10, borderRadius: 12, borderWidth: 2, borderColor: '#0F766E', backgroundColor: '#F0FDFA' },
   reliefCardOn: { backgroundColor: '#CCFBF1', borderBottomWidth: 4 },
   reliefHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reliefIcon: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
-  reliefEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 1.2, color: '#0F766E' },
+  reliefEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: '#0F766E' },
   reliefTitle: { fontSize: 13, fontWeight: '900', color: INK },
   reliefDesc: { fontSize: 12, lineHeight: 17, color: INK },
   reliefNudge: { fontSize: 11, fontWeight: '800', color: '#0F766E' },
@@ -1369,7 +1391,7 @@ const st = StyleSheet.create({
   wagerBtnDisabled: { opacity: 0.45 },
   wagerBtnTitle: { fontSize: 11, fontWeight: '900', color: INK, textAlign: 'center' },
   wagerBtnTitleSel: { color: INK },
-  wagerBtnSub: { fontSize: 10, fontWeight: '700', color: INK, opacity: 0.8, textAlign: 'center' },
+  wagerBtnSub: { fontSize: 11, fontWeight: '700', color: INK, opacity: 0.8, textAlign: 'center' },
   cauldronSummary: { fontSize: 11, fontWeight: '700', color: '#78350F', lineHeight: 16 },
   footer: { padding: 14, borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.paperBeige },
   footerActions: { flexDirection: 'row', gap: 8 },

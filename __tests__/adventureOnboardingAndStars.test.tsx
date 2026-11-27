@@ -717,8 +717,11 @@ describe('Adventure first minutes: the screens', () => {
     ));
     expect(screen.getByTestId('run-foe-taunt')).toBeTruthy();
 
-    fireEvent.press(screen.getAllByTestId(/^card-(diamond|oval|squiggle)-/)[0]);
+    const firstCard = screen.getAllByTestId(/^card-(diamond|oval|squiggle)-/)[0];
+    fireEvent.press(firstCard);
     expect(screen.queryByTestId('run-foe-taunt')).toBeNull();
+    // Deselect card so the [UI-15] mid-Set portrait thumb-zone guard disarms before single-tap inspect
+    fireEvent.press(firstCard);
 
     fireEvent.press(screen.getByTestId('run-passive-nine_lives'));
     expect(screen.getByTestId('hud-inspector-modal')).toBeTruthy();

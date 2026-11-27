@@ -305,6 +305,7 @@ interface FightLog {
   sawBomb: boolean;
   sawPassiveChip: boolean;
   sawTotalDamage: boolean;
+  sawDamageEquation: boolean;
   pickedLevelUp: boolean;
   boughtInShop: boolean;
   tips: number;
@@ -319,6 +320,7 @@ function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: b
     sawBomb: false,
     sawPassiveChip: false,
     sawTotalDamage: false,
+    sawDamageEquation: false,
     pickedLevelUp: false,
     boughtInShop: false,
     tips: 0,
@@ -328,6 +330,7 @@ function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: b
     log.sawEvolutionRing ||= screen.queryAllByTestId('evolution-ring').length > 0;
     log.sawPassiveChip ||= screen.queryAllByTestId(/^run-passive-/).length > 0;
     log.sawTotalDamage ||= !!screen.queryByTestId('run-total-damage');
+    log.sawDamageEquation ||= !!screen.queryByTestId('multiplier-ignition');
   };
   const tips = () => {
     while (screen.queryByTestId('tip-ok') && log.tips < 60) {
@@ -570,7 +573,9 @@ describe('Adventure Mode full-game E2E', () => {
       }
       expect(fight.sawPassiveChip).toBe(true);
       if (level.id === '1-7') {
-        expect(fight.sawTotalDamage).toBe(true);
+        // [UI-13] Total damage moved out of active play into Pause/Results; MultiplierIgnition is the live damage HUD
+        expect(fight.sawTotalDamage).toBe(false);
+        expect(fight.sawDamageEquation).toBe(true);
         expect(screen.getByTestId('results-total-damage')).toBeTruthy();
         expect(screen.getByTestId('results-biggest-hit')).toBeTruthy();
         expect(screen.getByTestId('results-dpm')).toBeTruthy();

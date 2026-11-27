@@ -8,6 +8,7 @@ import Icon from '@/components/Icon';
 import { WeaponAvatar } from '@/components/weapons';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
+import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import { EVOLUTION_RULES } from '../engine/sources';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
 import {
@@ -49,6 +50,7 @@ const PowerExplainer: React.FC<PowerExplainerProps> = ({
   compact = false,
   testID = 'power-explainer',
 }) => {
+  const textScale = useTextScale();
   const multValue = points !== undefined ? powerMultiplier(points) : (multiplier ?? 1);
   const multLabel = points !== undefined ? formatPower(points) : fmtMult(multValue);
   const hot = multValue >= 5;
@@ -57,7 +59,7 @@ const PowerExplainer: React.FC<PowerExplainerProps> = ({
       if (w.id === UNDERSTUDY_ID) {
         const left = idx > 0 ? weapons[idx - 1] : undefined;
         if (!left || left.id === UNDERSTUDY_ID) {
-          return { weapon: w, phrase: 'place beside a charm to copy its Power trigger', gain: null as string | null };
+          return { weapon: w, phrase: 'place beside a weapon to copy its Power trigger', gain: null as string | null };
         }
         const effectiveLv = Math.max(w.level ?? 1, left.level ?? 1);
         return {
@@ -81,32 +83,32 @@ const PowerExplainer: React.FC<PowerExplainerProps> = ({
       <View style={st.header}>
         <View style={st.titleRow}>
           <Icon name="lorc/power-lightning" size={16} color={hot ? COLORS.impactRed : INK} />
-          <Text style={st.title}>WHAT IS POWER?</Text>
+          <Text style={[st.title, { fontSize: scaleText(11, textScale) }]}>WHAT IS POWER?</Text>
         </View>
         <View style={[st.pill, { backgroundColor: hot ? COLORS.actionYellow : TONE.coinPale }]}>
-          <Text style={st.pillText}>{multLabel}</Text>
+          <Text style={[st.pillText, { fontSize: scaleText(13, textScale) }]}>{multLabel}</Text>
         </View>
       </View>
 
-      {subtitle && <Text style={st.subtitle}>{subtitle}</Text>}
+      {subtitle && <Text style={[st.subtitle, { fontSize: scaleText(11, textScale) }]}>{subtitle}</Text>}
 
-      <Text style={st.body}>
-        Power is your fight-wide damage multiplier. Every fight starts at ×1.0. Charm triggers, skill feats, and Evolutions raise Power—multiplying all damage you deal in the simple BASE × MULT equation.
+      <Text style={[st.body, { fontSize: scaleText(12, textScale), lineHeight: Math.round(scaleText(12, textScale) * 1.42) }]}>
+        Power is your fight-wide damage multiplier. Every fight starts at ×1.0. Weapon triggers, skill feats, and Evolutions raise Power—multiplying all damage you deal in the simple BASE × MULT equation.
       </Text>
-      <Text style={st.note}>
-        First {POWER_KNEE} Power adds +1.0× per point (up to ×{1 + POWER_KNEE}), then climbs smoothly as 2 + 2√(P − 2) forever. No penalty for a full charm belt, and upgrading a charm to Lv 5 doubles its Power yield (1.00× → 2.00×).
+      <Text style={[st.note, { fontSize: scaleText(11, textScale), lineHeight: Math.round(scaleText(11, textScale) * 1.4) }]}>
+        First {POWER_KNEE} Power adds +1.0× per point (up to ×{1 + POWER_KNEE}), then climbs smoothly as 2 + 2√(P − 2) forever. No penalty for a full Weapon Belt, and upgrading a weapon to Lv 5 doubles its Power yield (1.00× → 2.00×).
       </Text>
-      <Text style={st.note}>
+      <Text style={[st.note, { fontSize: scaleText(11, textScale), lineHeight: Math.round(scaleText(11, textScale) * 1.4) }]}>
         Skill feats: Perfect Parry {formatPowerGain(SKILL_FEAT_POWER.perfectParry)}, Counter Parry {formatPowerGain(SKILL_FEAT_POWER.counterParry)}, 3-step Purity {formatPowerGain(SKILL_FEAT_POWER.purityChain3)}, Clutch Bomb (&lt;5s) {formatPowerGain(SKILL_FEAT_POWER.clutchBomb)}, Evolution {formatPowerGain(EVOLUTION_RULES.power)}.
       </Text>
 
       {(feeders.length > 0 || evolutionsTriggered > 0) && (
         <View style={st.feedList}>
-          <Text style={st.feedHeader}>WHAT RAISES YOUR POWER</Text>
+          <Text style={[st.feedHeader, { fontSize: scaleText(11, textScale) }]}>WHAT RAISES YOUR POWER</Text>
           {feeders.map(({ weapon, phrase, gain }) => (
             <View key={weapon.id} style={st.feedRow}>
               <WeaponAvatar weapon={weapon} size={18} />
-              <Text style={st.feedText}>
+              <Text style={[st.feedText, { fontSize: scaleText(11.5, textScale), lineHeight: Math.round(scaleText(11.5, textScale) * 1.38) }]}>
                 <Text style={st.bold}>{weapon.name}</Text> (Lv.{weapon.level}) · {gain ? `${gain} Power on ` : ''}{phrase}
               </Text>
             </View>
@@ -114,7 +116,7 @@ const PowerExplainer: React.FC<PowerExplainerProps> = ({
           {evolutionsTriggered > 0 && (
             <View style={st.feedRow}>
               <Icon name="lorc/crystal-shine" size={16} color={TONE.evoReady} />
-              <Text style={st.feedText}>
+              <Text style={[st.feedText, { fontSize: scaleText(11.5, textScale), lineHeight: Math.round(scaleText(11.5, textScale) * 1.38) }]}>
                 <Text style={st.bold}>Evolution surge</Text> ×{evolutionsTriggered} · +{Math.round(evolutionsTriggered * EVOLUTION_RULES.power * 100) / 100} Power from fused weapons
               </Text>
             </View>
@@ -154,7 +156,7 @@ const st = StyleSheet.create({
     paddingTop: 8,
     gap: 6,
   },
-  feedHeader: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: INK, opacity: 0.65 },
+  feedHeader: { fontSize: 11, fontWeight: '900', letterSpacing: 1, color: INK, opacity: 0.7 },
   feedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   feedText: { flex: 1, fontSize: 11.5, lineHeight: 15, color: INK },
   bold: { fontWeight: '900' },

@@ -10,6 +10,7 @@ import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { formatChallengeText, useColorblind } from '@/utils/cardColors';
+import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import type { ArcanaId, PassiveId, RunState } from '../types';
 import { getArcana } from '../data/arcana';
 import { EVOLUTION_RECIPES } from '../data/evolutions';
@@ -30,7 +31,7 @@ export type HudInspectTarget =
   | { kind: 'arcana'; id: ArcanaId }
   | { kind: 'evolutions' }
   | { kind: 'score' }
-  | { kind: 'buff'; which: 'purity' | 'double' | 'charged' | 'simplified' };
+  | { kind: 'buff'; which: 'purity' | 'double' | 'charged' | 'simplified' | 'graces' };
 
 interface Props {
   target: HudInspectTarget | null;
@@ -38,12 +39,21 @@ interface Props {
   shownHp: number;
   challenge: ChallengeProgress;
   knownEvolutions?: ReadonlySet<string>;
+  /** [UI-15] Show a 1-time subtle tip teaching hold-to-inspect mid-Set */
+  showGuardTip?: boolean;
   onClose: () => void;
 }
 
-const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownEvolutions, onClose }) => {
+const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownEvolutions, showGuardTip = false, onClose }) => {
   const colorblind = useColorblind();
+  const textScale = useTextScale();
   if (!target) return null;
+
+  const titleStyle = [st.title, { fontSize: scaleText(19, textScale) }];
+  const bodyStyle = [st.body, { fontSize: scaleText(14, textScale), lineHeight: Math.round(scaleText(14, textScale) * 1.42) }];
+  const cardTextStyle = [st.cardText, { fontSize: scaleText(13, textScale), lineHeight: Math.round(scaleText(13, textScale) * 1.38) }];
+  const metaStyle = [st.meta, { fontSize: scaleText(12, textScale) }];
+  const noteStyle = [st.note, { fontSize: scaleText(12, textScale) }];
 
   const practice = !!run.level.rules.sandbox;
   const foeInfo = foeDisplay(run.level.foes[run.wave] ?? run.level.foes[0]);
@@ -58,8 +68,8 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               <EnemyAvatar enemy={foeInfo} size={52} hp={shownHp} maxHp={run.foeMaxHp} mood="menacing" lightweight animate={false} framed />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text={run.level.isBoss ? 'Boss Foe' : 'Current Foe'} />
-                <Text style={st.title}>{run.foeName}</Text>
-                <Text style={st.meta}>
+                <Text style={titleStyle}>{run.foeName}</Text>
+                <Text style={metaStyle}>
                   {practice ? 'Endless HP (Practice)' : `${shownHp} / ${run.foeMaxHp} HP`}
                   {run.level.foes.length > 1 ? ` · Wave ${run.wave + 1}/${run.level.foes.length}` : ''}
                 </Text>
@@ -68,7 +78,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
             {foeInfo.ability ? (
               <FoeAbilityCard foe={foeInfo} showAvatar={false} />
             ) : (
-              <Text style={st.body}>Standard foe — match Sets of 3 cards to deal damage and knock out {run.foeName}.</Text>
+              <Text style={bodyStyle}>Standard foe — match Sets of 3 cards to deal damage and knock out {run.foeName}.</Text>
             )}
             {run.parry && <ParryPreviewCard key={colorblind ? 'parry-cb' : 'parry-std'} spec={run.parry.spec} compact testID="inspector-parry-card" />}
             {hazards && <HazardNotices hazards={hazards} testID="inspector-hazards" />}
@@ -85,7 +95,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               <FighterAvatar character={run.fighter} size={44} mood="anticipation" animate={false} framed />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text="Fighter Passives" />
-                <Text style={st.title}>{run.fighter}</Text>
+                <Text style={titleStyle}>{run.fighter}</Text>
               </View>
             </View>
             {ordered.map(pid => {
@@ -95,14 +105,14 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
                 <View key={pid} style={[st.passiveCard, focused && st.passiveFocus]}>
                   <View style={st.rowCenter}>
                     <Icon name={p.icon} size={18} color={INK} />
-                    <Text style={st.cardTitle}>{p.name}</Text>
+                    <Text style={[st.cardTitle, { fontSize: scaleText(14, textScale) }]}>{p.name}</Text>
                     <Text style={st.tag}>ALWAYS ON</Text>
                   </View>
-                  <Text style={st.cardText}>{p.text}</Text>
+                  <Text style={cardTextStyle}>{p.text}</Text>
                 </View>
               );
             })}
-            <Text style={st.note}>Spend stars in {run.fighter}&apos;s Skill Tree at Camp to evolve these passives.</Text>
+            <Text style={noteStyle}>Spend stars in {run.fighter}&apos;s Skill Tree at Camp to evolve these passives.</Text>
           </>
         );
       }
@@ -112,20 +122,20 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
         return (
           <>
             <Eyebrow text="Star Goals" />
-            <Text style={st.title}>{run.level.id} · {run.level.name}</Text>
+            <Text style={titleStyle}>{run.level.id} · {run.level.name}</Text>
             <View style={st.goalRow}>
               <Text style={st.goalStars}>★</Text>
-              <Text style={st.cardText}>{goals[0]}</Text>
+              <Text style={cardTextStyle}>{goals[0]}</Text>
             </View>
             <View style={st.goalRow}>
               <Text style={st.goalStars}>★★</Text>
-              <Text style={st.cardText}>{goals[1]}</Text>
+              <Text style={cardTextStyle}>{goals[1]}</Text>
             </View>
             <View style={[st.goalRow, challenge.met && st.goalMet, challenge.failed && st.goalMissed]}>
               <Text style={st.goalStars}>★★★</Text>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={st.cardText}>{formatChallengeText(challenge.text, colorblind)}</Text>
-                <Text style={[st.meta, challenge.met && { color: TONE.upside }, challenge.failed && { color: '#B91C1C' }]}>
+                <Text style={cardTextStyle}>{formatChallengeText(challenge.text, colorblind)}</Text>
+                <Text style={[metaStyle, challenge.met && { color: TONE.upside }, challenge.failed && { color: '#B91C1C' }]}>
                   {challenge.met ? '✓ Goal met! Knock out the foe to lock in ★★★.' : challenge.failed ? 'Missed this run — still clearable for ★ / ★★.' : 'In progress (+ knockout required).'}
                 </Text>
               </View>
@@ -142,13 +152,13 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               <View style={st.iconBadge}><Icon name={a.icon} size={26} color={TONE.arcana} /></View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text={`Arcana ${a.numeral}`} color="#EDE9FE" />
-                <Text style={st.title}>{a.name}</Text>
+                <Text style={titleStyle}>{a.name}</Text>
               </View>
             </View>
-            <Text style={st.body}>{a.tagline}</Text>
+            <Text style={bodyStyle}>{a.tagline}</Text>
             <View style={st.passiveCard}>
-              <Text style={[st.cardText, { color: TONE.upside, fontWeight: '800' }]}>▲ {a.upside}</Text>
-              <Text style={[st.cardText, { color: TONE.tradeoff, fontWeight: '700' }]}>▼ {a.tradeoff}</Text>
+              <Text style={[cardTextStyle, { color: TONE.upside, fontWeight: '800' }]}>▲ {a.upside}</Text>
+              <Text style={[cardTextStyle, { color: TONE.tradeoff, fontWeight: '700' }]}>▼ {a.tradeoff}</Text>
             </View>
           </>
         );
@@ -168,8 +178,8 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               <View style={st.iconBadge}><Icon name="lorc/crystal-shine" size={26} color={TONE.combo} /></View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text="Evolutions" color="#EDE9FE" />
-                <Text style={st.title}>Weapon Fusions</Text>
-                <Text style={st.meta}>{Math.round(run.evolutionLikelihood)}% Catalyst chance · {capText}</Text>
+                <Text style={titleStyle}>Weapon Fusions</Text>
+                <Text style={metaStyle}>{Math.round(run.evolutionLikelihood)}% chance for a Catalyst on new cards · {capText}</Text>
               </View>
             </View>
             {activeList.length > 0 && (
@@ -179,10 +189,10 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
                   <View key={recipe.id} style={st.passiveFocus}>
                     <View style={st.rowCenter}>
                       <Icon name={recipe.icon} size={18} color={TONE.evoReady} />
-                      <Text style={st.cardTitle}>{recipe.name}</Text>
-                      <Text style={st.meta}>{Math.ceil(active.remainingMs / 1000)}s left</Text>
+                      <Text style={[st.cardTitle, { fontSize: scaleText(14, textScale) }]}>{recipe.name}</Text>
+                      <Text style={metaStyle}>{Math.ceil(active.remainingMs / 1000)}s left</Text>
                     </View>
-                    <Text style={st.cardText}>{recipe.activeText}</Text>
+                    <Text style={cardTextStyle}>{recipe.activeText}</Text>
                   </View>
                 ))}
               </View>
@@ -196,15 +206,15 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
                     <View key={r.id} style={st.passiveCard}>
                       <View style={st.rowCenter}>
                         <Icon name={r.icon} size={18} color={TONE.combo} />
-                        <Text style={st.cardTitle}>{known ? r.name : '??? Evolution'}</Text>
+                        <Text style={[st.cardTitle, { fontSize: scaleText(14, textScale) }]}>{known ? r.name : '??? Evolution'}</Text>
                       </View>
-                      <Text style={st.cardText}>{known ? r.activeText : `Armed by ${r.familyText}. Match a Catalyst to discover it!`}</Text>
+                      <Text style={cardTextStyle}>{known ? r.activeText : `Armed by ${r.familyText}. Match a Catalyst to discover it!`}</Text>
                     </View>
                   );
                 })}
               </View>
             )}
-            <Text style={st.note}>
+            <Text style={noteStyle}>
               Match any glowing Catalyst card in a valid Set to deal 10 damage and trigger an evolution for {EVOLUTION_RULES.durationMs / 1000}s. With 2+ armed evolutions, you&apos;ll choose 1 of up to 3 randomly drawn options.
             </Text>
           </>
@@ -226,8 +236,8 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               </View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text="Damage Math" color={COLORS.actionYellow} />
-                <Text style={st.title}>Score Breakdown</Text>
-                <Text style={st.meta}>Base × Multiplier (+ Bonus hits) = Damage</Text>
+                <Text style={titleStyle}>Score Breakdown</Text>
+                <Text style={metaStyle}>Base × Multiplier (+ Bonus hits) = Damage</Text>
               </View>
             </View>
 
@@ -245,8 +255,8 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
                       <Text style={st.scoreChipText}>{step.value}</Text>
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={st.scoreLabel}>{step.label}</Text>
-                      {step.note && <Text style={st.meta}>{step.note}</Text>}
+                      <Text style={[st.scoreLabel, { fontSize: scaleText(13, textScale) }]}>{step.label}</Text>
+                      {step.note && <Text style={metaStyle}>{step.note}</Text>}
                     </View>
                   </View>
                 ))}
@@ -261,14 +271,14 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
                     <Text style={st.scoreChipText}>{item.value}</Text>
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={st.scoreLabel}>{item.label}</Text>
-                    {item.note && <Text style={st.meta}>{item.note}</Text>}
+                    <Text style={[st.scoreLabel, { fontSize: scaleText(13, textScale) }]}>{item.label}</Text>
+                    {item.note && <Text style={metaStyle}>{item.note}</Text>}
                   </View>
                 </View>
               ))}
             </View>
 
-            <Text style={st.note}>Equip weapons like Rainbow Charm, Catalyst Prism, or Arcana to multiply Sets and grow Power faster!</Text>
+            <Text style={noteStyle}>Equip weapons like Rainbow Charm, Catalyst Prism, or Arcana to multiply Sets and grow Power faster!</Text>
           </>
         );
       }
@@ -278,8 +288,22 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
           return (
             <>
               <Eyebrow text="Escalating Purity" color="#CCFBF1" />
-              <Text style={st.title}>Purity Chain (×{Math.max(1, run.purityChain)})</Text>
-              <Text style={st.body}>Match consecutive Sets with rising numbers of all-different traits (1 → 2 → 3+) for bonus damage and coins. A mistake or lower variety resets the chain.</Text>
+              <Text style={titleStyle}>Purity Chain (×{Math.max(1, run.purityChain)})</Text>
+              <Text style={bodyStyle}>Match consecutive Sets with rising numbers of varied traits (1 → 2 → 3+ varied) for bonus damage and coins. A mistake or lower variety resets the chain.</Text>
+            </>
+          );
+        }
+        if (target.which === 'graces') {
+          return (
+            <>
+              <View style={st.headerRow}>
+                <View style={st.iconBadge}><Icon name="lorc/clover" size={26} color={COLORS.tealSurface} /></View>
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <Eyebrow text="Near-Miss Protection" color="#CCFBF1" />
+                  <Text style={titleStyle}>Graces ({run.stats.graces} left)</Text>
+                </View>
+              </View>
+              <Text style={bodyStyle}>Off by 1 trait? A Grace forgives a 1-trait near-miss, spares your heart, and refreshes those 3 cards (no Set damage unless a Grace weapon strikes back).</Text>
             </>
           );
         }
@@ -287,8 +311,8 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
           return (
             <>
               <Eyebrow text="Amplified" />
-              <Text style={st.title}>Next Trigger ×2</Text>
-              <Text style={st.body}>Your next weapon trigger (blast, laser, heal, echo, coin, time...) fires twice in a row!</Text>
+              <Text style={titleStyle}>Next Trigger ×2</Text>
+              <Text style={bodyStyle}>Your next weapon trigger (blast, laser, heal, echo, coin, time...) fires twice in a row!</Text>
             </>
           );
         }
@@ -296,16 +320,16 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
           return (
             <>
               <Eyebrow text="Charged Set" color="#FFE8CC" />
-              <Text style={st.title}>Next Set ×{run.nextSetMultiplier}</Text>
-              <Text style={st.body}>Your next Set deals ×{run.nextSetMultiplier} damage! Stacks with Rainbow Strikes and Shading Surges.</Text>
+              <Text style={titleStyle}>Next Set ×{run.nextSetMultiplier}</Text>
+              <Text style={bodyStyle}>Your next Set deals ×{run.nextSetMultiplier} damage! Stacks with Rainbow Strikes and Shading Surges.</Text>
             </>
           );
         }
         return (
           <>
             <Eyebrow text="Clarity" color="#CCFBF1" />
-            <Text style={st.title}>Simplified Board</Text>
-            <Text style={st.body}>Every new card arrives sharing the same trait value while active, making Sets effortless to spot.</Text>
+            <Text style={titleStyle}>Simplified Board</Text>
+            <Text style={bodyStyle}>Every new card arrives sharing the same trait value while active, making Sets effortless to spot.</Text>
           </>
         );
       }
@@ -315,11 +339,23 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={st.overlay} testID="hud-inspector-modal">
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close details" />
+        <TouchableOpacity
+          testID="hud-inspector-backdrop"
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+          accessibilityLabel="Close details"
+        />
         <PopIn style={st.panel}>
           <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 10 }} bounces={false}>
             {renderBody()}
           </ScrollView>
+          {showGuardTip && (
+            <View style={st.guardTip} testID="hud-inspect-guard-tip">
+              <Icon name="lorc/light-bulb" size={14} color="#92400E" />
+              <Text style={st.guardTipText}>Tip: Hold any chip or tap ? to inspect mid-Set.</Text>
+            </View>
+          )}
           <Btn testID="hud-inspector-close" label="Back to the fight" onPress={onClose} />
         </PopIn>
       </View>
@@ -335,7 +371,7 @@ const st = StyleSheet.create({
   iconBadge: { width: 46, height: 46, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
   title: { flexShrink: 1, fontSize: 19, fontWeight: '900', color: INK },
   meta: { flexShrink: 1, fontSize: 12, fontWeight: '700', color: INK, opacity: 0.75 },
-  section: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.65 },
+  section: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: INK, opacity: 0.7 },
   body: { fontSize: 14, lineHeight: 20, color: INK },
   bold: { fontWeight: '900' },
   note: { fontSize: 12, lineHeight: 17, color: INK, opacity: 0.75, fontStyle: 'italic' },
@@ -343,7 +379,7 @@ const st = StyleSheet.create({
   cardHazard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF3E0', borderRadius: 8, borderWidth: 1.5, borderColor: TONE.tradeoff, padding: 10 },
   cardTitle: { flex: 1, flexShrink: 1, fontSize: 14, fontWeight: '900', color: INK },
   cardText: { flex: 1, flexShrink: 1, fontSize: 13, lineHeight: 18, color: INK },
-  tag: { fontSize: 9, fontWeight: '900', letterSpacing: 1, color: INK, opacity: 0.65 },
+  tag: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: INK, opacity: 0.65 },
   passiveCard: { gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: TONE.spentEdge, padding: 10 },
   passiveFocus: { gap: 4, backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 10 },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.spentEdge, padding: 8 },
@@ -357,6 +393,8 @@ const st = StyleSheet.create({
   scoreChipBonus: { backgroundColor: COLORS.orangeSurface },
   scoreChipText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF', fontVariant: ['tabular-nums'] },
   scoreLabel: { fontSize: 13, fontWeight: '900', color: INK },
+  guardTip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF3C7', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 10, paddingVertical: 6 },
+  guardTipText: { flex: 1, flexShrink: 1, fontSize: 11.5, fontWeight: '800', color: '#92400E' },
 });
 
 export default HudInspector;
