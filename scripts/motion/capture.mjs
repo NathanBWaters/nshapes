@@ -13,10 +13,11 @@
  *   node scripts/motion/capture.mjs <shot> [--label before] [--base http://localhost:8099]
  *        [--frames auto|N] [--max 240] [--step 16] [--preroll 8] [--dpr 1]
  *        [--reduced] [--twice] [--no-seed] [--no-sheets] [--headed]
+ *        [--clip] [--slowmo-impact] [--vertical|--no-vertical] [--fit pad|crop]
  *   node scripts/motion/capture.mjs --list
  *
  * Output: motion-out/<shot>/<label>/{frames/*.png, capture.json, report.md,
- * contact.png, strip.png}. Read report.md first, then the sheets.
+ * contact.png, strip.png[, clip.mp4, clip.webm, clip.gif]}. Read report.md first, then the sheets.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,6 +25,7 @@ import crypto from 'node:crypto';
 import { chromium } from 'playwright';
 import { DEFAULT_BASE, FRAME_MS, OUT_ROOT, PHONE, decodePng, diffFrames, frameName, gitSha, num, padBox, parseArgs, png, unionBox, writeJson } from './lib.mjs';
 import { analyze } from './analyze.mjs';
+import { exportClip } from './exportClip.mjs';
 import { buildDefaultSheets } from './sheet.mjs';
 import { describeShots, resolveShot } from './shots.mjs';
 
@@ -593,12 +595,31 @@ async function main() {
   const { report } = analyze(outDir);
   let sheets = [];
   if (!args['no-sheets']) sheets = await buildDefaultSheets(outDir);
+  let clipResult = null;
+  if (args.clip || args['slowmo-impact']) {
+    clipResult = exportClip(outDir, {
+      slowmoImpact: !!args['slowmo-impact'],
+      vertical: args['no-vertical'] ? false : args.vertical !== 'false',
+      fit: typeof args.fit === 'string' ? args.fit : 'pad',
+      formats: typeof args['clip-formats'] === 'string' ? args['clip-formats'].split(',') : undefined,
+      impactFrame: args['impact-frame'] !== undefined ? num(args['impact-frame'], undefined) : undefined,
+    });
+  }
   console.log(report);
   if (first.capture.problems.length) console.log(`Page errors during capture:\n- ${first.capture.problems.slice(0, 5).join('\n- ')}\n`);
   console.log('## Files');
   console.log('');
   console.log(`- ${path.relative(process.cwd(), path.join(outDir, 'report.md'))}`);
   for (const s of sheets) console.log(`- ${path.relative(process.cwd(), s.file)}  (${s.about})`);
+  if (clipResult) {
+    console.log(`- ${path.relative(process.cwd(), clipResult.manifestPath)}  (PR clip manifest${clipResult.manifest.slowmoImpact ? `, 0.5× impact slow-mo around f${clipResult.manifest.impactFrame}` : ''})`);
+    for (const out of clipResult.exported) {
+      console.log(`- ${path.relative(process.cwd(), out.file)}  (PR ${out.format.toUpperCase()} clip)`);
+    }
+    if (clipResult.ffmpegMissing) {
+      console.log('- (ffmpeg not in PATH — install ffmpeg and run `node scripts/motion/exportClip.mjs ' + path.relative(process.cwd(), outDir) + (clipResult.manifest.slowmoImpact ? ' --slowmo-impact' : '') + '`)');
+    }
+  }
   console.log(`- ${path.relative(process.cwd(), path.join(outDir, 'frames'))}/f000.png … one PNG per frame (p00N.png = before the trigger)`);
 }
 

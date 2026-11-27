@@ -15,27 +15,34 @@ export default function Root({ children }: PropsWithChildren) {
         {/* Page <title> is populated via expo-router/head in app/_layout.tsx so static HTML emits a single non-empty <title> */}
         <meta
           name="description"
-          content="A pattern-matching roguelike — match trios, bend the rules, and build wild combos."
+          content="Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike."
         />
 
         {/* Open Graph social preview */}
         <meta property="og:title" content="NShapes — Pattern-Matching Roguelike" />
         <meta
           property="og:description"
-          content="A pattern-matching roguelike — match trios, bend the rules, and build wild combos."
+          content="Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike."
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://nathanbwaters.github.io/nshapes/" />
-        <meta property="og:image" content="https://nathanbwaters.github.io/nshapes/icons/icon-512.png" />
+        <meta property="og:image" content="https://nathanbwaters.github.io/nshapes/og-hero.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:type" content="image/png" />
+        <meta
+          property="og:image:alt"
+          content="NShapes — Orange Tabby hero and glowing Circle, Triangle, and Bolt cards erupting in an explosive combo starburst"
+        />
 
         {/* Twitter Card */}
-        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="NShapes — Pattern-Matching Roguelike" />
         <meta
           name="twitter:description"
-          content="A pattern-matching roguelike — match trios, bend the rules, and build wild combos."
+          content="Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike."
         />
-        <meta name="twitter:image" content="https://nathanbwaters.github.io/nshapes/icons/icon-512.png" />
+        <meta name="twitter:image" content="https://nathanbwaters.github.io/nshapes/og-hero.png" />
 
         <link rel="manifest" href="/nshapes/manifest.json" />
 
@@ -46,7 +53,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-title" content="NShapes" />
 
         {/* Theme color for mobile browsers */}
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#F4EFE6" />
 
         <ScrollViewStyleReset />
       </head>

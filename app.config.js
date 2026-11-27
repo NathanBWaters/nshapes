@@ -94,7 +94,7 @@ export default {
       icon: './assets/icon.png',
       name: 'NShapes',
       shortName: 'NShapes',
-      description: 'A pattern-matching roguelike — match trios, bend the rules, and build wild combos.',
+      description: 'Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike.',
       backgroundColor: '#145CA8',
       themeColor: '#145CA8',
       display: 'standalone',
