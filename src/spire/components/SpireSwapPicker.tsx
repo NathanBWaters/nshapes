@@ -7,16 +7,19 @@
  * preserves belt slot index for Understudy positioning.
  */
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '@/utils/colors';
+import { STAGGER } from '@/utils/motion';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { WeaponChip } from '@/adventure/components/SharedCards';
 import { INK, TONE } from '@/adventure/components/ui';
 import { spireHeldWeapons } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
+import { SpireInlineDrawer, SpireStaggerItem, SpireTactilePressable } from './SpireMotion';
 
 interface Props {
+  visible?: boolean;
   run: SpireRun;
   incomingWeaponId: string;
   incomingLevel: number;
@@ -27,6 +30,7 @@ interface Props {
 }
 
 const SpireSwapPicker: React.FC<Props> = ({
+  visible = true,
   run,
   incomingWeaponId,
   incomingLevel,
@@ -39,50 +43,56 @@ const SpireSwapPicker: React.FC<Props> = ({
   const incomingName = getArmoryWeapon(incomingWeaponId)?.name ?? incomingWeaponId;
 
   return (
-    <View style={st.panel} testID={`${testIDPrefix}-panel`}>
-      <View style={st.headRow}>
-        <Text style={st.title}>
-          {`Belt Full (${run.weapons.length}/${MAX_SUMMIT_WEAPONS}) — Swap out which weapon?`}
+    <SpireInlineDrawer visible={visible} style={st.panel} testID={`${testIDPrefix}-panel`}>
+      <View style={st.panelInner}>
+        <View style={st.headRow}>
+          <Text style={st.title}>
+            {`Belt Full (${run.weapons.length}/${MAX_SUMMIT_WEAPONS}) — Swap out which weapon?`}
+          </Text>
+          <SpireTactilePressable
+            testID={`${testIDPrefix}-cancel`}
+            small
+            onPress={onCancel}
+            style={st.cancelBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel weapon swap"
+          >
+            <Text style={st.cancelText}>Cancel</Text>
+          </SpireTactilePressable>
+        </View>
+
+        <Text style={st.sub}>
+          Equipping {incomingName} (Lv {incomingLevel})
+          {price !== undefined ? ` for ${price}¢` : ''} · Keeps slot order
         </Text>
-        <TouchableOpacity
-          testID={`${testIDPrefix}-cancel`}
-          onPress={onCancel}
-          style={st.cancelBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel weapon swap"
-        >
-          <Text style={st.cancelText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
 
-      <Text style={st.sub}>
-        Equipping {incomingName} (Lv {incomingLevel})
-        {price !== undefined ? ` for ${price}¢` : ''} · Keeps slot order
-      </Text>
-
-      <View style={st.list}>
-        {held.map((w, i) => {
-          const lv = run.weaponLevels[w.id] ?? 1;
-          return (
-            <View key={`${w.id}-${i}`} style={st.row}>
-              <Text style={st.slotNum}>{i + 1}</Text>
-              <View style={st.chipWrap}>
-                <WeaponChip weapon={w} level={lv} />
-              </View>
-              <TouchableOpacity
-                testID={`${testIDPrefix}-drop-${w.id}`}
-                onPress={() => onConfirmSwap(w.id)}
-                style={st.swapBtn}
-                accessibilityRole="button"
-                accessibilityLabel={`Swap out ${w.name} for ${incomingName}`}
-              >
-                <Text style={st.swapBtnText}>Swap</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
+        <View style={st.list}>
+          {held.map((w, i) => {
+            const lv = run.weaponLevels[w.id] ?? 1;
+            return (
+              <SpireStaggerItem key={`${w.id}-${i}`} index={i} count={held.length} gapMs={STAGGER.card} distance={8}>
+                <View style={st.row}>
+                  <Text style={st.slotNum}>{i + 1}</Text>
+                  <View style={st.chipWrap}>
+                    <WeaponChip weapon={w} level={lv} />
+                  </View>
+                  <SpireTactilePressable
+                    testID={`${testIDPrefix}-drop-${w.id}`}
+                    small
+                    onPress={() => onConfirmSwap(w.id)}
+                    style={st.swapBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Swap out ${w.name} for ${incomingName}`}
+                  >
+                    <Text style={st.swapBtnText}>Swap</Text>
+                  </SpireTactilePressable>
+                </View>
+              </SpireStaggerItem>
+            );
+          })}
+        </View>
       </View>
-    </View>
+    </SpireInlineDrawer>
   );
 };
 
@@ -95,6 +105,8 @@ const st = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#D97706',
     padding: 10,
+  },
+  panelInner: {
     gap: 8,
   },
   headRow: {

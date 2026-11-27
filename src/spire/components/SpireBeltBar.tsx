@@ -6,15 +6,16 @@
  * of any held weapon, inspect any charm, or sell spare gear in the Merchant Shop.
  */
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '@/utils/colors';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { WeaponChip } from '@/adventure/components/SharedCards';
-import { INK, TONE } from '@/adventure/components/ui';
+import { INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS, spireWeaponSellValue } from '../engine/runState';
 import type { SpireRun } from '../types';
+import { SpireStatPop, SpireTactilePressable } from './SpireMotion';
 
 interface Props {
   run: SpireRun;
@@ -80,88 +81,95 @@ const SpireBeltBar: React.FC<Props> = ({
           const isInspected = inspected?.id === w.id;
           const isCopiedTarget = understudyIdx > 0 && i === understudyIdx - 1;
           return (
-            <View key={`${w.id}-${i}`} style={[st.row, isInspected && st.rowFocused, isCopiedTarget && st.rowCopiedTarget]}>
-              <Text style={st.slotNum}>{i + 1}</Text>
-              <View style={st.chipWrap}>
-                <WeaponChip
-                  testID={`${testIDPrefix}-weapon-${w.id}`}
-                  weapon={w}
-                  level={lv}
-                  active={isInspected}
-                  onPress={() => {
-                    sfx('click');
-                    setInspectId(prev => (prev === w.id ? null : w.id));
-                  }}
-                />
+            <SpireStatPop key={`${w.id}-${i}`} value={`${w.id}-${i}`}>
+              <View style={[st.row, isInspected && st.rowFocused, isCopiedTarget && st.rowCopiedTarget]}>
+                <Text style={st.slotNum}>{i + 1}</Text>
+                <View style={st.chipWrap}>
+                  <WeaponChip
+                    testID={`${testIDPrefix}-weapon-${w.id}`}
+                    weapon={w}
+                    level={lv}
+                    active={isInspected}
+                    onPress={() => {
+                      sfx('click');
+                      setInspectId(prev => (prev === w.id ? null : w.id));
+                    }}
+                  />
+                </View>
+
+                {isCopiedTarget && (
+                  <View style={st.copiedPill} testID={`${testIDPrefix}-copied-target`}>
+                    <Text style={st.copiedPillText}>COPIED</Text>
+                  </View>
+                )}
+
+                {onReorder && held.length > 1 && (
+                  <View style={st.moveGroup}>
+                    <SpireTactilePressable
+                      testID={`${testIDPrefix}-left-${i}`}
+                      small
+                      disabled={i === 0}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      onPress={() => {
+                        sfx('click');
+                        onReorder(i, i - 1);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Move ${w.name} left`}
+                      style={[st.moveBtn, i === 0 && st.btnDisabled]}
+                    >
+                      <Text style={st.moveText}>◀</Text>
+                    </SpireTactilePressable>
+                    <SpireTactilePressable
+                      testID={`${testIDPrefix}-right-${i}`}
+                      small
+                      disabled={i === held.length - 1}
+                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                      onPress={() => {
+                        sfx('click');
+                        onReorder(i, i + 1);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Move ${w.name} right`}
+                      style={[st.moveBtn, i === held.length - 1 && st.btnDisabled]}
+                    >
+                      <Text style={st.moveText}>▶</Text>
+                    </SpireTactilePressable>
+                  </View>
+                )}
+
+                {onSell && (
+                  <SpireTactilePressable
+                    testID={`${testIDPrefix}-sell-${w.id}`}
+                    small
+                    disabled={!canSellAny}
+                    onPress={() => {
+                      band.cue('register');
+                      if (inspectId === w.id) setInspectId(null);
+                      onSell(w.id);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Sell ${w.name} for ${sellPrice} coins`}
+                    style={[st.sellBtn, !canSellAny && st.btnDisabled]}
+                  >
+                    <Text style={st.sellText}>+{sellPrice}¢</Text>
+                  </SpireTactilePressable>
+                )}
               </View>
-
-              {isCopiedTarget && (
-                <View style={st.copiedPill} testID={`${testIDPrefix}-copied-target`}>
-                  <Text style={st.copiedPillText}>COPIED</Text>
-                </View>
-              )}
-
-              {onReorder && held.length > 1 && (
-                <View style={st.moveGroup}>
-                  <TouchableOpacity
-                    testID={`${testIDPrefix}-left-${i}`}
-                    disabled={i === 0}
-                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                    onPress={() => {
-                      sfx('click');
-                      onReorder(i, i - 1);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Move ${w.name} left`}
-                    style={[st.moveBtn, i === 0 && st.btnDisabled]}
-                  >
-                    <Text style={st.moveText}>◀</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    testID={`${testIDPrefix}-right-${i}`}
-                    disabled={i === held.length - 1}
-                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                    onPress={() => {
-                      sfx('click');
-                      onReorder(i, i + 1);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Move ${w.name} right`}
-                    style={[st.moveBtn, i === held.length - 1 && st.btnDisabled]}
-                  >
-                    <Text style={st.moveText}>▶</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {onSell && (
-                <TouchableOpacity
-                  testID={`${testIDPrefix}-sell-${w.id}`}
-                  disabled={!canSellAny}
-                  onPress={() => {
-                    band.cue('register');
-                    if (inspectId === w.id) setInspectId(null);
-                    onSell(w.id);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Sell ${w.name} for ${sellPrice} coins`}
-                  style={[st.sellBtn, !canSellAny && st.btnDisabled]}
-                >
-                  <Text style={st.sellText}>+{sellPrice}¢</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            </SpireStatPop>
           );
         })}
       </View>
 
       {inspected && (
-        <WeaponExplainer
-          weapon={inspected}
-          build={builds[inspected.id]}
-          defaultOpen
-          hidePowerNote
-        />
+        <PopIn key={inspected.id}>
+          <WeaponExplainer
+            weapon={inspected}
+            build={builds[inspected.id]}
+            defaultOpen
+            hidePowerNote
+          />
+        </PopIn>
       )}
     </View>
   );
