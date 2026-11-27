@@ -9,14 +9,17 @@
  * races are impossible by construction.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useScreenTransition, type ScreenDirection } from '@/components/ScreenTransition';
+import Icon from '@/components/Icon';
+import { FightEffectsStorage, SettingsSheet } from '@/components/SettingsSheet';
 import { COLORS } from '@/utils/colors';
 import { MusicStorage, SoundStorage } from '@/utils/storage';
 import { band, music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import type { AdventureSave, FeatureDestination, LevelDef, MechanicDef, RunState } from './types';
 import { MAIN_LEVELS, getLevel, mainIndexOf } from './data/levels';
 import { getMapKey, isMapKeyClaimed, isMapKeyReached, lockedFighters, mapKeyAfter } from './data/mapKeys';
@@ -29,6 +32,7 @@ import {
   claimMapKey,
   equipArcana,
   equipCharm,
+  getFrontierLevel,
   hasUnspentStars,
   isLevelUnlocked,
   LESSON_KEYS,
@@ -115,7 +119,8 @@ type ActiveOverlay =
   | { kind: 'reference'; mechanic: MechanicDef; returnPreviewLevel?: LevelDef }
   | { kind: 'unlocks'; unlocks: Unlock[]; pendingEnding?: boolean }
   | { kind: 'rescue'; keyId: string }
-  | { kind: 'ending' };
+  | { kind: 'ending' }
+  | { kind: 'settings' };
 
 /**
  * How deep each screen sits: a change to a screen as deep or deeper comes in
@@ -216,6 +221,10 @@ const AdventureMode: React.FC<Props> = ({
   }, []);
 
   useAndroidBackHandler(() => {
+    if (overlay.kind === 'settings') {
+      setOverlay({ kind: 'none' });
+      return true;
+    }
     if (overlay.kind === 'reference') {
       setOverlay(
         overlay.returnPreviewLevel
@@ -530,6 +539,95 @@ const AdventureMode: React.FC<Props> = ({
     return key;
   };
 
+  // [UI-23] Unified web keyboard navigation across Map, Preview, Reference, Camp, FieldGuide & Results
+  useKeyboardNav({
+    enabled: screen.kind === 'map' && overlay.kind === 'none',
+    priority: KEY_PRIORITY.SCREEN,
+    onConfirm: () => {
+      const frontier = getFrontierLevel(save);
+      setWalkingKeyId(null);
+      sfx('click');
+      setOverlay({ kind: 'preview', level: frontier });
+    },
+    onCancel: () => transition.go(() => { music.stop(); onExit(); }, -1),
+  });
+
+  useKeyboardNav({
+    enabled: overlay.kind === 'preview',
+    priority: KEY_PRIORITY.SHEET,
+    onConfirm: () => {
+      if (overlay.kind === 'preview') {
+        handlePlay(overlay.level);
+      }
+    },
+    onCancel: () => {
+      setPreviewExit('slide');
+      setOverlay({ kind: 'none' });
+    },
+  });
+
+  useKeyboardNav({
+    enabled: overlay.kind === 'reference',
+    priority: KEY_PRIORITY.MODAL,
+    onCancel: () =>
+      setOverlay(
+        overlay.kind === 'reference' && overlay.returnPreviewLevel
+          ? { kind: 'preview', level: overlay.returnPreviewLevel }
+          : { kind: 'none' }
+      ),
+  });
+
+  useKeyboardNav({
+    enabled: (screen.kind === 'camp' || screen.kind === 'guide') && overlay.kind === 'none',
+    priority: KEY_PRIORITY.SCREEN,
+    onCancel: () => setScreen({ kind: 'map' }),
+  });
+
+  useKeyboardNav({
+    enabled: screen.kind === 'results' && overlay.kind === 'none' && unlocksRevealed,
+    priority: KEY_PRIORITY.SCREEN,
+    onConfirm: () => {
+      if (screen.kind !== 'results') return;
+      const lvl = getLevel(screen.levelId);
+      const nxt = nextLevelAfter(lvl);
+      const canNext = screen.stars > 0 && Boolean(nxt && isLevelUnlocked(save, nxt));
+      if (canNext && nxt) {
+        commitAdventureFight('results_next');
+        const key = readyKeyAfter(lvl.id);
+        if (key) {
+          setScreen({ kind: 'map', highlight: lvl.id }, () => setWalkingKeyId(key.id));
+        } else {
+          const nextIsNew = !save.seenMechanics.includes(nxt.introduces);
+          if (!nextIsNew && !nxt.isBoss && !hasUnspentStars(save)) {
+            startRun(nxt);
+          } else {
+            setOverlay({ kind: 'preview', level: nxt });
+          }
+        }
+      } else {
+        commitAdventureFight('results_retry');
+        startRun(lvl, { isRetry: true });
+      }
+    },
+    onRetry: () => {
+      if (screen.kind !== 'results') return;
+      const lvl = getLevel(screen.levelId);
+      commitAdventureFight('results_retry');
+      startRun(lvl, { isRetry: true });
+    },
+    onCancel: () => {
+      if (screen.kind !== 'results') return;
+      const lvl = getLevel(screen.levelId);
+      const nxt = nextLevelAfter(lvl);
+      commitAdventureFight('results_map');
+      const key = readyKeyAfter(lvl.id);
+      setScreen(
+        { kind: 'map', highlight: key ? lvl.id : nxt && isLevelUnlocked(save, nxt) ? nxt.id : lvl.id },
+        () => { if (key) setWalkingKeyId(key.id); }
+      );
+    },
+  });
+
   const previewLevel = overlay.kind === 'preview' ? overlay.level : null;
   const activeTeaching = overlay.kind === 'teaching' ? overlay.teaching : null;
   const activeReference = overlay.kind === 'reference' ? overlay.mechanic : null;
@@ -839,6 +937,57 @@ const AdventureMode: React.FC<Props> = ({
           onOpenSummit();
         } : undefined}
       />
+      {/* [UI-21] Non-overlapping >=44x44 global Settings trigger on Adventure Map */}
+      {screen.kind === 'map' && overlay.kind === 'none' && (
+        <TouchableOpacity
+          testID="adventure-settings-trigger"
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          activeOpacity={0.85}
+          onPress={() => {
+            sfx('click');
+            setOverlay({ kind: 'settings' });
+          }}
+          style={st.settingsFab}
+        >
+          <Icon name="lorc/gear-hammer" size={20} color={COLORS.slateCharcoal} noShadow />
+        </TouchableOpacity>
+      )}
+      {overlay.kind === 'settings' && (
+        <SettingsSheet
+          visible
+          onClose={() => setOverlay({ kind: 'none' })}
+          effectsOn={save.effectsOn}
+          onToggleEffects={() => {
+            const next = !save.effectsOn;
+            FightEffectsStorage.set(next);
+            setSave(s => ({ ...s, effectsOn: next }));
+          }}
+          onMusicChange={enabled => {
+            prevSaveMusicOn.current = enabled;
+            setSave(s => (s.musicOn === enabled ? s : { ...s, musicOn: enabled }));
+          }}
+          onReplayWalkthrough={() => {
+            setOverlay({ kind: 'none' });
+            startRun(MAIN_LEVELS[0]);
+          }}
+          onSaveRestored={() => {
+            const reloaded = loadAdventureSave();
+            setSaveState(reloaded);
+            saveRef.current = reloaded;
+          }}
+          onResetGame={() => {
+            const fresh = loadAdventureSave();
+            setSaveState(fresh);
+            saveRef.current = fresh;
+            const freshHistory = loadBattleHistory();
+            setHistory(freshHistory);
+            historyRef.current = freshHistory;
+            setOverlay({ kind: 'none' });
+            setScreen({ kind: 'map' });
+          }}
+        />
+      )}
     </View>
   );
 };
@@ -847,6 +996,21 @@ const st = StyleSheet.create({
   // Paper shows for the frame or two between one screen leaving and the next arriving
   root: { flex: 1, backgroundColor: COLORS.paperBeige },
   screen: { flex: 1 },
+  settingsFab: {
+    position: 'absolute',
+    right: 12,
+    bottom: 92,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.canvasWhite,
+    borderWidth: 2,
+    borderBottomWidth: 4,
+    borderColor: COLORS.slateCharcoal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 40,
+  },
 });
 
 export default AdventureMode;

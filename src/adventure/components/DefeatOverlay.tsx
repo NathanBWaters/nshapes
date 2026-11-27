@@ -13,13 +13,14 @@
  *
  * Pure GPU `transform`/`opacity` one-shot entrance (`MS.quick = 180ms`), zero infinite loops.
  */
-import React, { useEffect } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { useColorblind } from '@/utils/cardColors';
 import { COLORS } from '@/utils/colors';
 import { EASE, MS } from '@/utils/motion';
@@ -76,18 +77,19 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
     };
   }, [reduced, op, y]);
 
-  // Web instant-retry keyboard shortcuts (`Enter`, `Space`, `R`)
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ' || e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        onRetry();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+  const handleKeyboardRetry = useCallback(() => {
+    sfx('confirm');
+    onRetry();
   }, [onRetry]);
+
+  // [UI-23] Unified web keyboard shortcuts (`Enter`/`Space` confirm, `R` instant retry, `Esc` back to map)
+  useKeyboardNav({
+    enabled: true,
+    priority: KEY_PRIORITY.OVERLAY,
+    onConfirm: handleKeyboardRetry,
+    onRetry: handleKeyboardRetry,
+    onCancel: onMap,
+  });
 
   const panelStyle = useAnimatedStyle(() => ({
     opacity: op.value,

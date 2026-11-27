@@ -8,7 +8,7 @@
  * pure GPU `transform`/`opacity` one-shot motion (zero infinite loops), reduced-motion safe.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import Svg, { Polygon } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { COLORS } from '@/utils/colors';
 import { EASE, MS, SPRING } from '@/utils/motion';
 import { band, sfx } from '@/audio';
@@ -95,25 +96,20 @@ const StoryEndingModal: React.FC<Props> = ({ visible, save, onDone, onOpenSummit
     setPaused(p => !p);
   }, []);
 
-  useEffect(() => {
-    if (!visible || Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        togglePause();
-      } else if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        if (paused) {
-          sfx('click');
-          setPaused(false);
-        } else {
-          advance();
-        }
+  // [UI-23] Unified web keyboard shortcuts (`Enter`/`Space` advance or resume, `Esc` pause/resume)
+  useKeyboardNav({
+    enabled: visible,
+    priority: KEY_PRIORITY.OVERLAY,
+    onCancel: togglePause,
+    onConfirm: () => {
+      if (paused) {
+        sfx('click');
+        setPaused(false);
+      } else {
+        advance();
       }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [visible, paused, togglePause, advance]);
+    },
+  });
 
   if (!visible) return null;
 
