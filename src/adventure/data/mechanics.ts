@@ -115,7 +115,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
       'Your new Blast Powder fires by itself as you match. Make 2 all-orange Sets for the third star.',
     ],
     fightTips: [
-      { title: 'Your hearts and Blast Powder', text: 'A wrong Set costs a heart. Your Blast Powder charm blasts extra cards on lucky matches.', anchor: 'top' },
+      { title: 'Your hearts and Blast Powder', text: 'A wrong Set costs a heart. Your Blast Powder weapon blasts extra cards on lucky matches.', anchor: 'top' },
       { title: 'All-orange Sets', text: 'Make 2 Sets where all three cards are orange for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/shining-heart',
@@ -231,16 +231,16 @@ export const MECHANICS: Record<string, MechanicDef> = {
     id: 'power_cards',
     kind: 'feature',
     enables: 'power',
-    title: 'Power Cards',
+    title: 'Charged Cards',
     tagline: 'Cards marked +2 hit harder.',
     coach: 'Cards marked +2 hit harder. Grab them!',
     body: [
-      'Match a card with a +2 badge to deal +2 bonus damage!',
-      'Match 4 power or gold cards for the third star.',
+      'Match a Charged Card marked +2 to deal +2 bonus damage!',
+      'Match 4 Charged or Gold cards for the third star.',
     ],
     fightTips: [
-      { title: 'Power cards', text: 'Look for cards with a +2 badge in the corner. A Set that uses one hits for 2 more.', anchor: 'bottom' },
-      { title: 'Bonus hunter', text: 'Match 4 power or gold cards for the third star.', anchor: 'top' },
+      { title: 'Charged Cards', text: 'Look for Charged Cards with a +2 badge in the corner. A Set that uses one hits for 2 more.', anchor: 'bottom' },
+      { title: 'Bonus hunter', text: 'Match 4 Charged or Gold cards for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/fist',
     demo: {
@@ -258,15 +258,15 @@ export const MECHANICS: Record<string, MechanicDef> = {
   charm: {
     id: 'charm',
     kind: 'feature',
-    title: 'Charms',
-    tagline: 'Your weapons ride along as charms and fire by themselves. Bring any 3.',
-    coach: 'Your charms fire on their own. Watch for the boom!',
+    title: 'Weapon Belt',
+    tagline: 'Your weapons ride on your belt and fire by themselves. Bring any 3.',
+    coach: 'Your weapons fire on their own. Watch for the boom!',
     body: [
-      'Every weapon you win goes into your Armory. Bring up to 3 as charms: they fire by themselves as you match.',
+      'Every weapon you win goes into your Armory. Bring up to 3 on your Weapon Belt: they fire by themselves as you match.',
       'Set off 2 explosions for the third star.',
     ],
     fightTips: [
-      { title: 'Charms fire for you', text: 'Your charms fire by themselves when you match. Set off 2 explosions for the third star.', anchor: 'bottom' },
+      { title: 'Weapons fire for you', text: 'Your weapons fire by themselves when you match. Set off 2 explosions for the third star.', anchor: 'bottom' },
     ],
     icon: 'lorc/gems',
     demo: { type: 'icons', items: [{ icon: 'lorc/gems', label: 'Unlock' }, { icon: 'lorc/gear-hammer', label: 'Equip 3' }, { icon: 'lorc/crossed-swords', label: 'Fight' }] },
@@ -469,12 +469,12 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Off by one trait? A Grace saves your heart and refreshes those 3 cards.',
     coach: 'Off by 1 trait? A Grace saves your heart & refreshes the cards!',
     body: [
-      'A Grace forgives a 1-trait near-miss, saves your heart, and refreshes those 3 cards (no Set damage unless a Grace charm strikes back).',
+      'A Grace forgives a 1-trait near-miss, saves your heart, and refreshes those 3 cards (no Set damage unless a Grace weapon strikes back).',
       'Two or more wrong traits still cost a heart.',
-      'Equip counter-punch charms like Second Chance or Grace Conduit to turn near-misses into defensive retaliation. Get saved once for the third star.',
+      'Equip counter-punch weapons like Second Chance or Grace Conduit to turn near-misses into defensive retaliation. Get saved once for the third star.',
     ],
     fightTips: [
-      { title: 'Graces', text: 'The clover shows your Graces. A Grace forgives a 1-trait near-miss, saves your heart, and refreshes those 3 cards (no Set damage unless a Grace charm strikes back). Get saved once for the third star.', anchor: 'top' },
+      { title: 'Graces', text: 'The clover shows your Graces. A Grace forgives a 1-trait near-miss, saves your heart, and refreshes those 3 cards (no Set damage unless a Grace weapon strikes back). Get saved once for the third star.', anchor: 'top' },
     ],
     icon: 'lorc/clover',
     demo: {
@@ -611,10 +611,10 @@ export const MECHANICS: Record<string, MechanicDef> = {
   charm_slots: {
     id: 'charm_slots',
     kind: 'feature',
-    title: 'Charm Slots',
-    tagline: 'Three charms, three different jobs.',
+    title: 'Weapon Slots',
+    tagline: 'Three weapons, three different jobs.',
     body: [
-      'You carry 3 charm slots. The Charm Belt in the Workshop adds one per tier, up to 6.',
+      'You carry 3 weapon slots. The Weapon Belt in the Workshop adds one per tier, up to 6.',
       'Goblin Saboteur halves three kinds of weapon at random, so never bring three of a kind. Give every slot a different job.',
       'Trigger 3 different weapon effects for the third star.',
     ],
@@ -881,11 +881,11 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'It never falls and there is no clock. Try anything.',
     body: [
       'The dummy has endless health. There is no clock and no move limit: stay as long as you like.',
-      'Everything you have learned so far is switched on. Pick a fighter, charms and Arcana on the way in and see what they do together.',
+      'Everything you have learned so far is switched on. Pick a fighter, weapons and Arcana on the way in and see what they do together.',
       'If you run out of hearts they simply refill. Nothing here earns stars or coins, and nothing is lost. Press Done when you have had enough.',
     ],
     fightTips: [
-      { title: 'No pressure', text: 'The dummy never falls and nothing runs out. Try a fighter, a charm, an evolution. Press DONE up here when you have had enough.', anchor: 'top' },
+      { title: 'No pressure', text: 'The dummy never falls and nothing runs out. Try a fighter, a weapon, an evolution. Press DONE up here when you have had enough.', anchor: 'top' },
     ],
     icon: 'lorc/target-dummy',
     demo: {
@@ -963,11 +963,11 @@ export const MECHANICS: Record<string, MechanicDef> = {
     tagline: 'Shape the board.',
     body: [
       'Zoomies: every 5th Set re-deals the board clean. Duds and hidden cards are gone.',
-      'Fetch: matching a power or gold card brings a new one onto the board.',
+      'Fetch: matching a Charged or Gold card brings a new one onto the board.',
       'Skill tree: grow huge boards that explode, or fetch bonus cards that power up everything.',
     ],
     fightTips: [
-      { title: 'Keep fetching', text: 'Every power or gold card you match brings another. Match 8 for the third star.', anchor: 'bottom' },
+      { title: 'Keep fetching', text: 'Every Charged or Gold card you match brings another. Match 8 for the third star.', anchor: 'bottom' },
     ],
     icon: 'delapouite/sitting-dog',
     demo: { type: 'icons', items: [{ icon: 'delapouite/jumping-dog', label: '5th Set: re-deal' }, { icon: 'lorc/fist', label: 'Match a +2…' }, { icon: 'delapouite/sitting-dog', label: '…fetch another' }] },
@@ -996,7 +996,7 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'The Workshop',
     tagline: 'Spend coins on permanent upgrades at Camp.',
     body: [
-      'Upgrade your Armory weapons and unlock extra charm & Arcana slots at Camp.',
+      'Upgrade your Armory weapons and unlock extra weapon & Arcana slots at Camp.',
       'Every Workshop upgrade refunds 100% of its coins anytime!',
     ],
     icon: 'lorc/gear-hammer',
@@ -1016,18 +1016,18 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Escalating Purity',
     tagline: 'Climb from simple matches up to Rainbow Strikes!',
     body: [
-      'Match 1-different trait, then 2-different, then a 3-different Rainbow Strike for bonus damage and coins!',
+      'Match 1 varied trait, then 2 varied, then a 3+ varied Rainbow Strike for bonus damage and coins!',
       'Mistakes reset the chain.',
     ],
     fightTips: [
-      { title: 'Climb the ladder', text: 'Match a simple 1-diff Set first, then a 2-diff Set, then a 3-diff Rainbow Strike for bonus damage and coins!', anchor: 'top' },
+      { title: 'Climb the ladder', text: 'Match a simple 1-varied Set first, then a 2-varied Set, then a 3+ varied Rainbow Strike for bonus damage and coins!', anchor: 'top' },
     ],
     icon: 'lorc/lightning-branches',
     demo: {
       type: 'icons',
       items: [
-        { icon: 'lorc/stone-block', label: '1-Diff' },
-        { icon: 'lorc/lightning-branches', label: '2-Diff (+dmg)' },
+        { icon: 'lorc/stone-block', label: '1-Varied' },
+        { icon: 'lorc/lightning-branches', label: '2-Varied (+dmg)' },
         { icon: 'lorc/rainbow-star', label: 'Rainbow (Max!)' },
       ],
     },
@@ -1040,13 +1040,13 @@ export const MECHANICS: Record<string, MechanicDef> = {
     title: 'Evolutions',
     tagline: '2 weapon families + 1 Catalyst card = 30s superpower!',
     body: [
-      'Equip charms from both weapon families in a recipe to ARM it.',
+      'Equip weapons from both weapon families in a recipe to ARM it.',
       'Match the glowing Catalyst card in any Set to evolve for 30 seconds!',
     ],
     lessons: [
       {
         title: 'Arm the recipe',
-        body: ['Before the fight, equip Blast Powder and Mending Charm as charms.', 'Holding both families arms Phoenix Pyre. The fight preview shows it lit up.'],
+        body: ['Before the fight, equip Blast Powder and Mending Charm on your Weapon Belt.', 'Holding both families arms Phoenix Pyre. The fight preview shows it lit up.'],
         demo: {
           type: 'icons',
           items: [

@@ -30,6 +30,7 @@ import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { cascadeDelay, EASE, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
+import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import { arcanaRules, getArcana } from '../data/arcana';
 import { PARRY_RULES } from '../data/parry';
 import { BASE_RULES, SURGE_RULES } from '../data/rules';
@@ -458,7 +459,7 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
   }
   if (gearFlat !== 0) {
     base += gearFlat;
-    items.push({ label: 'Gear', value: `${gearFlat > 0 ? '+' : ''}${fmt(gearFlat)}`, kind: 'base', note: 'Standing charm & skill bonuses' });
+    items.push({ label: 'Gear', value: `${gearFlat > 0 ? '+' : ''}${fmt(gearFlat)}`, kind: 'base', note: 'Standing weapon & skill bonuses' });
   }
   if (hintFlat > 0) {
     base += hintFlat;
@@ -617,16 +618,21 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
   return { base, mult, total, items, summaryLine };
 };
 
+/** How long the floating itemized receipt stays visible after a Set settles on mobile portrait ([UI-13]). */
+export const RECEIPT_HOLD_MS = 1800;
+
 interface Props {
   ignition: SetIgnition | null;
   run?: RunState;
   enabled: boolean;
-  /** Desktop landscape sidebar: allow 2 full lines of itemized receipt */
+  /** Desktop landscape sidebar: allow 2 full lines of itemized receipt docked permanently */
   wide?: boolean;
   /** [FX-23] Incremented by AdventureRun on every lead `Beat.onLand` to fire the final TOTAL slam on exact impact */
   landSeq?: number;
   /** [FX-23] Planned flight + slip duration (ms) for distributing tally steps up to impact */
   impactMs?: number;
+  /** [UI-15] Require long-press on the main bar during active Parry wind-up / card selection (keep `?` dot instant) */
+  guardPress?: boolean;
   onPress?: () => void;
 }
 
@@ -699,10 +705,12 @@ const MultiplierIgnition: React.FC<Props> = ({
   wide = false,
   landSeq,
   impactMs = FX_TIMING.flightMs,
+  guardPress = false,
   onPress,
 }) => {
   const appActive = useAppActive();
   const sysReduced = useReducedMotion();
+  const textScale = useTextScale();
   const animate = enabled && !sysReduced;
 
   const breakdown = useMemo(() => (ignition ? buildBalatroBreakdown(ignition) : null), [ignition]);
@@ -712,7 +720,10 @@ const MultiplierIgnition: React.FC<Props> = ({
   const [phase, setPhase] = useState<'primed' | 'tally' | 'settled'>(() =>
     ignition ? (animate ? 'tally' : 'settled') : 'primed'
   );
+  // [UI-13] Compact single-row bar at rest on mobile portrait; expand floating receipt during tally + 1.8s post-settle
+  const [receiptExpanded, setReceiptExpanded] = useState<boolean>(() => Boolean(ignition));
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const receiptHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slamFnRef = useRef<(() => void) | null>(null);
   const prevLandSeqRef = useRef<number | undefined>(landSeq);
 
@@ -726,11 +737,16 @@ const MultiplierIgnition: React.FC<Props> = ({
   useEffect(() => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
+    if (receiptHideTimer.current) {
+      clearTimeout(receiptHideTimer.current);
+      receiptHideTimer.current = null;
+    }
     slamFnRef.current = null;
 
     if (!ignition || !breakdown) {
       setPhase('primed');
       setStepIdx(-1);
+      setReceiptExpanded(false);
       baseScale.value = 1;
       multScale.value = 1;
       bonusScale.value = 1;
@@ -740,19 +756,34 @@ const MultiplierIgnition: React.FC<Props> = ({
       return;
     }
 
+    const scheduleReceiptCollapse = () => {
+      if (receiptHideTimer.current) clearTimeout(receiptHideTimer.current);
+      receiptHideTimer.current = setTimeout(() => {
+        receiptHideTimer.current = null;
+        setReceiptExpanded(false);
+      }, fxMs(RECEIPT_HOLD_MS));
+    };
+
     const lastIdx = breakdown.steps.length - 1;
 
-    // Reduced motion / effects off: show the exact finished Balatro receipt instantly, zero bounce/flames
+    // Reduced motion / effects off: show the exact finished Balatro receipt briefly, zero bounce/flames
     if (!animate) {
       setStepIdx(lastIdx);
       setPhase('settled');
+      setReceiptExpanded(true);
+      scheduleReceiptCollapse();
       baseScale.value = 1;
       multScale.value = 1;
       bonusScale.value = 1;
       totalScale.value = 1;
       tickerY.value = 0;
       tickerOp.value = 1;
-      return;
+      return () => {
+        if (receiptHideTimer.current) {
+          clearTimeout(receiptHideTimer.current);
+          receiptHideTimer.current = null;
+        }
+      };
     }
 
     const popValue = (sv: { value: number }) => {
@@ -772,6 +803,7 @@ const MultiplierIgnition: React.FC<Props> = ({
     // f0: immediately open tally on Step 0 (Cards base)
     setPhase('tally');
     setStepIdx(0);
+    setReceiptExpanded(true);
     popValue(baseScale);
     flashTicker();
 
@@ -810,6 +842,7 @@ const MultiplierIgnition: React.FC<Props> = ({
       timers.current = [];
       setStepIdx(lastIdx);
       setPhase('settled');
+      scheduleReceiptCollapse();
       totalScale.value = 0.86;
       totalScale.value = withSequence(
         withTiming(SCALE.reward, { duration: fxMs(Math.round(MS.feedback * 0.7)), easing: EASE.pop }),
@@ -829,6 +862,10 @@ const MultiplierIgnition: React.FC<Props> = ({
       slamFnRef.current = null;
       timers.current.forEach(clearTimeout);
       timers.current = [];
+      if (receiptHideTimer.current) {
+        clearTimeout(receiptHideTimer.current);
+        receiptHideTimer.current = null;
+      }
       cancelAnimation(baseScale);
       cancelAnimation(multScale);
       cancelAnimation(bonusScale);
@@ -904,121 +941,182 @@ const MultiplierIgnition: React.FC<Props> = ({
     ? (activeStep.kind === 'base' ? '#BAE6FD' : activeStep.kind === 'mult' ? '#FECACA' : '#FDE047')
     : '#F5F0E8';
 
+  const showFloatingReceipt = !wide && showingSet && (phase === 'tally' || receiptExpanded);
+  const pillValFont = { fontSize: scaleText(11.5, textScale) };
+  const totalFont = { fontSize: scaleText(12.5, textScale) };
+  const receiptFont = { fontSize: scaleText(11, textScale), color: row2Color };
+
+  const barHitSlop = wide
+    ? { top: 8, bottom: 8, left: 4, right: 4 }
+    : { top: 16, bottom: 0, left: 4, right: 4 };
+  const infoDotHitSlop = wide
+    ? { top: 12, bottom: 12, left: 12, right: 12 }
+    : { top: 20, bottom: 0, left: 12, right: 12 };
+
+  const eqRowContent = (
+    <View style={st.eqRow}>
+      <View style={[st.tagPill, phase === 'tally' && st.tagPillLive]}>
+        <Text style={[st.tagText, phase === 'tally' && st.tagTextLive]}>{tagText}</Text>
+      </View>
+
+      <View style={st.eqMath}>
+        <Animated.View style={[st.basePill, baseAnim]} testID="score-base-pill">
+          <Text style={st.pillCap}>BASE</Text>
+          <Text style={[st.pillVal, pillValFont]} numberOfLines={1}>{fmt(shownBase)}</Text>
+        </Animated.View>
+
+        <Text style={st.op}>×</Text>
+
+        <Animated.View style={[st.multPill, shownMult > 1.01 && st.multPillHot, multAnim]} testID="score-mult-pill">
+          <Text style={st.pillCap}>MULT</Text>
+          <Text style={[st.pillVal, pillValFont]} numberOfLines={1}>{fmt(shownMult)}×</Text>
+        </Animated.View>
+
+        {hasFinalBonus && (
+          <>
+            <Text style={[st.op, shownBonus <= 0 && { opacity: 0.3 }]}>+</Text>
+            <Animated.View
+              style={[st.bonusPill, shownBonus <= 0 && { opacity: 0.3 }, bonusAnim]}
+              testID="score-bonus-pill"
+            >
+              <Text style={[st.pillVal, pillValFont]} numberOfLines={1}>{fmt(shownBonus)}</Text>
+            </Animated.View>
+          </>
+        )}
+
+        <Text style={st.op}>=</Text>
+
+        <Animated.View style={[st.totalWrap, totalAnim]}>
+          {isBlazing && (
+            <>
+              <FlameTongue color={isNuclear ? '#38BDF8' : '#FB923C'} offset={-24} delay={0} active={flamesActive} />
+              <FlameTongue color={isNuclear ? '#FDE047' : '#FACC15'} offset={0} delay={70} active={flamesActive} />
+              <FlameTongue color={isNuclear ? '#22D3EE' : '#F97316'} offset={22} delay={130} active={flamesActive} />
+            </>
+          )}
+          <View
+            style={[
+              st.totalBadge,
+              showingSet && heatTier === 1 && st.totalHot,
+              showingSet && heatTier === 2 && st.totalBlazing,
+              showingSet && heatTier === 3 && st.totalNuclear,
+            ]}
+          >
+            <Text
+              testID="multiplier-ignition-total"
+              style={[st.totalText, totalFont, showingSet && heatTier >= 2 && { color: '#FFFFFF' }]}
+              numberOfLines={1}
+            >
+              {fmt(shownTotal)}
+            </Text>
+          </View>
+        </Animated.View>
+      </View>
+
+      {onPress ? (
+        <TouchableOpacity
+          testID="score-info-dot"
+          onPress={onPress}
+          hitSlop={infoDotHitSlop}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Inspect score breakdown"
+          style={st.infoDot}
+        >
+          <Text style={st.infoText}>?</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={{ width: 20 }} />
+      )}
+    </View>
+  );
+
   const inner = (
     <View
       style={[
         st.bar,
+        !wide && st.barCompact,
         showingSet && heatTier === 1 && st.barHot,
         showingSet && heatTier === 2 && st.barBlazing,
         showingSet && heatTier === 3 && st.barNuclear,
       ]}
     >
       {/* Row 1: Balanced 3-zone fixed-geometry Balatro Equation — ZERO horizontal reflow */}
-      <View style={st.eqRow}>
-        <View style={[st.tagPill, phase === 'tally' && st.tagPillLive]}>
-          <Text style={[st.tagText, phase === 'tally' && st.tagTextLive]}>{tagText}</Text>
-        </View>
+      {eqRowContent}
 
-        <View style={st.eqMath}>
-          <Animated.View style={[st.basePill, baseAnim]} testID="score-base-pill">
-            <Text style={st.pillCap}>BASE</Text>
-            <Text style={st.pillVal} numberOfLines={1}>{fmt(shownBase)}</Text>
-          </Animated.View>
-
-          <Text style={st.op}>×</Text>
-
-          <Animated.View style={[st.multPill, shownMult > 1.01 && st.multPillHot, multAnim]} testID="score-mult-pill">
-            <Text style={st.pillCap}>MULT</Text>
-            <Text style={st.pillVal} numberOfLines={1}>{fmt(shownMult)}×</Text>
-          </Animated.View>
-
-          {hasFinalBonus && (
-            <>
-              <Text style={[st.op, shownBonus <= 0 && { opacity: 0.3 }]}>+</Text>
-              <Animated.View
-                style={[st.bonusPill, shownBonus <= 0 && { opacity: 0.3 }, bonusAnim]}
-                testID="score-bonus-pill"
-              >
-                <Text style={st.pillVal} numberOfLines={1}>{fmt(shownBonus)}</Text>
-              </Animated.View>
-            </>
-          )}
-
-          <Text style={st.op}>=</Text>
-
-          <Animated.View style={[st.totalWrap, totalAnim]}>
-            {isBlazing && (
-              <>
-                <FlameTongue color={isNuclear ? '#38BDF8' : '#FB923C'} offset={-24} delay={0} active={flamesActive} />
-                <FlameTongue color={isNuclear ? '#FDE047' : '#FACC15'} offset={0} delay={70} active={flamesActive} />
-                <FlameTongue color={isNuclear ? '#22D3EE' : '#F97316'} offset={22} delay={130} active={flamesActive} />
-              </>
-            )}
-            <View
-              style={[
-                st.totalBadge,
-                showingSet && heatTier === 1 && st.totalHot,
-                showingSet && heatTier === 2 && st.totalBlazing,
-                showingSet && heatTier === 3 && st.totalNuclear,
-              ]}
-            >
-              <Text
-                testID="multiplier-ignition-total"
-                style={[st.totalText, showingSet && heatTier >= 2 && { color: '#FFFFFF' }]}
-                numberOfLines={1}
-              >
-                {fmt(shownTotal)}
-              </Text>
-            </View>
-          </Animated.View>
-        </View>
-
-        {onPress ? (
-          <View style={st.infoDot}>
-            <Text style={st.infoText}>?</Text>
-          </View>
-        ) : (
-          <View style={{ width: 16 }} />
-        )}
-      </View>
-
-      {/* Row 2: Fixed-height itemized source ticker → persistent receipt */}
-      <Animated.View style={[st.receiptRow, wide && st.receiptRowWide, tickerAnim]}>
-        <Text
-          testID="score-receipt-line"
-          style={[st.receiptText, { color: row2Color }]}
-          numberOfLines={wide ? 2 : 1}
-          ellipsizeMode="tail"
-        >
-          {row2Text}
-        </Text>
-      </Animated.View>
+      {/* Row 2 (Wide sidebar only): Docked itemized source ticker → persistent receipt */}
+      {wide && (
+        <Animated.View style={[st.receiptRow, st.receiptRowWide, tickerAnim]}>
+          <Text
+            testID="score-receipt-line"
+            style={[st.receiptText, receiptFont]}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            {row2Text}
+          </Text>
+        </Animated.View>
+      )}
     </View>
   );
 
+  // [UI-13] On mobile portrait, float itemized receipt below the bar ONLY during tally + 1.8s post-settle (zero board reflow)
+  const floatingReceipt = showFloatingReceipt ? (
+    <Animated.View
+      testID="score-receipt-popover"
+      pointerEvents="none"
+      style={[st.floatingReceipt, tickerAnim]}
+    >
+      <Text
+        testID="score-receipt-line"
+        style={[st.receiptText, receiptFont]}
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
+        {row2Text}
+      </Text>
+    </Animated.View>
+  ) : null;
+
   if (onPress) {
     return (
-      <TouchableOpacity
-        testID="multiplier-ignition"
-        onPress={onPress}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel={`Score equation: Base ${fmt(shownBase)} times Mult ${fmt(shownMult)} equals ${fmt(shownTotal)} damage. Tap for full breakdown.`}
-        style={st.wrap}
-      >
-        {inner}
-      </TouchableOpacity>
+      <View style={st.outerWrap}>
+        <TouchableOpacity
+          testID="multiplier-ignition"
+          onPress={guardPress ? NOOP_PRESS : onPress}
+          onLongPress={guardPress ? onPress : undefined}
+          delayLongPress={250}
+          hitSlop={barHitSlop}
+          activeOpacity={guardPress ? 1 : 0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Score equation: Base ${fmt(shownBase)} times Mult ${fmt(shownMult)} equals ${fmt(shownTotal)} damage. ${guardPress ? 'Hold or tap question mark for full breakdown.' : 'Tap for full breakdown.'}`}
+          style={st.wrap}
+        >
+          {inner}
+        </TouchableOpacity>
+        {floatingReceipt}
+      </View>
     );
   }
 
   return (
-    <View testID="multiplier-ignition" style={st.wrap}>
-      {inner}
+    <View style={st.outerWrap}>
+      <View testID="multiplier-ignition" style={st.wrap}>
+        {inner}
+      </View>
+      {floatingReceipt}
     </View>
   );
 };
 
+const NOOP_PRESS = () => {};
+
 const st = StyleSheet.create({
+  outerWrap: {
+    width: '100%',
+    position: 'relative',
+    zIndex: 30,
+  },
   wrap: {
     width: '100%',
   },
@@ -1029,8 +1127,12 @@ const st = StyleSheet.create({
     borderColor: INK,
     paddingHorizontal: 6,
     paddingVertical: 2.5,
-    gap: 1.5,
+    gap: 2,
     overflow: 'hidden',
+  },
+  barCompact: {
+    paddingVertical: 2,
+    gap: 0,
   },
   barHot: {
     borderColor: '#D97706',
@@ -1047,9 +1149,8 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 4,
+    gap: 3,
     minHeight: 22,
-    paddingTop: 2.5,
   },
   eqMath: {
     flex: 1,
@@ -1057,24 +1158,24 @@ const st = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3.5,
+    gap: 3,
   },
   tagPill: {
-    width: 32,
+    minWidth: 38,
     alignItems: 'center',
     backgroundColor: '#3A2F26',
     borderRadius: 4,
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
     paddingVertical: 1.5,
   },
   tagPillLive: {
     backgroundColor: COLORS.actionYellow,
   },
   tagText: {
-    fontSize: 8,
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: 0.5,
-    color: '#D6CFC4',
+    letterSpacing: 0.3,
+    color: '#E7E0D6',
   },
   tagTextLive: {
     color: INK,
@@ -1119,10 +1220,10 @@ const st = StyleSheet.create({
     justifyContent: 'center',
   },
   pillCap: {
-    fontSize: 7,
+    fontSize: 11,
     fontWeight: '900',
-    color: 'rgba(255,255,255,0.78)',
-    letterSpacing: 0.3,
+    color: 'rgba(255,255,255,0.85)',
+    letterSpacing: 0.2,
   },
   pillVal: {
     flexShrink: 1,
@@ -1182,20 +1283,20 @@ const st = StyleSheet.create({
     letterSpacing: 0.2,
   },
   infoDot: {
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#3A2F26',
     alignItems: 'center',
     justifyContent: 'center',
   },
   infoText: {
-    fontSize: 9.5,
+    fontSize: 11,
     fontWeight: '900',
     color: '#E7E0D6',
   },
   receiptRow: {
-    height: 13,
+    minHeight: 18,
     width: '100%',
     overflow: 'hidden',
     flexDirection: 'row',
@@ -1203,12 +1304,28 @@ const st = StyleSheet.create({
     justifyContent: 'center',
   },
   receiptRowWide: {
-    height: 26,
+    minHeight: 30,
+  },
+  floatingReceipt: {
+    position: 'absolute',
+    top: '100%',
+    left: 4,
+    right: 4,
+    marginTop: 2,
+    backgroundColor: 'rgba(36, 30, 25, 0.95)',
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: INK,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 45,
   },
   receiptText: {
     flexShrink: 1,
     maxWidth: '100%',
-    fontSize: 9.5,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.1,
     textAlign: 'center',

@@ -75,8 +75,8 @@ export const ARCANA: ArcanaDef[] = [
     name: 'Monochrome Pact',
     icon: 'lorc/stone-block',
     tagline: 'Simple Sets hit like boulders; complex Sets lose their edge.',
-    upside: `1-diff Sets deal +${monochromePact.singleTraitBonusDamage} flat damage and add +${monochromePact.singleTraitPowerBonus} Power.`,
-    tradeoff: `Rainbows and 3+ diff Sets deal ×${monochromePact.rainbowMultiplier} damage.`,
+    upside: `1-varied Sets deal +${monochromePact.singleTraitBonusDamage} flat damage and add +${monochromePact.singleTraitPowerBonus} Power.`,
+    tradeoff: `Rainbows and 3+ varied Sets deal ×${monochromePact.rainbowMultiplier} damage.`,
   },
   {
     id: 'prismatic_fever',
@@ -104,8 +104,8 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'IV',
     name: 'Glass Prism',
     icon: 'lorc/diamond-hard',
-    tagline: 'Flood the board with lethal Power and Gold on a razor-thin life bar.',
-    upside: `Power (+${glassPrism.powerCardBonusOverride} dmg, doubled) and Gold (+${BASE_RULES.coinCardValue}¢) cards spawn ${glassPrism.specialCardChanceScale}× as often.`,
+    tagline: 'Flood the board with lethal Charged and Gold cards on a razor-thin life bar.',
+    upside: `Charged (+${glassPrism.powerCardBonusOverride} dmg, doubled) and Gold (+${BASE_RULES.coinCardValue}¢) cards spawn ${glassPrism.specialCardChanceScale}× as often.`,
     tradeoff: `Maximum Hearts are locked to ${glassPrism.maxHeartsLock} and all healing is disabled.`,
   },
   {
@@ -126,7 +126,7 @@ export const ARCANA: ArcanaDef[] = [
     icon: 'lorc/open-book',
     tagline: 'Travel light and forge your arsenal mid-battle.',
     upside: `${scholarsGambit.xpScale}× XP, ${scholarsGambit.pickOptions} weapon choices per level-up, and +${scholarsGambit.levelUpPowerBonus} Power on every level-up.`,
-    tradeoff: `Enter the fight with ${-scholarsGambit.charmSlotDelta!} fewer equipped Charm slot.`,
+    tradeoff: `Enter the fight with ${-scholarsGambit.charmSlotDelta!} fewer equipped Weapon slot.`,
   },
   {
     id: 'catalyst_resonance',
@@ -149,6 +149,20 @@ export const ARCANA: ArcanaDef[] = [
     tradeoff: `Timed clocks tick ${tempoSurge.timerSpeedScale}× faster (${percentMore(tempoSurge.timerSpeedScale!)}% quicker), or −${-tempoSurge.untimedMoves!.delta} moves on untimed fights (min ${tempoSurge.untimedMoves!.min}).`,
   },
 ];
+
+/** Plain-English 1-word HUD chip labels replacing opaque Roman numerals ([UI-19]). */
+export const ARCANA_SHORT_NAMES: Readonly<Record<ArcanaId, string>> = {
+  monochrome_pact: 'Pact',
+  prismatic_fever: 'Rainbow',
+  controlled_burn: 'Burn',
+  glass_prism: 'Glass',
+  overkill_harvest: 'Harvest',
+  scholars_gambit: 'Scholar',
+  catalyst_resonance: 'Catalyst',
+  tempo_surge: 'Tempo',
+};
+
+export const arcanaShortName = (id: ArcanaId): string => ARCANA_SHORT_NAMES[id] ?? getArcana(id).name;
 
 const NO_RULES: ExtendedArcanaRules = {};
 

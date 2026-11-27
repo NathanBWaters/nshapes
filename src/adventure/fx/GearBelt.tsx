@@ -68,8 +68,21 @@ const BeltItem: React.FC<{
   badge?: BeltBadge;
   ignitionId?: number;
   reduced?: boolean;
+  guardPress?: boolean;
+  noBottomBleed?: boolean;
   onPress: () => void;
-}> = ({ weapon, size, stacks, counter, badge, ignitionId, reduced = false, onPress }) => {
+}> = ({
+  weapon,
+  size,
+  stacks,
+  counter,
+  badge,
+  ignitionId,
+  reduced = false,
+  guardPress = false,
+  noBottomBleed = false,
+  onPress,
+}) => {
   const [fired, setFired] = useState(0);
   const [shownBadge, setShownBadge] = useState<BeltBadge | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,14 +137,25 @@ const BeltItem: React.FC<{
   if (stacks > 0) a11yParts.push(`grown ${Math.round(stacks)} times`);
   if (counter) a11yParts.push(`countered by foe −${counter.reduction}% (${counter.label})`);
 
+  // [UI-17] Guarantee >=44x44px touch target via hitSlop; [UI-15] keep bottom: 0 on portrait so it never bleeds into row-0 cards.
+  const boxSize = size + 4;
+  const dx = Math.max(0, Math.ceil((44 - boxSize) / 2));
+  const needY = Math.max(0, 44 - boxSize);
+  const slotHitSlop = noBottomBleed
+    ? { top: needY, bottom: 0, left: dx, right: dx }
+    : { top: Math.ceil(needY / 2), bottom: Math.ceil(needY / 2), left: dx, right: dx };
+
   return (
     <Anchor name={`weapon:${weapon.id}`}>
       <TouchableOpacity
-        onPress={onPress}
-        activeOpacity={0.7}
-        style={[st.item, counter && st.itemCountered, { width: size + 4, height: size + 4 }]}
+        onPress={guardPress ? NOOP_BELT_PRESS : onPress}
+        onLongPress={guardPress ? onPress : undefined}
+        delayLongPress={250}
+        hitSlop={slotHitSlop}
+        activeOpacity={guardPress ? 1 : 0.7}
+        style={[st.item, counter && st.itemCountered, { width: boxSize, height: boxSize }]}
         accessibilityRole="button"
-        accessibilityLabel={`${a11yParts.join(', ')}: what it does`}
+        accessibilityLabel={`${a11yParts.join(', ')}: ${guardPress ? 'hold to inspect' : 'what it does'}`}
         testID={`belt-${weapon.id}`}
       >
         <WeaponAvatar weapon={weapon} size={size} triggerKey={fired} />
@@ -171,8 +195,23 @@ export const GearBelt: React.FC<{
   width: number;
   /** Optional horizontal pixels reserved on the same row for docked Arcana / Evo pills */
   reservedRightPx?: number;
+  /** [UI-15] Require long-press during active Parry wind-up or card selection on mobile portrait */
+  guardPress?: boolean;
+  /** [UI-15]/[UI-17] Keep hitSlop.bottom = 0 on portrait so touch target never encroaches row-0 cards */
+  noBottomBleed?: boolean;
   onInspect: (w: Weapon) => void;
-}> = ({ weapons, growth, ignition, counters, reduced, width, reservedRightPx = 0, onInspect }) => {
+}> = ({
+  weapons,
+  growth,
+  ignition,
+  counters,
+  reduced,
+  width,
+  reservedRightPx = 0,
+  guardPress = false,
+  noBottomBleed = false,
+  onInspect,
+}) => {
   if (weapons.length === 0) return null;
   const avail = Math.max(120, (width > 0 ? width : 360) - 20 - reservedRightPx);
   const room = (avail - GAP * (weapons.length - 1)) / weapons.length - 6;
@@ -189,6 +228,8 @@ export const GearBelt: React.FC<{
           badge={ignition?.beltBadges?.[w.id]}
           ignitionId={ignition?.id}
           reduced={reduced}
+          guardPress={guardPress}
+          noBottomBleed={noBottomBleed}
           onPress={() => onInspect(w)}
         />
       ))}
@@ -196,17 +237,19 @@ export const GearBelt: React.FC<{
   );
 };
 
+const NOOP_BELT_PRESS = () => {};
+
 const st = StyleSheet.create({
   belt: { flexDirection: 'row', alignItems: 'center', gap: GAP, flexWrap: 'wrap', overflow: 'visible', paddingTop: 4, paddingBottom: 4 },
-  stacks: { position: 'absolute', top: -4, right: -4, minWidth: 15, paddingHorizontal: 2, borderRadius: 7, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, alignItems: 'center', zIndex: 5 },
-  stacksText: { fontSize: 8.5, fontWeight: '900', color: COLORS.slateCharcoal, lineHeight: 10 },
+  stacks: { position: 'absolute', top: -6, right: -5, minWidth: 18, paddingHorizontal: 3, borderRadius: 7, backgroundColor: COLORS.actionYellow, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, alignItems: 'center', zIndex: 5 },
+  stacksText: { fontSize: 11, fontWeight: '900', color: COLORS.slateCharcoal, lineHeight: 13 },
   item: { alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 1.5, borderColor: COLORS.slateCharcoal, backgroundColor: COLORS.paperBeige, overflow: 'visible' },
   itemCountered: { borderColor: '#DC2626', backgroundColor: '#FEE2E2' },
   counterBadge: {
     position: 'absolute',
-    top: -4,
-    left: -4,
-    paddingHorizontal: 2.5,
+    top: -6,
+    left: -5,
+    paddingHorizontal: 3,
     paddingVertical: 0.5,
     borderRadius: 6,
     backgroundColor: '#B91C1C',
@@ -216,29 +259,29 @@ const st = StyleSheet.create({
     zIndex: 7,
   },
   counterBadgeText: {
-    fontSize: 7.5,
+    fontSize: 11,
     fontWeight: '900',
     color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
-    lineHeight: 9,
+    lineHeight: 13,
   },
   triggerBadge: {
     position: 'absolute',
-    bottom: -4,
+    bottom: -6,
     alignSelf: 'center',
     borderRadius: 5,
     borderWidth: 1.5,
     borderColor: COLORS.slateCharcoal,
-    paddingHorizontal: 3.5,
-    paddingVertical: 0,
+    paddingHorizontal: 4,
+    paddingVertical: 0.5,
     zIndex: 14,
   },
   triggerBadgeText: {
-    fontSize: 8,
+    fontSize: 11,
     fontWeight: '900',
     color: '#FFFFFF',
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.1,
-    lineHeight: 10,
+    lineHeight: 13,
   },
 });

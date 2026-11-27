@@ -19,6 +19,7 @@ import { INSTRUMENT_NAMES } from '@/audio/instruments';
 import { weaponVoice } from '@/audio/voices';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
+import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import { armoryBaseWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
 import { NO_GROWTH, WEAPON_GROWTH, growthKey, growthText, type GrowthState } from '../data/weaponGrowth';
@@ -64,6 +65,7 @@ const WeaponExplainer: React.FC<Props> = ({
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   const [taps, setTaps] = useState(0);
+  const textScale = useTextScale();
   const guide = weaponGuide(weapon.id);
   const kind = WEAPON_KINDS[guide.kind];
   const base = armoryBaseWeapon(weapon.id);
@@ -77,6 +79,7 @@ const WeaponExplainer: React.FC<Props> = ({
       <TouchableOpacity
         onPress={() => setOpen(o => !o)}
         activeOpacity={0.85}
+        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         accessibilityLabel={`${weapon.name}: ${open ? 'hide' : 'show'} more`}
@@ -86,21 +89,21 @@ const WeaponExplainer: React.FC<Props> = ({
           <WeaponAvatar weapon={weapon} size={44} />
           <View style={{ flex: 1, gap: 3 }}>
             <View style={st.nameRow}>
-              <Text style={st.name} numberOfLines={1}>{weapon.name}{weaponLevelSuffix(build.level)}</Text>
+              <Text style={[st.name, { fontSize: scaleText(16, textScale) }]} numberOfLines={1}>{weapon.name}{weaponLevelSuffix(build.level)}</Text>
               {badge && <Text style={st.badge}>{badge}</Text>}
             </View>
             <View style={st.tags}>
               <View style={[st.kind, { backgroundColor: kind.color }]}><Text style={st.kindText}>{kind.label.toUpperCase()}</Text></View>
-              <Text style={st.role}>{roleLabel(weapon.id)}</Text>
+              <Text style={[st.role, { fontSize: scaleText(11, textScale) }]}>{roleLabel(weapon.id)}</Text>
             </View>
           </View>
           <Text style={st.caret}>{open ? '▲' : '▼'}</Text>
         </View>
-        <Text style={st.what} testID={`weapon-explainer-what-${weapon.id}`}>{weapon.description}</Text>
+        <Text style={[st.what, { fontSize: scaleText(15, textScale), lineHeight: Math.round(scaleText(15, textScale) * 1.4) }]} testID={`weapon-explainer-what-${weapon.id}`}>{weapon.description}</Text>
         {counter && (
           <View style={st.counterAlert} testID={`weapon-explainer-counter-${weapon.id}`}>
             <Icon name="lorc/broken-shield" size={14} color="#B91C1C" />
-            <Text style={st.counterAlertText}>
+            <Text style={[st.counterAlertText, { fontSize: scaleText(12, textScale) }]}>
               Foe counter (−{counter.reduction}%): {counter.label} reduced from {counter.baseChance}% to {counter.effectiveChance}%.
             </Text>
           </View>
@@ -108,7 +111,7 @@ const WeaponExplainer: React.FC<Props> = ({
         {result && (
           <View style={st.result} testID={`weapon-explainer-result-${weapon.id}`}>
             <Text style={st.resultLabel}>THIS FIGHT</Text>
-            <Text style={st.resultText}>{result.text}</Text>
+            <Text style={[st.resultText, { fontSize: scaleText(14, textScale) }]}>{result.text}</Text>
             {result.share !== undefined && result.share > 0 && (
               <View style={st.track}><View style={[st.bar, { width: `${Math.max(3, Math.min(100, result.share * 100))}%` }]} /></View>
             )}
@@ -119,20 +122,20 @@ const WeaponExplainer: React.FC<Props> = ({
       {open && (
         <View style={st.more} testID={`weapon-explainer-more-${weapon.id}`}>
           <WeaponDemoClip weaponId={weapon.id} />
-          <Row icon="lorc/crystal-shine" title={kind.label} color={kind.color}>{kind.blurb}</Row>
+          <Row icon="lorc/crystal-shine" title={kind.label} color={kind.color} textScale={textScale}>{kind.blurb}</Row>
           {guide.look && (
             <View style={st.row}>
               <View style={[st.mark, { borderColor: guide.look.color ?? INK }]}>
                 <Icon name={guide.look.icon ?? 'lorc/magnifying-glass'} size={16} color={guide.look.color ?? INK} />
               </View>
-              <Text style={st.rowText}><Text style={st.rowTitle}>Look for: </Text>{guide.look.text}</Text>
+              <Text style={[st.rowText, { fontSize: scaleText(14, textScale), lineHeight: Math.round(scaleText(14, textScale) * 1.42) }]}><Text style={st.rowTitle}>Look for: </Text>{guide.look.text}</Text>
             </View>
           )}
-          {!!guide.tip && <Row icon="lorc/light-bulb" title="How to play it" color="#B45309">{guide.tip}</Row>}
+          {!!guide.tip && <Row icon="lorc/light-bulb" title="How to play it" color="#B45309" textScale={textScale}>{guide.tip}</Row>}
           {(grows.length > 0 || NO_GROWTH[weapon.id] || Boolean(powerLine)) && (
             <View style={st.row} testID={`weapon-explainer-scaling-${weapon.id}`}>
               <View style={[st.mark, { borderColor: '#0F766E' }]}><Icon name="lorc/tree-branch" size={16} color="#0F766E" /></View>
-              <Text style={st.rowText}>
+              <Text style={[st.rowText, { fontSize: scaleText(14, textScale), lineHeight: Math.round(scaleText(14, textScale) * 1.42) }]}>
                 <Text style={st.rowTitle}>Scaling: </Text>
                 {[
                   grows.length === 0
@@ -155,10 +158,10 @@ const WeaponExplainer: React.FC<Props> = ({
                   accessibilityLabel={`${bracketParam(line.label)} ${formatStat(line.unit, line.value)}`}
                 >
                   <View style={st.numberHead}>
-                    <Text style={st.numberValue}>{formatStat(line.unit, line.value)}</Text>
+                    <Text style={[st.numberValue, { fontSize: scaleText(16, textScale) }]}>{formatStat(line.unit, line.value)}</Text>
                     {line.tier > 0 && <Text style={st.tierTag}>{`T${line.tier}`}</Text>}
                   </View>
-                  <Text style={st.numberLabel}>{line.label}</Text>
+                  <Text style={[st.numberLabel, { fontSize: scaleText(11, textScale) }]}>{line.label}</Text>
                 </View>
               ))}
             </View>
@@ -166,12 +169,13 @@ const WeaponExplainer: React.FC<Props> = ({
           <TouchableOpacity
             onPress={() => { setTaps(t => t + 1); band.audition(weapon.id); }}
             style={st.sound}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             accessibilityRole="button"
             accessibilityLabel={`Hear ${weapon.name}`}
             testID={`weapon-explainer-sound-${weapon.id}`}
           >
             <Icon name="delapouite/sound-on" size={16} color={INK} />
-            <Text style={st.rowText}>
+            <Text style={[st.rowText, { fontSize: scaleText(14, textScale), lineHeight: Math.round(scaleText(14, textScale) * 1.42) }]}>
               <Text style={st.rowTitle}>{taps > 0 ? 'Playing: ' : 'Hear it: '}</Text>
               {INSTRUMENT_NAMES[voice.inst]}. {voice.why}
             </Text>
@@ -182,10 +186,10 @@ const WeaponExplainer: React.FC<Props> = ({
   );
 };
 
-const Row: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; title: string; color: string; children: React.ReactNode }> = ({ icon, title, color, children }) => (
+const Row: React.FC<{ icon: React.ComponentProps<typeof Icon>['name']; title: string; color: string; textScale: number; children: React.ReactNode }> = ({ icon, title, color, textScale, children }) => (
   <View style={st.row}>
     <View style={[st.mark, { borderColor: color }]}><Icon name={icon} size={16} color={color} /></View>
-    <Text style={st.rowText}><Text style={st.rowTitle}>{title}: </Text>{children}</Text>
+    <Text style={[st.rowText, { fontSize: scaleText(14, textScale), lineHeight: Math.round(scaleText(14, textScale) * 1.42) }]}><Text style={st.rowTitle}>{title}: </Text>{children}</Text>
   </View>
 );
 
@@ -194,17 +198,17 @@ const st = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { flexShrink: 1, fontSize: 16, fontWeight: '900', color: INK },
-  badge: { fontSize: 10, fontWeight: '800', color: INK, backgroundColor: COLORS.actionYellow, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' },
+  badge: { fontSize: 11, fontWeight: '800', color: INK, backgroundColor: COLORS.actionYellow, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden' },
   tags: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   kind: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  kindText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5, color: COLORS.canvasWhite },
+  kindText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5, color: COLORS.canvasWhite },
   role: { fontSize: 11, fontWeight: '600', color: INK, opacity: 0.65 },
   caret: { fontSize: 12, color: INK, opacity: 0.6, paddingHorizontal: 4 },
   what: { fontSize: 15, lineHeight: 21, color: INK, marginTop: 8 },
   counterAlert: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#FEE2E2', borderRadius: 8, borderWidth: 1.5, borderColor: '#DC2626', paddingHorizontal: 8, paddingVertical: 6 },
   counterAlertText: { flex: 1, flexShrink: 1, fontSize: 12, lineHeight: 17, fontWeight: '800', color: '#991B1B' },
   result: { marginTop: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8, gap: 3 },
-  resultLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.6 },
+  resultLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.3, color: INK, opacity: 0.65 },
   resultText: { fontSize: 14, fontWeight: '700', color: INK },
   track: { height: 6, borderRadius: 3, backgroundColor: '#E6E0D7', overflow: 'hidden', marginTop: 2 },
   bar: { height: 6, borderRadius: 3, backgroundColor: '#eb6834' },
@@ -217,9 +221,9 @@ const st = StyleSheet.create({
   number: { backgroundColor: COLORS.paperBeige, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 92 },
   numberHead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   numberValue: { fontSize: 16, fontWeight: '900', color: INK },
-  tierTag: { fontSize: 10, fontWeight: '900', color: '#B45309', backgroundColor: '#FEF3C7', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
+  tierTag: { fontSize: 11, fontWeight: '900', color: '#B45309', backgroundColor: '#FEF3C7', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, overflow: 'hidden' },
   numberLabel: { fontSize: 11, color: INK, opacity: 0.7 },
-  sound: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 8 },
+  sound: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, padding: 10, minHeight: 44 },
 });
 
 export default WeaponExplainer;
