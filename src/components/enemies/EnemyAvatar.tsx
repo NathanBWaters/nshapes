@@ -1,5 +1,6 @@
-import React, { memo, useEffect, useMemo } from 'react';
-import {
+import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { StyleSheet } from 'react-native';
+import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
@@ -15,6 +16,8 @@ import { CreatureStage } from '@/components/creatures/CreatureStage';
 import { CreatureScaleTier, RigVisualProvider } from '@/components/creatures/RigLayers';
 import {
   CreatureMotionConfig,
+  ReactionChannels,
+  ReactionContext,
   useCreatureMotion,
 } from '@/components/creatures/useCreatureMotion';
 import type { EnemyInstance } from '@/types/enemy';
@@ -22,6 +25,7 @@ import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
+  ACCESSIBLE,
   BLINK,
   CREATURE_ACTING,
   CREATURE_FX,
@@ -31,8 +35,15 @@ import {
   HIT,
   HitKind,
   HitTier,
+  MASS_CLASS,
   MS,
+  MassClass,
+  OVERLAP,
+  PHASE,
+  SMEAR,
   SPRING,
+  SQUASH_TIER,
+  STAYS,
   SpringSpec,
   geometricShakeKeyframes,
   hitstopHoldMs,
@@ -43,13 +54,24 @@ import {
   EnemyAmbientMood,
   EnemyReactionEvent,
   EnemyReactionType,
+  EnemySpeciesClass,
   EnemyTier,
   TIER_AURA_COLORS,
+  getEnemyAttackTimings,
   getEnemyHealthState,
   resolveEnemyExpression,
 } from '@/utils/enemyAnimations';
 import { EnemyEffectsOverlay } from './EnemyEffectsOverlay';
-import { EnemyCreatureRig, getEnemyPersonality, getEnemyRigPivots } from './enemyRegistry';
+import { EnemyBlinkProvider } from './EnemyEyes';
+import {
+  EnemyCreatureRig,
+  getEnemyDefaultTier,
+  getEnemyMassClass,
+  getEnemyPersonality,
+  getEnemyRigPivots,
+  getEnemySpeciesClass,
+  isBossEnemy,
+} from './enemyRegistry';
 
 export interface EnemyAvatarReactionEvent extends EnemyReactionEvent {
   /** Optional damage tier (`0..3`) scaling hitstop & recoil (`[FX-06]`) */
@@ -141,7 +163,445 @@ function buildHitstopVibration(
   return withSequence(withTiming(center, snap), ...vibSteps, withSpring(rest, spring));
 }
 
-/** How enemies move: menacing stances, tier-scaled hitstop recoils, snap lunges, and taunts. */
+/**
+ * Builds a 3-step dread-tremor moving hold during a boss's extended telegraph coil
+ * so massive bosses visibly quiver with pent-up energy instead of freezing dead.
+ */
+function buildBossCoilMovingHold(
+  coilTx: number,
+  coilHoldMs: number,
+  strikeTx: number,
+  strikeCfg: { duration: number; easing: typeof EASE.enter },
+  apexHoldMs: number,
+  settleSpring: SpringSpec
+) {
+  const stepMs = Math.max(OVERLAP.primaryMs, Math.round(coilHoldMs / 3));
+  const lastStepMs = Math.max(OVERLAP.primaryMs, coilHoldMs - stepMs * 2);
+  const tremor = PHASE.movingHoldTremorPx;
+  return withSequence(
+    withTiming(coilTx + tremor, { duration: stepMs, easing: EASE.drift }),
+    withTiming(coilTx - tremor, { duration: stepMs, easing: EASE.drift }),
+    withTiming(coilTx + tremor * 0.7, { duration: lastStepMs, easing: EASE.drift }),
+    withTiming(strikeTx, strikeCfg),
+    withDelay(apexHoldMs, withSpring(0, settleSpring))
+  );
+}
+
+/** Normalizes any full-turn residual (`-360°` after `rage_spin`) to `0°` cleanly with zero visual jump. */
+function normalizeResidualRotation(ch: ReactionChannels) {
+  if (Math.abs(ch.bodyRotate.value) >= 180) {
+    ch.bodyRotate.value = ch.bodyRotate.value % 360;
+  }
+}
+
+/**
+ * Species-specific reaction choreography layering `pawTx`, `pawRotate`, `headTx`, `bodySkewX`,
+ * asymmetric wingbeats, Hydra out-of-phase multi-head snaps, pincer scissors, and boss slams
+ * on top of `MASS_CLASS` weight kinematics.
+ */
+export function playEnemySpeciesReaction(
+  enemyName: string,
+  speciesClass: EnemySpeciesClass,
+  type: EnemyReactionType,
+  ch: ReactionChannels,
+  size: number,
+  context: ReactionContext
+): boolean {
+  const massClass: MassClass = context.massClass ?? 'standard';
+  const mass = MASS_CLASS[massClass];
+  const isBoss = massClass === 'boss';
+  const isCompact = context.compact ?? size <= CREATURE_ACTING.compactSizePx;
+  const rotBoost = isCompact ? CREATURE_ACTING.compactRotateBoost : 1;
+  const jumpPx = Math.max(6, size * 0.16);
+  const recoilPx = Math.max(5, size * 0.14);
+  const recoverSpring: SpringSpec = SPRING[mass.spring];
+
+  normalizeResidualRotation(ch);
+
+  if (type === 'attack') {
+    const { windMs, coilHoldMs, strikeMs, apexHoldMs, strikeStartMs } = getEnemyAttackTimings(massClass);
+    const wind = { duration: windMs, easing: EASE.enter };
+    const lunge = { duration: strikeMs, easing: EASE.enter };
+
+    // 1. THE HYDRA — Out-of-phase sequential 3-head serpentine snap cascade!
+    if (speciesClass === 'hydra') {
+      const coilTx = recoilPx * ENEMY_ATTACK.windTxMult * 0.9;
+      const strikeTx = recoilPx * ENEMY_ATTACK.strikeTxMult * 0.92;
+      ch.bodyTx.value = withSequence(
+        withTiming(coilTx, wind),
+        buildBossCoilMovingHold(coilTx, coilHoldMs, strikeTx, lunge, apexHoldMs, SPRING.boss)
+      );
+      ch.reactionScaleY.value = withSequence(
+        withTiming(SQUASH_TIER.heavy.squashY, wind),
+        withTiming(SQUASH_TIER.heavy.squashY - PHASE.movingHoldScaleDelta, {
+          duration: coilHoldMs,
+          easing: EASE.drift,
+        }),
+        withTiming(1.16, lunge),
+        withDelay(apexHoldMs, withSpring(1, SPRING.boss))
+      );
+      ch.bodyRotate.value = withSequence(
+        withTiming(10 * rotBoost, wind),
+        withDelay(coilHoldMs, withTiming(-14 * rotBoost, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+      );
+      if (ch.bodySkewX) {
+        ch.bodySkewX.value = withDelay(
+          strikeStartMs,
+          withSequence(
+            withTiming(-SMEAR.strikeSkewDeg, { duration: SMEAR.durationMs, easing: EASE.enter }),
+            withSpring(0, SPRING.snappy)
+          )
+        );
+      }
+      // Head 1 (front-left striker) snaps FIRST at strikeStartMs
+      ch.leftEarExtra.value = withSequence(
+        withTiming(20, wind),
+        withDelay(coilHoldMs, withTiming(-34, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      // Head 2 (tall central alpha head) snaps SECOND (+OVERLAP.primaryMs = +32ms)
+      ch.headRotate.value = withSequence(
+        withTiming(12 * rotBoost, wind),
+        withDelay(coilHoldMs + OVERLAP.primaryMs, withTiming(-24 * rotBoost, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+      );
+      if (ch.headTx) {
+        ch.headTx.value = withDelay(
+          strikeStartMs + OVERLAP.primaryMs,
+          withSequence(
+            withTiming(-size * 0.1, lunge),
+            withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+          )
+        );
+      }
+      // Head 3 (upper-right coiled head) whips THIRD (+OVERLAP.secondaryMs = +64ms)
+      ch.rightEarExtra.value = withSequence(
+        withTiming(16, wind),
+        withDelay(coilHoldMs + OVERLAP.secondaryMs, withTiming(-32, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      ch.tailExtra.value = withDelay(
+        strikeStartMs,
+        withSequence(
+          withTiming(22, { duration: MS.feedback, easing: EASE.ui }),
+          withSpring(0, SPRING.loose)
+        )
+      );
+      return true;
+    }
+
+    // 2. WINGED — Aerial wing-lift gather → high-velocity diving swoop + wing downstroke!
+    if (speciesClass === 'winged') {
+      const coilTx = recoilPx * ENEMY_ATTACK.windTxMult;
+      const strikeTx = recoilPx * ENEMY_ATTACK.strikeTxMult * (isBoss ? 0.8 : 1.05);
+      ch.bodyTx.value = isBoss
+        ? withSequence(
+            withTiming(coilTx, wind),
+            buildBossCoilMovingHold(coilTx, coilHoldMs, strikeTx, lunge, apexHoldMs, SPRING.boss)
+          )
+        : withSequence(
+            withTiming(coilTx, wind),
+            withDelay(coilHoldMs, withTiming(strikeTx, lunge)),
+            withDelay(apexHoldMs, withSpring(0, recoverSpring))
+          );
+      ch.bodyTy.value = withSequence(
+        withTiming(-jumpPx * (isBoss ? 0.55 : 0.78), wind),
+        withDelay(coilHoldMs, withTiming(size * 0.04, lunge)),
+        withDelay(apexHoldMs, withSpring(0, recoverSpring))
+      );
+      ch.reactionScaleY.value = withSequence(
+        withTiming(isBoss ? SQUASH_TIER.heavy.squashY : 0.84, wind),
+        withDelay(coilHoldMs, withTiming(isBoss ? 1.15 : 1.18, lunge)),
+        withDelay(apexHoldMs, withSpring(1, recoverSpring))
+      );
+      ch.bodyRotate.value = withSequence(
+        withTiming(13 * rotBoost, wind),
+        withDelay(coilHoldMs, withTiming(-19 * rotBoost, lunge)),
+        withDelay(apexHoldMs, withSpring(0, recoverSpring))
+      );
+      if (ch.bodySkewX) {
+        ch.bodySkewX.value = withDelay(
+          strikeStartMs,
+          withSequence(
+            withTiming(-SMEAR.strikeSkewDeg, { duration: SMEAR.durationMs, easing: EASE.enter }),
+            withSpring(0, SPRING.snappy)
+          )
+        );
+      }
+      // Asymmetric sweeping wing upstroke on gather → powerful downstroke on dive!
+      ch.leftEarExtra.value = withSequence(
+        withTiming(-30, wind),
+        withDelay(coilHoldMs, withTiming(34, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      ch.rightEarExtra.value = withSequence(
+        withTiming(26, wind),
+        withDelay(coilHoldMs + HIT.snapMs, withTiming(-32, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      ch.headRotate.value = withDelay(
+        strikeStartMs,
+        withSequence(
+          withTiming(-14 * rotBoost, lunge),
+          withDelay(apexHoldMs, withSpring(0, recoverSpring))
+        )
+      );
+      if (ch.pawTx) {
+        ch.pawTx.value = withSequence(
+          withTiming(size * (isBoss ? 0.025 : 0.04), wind),
+          withDelay(coilHoldMs, withTiming(-size * (isBoss ? 0.055 : 0.12), lunge)),
+          withDelay(apexHoldMs, withSpring(0, recoverSpring))
+        );
+      }
+      if (ch.pawRotate) {
+        ch.pawRotate.value = withSequence(
+          withTiming(isBoss ? 10 : 16, wind),
+          withDelay(coilHoldMs, withTiming(isBoss ? -14 : -26, lunge)),
+          withDelay(apexHoldMs, withSpring(0, recoverSpring))
+        );
+      }
+      ch.pawBounce.value = withSequence(
+        withTiming(-size * 0.05, wind),
+        withDelay(coilHoldMs, withTiming(-size * 0.14, lunge)),
+        withDelay(apexHoldMs, withSpring(0, recoverSpring))
+      );
+      return true;
+    }
+
+    // 3. PINCER — Wide claw splay → asynchronous scissor pincer clamp + scorpion stinger whip!
+    if (speciesClass === 'pincer') {
+      ch.bodyTx.value = withSequence(
+        withTiming(recoilPx * 0.62, wind),
+        withDelay(coilHoldMs, withTiming(recoilPx * -1.45, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.settle))
+      );
+      ch.reactionScaleY.value = withSequence(
+        withTiming(0.84, wind),
+        withDelay(coilHoldMs, withTiming(1.16, lunge)),
+        withDelay(apexHoldMs, withSpring(1, SPRING.lively))
+      );
+      ch.bodyRotate.value = withSequence(
+        withTiming(9 * rotBoost, wind),
+        withDelay(coilHoldMs, withTiming(-14 * rotBoost, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.lively))
+      );
+      // Wide claw splay on gather, then left snaps shut at t0 and right snaps +32ms later (scissor snap!)
+      ch.leftEarExtra.value = withSequence(
+        withTiming(-28, wind),
+        withDelay(coilHoldMs, withTiming(34, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      ch.rightEarExtra.value = withSequence(
+        withTiming(28, wind),
+        withDelay(coilHoldMs + OVERLAP.primaryMs, withTiming(-32, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      ch.tailExtra.value = withSequence(
+        withTiming(18, wind),
+        withDelay(coilHoldMs, withTiming(-36, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      if (ch.pawTx) {
+        ch.pawTx.value = withDelay(
+          strikeStartMs,
+          withSequence(withTiming(-size * 0.12, lunge), withDelay(apexHoldMs, withSpring(0, SPRING.lively)))
+        );
+      }
+      if (ch.pawRotate) {
+        ch.pawRotate.value = withDelay(
+          strikeStartMs,
+          withSequence(withTiming(-22, lunge), withDelay(apexHoldMs, withSpring(0, SPRING.lively)))
+        );
+      }
+      if (ch.bodySkewX) {
+        ch.bodySkewX.value = withDelay(
+          strikeStartMs,
+          withSequence(
+            withTiming(-SMEAR.strikeSkewDeg * 0.85, { duration: SMEAR.durationMs, easing: EASE.enter }),
+            withSpring(0, SPRING.snappy)
+          )
+        );
+      }
+      return true;
+    }
+
+    // 4. BOSS TIER — Heavy anticipation lift + dread shiver + seismic stomp / scythe reap / claw slam!
+    if (isBoss) {
+      const isReaper = enemyName === 'The Reaper';
+      const isHyenaBoss = enemyName === 'Hyena Boss';
+      const coilTx = recoilPx * ENEMY_ATTACK.windTxMult * 0.9;
+      // 3/4 LEFT boss silhouettes already lean left in SVG space; keep peak strike cleanly inside card border
+      const strikeTx = recoilPx * ENEMY_ATTACK.strikeTxMult * (isHyenaBoss ? 0.84 : 0.78);
+
+      ch.bodyTx.value = withSequence(
+        withTiming(coilTx, wind),
+        buildBossCoilMovingHold(coilTx, coilHoldMs, strikeTx, lunge, apexHoldMs, SPRING.boss)
+      );
+      // Heavy stomp anticipation lift → seismic downward slam (Reaper glides cleanly overhead!)
+      ch.bodyTy.value = isReaper
+        ? withSequence(
+            withTiming(-jumpPx * 0.5, wind),
+            withDelay(coilHoldMs, withTiming(-jumpPx * 0.12, lunge)),
+            withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+          )
+        : withSequence(
+            withTiming(-jumpPx * 0.36, wind),
+            withDelay(coilHoldMs, withTiming(size * 0.05, { duration: strikeMs, easing: EASE.impact })),
+            withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+          );
+      ch.reactionScaleY.value = withSequence(
+        withTiming(SQUASH_TIER.heavy.squashY, wind),
+        withTiming(SQUASH_TIER.heavy.squashY - PHASE.movingHoldScaleDelta, {
+          duration: coilHoldMs,
+          easing: EASE.drift,
+        }),
+        withTiming(isReaper ? 1.14 : 0.8, lunge),
+        withDelay(apexHoldMs, withSpring(1, SPRING.boss))
+      );
+      ch.bodyRotate.value = withSequence(
+        withTiming(11 * rotBoost, wind),
+        withDelay(coilHoldMs, withTiming(-14 * rotBoost, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+      );
+      ch.headRotate.value = withDelay(
+        strikeStartMs + HIT.snapMs,
+        withSequence(
+          withTiming(-12 * rotBoost, lunge),
+          withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+        )
+      );
+      if (ch.headTx) {
+        ch.headTx.value = withDelay(
+          strikeStartMs,
+          withSequence(withTiming(-size * 0.028, lunge), withDelay(apexHoldMs, withSpring(0, SPRING.boss)))
+        );
+      }
+      if (ch.bodySkewX) {
+        ch.bodySkewX.value = withDelay(
+          strikeStartMs,
+          withSequence(
+            withTiming(-SMEAR.strikeSkewDeg, { duration: SMEAR.durationMs, easing: EASE.enter }),
+            withSpring(0, SPRING.snappy)
+          )
+        );
+      }
+      // Signature weapon/limb sweep via pawTx & pawRotate (calibrated to stay anchored & inside framed cards)
+      if (ch.pawTx) {
+        ch.pawTx.value = withSequence(
+          withTiming(size * (isReaper ? 0.08 : 0.04), wind),
+          withDelay(coilHoldMs, withTiming(-size * (isReaper ? 0.12 : 0.075), lunge)),
+          withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+        );
+      }
+      if (ch.pawRotate) {
+        ch.pawRotate.value = withSequence(
+          withTiming(isReaper ? 28 : 14, wind),
+          withDelay(coilHoldMs, withTiming(isReaper ? -36 : -20, lunge)),
+          withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+        );
+      }
+      ch.pawBounce.value = withSequence(
+        withTiming(-size * (isReaper ? 0.09 : 0.06), wind),
+        withDelay(coilHoldMs, withTiming(isReaper ? size * 0.04 : -size * 0.12, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.boss))
+      );
+      ch.leftEarExtra.value = withSequence(
+        withTiming(-18, wind),
+        withDelay(coilHoldMs, withTiming(22, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      ch.rightEarExtra.value = withSequence(
+        withTiming(16, wind),
+        withDelay(coilHoldMs + OVERLAP.primaryMs, withTiming(-20, lunge)),
+        withDelay(apexHoldMs, withSpring(0, SPRING.loose))
+      );
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/** Species-specific idle micro-fidgets paired with blinks (winged double-flutter, Hydra wave, pincer click). */
+export function playEnemySpeciesFidget(
+  speciesClass: EnemySpeciesClass,
+  roll: number,
+  ch: ReactionChannels,
+  size: number
+): boolean {
+  if (speciesClass === 'winged' && roll < 0.58) {
+    ch.leftEarExtra.value = withSequence(
+      withTiming(-22, { duration: CREATURE_FX.fidgetFastMs, easing: EASE.ui }),
+      withTiming(16, { duration: CREATURE_FX.fidgetFastMs, easing: EASE.ui }),
+      withSpring(0, SPRING.loose)
+    );
+    ch.rightEarExtra.value = withDelay(
+      OVERLAP.primaryMs,
+      withSequence(
+        withTiming(20, { duration: CREATURE_FX.fidgetFastMs, easing: EASE.ui }),
+        withTiming(-14, { duration: CREATURE_FX.fidgetFastMs, easing: EASE.ui }),
+        withSpring(0, SPRING.loose)
+      )
+    );
+    return true;
+  }
+
+  if (speciesClass === 'hydra' && roll < 0.62) {
+    ch.leftEarExtra.value = withSequence(
+      withTiming(-16, { duration: CREATURE_FX.fidgetStepMs, easing: EASE.ui }),
+      withSpring(0, SPRING.loose)
+    );
+    ch.headRotate.value = withDelay(
+      OVERLAP.primaryMs,
+      withSequence(
+        withTiming(-10, { duration: CREATURE_FX.fidgetStepMs, easing: EASE.ui }),
+        withSpring(0, SPRING.boss)
+      )
+    );
+    ch.rightEarExtra.value = withDelay(
+      OVERLAP.secondaryMs,
+      withSequence(
+        withTiming(16, { duration: CREATURE_FX.fidgetStepMs, easing: EASE.ui }),
+        withSpring(0, SPRING.loose)
+      )
+    );
+    return true;
+  }
+
+  if (speciesClass === 'pincer' && roll < 0.58) {
+    ch.leftEarExtra.value = withSequence(
+      withTiming(18, { duration: CREATURE_FX.fidgetFastMs, easing: EASE.enter }),
+      withSpring(0, SPRING.loose)
+    );
+    ch.rightEarExtra.value = withDelay(
+      CREATURE_FX.fidgetDelayMs,
+      withSequence(
+        withTiming(-18, { duration: CREATURE_FX.fidgetFastMs, easing: EASE.enter }),
+        withSpring(0, SPRING.loose)
+      )
+    );
+    return true;
+  }
+
+  if (speciesClass === 'boss' && roll < 0.45) {
+    if (ch.pawTx) {
+      ch.pawTx.value = withSequence(
+        withTiming(-size * 0.04, { duration: CREATURE_FX.fidgetStepMs, easing: EASE.ui }),
+        withSpring(0, SPRING.boss)
+      );
+    }
+    ch.tailExtra.value = withSequence(
+      withTiming(-14, { duration: CREATURE_FX.fidgetStepMs, easing: EASE.ui }),
+      withSpring(0, SPRING.loose)
+    );
+    return true;
+  }
+
+  return false;
+}
+
+/** How enemies move: menacing stances, mass-scaled hitstop recoils, snap lunges, and smooth taunts. */
 export const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionType> = {
   moodMotion: ENEMY_MOOD_MOTION,
   reactionHoldMs: {
@@ -149,13 +609,20 @@ export const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionT
     pain: HIT.painHoldMs,
   },
   resolveReactionHoldMs: (type, context) => {
+    const massClass: MassClass = context.massClass ?? 'standard';
     if (type === 'pain') {
       const tier: HitTier = context.hitTier ?? 0;
-      const hold = hitstopHoldMs(tier, context.moveKind, context.chain);
+      const baseHold = hitstopHoldMs(tier, context.moveKind, context.chain);
+      const hold =
+        massClass === 'boss'
+          ? Math.min(HIT.maxHoldMs, Math.round(baseHold * 1.15))
+          : baseHold;
       // Release expression cleanly right as tier-scaled hitstop + spring recoil settle (`[FX-12]`)
       return HIT.painHoldMs + Math.max(0, hold - HIT.holdMs);
     }
-    return ENEMY_REACTION_HOLD_MS[type] ?? 850;
+    const base = ENEMY_REACTION_HOLD_MS[type] ?? 850;
+    if (massClass === 'standard') return base;
+    return Math.round(base * (massClass === 'boss' ? 1.15 : MASS_CLASS[massClass].timeMult));
   },
   tapReaction: 'poke',
   tapStreakReaction: 'rage_spin',
@@ -251,7 +718,8 @@ export const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionT
   look: {
     hop: 0.09,
     danceTiltDeg: 0,
-    tremorFreq: 2.2,
+    // Exact integer harmonic `2` prevents the 2π wagPhase wrap seam tick previously caused by `2.2`
+    tremorFreq: 2,
     tremorAmpPx: 1.4,
     shadowOpacity: 0.2,
     shadowLiftShrinkX: 0.4,
@@ -262,61 +730,78 @@ export const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionT
   },
 
   playReaction: (type, ch, size, context) => {
+    const massClass: MassClass = context.massClass ?? 'standard';
+    const mass = MASS_CLASS[massClass];
+    const isBoss = massClass === 'boss';
     const jumpPx = Math.max(6, size * 0.16);
     const recoilPx = Math.max(5, size * 0.14);
     const isCompact = context.compact ?? size <= CREATURE_ACTING.compactSizePx;
     const rotBoost = isCompact ? CREATURE_ACTING.compactRotateBoost : 1;
 
+    normalizeResidualRotation(ch);
+
     switch (type) {
       case 'pain':
       case 'crit_pain': {
         // [FX-02][FX-04][FX-06][FX-12]: 1-frame snap into variant damage pose (`throw` / `blast` / `zap`),
-        // tier-scaled hitstop hold (3f/4f/6f/8.5f, chains 2f) with decaying micro-vibration, then spring recovery.
+        // tier & mass-scaled hitstop hold with decaying micro-vibration, then mass-appropriate spring recovery.
         const tier: HitTier = context.hitTier ?? (type === 'crit_pain' ? 1 : 0);
         const hitKind: HitKind = context.hitKind ?? 'throw';
         const chainGain = 1 + HIT.chainGain * context.chain;
-        const hold = hitstopHoldMs(tier, context.moveKind, context.chain);
+        const rawHold = hitstopHoldMs(tier, context.moveKind, context.chain);
+        const hold = isBoss ? Math.min(HIT.maxHoldMs, Math.round(rawHold * 1.15)) : rawHold;
         const snap = { duration: HIT.snapMs, easing: EASE.enter };
         const strike = (to: number, rest: number, spring: SpringSpec) =>
           withSequence(withTiming(to, snap), withDelay(hold, withSpring(rest, spring)));
 
-        const baseRecoil = recoilPx * Math.min(1.85, HIT.tierRecoilMult[tier] * chainGain);
-        const vibAmp = recoilPx * HIT.defenderVibRatio * HIT.defenderVibTierScale[tier];
-        const recoverSpring = tier >= 2 || type === 'crit_pain' ? SPRING.playful : SPRING.lively;
+        // Heavy/boss foes resist horizontal knockback (`MASS_CLASS.boss.recoilMult = 0.65`)
+        const baseRecoil =
+          recoilPx * Math.min(1.85, HIT.tierRecoilMult[tier] * chainGain) * mass.recoilMult;
+        const vibAmp =
+          recoilPx *
+          HIT.defenderVibRatio *
+          HIT.defenderVibTierScale[tier] *
+          (isBoss ? 0.85 : 1);
+        const recoverSpring: SpringSpec = isBoss
+          ? SPRING.boss
+          : tier >= 2 || type === 'crit_pain'
+            ? SPRING.playful
+            : SPRING[mass.spring];
+        const settleSpring: SpringSpec = isBoss ? SPRING.boss : SPRING.settle;
 
         if (hitKind === 'blast') {
-          // Airborne blast pop: vertical launch + X/Y hitstop micro-vibration + wide back-tumble
-          const blastLift = -jumpPx * HIT.blastLiftMult * (1 + tier * 0.1);
+          const blastLift =
+            -jumpPx * HIT.blastLiftMult * (1 + tier * 0.1) * (isBoss ? 0.62 : 1);
           const vibAmpY = jumpPx * HIT.blastVibYRatio * HIT.defenderVibTierScale[tier];
           const blastRot = Math.min(
             34,
             (HIT.blastRotateMinDeg + (HIT.blastRotateMaxDeg - HIT.blastRotateMinDeg) * (tier / 3)) *
-              rotBoost
+              rotBoost *
+              (isBoss ? 0.72 : 1)
           );
-          ch.bodyTx.value = buildHitstopVibration(baseRecoil * 1.15, vibAmp * 1.2, hold, 0, SPRING.settle, 1);
-          ch.bodyTy.value = buildHitstopVibration(blastLift, vibAmpY, hold, 0, SPRING.playful, -1);
+          ch.bodyTx.value = buildHitstopVibration(baseRecoil * 1.15, vibAmp * 1.2, hold, 0, settleSpring, 1);
+          ch.bodyTy.value = buildHitstopVibration(blastLift, vibAmpY, hold, 0, recoverSpring, -1);
           ch.reactionScaleY.value = withSequence(
             withTiming(Math.max(0.7, HIT.tierSquash[tier] - 0.04), snap),
             withDelay(
               hold,
               withSequence(
-                withTiming(1.08, { duration: MS.feedback, easing: EASE.enter }),
-                withSpring(1, SPRING.playful)
+                withTiming(isBoss ? 1.05 : 1.08, { duration: MS.feedback, easing: EASE.enter }),
+                withSpring(1, recoverSpring)
               )
             )
           );
-          ch.bodyRotate.value = strike(blastRot, 0, SPRING.playful);
-          ch.headRotate.value = withDelay(HIT.snapMs, strike(Math.min(36, blastRot * 1.08), 0, SPRING.playful));
+          ch.bodyRotate.value = strike(blastRot, 0, recoverSpring);
+          ch.headRotate.value = withDelay(HIT.snapMs, strike(Math.min(36, blastRot * 1.08), 0, recoverSpring));
           ch.leftEarExtra.value = strike(HIT.blastEarSplayDeg, 0, SPRING.loose);
           ch.rightEarExtra.value = strike(-HIT.blastEarSplayDeg, 0, SPRING.loose);
-          ch.pawBounce.value = strike(-size * 0.1, 0, SPRING.playful);
+          ch.pawBounce.value = strike(-size * 0.1, 0, recoverSpring);
         } else if (hitKind === 'zap') {
-          // Electric zap: grounded (`bodyTy = 0`), upright shock-stretch + tight high-frequency buzz
           cancelAnimation(ch.bodyTy);
           ch.bodyTy.value = 0;
           const zapHold = Math.max(hold, HIT.holdMs);
-          const zapBuzz = recoilPx * HIT.zapBuzzRatio * HIT.defenderVibTierScale[tier];
-          ch.bodyTx.value = buildHitstopVibration(recoilPx * 0.28, zapBuzz, zapHold, 0, SPRING.snappy, 1);
+          const zapBuzz = recoilPx * HIT.zapBuzzRatio * HIT.defenderVibTierScale[tier] * mass.recoilMult;
+          ch.bodyTx.value = buildHitstopVibration(recoilPx * 0.28 * mass.recoilMult, zapBuzz, zapHold, 0, SPRING.snappy, 1);
           ch.reactionScaleY.value = strike(HIT.zapStretchY + tier * 0.02, 1, SPRING.snappy);
           ch.bodyRotate.value = strike(HIT.zapTiltDeg * rotBoost, 0, SPRING.snappy);
           ch.headRotate.value = buildHitstopVibration(
@@ -333,163 +818,283 @@ export const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionT
           // Grounded `'throw'` hit: horizontal-only recoil (`bodyTy = 0`), feet stay flush on ground shadow (`[FX-04]`)
           cancelAnimation(ch.bodyTy);
           ch.bodyTy.value = 0;
-          const squashTarget = Math.max(0.68, HIT.tierSquash[tier] - (chainGain - 1) * 0.14);
-          const bodyRot = Math.min(28, HIT.tierRotateDeg[tier] * chainGain * rotBoost);
-          const headRot = Math.min(30, HIT.tierHeadRotateDeg[tier] * chainGain * rotBoost);
+          const squashTarget = Math.max(
+            0.68,
+            HIT.tierSquash[tier] - (chainGain - 1) * 0.14 - (isBoss ? 0.02 : 0)
+          );
+          const rotScale = isBoss ? 0.72 : 1;
+          const bodyRot = Math.min(28, HIT.tierRotateDeg[tier] * chainGain * rotBoost * rotScale);
+          const headRot = Math.min(30, HIT.tierHeadRotateDeg[tier] * chainGain * rotBoost * rotScale);
           const earDeg = HIT.tierEarSplayDeg[tier];
 
           ch.reactionScaleY.value = strike(squashTarget, 1, recoverSpring);
-          ch.bodyTx.value = buildHitstopVibration(baseRecoil, vibAmp, hold, 0, SPRING.settle, 1);
+          ch.bodyTx.value = buildHitstopVibration(baseRecoil, vibAmp, hold, 0, settleSpring, 1);
           ch.bodyRotate.value = strike(bodyRot, 0, recoverSpring);
-          // Head and ears are thrown 1 frame later and recover loose (follow-through)
+          // Head and ears trail behind torso impact (Disney #5 Follow-Through)
           ch.headRotate.value = withDelay(HIT.snapMs, strike(headRot, 0, recoverSpring));
-          ch.leftEarExtra.value = strike(earDeg, 0, SPRING.loose);
-          ch.rightEarExtra.value = strike(-earDeg, 0, SPRING.loose);
+          if (ch.headTx) {
+            ch.headTx.value = withDelay(HIT.snapMs, strike(baseRecoil * 0.25, 0, recoverSpring));
+          }
+          if (ch.bodySkewX) {
+            ch.bodySkewX.value = withSequence(
+              withTiming(SMEAR.strikeSkewDeg * 0.55 * rotScale, snap),
+              withDelay(Math.min(hold, SMEAR.durationMs), withSpring(0, SPRING.snappy))
+            );
+          }
+          ch.leftEarExtra.value = withDelay(HIT.snapMs, strike(earDeg, 0, SPRING.loose));
+          ch.rightEarExtra.value = withDelay(OVERLAP.primaryMs, strike(-earDeg, 0, SPRING.loose));
         }
         break;
       }
 
       case 'taunt': {
-        // Player made a mistake! Wicked cackle bounce + smug head rock!
+        const tm = mass.timeMult;
+        const settle: SpringSpec = isBoss ? SPRING.boss : SPRING.playful;
         ch.reactionScaleY.value = withSequence(
-          withTiming(0.86, { duration: CREATURE_FX.tauntDipMs, easing: EASE.enter }),
-          withTiming(1.16, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.enter }),
-          withTiming(0.94, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
-          withTiming(1.09, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.ui }),
-          withSpring(1, SPRING.playful)
+          withTiming(0.86, { duration: Math.round(CREATURE_FX.tauntDipMs * tm), easing: EASE.enter }),
+          withTiming(1.15, { duration: Math.round(CREATURE_FX.pokeFollowMs * tm), easing: EASE.enter }),
+          withTiming(0.94, { duration: Math.round(CREATURE_FX.tauntStepMs * tm), easing: EASE.ui }),
+          withTiming(1.08, { duration: Math.round(CREATURE_FX.pokeFollowMs * tm), easing: EASE.ui }),
+          withSpring(1, settle)
         );
         ch.bodyTy.value = withSequence(
-          withTiming(size * 0.03, { duration: CREATURE_FX.tauntDipMs, easing: EASE.enter }),
-          withTiming(-jumpPx * 0.9, { duration: CREATURE_FX.tauntRiseMs, easing: EASE.enter }),
-          withTiming(0, { duration: CREATURE_FX.tauntStepMs, easing: EASE.impact }),
-          withTiming(-jumpPx * 0.55, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.enter }),
-          withSpring(0, SPRING.playful)
+          withTiming(size * 0.03, { duration: Math.round(CREATURE_FX.tauntDipMs * tm), easing: EASE.enter }),
+          withTiming(-jumpPx * (isBoss ? 0.58 : 0.9), { duration: Math.round(CREATURE_FX.tauntRiseMs * tm), easing: EASE.enter }),
+          withTiming(0, { duration: Math.round(CREATURE_FX.tauntStepMs * tm), easing: EASE.impact }),
+          withTiming(-jumpPx * (isBoss ? 0.35 : 0.55), { duration: Math.round(CREATURE_FX.pokeFollowMs * tm), easing: EASE.enter }),
+          withSpring(0, settle)
         );
-        ch.headRotate.value = withSequence(
-          withTiming(-11 * rotBoost, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
-          withTiming(11 * rotBoost, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.ui }),
-          withTiming(-8 * rotBoost, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
-          withSpring(0, SPRING.lively)
+        ch.headRotate.value = withDelay(
+          OVERLAP.primaryMs,
+          withSequence(
+            withTiming(-11 * rotBoost, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
+            withTiming(11 * rotBoost, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.ui }),
+            withTiming(-8 * rotBoost, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
+            withSpring(0, SPRING.lively)
+          )
         );
         ch.pawBounce.value = withSequence(
           withTiming(-size * 0.1, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.enter }),
           withTiming(0, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
           withTiming(-size * 0.08, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.enter }),
-          withSpring(0, SPRING.playful)
+          withSpring(0, settle)
         );
         break;
       }
 
       case 'attack': {
-        // [FX-10] Frame-1 snap anticipation -> 4f coiled hold -> 2f strike lunge -> 3f apex hold -> slow follow-through!
-        const wind = { duration: ENEMY_ATTACK.windMs, easing: EASE.enter };
-        const lunge = { duration: ENEMY_ATTACK.strikeMs, easing: EASE.enter };
+        // [FX-10] Mass-scaled anticipation -> coiled telegraph (moving-hold dread shiver for bosses!) ->
+        // 2f strike snap with velocity smear & paw jab -> apex hold -> spring follow-through!
+        const { windMs, coilHoldMs, strikeMs, apexHoldMs, strikeStartMs } = getEnemyAttackTimings(massClass);
+        const wind = { duration: windMs, easing: EASE.enter };
+        const lunge = { duration: strikeMs, easing: EASE.enter };
+        const settleSpring: SpringSpec = isBoss ? SPRING.boss : SPRING.settle;
+        const bodySpring: SpringSpec = isBoss ? SPRING.boss : SPRING[mass.spring];
 
-        ch.bodyTx.value = withSequence(
-          withTiming(recoilPx * ENEMY_ATTACK.windTxMult, wind),
-          withDelay(ENEMY_ATTACK.coilHoldMs, withTiming(recoilPx * ENEMY_ATTACK.strikeTxMult, lunge)),
-          withDelay(ENEMY_ATTACK.apexHoldMs, withSpring(0, SPRING.settle))
-        );
+        const coilTx = recoilPx * ENEMY_ATTACK.windTxMult;
+        const strikeTx = recoilPx * ENEMY_ATTACK.strikeTxMult;
+
+        ch.bodyTx.value = isBoss
+          ? withSequence(
+              withTiming(coilTx, wind),
+              buildBossCoilMovingHold(coilTx, coilHoldMs, strikeTx, lunge, apexHoldMs, SPRING.boss)
+            )
+          : withSequence(
+              withTiming(coilTx, wind),
+              withDelay(coilHoldMs, withTiming(strikeTx, lunge)),
+              withDelay(apexHoldMs, withSpring(0, settleSpring))
+            );
         ch.reactionScaleY.value = withSequence(
           withTiming(ENEMY_ATTACK.windScaleY, wind),
-          withDelay(ENEMY_ATTACK.coilHoldMs, withTiming(ENEMY_ATTACK.strikeScaleY, lunge)),
-          withDelay(ENEMY_ATTACK.apexHoldMs, withSpring(1, SPRING.lively))
+          withDelay(coilHoldMs, withTiming(ENEMY_ATTACK.strikeScaleY, lunge)),
+          withDelay(apexHoldMs, withSpring(1, bodySpring))
         );
         ch.bodyRotate.value = withSequence(
           withTiming(ENEMY_ATTACK.windRotateDeg * rotBoost, wind),
-          withDelay(ENEMY_ATTACK.coilHoldMs, withTiming(ENEMY_ATTACK.strikeRotateDeg * rotBoost, lunge)),
-          withDelay(ENEMY_ATTACK.apexHoldMs, withSpring(0, SPRING.lively))
+          withDelay(coilHoldMs, withTiming(ENEMY_ATTACK.strikeRotateDeg * rotBoost, lunge)),
+          withDelay(apexHoldMs, withSpring(0, bodySpring))
         );
         ch.headRotate.value = withDelay(
-          ENEMY_ATTACK.windMs + ENEMY_ATTACK.coilHoldMs,
+          strikeStartMs,
           withSequence(
             withTiming(ENEMY_ATTACK.strikeHeadRotateDeg * rotBoost, lunge),
-            withDelay(ENEMY_ATTACK.apexHoldMs, withSpring(0, SPRING.lively))
+            withDelay(apexHoldMs, withSpring(0, bodySpring))
           )
         );
+        if (ch.bodySkewX) {
+          ch.bodySkewX.value = withDelay(
+            strikeStartMs,
+            withSequence(
+              withTiming(-SMEAR.strikeSkewDeg * 0.75, { duration: SMEAR.durationMs, easing: EASE.enter }),
+              withSpring(0, SPRING.snappy)
+            )
+          );
+        }
         ch.pawBounce.value = withSequence(
           withTiming(size * ENEMY_ATTACK.windPawRatio, wind),
-          withDelay(ENEMY_ATTACK.coilHoldMs, withTiming(size * ENEMY_ATTACK.strikePawRatio, lunge)),
-          withDelay(ENEMY_ATTACK.apexHoldMs, withSpring(0, SPRING.lively))
+          withDelay(coilHoldMs, withTiming(size * ENEMY_ATTACK.strikePawRatio, lunge)),
+          withDelay(apexHoldMs, withSpring(0, bodySpring))
         );
+        if (ch.pawTx) {
+          ch.pawTx.value = withSequence(
+            withTiming(size * 0.04, wind),
+            withDelay(coilHoldMs, withTiming(-size * 0.12, lunge)),
+            withDelay(apexHoldMs, withSpring(0, bodySpring))
+          );
+        }
+        if (ch.pawRotate) {
+          ch.pawRotate.value = withSequence(
+            withTiming(14, wind),
+            withDelay(coilHoldMs, withTiming(-24, lunge)),
+            withDelay(apexHoldMs, withSpring(0, bodySpring))
+          );
+        }
         break;
       }
 
       case 'regen': {
-        // [FX-10] Crisp anticipation dip -> 2f hold -> buoyant swell -> apex hold -> gentle settle!
-        const dip = { duration: ENEMY_REGEN.dipMs, easing: EASE.enter };
-        const swell = { duration: ENEMY_REGEN.swellMs, easing: EASE.enterSoft };
+        // [FX-10] Mass-scaled anticipation dip -> hold -> buoyant swell -> apex hold -> gentle settle!
+        const tm = mass.timeMult;
+        const dip = { duration: Math.round(ENEMY_REGEN.dipMs * tm), easing: EASE.enter };
+        const dipHold = Math.round(ENEMY_REGEN.dipHoldMs * tm);
+        const swell = { duration: Math.round(ENEMY_REGEN.swellMs * tm), easing: EASE.enterSoft };
+        const apexHold = Math.round(ENEMY_REGEN.apexHoldMs * tm);
+        const settle: SpringSpec = isBoss ? SPRING.boss : SPRING.settle;
 
         ch.bodyTy.value = withSequence(
           withTiming(size * ENEMY_REGEN.dipTyRatio, dip),
-          withDelay(ENEMY_REGEN.dipHoldMs, withTiming(jumpPx * ENEMY_REGEN.swellLiftMult, swell)),
-          withDelay(ENEMY_REGEN.apexHoldMs, withSpring(0, SPRING.settle))
+          withDelay(dipHold, withTiming(jumpPx * ENEMY_REGEN.swellLiftMult, swell)),
+          withDelay(apexHold, withSpring(0, settle))
         );
         ch.reactionScaleY.value = withSequence(
           withTiming(ENEMY_REGEN.dipScaleY, dip),
-          withDelay(ENEMY_REGEN.dipHoldMs, withTiming(ENEMY_REGEN.swellScaleY, swell)),
-          withDelay(ENEMY_REGEN.apexHoldMs, withSpring(1, SPRING.settle))
+          withDelay(dipHold, withTiming(ENEMY_REGEN.swellScaleY, swell)),
+          withDelay(apexHold, withSpring(1, settle))
         );
         break;
       }
 
       case 'poke': {
-        // Player poked the enemy: startled squish -> snappy annoyed growl shake!
+        const settle: SpringSpec = isBoss ? SPRING.boss : SPRING.playful;
         ch.reactionScaleY.value = withSequence(
           withTiming(0.83, { duration: CREATURE_FX.pokeStepMs, easing: EASE.enter }),
           withTiming(1.11, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.enter }),
-          withSpring(1, SPRING.playful)
+          withSpring(1, settle)
         );
-        ch.headRotate.value = withSequence(
-          withTiming(10 * rotBoost, { duration: CREATURE_FX.pokeStepMs, easing: EASE.ui }),
-          withTiming(-10 * rotBoost, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
-          withSpring(0, SPRING.lively)
+        ch.headRotate.value = withDelay(
+          OVERLAP.primaryMs,
+          withSequence(
+            withTiming(10 * rotBoost, { duration: CREATURE_FX.pokeStepMs, easing: EASE.ui }),
+            withTiming(-10 * rotBoost, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
+            withSpring(0, SPRING.lively)
+          )
         );
-        ch.tailExtra.value = withSequence(
-          withTiming(-20, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
-          withTiming(20, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
-          withSpring(0, SPRING.loose)
+        ch.tailExtra.value = withDelay(
+          OVERLAP.secondaryMs,
+          withSequence(
+            withTiming(-20, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
+            withTiming(20, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
+            withSpring(0, SPRING.loose)
+          )
         );
         break;
       }
 
       case 'rage_spin': {
-        // 5x poke easter egg: furious 360° berserker tornado spin!
+        // 5x poke easter egg: crisp anticipation pullback -> furious 360° spin overshoot ->
+        // smooth spring settle at -360° (0° mod 360°) with zero 0ms snap-pop!
+        const spinSpring: SpringSpec = isBoss ? SPRING.boss : SPRING.playful;
         ch.bodyRotate.value = 0;
         ch.bodyRotate.value = withSequence(
-          withTiming(16, { duration: CREATURE_FX.pokeStepMs, easing: EASE.ui }),
-          withTiming(-360, { duration: CREATURE_FX.spinMs, easing: EASE.enter }),
-          withTiming(0, { duration: 0 })
+          withTiming(18, { duration: CREATURE_FX.pokeStepMs, easing: EASE.anticipate }),
+          withTiming(-376, { duration: CREATURE_FX.spinMs, easing: EASE.enter }),
+          withSpring(-360, spinSpring)
         );
         ch.bodyTy.value = withSequence(
-          withTiming(size * 0.04, { duration: CREATURE_FX.pokeStepMs, easing: EASE.ui }),
-          withTiming(-jumpPx * 1.15, { duration: MS.move, easing: EASE.enter }),
-          withSpring(0, SPRING.playful)
+          withTiming(size * 0.045, { duration: CREATURE_FX.pokeStepMs, easing: EASE.enter }),
+          withTiming(-jumpPx * (isBoss ? 0.78 : 1.15), { duration: MS.move, easing: EASE.enter }),
+          withTiming(size * 0.035, { duration: MS.quick, easing: EASE.impact }),
+          withSpring(0, spinSpring)
+        );
+        ch.reactionScaleY.value = withSequence(
+          withTiming(0.84, { duration: CREATURE_FX.pokeStepMs, easing: EASE.enter }),
+          withTiming(1.14, { duration: MS.move, easing: EASE.enter }),
+          withTiming(0.82, { duration: MS.quick, easing: EASE.impact }),
+          withSpring(1, spinSpring)
+        );
+        ch.headRotate.value = withDelay(
+          OVERLAP.primaryMs,
+          withSequence(
+            withTiming(-14 * rotBoost, { duration: MS.move, easing: EASE.ui }),
+            withSpring(0, SPRING.loose)
+          )
+        );
+        ch.leftEarExtra.value = withDelay(
+          OVERLAP.primaryMs,
+          withSequence(
+            withTiming(-24, { duration: MS.move, easing: EASE.ui }),
+            withSpring(0, SPRING.loose)
+          )
+        );
+        ch.rightEarExtra.value = withDelay(
+          OVERLAP.secondaryMs,
+          withSequence(
+            withTiming(24, { duration: MS.move, easing: EASE.ui }),
+            withSpring(0, SPRING.loose)
+          )
         );
         break;
       }
 
       case 'entrance': {
-        // Heavy boss/foe drop-in crouch -> menacing rise & roar!
+        // Heavy mass-scaled drop-in stomp -> deep landing squash -> monumental spring rise!
+        const tm = mass.timeMult;
+        const dropMs = Math.round(CREATURE_FX.entranceDropMs * tm);
+        const holdMs = isBoss ? PHASE.bossApexHoldMs : CREATURE_FX.pokeStepMs;
+        const settleSpring: SpringSpec = isBoss ? SPRING.boss : SPRING.lively;
+
         ch.bodyTy.value = withSequence(
-          withTiming(-jumpPx * 0.85, { duration: 0 }),
-          withTiming(size * 0.04, { duration: CREATURE_FX.entranceDropMs, easing: EASE.impact }),
-          withSpring(0, SPRING.lively)
+          withTiming(-jumpPx * (isBoss ? 1.05 : 0.85), { duration: 0 }),
+          withTiming(size * (isBoss ? 0.065 : 0.04), { duration: dropMs, easing: EASE.impact }),
+          withDelay(holdMs, withSpring(0, settleSpring))
         );
         ch.reactionScaleY.value = withSequence(
-          withTiming(1.12, { duration: CREATURE_FX.tauntStepMs, easing: EASE.ui }),
-          withTiming(0.84, { duration: CREATURE_FX.pokeStepMs, easing: EASE.enter }),
-          withTiming(1.08, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.ui }),
-          withSpring(1, SPRING.lively)
+          withTiming(1.12, { duration: Math.round(dropMs * 0.7), easing: EASE.ui }),
+          withTiming(isBoss ? SQUASH_TIER.heavy.squashY - 0.04 : 0.84, {
+            duration: Math.max(32, Math.round(dropMs * 0.3)),
+            easing: EASE.impact,
+          }),
+          withDelay(
+            holdMs,
+            withSequence(
+              withTiming(isBoss ? 1.07 : 1.09, { duration: CREATURE_FX.pokeFollowMs, easing: EASE.enter }),
+              withSpring(1, settleSpring)
+            )
+          )
         );
-        ch.leftEarExtra.value = withSequence(
-          withTiming(-16, { duration: CREATURE_FX.entranceHoldMs, easing: EASE.ui }),
-          withSpring(0, SPRING.loose)
+        ch.leftEarExtra.value = withDelay(
+          dropMs,
+          withSequence(
+            withTiming(-20, { duration: CREATURE_FX.entranceHoldMs, easing: EASE.ui }),
+            withSpring(0, SPRING.loose)
+          )
         );
-        ch.rightEarExtra.value = withSequence(
-          withTiming(16, { duration: CREATURE_FX.entranceHoldMs, easing: EASE.ui }),
-          withSpring(0, SPRING.loose)
+        ch.rightEarExtra.value = withDelay(
+          dropMs + OVERLAP.primaryMs,
+          withSequence(
+            withTiming(20, { duration: CREATURE_FX.entranceHoldMs, easing: EASE.ui }),
+            withSpring(0, SPRING.loose)
+          )
         );
+        if (ch.pawBounce) {
+          ch.pawBounce.value = withDelay(
+            dropMs,
+            withSequence(
+              withTiming(size * 0.04, { duration: HIT.snapMs * 2, easing: EASE.impact }),
+              withSpring(0, settleSpring)
+            )
+          );
+        }
         break;
       }
     }
@@ -533,9 +1138,23 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
     typeof enemy === 'string'
       ? enemy
       : enemy?.name ?? 'Sparring Foe';
-  const rawTier = typeof enemy === 'object' && enemy && enemy.tier ? enemy.tier : 1;
+  const explicitTier = typeof enemy === 'object' && enemy && enemy.tier ? enemy.tier : undefined;
+  const rawTier = explicitTier ?? getEnemyDefaultTier(enemyName);
   const resolvedTier = Math.max(1, Math.min(4, rawTier)) as EnemyTier;
 
+  const resolvedScaleTier: CreatureScaleTier =
+    scaleTier ??
+    (resolvedTier >= 4 || isBossEnemy(enemyName)
+      ? 'boss'
+      : resolvedTier >= 2
+        ? 'elite'
+        : 'standard');
+
+  const massClass = useMemo(
+    () => getEnemyMassClass(enemyName, resolvedScaleTier),
+    [enemyName, resolvedScaleTier]
+  );
+  const speciesClass = useMemo(() => getEnemySpeciesClass(enemyName), [enemyName]);
   const personality = useMemo(
     () => getEnemyPersonality(enemyName, resolvedTier),
     [enemyName, resolvedTier]
@@ -549,6 +1168,22 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
       : mood;
 
   const resolvedHitKind: HitKind = reaction?.hitKind ?? reaction?.hitStyle ?? hitKind ?? 'throw';
+
+  const speciesChoreography = useCallback(
+    (
+      type: EnemyReactionType,
+      ch: ReactionChannels,
+      s: number,
+      ctx: ReactionContext
+    ) => playEnemySpeciesReaction(enemyName, speciesClass, type, ch, s, ctx),
+    [enemyName, speciesClass]
+  );
+
+  const speciesFidget = useCallback(
+    (roll: number, ch: ReactionChannels, s: number) =>
+      playEnemySpeciesFidget(speciesClass, roll, ch, s),
+    [speciesClass]
+  );
 
   const motion = useCreatureMotion(ENEMY_MOTION, {
     name: enemyName,
@@ -565,6 +1200,9 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
     lively: !lightweight,
     interactive,
     onTap: onPoke as ((reaction: EnemyReactionType) => void) | undefined,
+    massClass,
+    speciesChoreography,
+    speciesFidget,
   });
 
   // [FX-13] Restore gentle GPU-only breathing on lightweight rigs without spawning frame loops or JS timers
@@ -588,6 +1226,75 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
     };
   }, [shouldLightweightBreathe, enemyName, personality.breathCycleMs, lightweightBreath]);
 
+  // Staggered boss KO collapse: 6f freeze -> heavy torso drop & tilt on SPRING.boss
+  const bossKoDrop = useSharedValue(0);
+  const prevHealthStateRef = useRef(healthState);
+  useEffect(() => {
+    const prev = prevHealthStateRef.current;
+    prevHealthStateRef.current = healthState;
+    if (massClass !== 'boss' || lightweight) {
+      cancelAnimation(bossKoDrop);
+      bossKoDrop.value = 0;
+      return;
+    }
+    if (healthState === 'knocked_out' && prev !== 'knocked_out') {
+      if (!shouldAnimate) {
+        bossKoDrop.value = 1;
+        return;
+      }
+      bossKoDrop.value = 0;
+      bossKoDrop.value = withDelay(
+        HIT.tierHoldMs[2], // 6f dramatic impact freeze (96ms) before boss collapses
+        withSpring(1, SPRING.boss)
+      );
+    } else if (healthState !== 'knocked_out') {
+      cancelAnimation(bossKoDrop);
+      bossKoDrop.value = withTiming(0, { duration: MS.quick, easing: EASE.ui });
+    }
+  }, [healthState, massClass, lightweight, shouldAnimate, bossKoDrop]);
+
+  useEffect(() => {
+    return () => {
+      cancelAnimation(bossKoDrop);
+    };
+  }, [bossKoDrop]);
+
+  const bossKoStyle = useAnimatedStyle(() => {
+    const k = bossKoDrop.value;
+    if (k <= 0.001) return {};
+    return {
+      transform: [
+        { translateY: k * size * 0.075 },
+        { rotate: `${k * 6.5}deg` },
+        { scaleY: 1 - k * 0.09 },
+        { scaleX: 1 + k * 0.06 },
+      ],
+    };
+  });
+
+  // Smooth framed cornered-danger transition (GPU-only opacity highlight, reduced-motion safe!)
+  const isCorneredFrame = healthState === 'critical' || healthState === 'knocked_out';
+  const corneredFrameOpacity = useSharedValue(isCorneredFrame ? 1 : 0);
+  useEffect(() => {
+    if (!framed || lightweight || silhouette) {
+      cancelAnimation(corneredFrameOpacity);
+      corneredFrameOpacity.value = 0;
+      return;
+    }
+    corneredFrameOpacity.value = withTiming(isCorneredFrame ? 1 : 0, {
+      duration: reducedMotion ? ACCESSIBLE.fadeMs : MS.quick,
+      easing: EASE.state,
+      ...STAYS,
+    });
+    return () => {
+      cancelAnimation(corneredFrameOpacity);
+    };
+  }, [framed, lightweight, silhouette, isCorneredFrame, reducedMotion, corneredFrameOpacity]);
+
+  const corneredFrameStyle = useAnimatedStyle(() => ({
+    opacity: corneredFrameOpacity.value * 0.22,
+  }));
+
   const footAnchorY = size * 0.35;
   const lightweightBreathAmp = personality.breathIntensity;
   const lightweightRigStyle = useAnimatedStyle(() => {
@@ -610,18 +1317,19 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
         mood: effectiveMood,
         activeReaction: motion.activeReaction,
         isBlinking: motion.isBlinking,
+        blinkStage: motion.blinkStage,
       }),
-    [healthState, effectiveMood, motion.activeReaction, motion.isBlinking]
+    [healthState, effectiveMood, motion.activeReaction, motion.isBlinking, motion.blinkStage]
   );
 
-  const isCorneredFrame = healthState === 'critical' || healthState === 'knocked_out';
-  const resolvedScaleTier: CreatureScaleTier =
-    scaleTier ?? (resolvedTier >= 4 ? 'boss' : resolvedTier >= 2 ? 'elite' : 'standard');
   const resolvedFacing: 'front' | 'left' =
     facing ??
     (effectiveMood === 'menacing' || effectiveMood === 'enraged' || effectiveMood === 'cornered'
       ? 'left'
       : 'front');
+
+  const attackTimings = useMemo(() => getEnemyAttackTimings(massClass), [massClass]);
+  const entranceDropMs = Math.round(CREATURE_FX.entranceDropMs * MASS_CLASS[massClass].timeMult);
 
   return (
     <CreatureStage
@@ -642,41 +1350,65 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
       shadow={
         lightweight || silhouette
           ? undefined
-          : { testID: 'enemy-ground-shadow', minWidth: 12, minHeight: 3, style: motion.groundShadowStyle }
+          : {
+              testID: 'enemy-ground-shadow',
+              minWidth: 12,
+              minHeight: 3,
+              style: motion.groundShadowStyle,
+              penumbraStyle: motion.groundPenumbraStyle,
+            }
       }
       rigRootStyle={lightweight ? lightweightRigStyle : motion.rigRootStyle}
       rig={
-        <RigVisualProvider
-          silhouette={silhouette}
-          facing={resolvedFacing}
-          overheadLighting={!lightweight}
-          scaleTier={resolvedScaleTier}
-        >
-          <EnemyCreatureRig
-            enemyName={enemyName}
-            expression={expression}
-            healthState={healthState}
-            gazeOffset={motion.gaze}
-            facing={resolvedFacing}
-            scaleTier={resolvedScaleTier}
+        <Animated.View style={[StyleSheet.absoluteFill, massClass === 'boss' ? bossKoStyle : undefined]}>
+          <RigVisualProvider
             silhouette={silhouette}
-            headStyle={motion.headStyle}
-            leftEarStyle={motion.leftEarStyle}
-            rightEarStyle={motion.rightEarStyle}
-            tailStyle={motion.tailStyle}
-            pawStyle={motion.pawStyle}
-          />
-          {!lightweight && !silhouette && (
-            <CreatureDamageOverlay
-              healthState={healthState}
-              headStyle={motion.headStyle}
-              animate={shouldAnimate}
-              testID="enemy-damage-overlay"
-            />
-          )}
-        </RigVisualProvider>
+            facing={resolvedFacing}
+            overheadLighting={!lightweight}
+            scaleTier={resolvedScaleTier}
+          >
+            <EnemyBlinkProvider blinkStage={motion.blinkStage}>
+              <EnemyCreatureRig
+                enemyName={enemyName}
+                expression={expression}
+                blinkStage={motion.blinkStage}
+                healthState={healthState}
+                gazeOffset={motion.gaze}
+                facing={resolvedFacing}
+                scaleTier={resolvedScaleTier}
+                silhouette={silhouette}
+                headStyle={motion.headStyle}
+                leftEarStyle={motion.leftEarStyle}
+                rightEarStyle={motion.rightEarStyle}
+                tailStyle={motion.tailStyle}
+                pawStyle={motion.pawStyle}
+              />
+            </EnemyBlinkProvider>
+            {!lightweight && !silhouette && (
+              <CreatureDamageOverlay
+                healthState={healthState}
+                headStyle={motion.headStyle}
+                animate={shouldAnimate}
+                testID="enemy-damage-overlay"
+              />
+            )}
+          </RigVisualProvider>
+        </Animated.View>
       }
     >
+      {framed && !lightweight && !silhouette && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              backgroundColor: COLORS.impactRed,
+              borderRadius: Math.max(8, Math.round(size * 0.2)),
+            },
+            corneredFrameStyle,
+          ]}
+        />
+      )}
       {!lightweight && !silhouette && (
         <EnemyEffectsOverlay
           activeReaction={motion.activeReaction}
@@ -687,6 +1419,8 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
           stillBurst={quiet}
           hideImpactStars={hideImpactStars}
           hitKind={resolvedHitKind}
+          attackStrikeDelayMs={attackTimings.strikeStartMs}
+          entranceLandingDelayMs={entranceDropMs}
         />
       )}
     </CreatureStage>

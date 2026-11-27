@@ -3,9 +3,19 @@ import { MONO_FONT } from '@/utils/fonts';
  * DefeatProgress Component
  * Shows progress toward the enemy's defeat condition.
  */
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, type LayoutChangeEvent } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { EASE, MS, SCALE, SPRING, STAYS } from '@/utils/motion';
 import Icon from '../Icon';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 
@@ -112,47 +122,105 @@ const parseDefeatProgress = (
 const DefeatProgress: React.FC<DefeatProgressProps> = ({ enemy, stats }) => {
   const progress = parseDefeatProgress(enemy, stats);
   const isDefeated = enemy.checkDefeatCondition(stats);
+  const reducedMotion = Boolean(useReducedMotion());
+
+  const targetRatio = progress
+    ? Math.max(0, Math.min(1, progress.current / Math.max(1, progress.goal)))
+    : 0;
+
+  const trackWidthSV = useSharedValue(0);
+  const fillRatio = useSharedValue(targetRatio);
+  const badgeScale = useSharedValue(1);
+  const prevCurrentRef = useRef<number | null>(progress ? progress.current : null);
+  const prevDefeatedRef = useRef(isDefeated);
+
+  useEffect(() => {
+    fillRatio.value = withTiming(targetRatio, {
+      duration: MS.move,
+      easing: EASE.enter,
+      ...STAYS,
+    });
+  }, [targetRatio, fillRatio]);
+
+  useEffect(() => {
+    const nextCurrent = progress ? progress.current : null;
+    if (nextCurrent !== null && prevCurrentRef.current !== null && nextCurrent > prevCurrentRef.current) {
+      if (!reducedMotion) {
+        badgeScale.value = withSequence(
+          withTiming(SCALE.pop, { duration: Math.round(MS.feedback * 0.5), easing: EASE.popSoft }),
+          withSpring(1, SPRING.snappy)
+        );
+      }
+    }
+    prevCurrentRef.current = nextCurrent;
+  }, [progress, badgeScale, reducedMotion]);
+
+  useEffect(() => {
+    if (isDefeated && !prevDefeatedRef.current) {
+      if (!reducedMotion) {
+        badgeScale.value = 0.9;
+        badgeScale.value = withSpring(1, SPRING.playful);
+      }
+    }
+    prevDefeatedRef.current = isDefeated;
+  }, [isDefeated, badgeScale, reducedMotion]);
+
+  useEffect(() => {
+    return () => {
+      cancelAnimation(fillRatio);
+      cancelAnimation(badgeScale);
+    };
+  }, [fillRatio, badgeScale]);
+
+  const handleTrackLayout = (event: LayoutChangeEvent) => {
+    trackWidthSV.value = event.nativeEvent.layout.width;
+  };
+
+  const containerAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgeScale.value }],
+  }));
+
+  const fillAnimStyle = useAnimatedStyle(() => {
+    const w = trackWidthSV.value;
+    const r = Math.max(0, Math.min(1, fillRatio.value));
+    return {
+      transform: w > 0 ? [{ translateX: -w * (1 - r) * 0.5 }, { scaleX: r }] : [{ scaleX: r }],
+    };
+  });
 
   if (isDefeated) {
     return (
-      <View style={[styles.container, styles.containerDefeated]}>
+      <Animated.View style={[styles.container, styles.containerDefeated, containerAnimStyle]}>
         <Icon name="lorc/flat-star" size={14} color={COLORS.logicTeal} />
         <Text style={styles.defeatedText}>Defeated!</Text>
-      </View>
+      </Animated.View>
     );
   }
 
   if (!progress) {
     // Can't show progress bar, just show condition text
     return (
-      <View style={styles.container}>
+      <Animated.View style={[styles.container, containerAnimStyle]}>
         <Icon name="lorc/archery-target" size={14} color={COLORS.slateCharcoal} />
         <Text style={styles.conditionText} numberOfLines={1}>
           {enemy.defeatConditionText}
         </Text>
-      </View>
+      </Animated.View>
     );
   }
 
-  const fillPercent = Math.min(100, (progress.current / progress.goal) * 100);
-
   return (
-    <View style={styles.container}>
+    <Animated.View style={[styles.container, containerAnimStyle]}>
       <Icon name="lorc/archery-target" size={14} color={COLORS.slateCharcoal} />
       <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${fillPercent}%` },
-            ]}
-          />
+        <View style={styles.progressBar} onLayout={handleTrackLayout}>
+          <Animated.View style={[styles.progressFill, fillAnimStyle]} />
         </View>
         <Text style={styles.progressText}>
           {progress.label}: {progress.current}/{progress.goal}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -166,6 +234,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: RADIUS.button,
     borderWidth: 1,
+    borderBottomWidth: 2,
     borderColor: COLORS.slateCharcoal,
   },
   containerDefeated: {
@@ -198,16 +267,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slateCharcoal,
   },
   progressFill: {
+    width: '100%',
     height: '100%',
     backgroundColor: COLORS.actionYellow,
     borderRadius: 2,
   },
   progressText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     fontFamily: MONO_FONT,
+    fontVariant: ['tabular-nums'],
     color: COLORS.slateCharcoal,
-    minWidth: 60,
+    minWidth: 64,
   },
 });
 

@@ -1,8 +1,8 @@
 import React from 'react';
-import { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
-import { RigLayer, RigLayerStack, useRigVisual } from '@/components/creatures/RigLayers';
+import { Circle, Ellipse, G, Line, Path, Polygon } from 'react-native-svg';
+import { RigLayer, RigLayerStack, RigLayers, useRigVisual } from '@/components/creatures/RigLayers';
 import { isBattleWorn, isFierceExpression, isHurtExpression } from '@/components/creatures/expressions';
-import { STROKE } from '@/components/illustration/primitives';
+import { STROKE, StorybookToneDefs, SunlitRimStroke } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { EnemyExpression } from '@/utils/enemyAnimations';
 import { EnemyEyes } from '../EnemyEyes';
@@ -287,24 +287,244 @@ export const WolfRig: React.FC<EnemyRigProps<'dire'>> = ({
 /**
  * Cackling Hyena, Pickpocket Hyena, Haggling Hyena & Hyena Boss rigs
  */
-export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'>> = ({
-  variant,
-  healthState,
-  expression,
-  gazeOffset,
-  headStyle,
-  leftEarStyle,
-  rightEarStyle,
-  tailStyle,
-  pawStyle,
-}) => {
+export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'>> = (props) => {
+  const {
+    variant,
+    healthState,
+    expression,
+    blinkStage,
+    gazeOffset,
+    facing,
+    headStyle,
+    leftEarStyle,
+    rightEarStyle,
+    tailStyle,
+    pawStyle,
+  } = props;
   const isRuffled = isBattleWorn(healthState);
   const isFierce = isFierceExpression(expression);
   const isPickpocket = variant === 'pickpocket';
   const isHaggling = variant === 'haggling';
   const isBoss = variant === 'boss';
 
-  const ochre = isBoss ? '#B45309' : '#D97706';
+  // CHAPTER BOSS: Hyena Boss — True 3/4 LEFT hunched prowling spotted raider leader
+  // Matching bosses-34-sheet.png: bristled mane, tattered crimson bandana, raised claw paw!
+  if (isBoss) {
+    const FUR_LIT = '#FBBF24';
+    const FUR_BASE = '#D97706';
+    const FUR_SHADOW = '#92400E';
+    const MANE_LIT = '#57534E';
+    const MANE_BASE = '#292524';
+    const MANE_SHADOW = '#0C0A09';
+    const SCARF_LIT = '#EF4444';
+    const SCARF_BASE = '#B91C1C';
+    const SCARF_SHADOW = '#7F1D1D';
+    const SPOT = '#451A03';
+    const lean = facing === 'left' ? 'translate(-0.7, 0)' : undefined;
+
+    return (
+      <RigLayers
+        partStyles={props}
+        skipAutoLighting
+        skipFacingOffset
+        tail={
+          <G>
+            <StorybookToneDefs
+              tones={[
+                { id: 'hyb-tail', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW },
+                { id: 'hyb-mane-t', lit: MANE_LIT, base: MANE_BASE, shadow: MANE_SHADOW },
+              ]}
+            />
+            {/* Swishing tufted spotted hyena tail curving up-right */}
+            <Path
+              d="M 73 66 C 84 68, 92 60, 89 48 C 85 52, 82 58, 74 60 Z"
+              fill="url(#hyb-tail)"
+              stroke={STROKE}
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
+            <Path
+              d="M 83 56 C 88 52, 94 45, 92 40 C 86 43, 82 49, 80 55 Z"
+              fill="url(#hyb-mane-t)"
+              stroke={STROKE}
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+            />
+          </G>
+        }
+        leftEar={
+          <G>
+            <StorybookToneDefs
+              tones={[{ id: 'hyb-ear-l', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW }]}
+            />
+            {/* Front-left notched rounded hyena ear */}
+            <Path
+              d="M 22 36 C 14 29, 14 19, 23 19 L 25 23 L 28 20 C 33 23, 33 31, 29 36 Z"
+              fill="url(#hyb-ear-l)"
+              stroke={STROKE}
+              strokeWidth={2.9}
+              strokeLinejoin="round"
+            />
+            <Ellipse cx={23} cy={28} rx={3.8} ry={4.6} fill={MANE_BASE} />
+          </G>
+        }
+        rightEar={
+          <G>
+            <StorybookToneDefs
+              tones={[{ id: 'hyb-ear-r', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW }]}
+            />
+            {/* Dominant rear rounded hyena ear */}
+            <Path
+              d="M 35 35 C 33 23, 41 16, 48 21 C 52 27, 47 36, 40 38 Z"
+              fill="url(#hyb-ear-r)"
+              stroke={STROKE}
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
+            <Ellipse cx={42} cy={28.5} rx={4.2} ry={5} fill={MANE_BASE} />
+          </G>
+        }
+        body={
+          <G>
+            <StorybookToneDefs
+              tones={[
+                { id: 'hyb-body', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW },
+                { id: 'hyb-mane', lit: MANE_LIT, base: MANE_BASE, shadow: MANE_SHADOW },
+                { id: 'hyb-scarf', lit: SCARF_LIT, base: SCARF_BASE, shadow: SCARF_SHADOW },
+              ]}
+            />
+            {/* Bristled spiky dark back mane running along hunched spine */}
+            <Polygon
+              points="43,35 54,28 53,36 64,33 61,42 73,41 68,51 78,52 70,60 44,50"
+              fill="url(#hyb-mane)"
+              stroke={STROKE}
+              strokeWidth={2.9}
+              strokeLinejoin="round"
+            />
+            {/* Rear crouched spotted haunch & hind leg */}
+            <Path
+              d="M 55 58 C 66 56, 75 63, 75 74 L 80 86 L 68 87 L 64 76 L 54 85 L 44 85 L 52 72 Z"
+              fill="url(#hyb-body)"
+              stroke={STROKE}
+              strokeWidth={3.1}
+              strokeLinejoin="round"
+            />
+            {/* Hunched muscular prowling spotted torso */}
+            <Path
+              d="M 30 47 C 37 36, 56 38, 69 49 C 77 56, 75 67, 65 71 L 37 69 C 29 65, 27 55, 30 47 Z"
+              fill="url(#hyb-body)"
+              stroke={STROKE}
+              strokeWidth={3.3}
+              strokeLinejoin="round"
+            />
+            <SunlitRimStroke d="M 35 45 C 43 40, 55 41, 64 47" strokeWidth={2.1} opacity={0.55} />
+            {/* Signature dark hyena spots */}
+            <Circle cx={55} cy={56} r={2.6} fill={SPOT} />
+            <Circle cx={64} cy={61} r={2.3} fill={SPOT} />
+            <Circle cx={50} cy={64} r={2.1} fill={SPOT} />
+            <Circle cx={71} cy={70} r={2} fill={SPOT} />
+            {/* Dramatic tattered crimson raider bandana wrapped around neck & streaming back */}
+            <Path
+              d="M 27 51 C 36 59, 49 58, 59 47 L 66 54 L 54 63 L 65 65 L 49 71 L 41 65 L 28 60 Z"
+              fill="url(#hyb-scarf)"
+              stroke={STROKE}
+              strokeWidth={2.9}
+              strokeLinejoin="round"
+            />
+            <SunlitRimStroke d="M 32 54 Q 44 58 55 51" strokeWidth={1.8} opacity={0.5} />
+          </G>
+        }
+        head={
+          <G transform={lean}>
+            <StorybookToneDefs
+              tones={[
+                { id: 'hyb-head', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW },
+                { id: 'hyb-snout', lit: MANE_LIT, base: MANE_BASE, shadow: MANE_SHADOW },
+              ]}
+            />
+            {/* Bristled crown tuft */}
+            <Polygon
+              points="26,33 30,22 36,28 42,21 44,32"
+              fill="url(#hyb-snout)"
+              stroke={STROKE}
+              strokeWidth={2.5}
+              strokeLinejoin="round"
+            />
+            {/* Angular 3/4 left prowling hyena head & extended dark snarling muzzle */}
+            <Path
+              d="M 10 47 C 11 40, 18 35, 29 33 C 40 31, 47 37, 45 47 C 43 54, 34 57, 24 56 L 12 52 Z"
+              fill="url(#hyb-head)"
+              stroke={STROKE}
+              strokeWidth={3.2}
+              strokeLinejoin="round"
+            />
+            <SunlitRimStroke d="M 15 40 C 21 35, 30 34, 38 35" strokeWidth={2} opacity={0.6} />
+            {/* Dark hyena snout */}
+            <Path
+              d="M 10 47 C 11 43, 17 42, 23 44 L 22 54 L 12 52 Z"
+              fill="url(#hyb-snout)"
+              stroke={STROKE}
+              strokeWidth={2.3}
+              strokeLinejoin="round"
+            />
+            {/* Fierce open fanged hyena snarl */}
+            <Path
+              d="M 12 50 L 28 49 L 25 57 L 15 55 Z"
+              fill="#7F1D1D"
+              stroke={STROKE}
+              strokeWidth={2.3}
+              strokeLinejoin="round"
+            />
+            <Polygon points="14,50 16,54 18,50" fill="#FFFFFF" />
+            <Polygon points="21,49.5 23,53.5 25,49.5" fill="#FFFFFF" />
+            <Circle cx={13} cy={45.5} r={2.2} fill={MANE_SHADOW} />
+            {isRuffled && (
+              <Path d="M 35 39 L 39 44" stroke={STROKE} strokeWidth={2} strokeLinecap="round" />
+            )}
+            <EnemyEyes
+              expression={expression}
+              blinkStage={blinkStage}
+              gazeOffset={gazeOffset}
+              leftX={20}
+              rightX={30.5}
+              y={41.5}
+              radius={3.7}
+              irisColor="#FACC15"
+            />
+          </G>
+        }
+        paws={
+          <G>
+            <StorybookToneDefs
+              tones={[
+                { id: 'hyb-paw', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW },
+                { id: 'hyb-claw', lit: MANE_LIT, base: MANE_BASE, shadow: MANE_SHADOW },
+              ]}
+            />
+            {/* Raised prowling front-left swipe paw + planted front-right stride leg */}
+            <Path
+              d="M 33 63 L 18 70 L 14 78 L 22 77 L 26 73 L 36 68 Z"
+              fill="url(#hyb-paw)"
+              stroke={STROKE}
+              strokeWidth={2.9}
+              strokeLinejoin="round"
+            />
+            <Ellipse cx={17} cy={76} rx={4.2} ry={3.2} fill="url(#hyb-claw)" stroke={STROKE} strokeWidth={2.2} />
+            <Path
+              d="M 37 66 L 34 86 L 44 87 L 46 68 Z"
+              fill="url(#hyb-paw)"
+              stroke={STROKE}
+              strokeWidth={3}
+              strokeLinejoin="round"
+            />
+            <Ellipse cx={38} cy={86} rx={5.2} ry={3.2} fill="url(#hyb-claw)" stroke={STROKE} strokeWidth={2.2} />
+          </G>
+        }
+      />
+    );
+  }
+
+  const ochre = '#D97706';
   const belly = '#FDE68A';
   const spot = '#451A03';
   const mane = '#292524';
@@ -322,7 +542,7 @@ export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'
         />
       </RigLayer>
 
-      {/* 2. Spotted Savanna Body + Bandana (Pickpocket) / Gold Chain (Boss) */}
+      {/* 2. Spotted Savanna Body + Bandana (Pickpocket) */}
       <RigLayer>
         <Path
           d="M 29 58 C 23 69, 24 86, 35 89 L 65 89 C 76 86, 77 69, 71 58 Z"
@@ -351,35 +571,13 @@ export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'
             <Path d="M 43 63 L 50 69 L 57 63" stroke="#FCA5A5" strokeWidth={1.8} fill="none" />
           </G>
         )}
-
-        {/* Hyena Boss Heavy Gold Chain & Medallion */}
-        {isBoss && (
-          <G>
-            <Path
-              d="M 33 61 Q 50 76 67 61"
-              stroke={COLORS.actionYellow}
-              strokeWidth={5.2}
-              strokeLinecap="round"
-              fill="none"
-            />
-            <Path
-              d="M 33 61 Q 50 76 67 61"
-              stroke={STROKE}
-              strokeWidth={1.6}
-              strokeDasharray="4 3"
-              fill="none"
-            />
-            <Circle cx={50} cy={73} r={5.2} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.3} />
-            <Polygon points="50,70 52,74 48,74" fill="#DC2626" />
-          </G>
-        )}
       </RigLayer>
 
       {/* 3. Big Rounded Left Hyena Ear */}
       <RigLayer style={leftEarStyle}>
         <Path
           d={
-            isRuffled || isBoss
+            isRuffled
               ? 'M 28 36 C 14 31, 13 13, 24 11 L 26 17 L 30 12 C 38 14, 40 25, 37 32 Z'
               : 'M 28 36 C 14 31, 13 12, 26 11 C 37 10, 40 23, 37 32 Z'
           }
@@ -403,7 +601,7 @@ export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'
         <Ellipse cx={73} cy={22.5} rx={5.5} ry={6.8} fill={mane} />
       </RigLayer>
 
-      {/* 5. Hyena Head + Mohawk Crest + Fez/Monocle (Haggling) + Gold Crown (Boss) */}
+      {/* 5. Hyena Head + Mohawk Crest + Fez/Monocle (Haggling) */}
       <RigLayer style={headStyle}>
         {/* Dark bristling mohawk crest */}
         <Polygon
@@ -442,20 +640,6 @@ export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'
           </G>
         )}
 
-        {/* Jagged Gold Crown on Hyena Boss */}
-        {isBoss && (
-          <G>
-            <Polygon
-              points="35,25 33,10 43,17 50,7 57,17 67,10 65,25"
-              fill={COLORS.actionYellow}
-              stroke={STROKE}
-              strokeWidth={2.7}
-              strokeLinejoin="round"
-            />
-            <Circle cx={50} cy={19} r={2.6} fill="#EF4444" stroke={STROKE} strokeWidth={1.4} />
-          </G>
-        )}
-
         <EnemyEyes
           expression={expression}
           gazeOffset={gazeOffset}
@@ -463,7 +647,7 @@ export const HyenaRig: React.FC<EnemyRigProps<'pickpocket' | 'haggling' | 'boss'
           rightX={61.5}
           y={41.5}
           radius={4.7}
-          irisColor={isBoss ? '#EF4444' : '#FACC15'}
+          irisColor="#FACC15"
         />
 
         {/* Brass Monocle on Haggling Hyena */}
@@ -1111,155 +1295,214 @@ export const TapirRig: React.FC<EnemyRigProps> = ({
 };
 
 /**
- * Dusty Mammoth & Mammoth rigs
+ * CHAPTER BOSS: Dusty Mammoth & Tusk Mammoth — True 3/4 LEFT towering shaggy woolly mammoth
+ * Matching bosses-34-sheet.png: tufted woolly dome, raised S-curled trunk, colossal sweeping
+ * ivory tusks curving down then far forward-up-left, and massive stomping pillar legs!
  */
-export const MammothRig: React.FC<EnemyRigProps<'dusty'>> = ({
-  variant,
-  healthState,
-  expression,
-  gazeOffset,
-  headStyle,
-  leftEarStyle,
-  rightEarStyle,
-  tailStyle,
-  pawStyle,
-}) => {
+export const MammothRig: React.FC<EnemyRigProps<'dusty'>> = (props) => {
+  const { variant, healthState, expression, blinkStage, gazeOffset, facing } = props;
   const isRuffled = isBattleWorn(healthState);
-  const isFierce = isFierceExpression(expression);
   const isDusty = variant === 'dusty';
-  const fur = isDusty ? '#92400E' : '#7C2D12';
-  const furHighlight = isDusty ? '#FDE68A' : '#B45309';
+  const FUR_LIT = isDusty ? '#B45309' : '#9A441A';
+  const FUR_BASE = isDusty ? '#7C2D12' : '#6C280E';
+  const FUR_SHADOW = '#3B1306';
+  const TUSK_LIT = '#FFFDF5';
+  const TUSK_BASE = '#FEF3C7';
+  const TUSK_SHADOW = '#D6C49C';
+  const DUST_GOLD = '#FDE68A';
+  const lean = facing === 'left' ? 'translate(-0.7, 0)' : undefined;
 
   return (
-    <RigLayerStack>
-      {/* 1. Woolly Rump Tail + Canyon Dust Cloud (Dusty Mammoth) */}
-      <RigLayer style={tailStyle}>
-        <Path
-          d="M 72 72 Q 86 76 84 86 L 78 83 L 75 86 Z"
-          fill={fur}
-          stroke={STROKE}
-          strokeWidth={2.8}
-          strokeLinejoin="round"
-        />
-        {isDusty && (
-          <G opacity={0.85}>
-            <Circle cx={17} cy={82} r={6} fill="#FDE68A" stroke={STROKE} strokeWidth={2} />
-            <Circle cx={84} cy={80} r={6.5} fill="#FDE68A" stroke={STROKE} strokeWidth={2} />
-          </G>
-        )}
-      </RigLayer>
-
-      {/* 2. Massive Shaggy Woolly Coat */}
-      <RigLayer>
-        <Path
-          d="M 21 53 C 16 68, 18 85, 25 89 L 33 85 L 41 89 L 50 85 L 59 89 L 67 85 L 75 89 C 82 85, 84 68, 79 53 Z"
-          fill={fur}
-          stroke={STROKE}
-          strokeWidth={3.3}
-          strokeLinejoin="round"
-        />
-        {isDusty && (
+    <RigLayers
+      partStyles={props}
+      earsInFront
+      skipAutoLighting
+      skipFacingOffset
+      tail={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'mam-tail', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW }]}
+          />
+          {/* Tufted woolly mammoth tail + canyon dust wisps (Dusty Mammoth) */}
           <Path
-            d="M 25 63 Q 38 69 50 63 Q 62 69 75 63"
-            stroke={furHighlight}
-            strokeWidth={4}
+            d="M 80 62 C 88 67, 91 75, 88 84 L 83 80 L 82 72 Z"
+            fill="url(#mam-tail)"
+            stroke={STROKE}
+            strokeWidth={2.9}
+            strokeLinejoin="round"
+          />
+          {isDusty && (
+            <G opacity={0.82}>
+              <Circle cx={88} cy={83} r={4.8} fill={DUST_GOLD} stroke={STROKE} strokeWidth={1.8} />
+              <Circle cx={20} cy={86} r={4.2} fill={DUST_GOLD} stroke={STROKE} strokeWidth={1.8} />
+            </G>
+          )}
+        </G>
+      }
+      body={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'mam-body', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW }]}
+          />
+          {/* Towering shaggy woolly mammoth shoulders, sloped back & tufted skirt */}
+          <Path
+            d="M 29 44 C 31 24, 52 21, 69 34 C 81 43, 86 58, 83 74 L 74 71 L 68 77 L 58 72 L 49 77 L 39 72 L 30 75 C 25 65, 26 54, 29 44 Z"
+            fill="url(#mam-body)"
+            stroke={STROKE}
+            strokeWidth={3.4}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 35 32 C 44 25, 57 26, 68 34" strokeWidth={2.4} opacity={0.55} />
+          {/* Shaggy flank fur lines */}
+          <Path
+            d="M 55 44 C 57 52, 54 60, 52 67 M 66 48 C 68 55, 66 63, 64 69"
+            stroke={FUR_SHADOW}
+            strokeWidth={2.3}
             strokeLinecap="round"
             fill="none"
           />
-        )}
-      </RigLayer>
-
-      {/* 3. Left Ear + Sweeping Curved Left Ivory Tusk */}
-      <RigLayer style={leftEarStyle}>
-        <Ellipse cx={24} cy={36} rx={6.5} ry={8.5} fill={fur} stroke={STROKE} strokeWidth={2.9} />
-        {/* Grand sweeping left ivory tusk */}
-        <Path
-          d={
-            isRuffled
-              ? 'M 36 53 C 20 62, 7 52, 10 37 L 14 41 C 14 49, 24 55, 38 48 Z'
-              : 'M 36 53 C 19 63, 5 50, 10 31 C 12 44, 22 54, 38 48 Z'
-          }
-          fill="#FEFCE8"
-          stroke={STROKE}
-          strokeWidth={2.9}
-          strokeLinejoin="round"
-        />
-      </RigLayer>
-
-      {/* 4. Right Ear + Sweeping Curved Right Ivory Tusk */}
-      <RigLayer style={rightEarStyle}>
-        <Ellipse cx={76} cy={36} rx={6.5} ry={8.5} fill={fur} stroke={STROKE} strokeWidth={2.9} />
-        {/* Grand sweeping right ivory tusk */}
-        <Path
-          d="M 64 53 C 81 63, 95 50, 90 31 C 88 44, 78 54, 62 48 Z"
-          fill="#FEFCE8"
-          stroke={STROKE}
-          strokeWidth={2.9}
-          strokeLinejoin="round"
-        />
-      </RigLayer>
-
-      {/* 5. Domed Furry Crown + Heavy Brow + Curling S-Shaped Trunk */}
-      <RigLayer style={headStyle}>
-        <Path
-          d="M 25 43 C 25 22, 36 14, 50 14 C 64 14, 75 22, 75 43 C 75 55, 64 61, 50 61 C 36 61, 25 55, 25 43 Z"
-          fill={fur}
-          stroke={STROKE}
-          strokeWidth={3.3}
-          strokeLinejoin="round"
-        />
-        <Polygon
-          points="40,18 45,8 50,14 55,7 60,18"
-          fill={isDusty ? '#D97706' : fur}
-          stroke={STROKE}
-          strokeWidth={2.6}
-          strokeLinejoin="round"
-        />
-        {isDusty && (
-          <Path d="M 33 26 Q 50 20 67 26" stroke={furHighlight} strokeWidth={3.5} strokeLinecap="round" fill="none" />
-        )}
-
-        <EnemyEyes
-          expression={expression}
-          gazeOffset={gazeOffset}
-          leftX={36.5}
-          rightX={63.5}
-          y={39.5}
-          radius={4.3}
-          darkMask
-          irisColor={isDusty ? '#F59E0B' : '#EA580C'}
-        />
-
-        <PredatorMaw expression={expression} y={54} width={6.5} fangSize={3} strokeColor="#FDE68A" />
-
-        {/* Sweeping curling S-shaped mammoth trunk */}
-        <Path
-          d="M 44 43 C 43 58, 42 74, 54 75 C 63 76, 65 65, 58 62 C 54 61, 53 66, 56 68 C 51 68, 52 56, 56 43"
-          fill={fur}
-          stroke={STROKE}
-          strokeWidth={3.1}
-          strokeLinejoin="round"
-        />
-        <Path
-          d="M 46 50 L 53 50 M 45 57 L 52 57 M 46 64 L 52 64"
-          stroke={STROKE}
-          strokeWidth={1.8}
-          strokeLinecap="round"
-        />
-      </RigLayer>
-
-      {/* 6. Stomping Pillar Mammoth Feet */}
-      <RigLayer style={pawStyle}>
-        <G transform={isFierce ? 'translate(0, -12)' : undefined}>
-          <Rect x={29} y={81} width={15} height={9} rx={4} fill={fur} stroke={STROKE} strokeWidth={2.8} />
-          <Rect x={56} y={81} width={15} height={9} rx={4} fill={fur} stroke={STROKE} strokeWidth={2.8} />
-          <Circle cx={33} cy={88.5} r={2.2} fill="#FEFCE8" />
-          <Circle cx={39} cy={88.5} r={2.2} fill="#FEFCE8" />
-          <Circle cx={61} cy={88.5} r={2.2} fill="#FEFCE8" />
-          <Circle cx={67} cy={88.5} r={2.2} fill="#FEFCE8" />
+          {isDusty && (
+            <Path
+              d="M 42 48 Q 56 54 73 50"
+              stroke={DUST_GOLD}
+              strokeWidth={3.4}
+              strokeLinecap="round"
+              opacity={0.72}
+              fill="none"
+            />
+          )}
         </G>
-      </RigLayer>
-    </RigLayerStack>
+      }
+      leftEar={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'mam-tusk', lit: TUSK_LIT, base: TUSK_BASE, shadow: TUSK_SHADOW }]}
+          />
+          {/* Far-left sweeping ivory tusk (framed cleanly inside portrait during peak stomp squash) */}
+          <Path
+            d="M 30 53 C 21 60, 12 55, 11 43 C 14 51, 22 53, 31 48 Z"
+            fill="url(#mam-tusk)"
+            stroke={STROKE}
+            strokeWidth={2.8}
+            strokeLinejoin="round"
+          />
+          {/* Dominant foreground sweeping ivory tusk curving deep down then sweeping up-left! */}
+          <Path
+            d={
+              isRuffled
+                ? 'M 42 54 C 36 74, 15 76, 12 57 L 17 59 C 19 67, 32 66, 37 51 Z'
+                : 'M 42 54 C 36 77, 13 77, 12 52 C 16 66, 31 67, 37 51 Z'
+            }
+            fill="url(#mam-tusk)"
+            stroke={STROKE}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 15 58 C 18 69, 30 70, 38 56" strokeWidth={1.9} opacity={0.85} />
+        </G>
+      }
+      rightEar={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'mam-ear', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW }]}
+          />
+          {/* Shaggy flapping mammoth side ear angled 3/4 left */}
+          <Path
+            d="M 46 35 C 56 32, 62 41, 56 52 C 51 55, 45 50, 44 43 Z"
+            fill="url(#mam-ear)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 48 37 C 53 36, 57 39, 57 44" strokeWidth={1.8} opacity={0.5} />
+        </G>
+      }
+      head={
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[{ id: 'mam-head', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW }]}
+          />
+          {/* Domed tufted woolly cranium & heavy brow facing 3/4 left */}
+          <Path
+            d="M 27 46 C 25 27, 34 17, 46 18 L 51 22 C 55 31, 53 47, 45 55 L 30 55 Z"
+            fill="url(#mam-head)"
+            stroke={STROKE}
+            strokeWidth={3.3}
+            strokeLinejoin="round"
+          />
+          {/* Crown fur crest */}
+          <Polygon
+            points="33,22 36,12 41,18 46,12 49,21"
+            fill="url(#mam-head)"
+            stroke={STROKE}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 30 33 C 31 24, 37 20, 44 21" strokeWidth={2.2} opacity={0.6} />
+          {/* Raised muscular S-curled woolly mammoth trunk curling up-left! */}
+          <Path
+            d="M 31 44 C 24 54, 14 50, 12 37 C 11 29, 17 24, 21 28 C 23 31, 18 34, 18 38 C 19 44, 25 44, 27 38 Z"
+            fill="url(#mam-head)"
+            stroke={STROKE}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          <Path d="M 16 42 L 22 45 M 14 36 L 19 37" stroke={FUR_SHADOW} strokeWidth={1.7} strokeLinecap="round" />
+          {/* Fierce mammoth eyes positioned 3/4 left under heavy shadowed brow */}
+          <EnemyEyes
+            expression={expression}
+            blinkStage={blinkStage}
+            gazeOffset={gazeOffset}
+            leftX={29.5}
+            rightX={39.5}
+            y={38}
+            radius={3.6}
+            darkMask
+            irisColor={isDusty ? '#F59E0B' : '#EA580C'}
+          />
+        </G>
+      }
+      paws={
+        <G>
+          <StorybookToneDefs
+            tones={[
+              { id: 'mam-leg', lit: FUR_LIT, base: FUR_BASE, shadow: FUR_SHADOW },
+              { id: 'mam-nail', lit: TUSK_LIT, base: TUSK_BASE, shadow: TUSK_SHADOW },
+            ]}
+          />
+          {/* Massive columnar stomping mammoth legs in grounded 3/4 left stance */}
+          <Path
+            d="M 31 70 L 29 88 L 44 88 L 45 71 Z"
+            fill="url(#mam-leg)"
+            stroke={STROKE}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          <Circle cx={33} cy={87} r={2.3} fill="url(#mam-nail)" stroke={STROKE} strokeWidth={1.3} />
+          <Circle cx={39} cy={87} r={2.3} fill="url(#mam-nail)" stroke={STROKE} strokeWidth={1.3} />
+
+          <Path
+            d="M 52 71 L 51 87 L 65 87 L 65 71 Z"
+            fill="url(#mam-leg)"
+            stroke={STROKE}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          <Circle cx={55} cy={86} r={2.2} fill="url(#mam-nail)" stroke={STROKE} strokeWidth={1.3} />
+          <Circle cx={61} cy={86} r={2.2} fill="url(#mam-nail)" stroke={STROKE} strokeWidth={1.3} />
+
+          <Path
+            d="M 70 69 L 71 86 L 83 86 L 82 68 Z"
+            fill="url(#mam-leg)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+          <Circle cx={75} cy={85} r={2.1} fill="url(#mam-nail)" stroke={STROKE} strokeWidth={1.3} />
+          <Circle cx={80} cy={85} r={2.1} fill="url(#mam-nail)" stroke={STROKE} strokeWidth={1.3} />
+        </G>
+      }
+    />
   );
 };
 
