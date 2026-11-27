@@ -2,15 +2,17 @@
  * Persistent top bar shown across all non-combat Starfall Summit screens
  * (Map, Preview, Shop, Campfire, Event, Treasure, Rewards).
  */
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
-import { CoinPill, Heart, INK, TONE } from '@/adventure/components/ui';
+import { MONO_FONT } from '@/utils/fonts';
+import { Heart, INK, TONE } from '@/adventure/components/ui';
 import { spireArmedRecipes } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
+import { SpireCountUp, SpireLightweightBreath, SpireStatPop, SpireTactilePressable } from './SpireMotion';
 
 interface Props {
   run: SpireRun;
@@ -42,12 +44,22 @@ const SpireHeader: React.FC<Props> = ({
         ? 'Music only, sound effects muted — tap to mute all'
         : 'Music and sound effects on — tap to mute music';
 
+  const prevHeartsRef = useRef(run.hearts);
+  const [portraitPulse, setPortraitPulse] = useState(0);
+  useEffect(() => {
+    if (run.hearts !== prevHeartsRef.current) {
+      prevHeartsRef.current = run.hearts;
+      setPortraitPulse(n => n + 1);
+    }
+  }, [run.hearts]);
+
   return (
     <View style={st.bar} testID="spire-header">
       <View style={st.left}>
         {onExitToMenu && (
-          <TouchableOpacity
+          <SpireTactilePressable
             testID="spire-back-menu"
+            small
             onPress={onExitToMenu}
             style={st.backBtn}
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
@@ -55,14 +67,18 @@ const SpireHeader: React.FC<Props> = ({
             accessibilityRole="button"
           >
             <Icon name="ui/back-arrow" size={16} color={INK} noShadow />
-          </TouchableOpacity>
+          </SpireTactilePressable>
         )}
-        <FighterAvatar character={run.fighter} size={28} health={run.hearts} maxHealth={run.maxHearts} animate={false} />
+        <SpireLightweightBreath keySeed={`header-${run.fighter}`} size={28} pulseKey={portraitPulse}>
+          <FighterAvatar character={run.fighter} size={28} health={run.hearts} maxHealth={run.maxHearts} animate={false} />
+        </SpireLightweightBreath>
         <View style={{ flexShrink: 1, minWidth: 0 }}>
           <View style={st.metaRow}>
-            <Text style={st.actText} numberOfLines={1}>
-              {actTag} · FL {run.floor}
-            </Text>
+            <SpireStatPop value={`${run.act}-${run.floor}`}>
+              <Text style={st.actText} numberOfLines={1}>
+                {actTag} · FL {run.floor}
+              </Text>
+            </SpireStatPop>
             {run.isDaily && (
               <View style={st.dailyPill} testID="spire-header-daily-badge">
                 <Text style={st.dailyText}>DAILY</Text>
@@ -75,28 +91,36 @@ const SpireHeader: React.FC<Props> = ({
             )}
           </View>
           <View style={st.heartsRow}>
-            <Heart size={13} />
-            <Text style={st.heartsText}>
-              {run.hearts}/{run.maxHearts}
-            </Text>
+            <SpireStatPop value={run.hearts} style={st.heartsPopWrap} testID="spire-header-hearts">
+              <Heart size={13} />
+              <Text style={st.heartsText}>
+                {run.hearts}/{run.maxHearts}
+              </Text>
+            </SpireStatPop>
             {armedCount > 0 && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <SpireStatPop value={armedCount} style={st.evoPopWrap}>
                 <Text style={st.evoText}>·</Text>
                 <Icon name="sbed/electric" size={11} color={TONE.evoReady} noShadow />
                 <Text style={st.evoText} numberOfLines={1}>
                   {armedCount}
                 </Text>
-              </View>
+              </SpireStatPop>
             )}
           </View>
         </View>
       </View>
 
       <View style={st.right}>
-        <CoinPill coins={run.coins} compact />
+        <SpireStatPop value={run.coins} testID="spire-header-coins">
+          <View style={st.coinPill}>
+            <Icon name="lorc/crown-coin" size={14} color={TONE.coinBright} />
+            <SpireCountUp target={run.coins} animateChanges ticks={6} style={st.coinText} />
+          </View>
+        </SpireStatPop>
         {onToggleAudio && (
-          <TouchableOpacity
+          <SpireTactilePressable
             testID="spire-toggle-audio"
+            small
             onPress={onToggleAudio}
             style={[
               st.audioBtn,
@@ -114,21 +138,24 @@ const SpireHeader: React.FC<Props> = ({
               noShadow
             />
             {audioAllOff && <View pointerEvents="none" style={st.muteSlash} />}
-          </TouchableOpacity>
+          </SpireTactilePressable>
         )}
-        <TouchableOpacity
-          testID="spire-open-build"
-          onPress={onOpenBuild}
-          style={st.buildBtn}
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-          accessibilityLabel="Inspect Summit build"
-          accessibilityRole="button"
-        >
-          <Icon name="lorc/gems" size={14} color={INK} />
-          <Text style={st.buildText}>
-            {`${run.weapons.length}/${MAX_SUMMIT_WEAPONS}`}
-          </Text>
-        </TouchableOpacity>
+        <SpireStatPop value={run.weapons.length}>
+          <SpireTactilePressable
+            testID="spire-open-build"
+            small
+            onPress={onOpenBuild}
+            style={st.buildBtn}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityLabel="Inspect Summit build"
+            accessibilityRole="button"
+          >
+            <Icon name="lorc/gems" size={14} color={INK} />
+            <Text style={st.buildText}>
+              {`${run.weapons.length}/${MAX_SUMMIT_WEAPONS}`}
+            </Text>
+          </SpireTactilePressable>
+        </SpireStatPop>
       </View>
     </View>
   );
@@ -203,6 +230,16 @@ const st = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
   },
+  heartsPopWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  evoPopWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   heartsText: {
     fontSize: 12,
     fontWeight: '900',
@@ -214,11 +251,30 @@ const st = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     color: TONE.evoReady,
+    fontVariant: ['tabular-nums'],
   },
   right: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  coinPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: COLORS.canvasWhite,
+    borderColor: INK,
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  coinText: {
+    fontFamily: MONO_FONT,
+    fontSize: 12,
+    fontWeight: '900',
+    color: INK,
+    fontVariant: ['tabular-nums'],
   },
   audioBtn: {
     width: 36,

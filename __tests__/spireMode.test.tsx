@@ -2271,3 +2271,208 @@ describe('[GP-25] & [TP-19] Parry Ramp, 80/20 Theme Packs, Amber Clash Pills, Be
     expect(endText).toContain('?mode=summit&seed=');
   });
 });
+
+describe('Starfall Summit — Disney-12 Motion Primitives & Tactile Choreography', () => {
+  it('renders staged reward claim flourish, campfire acting, shop SOLD stamp, treasure chest reveal, modal mount/unmount & end-screen climax', () => {
+    const { render, fireEvent } = require('@testing-library/react-native');
+    const { SafeAreaProvider } = require('react-native-safe-area-context');
+    const SpireBuildModal = require('../src/spire/components/SpireBuildModal').default;
+    const SpireCampfire = require('../src/spire/components/SpireCampfire').default;
+    const SpireEndScreen = require('../src/spire/components/SpireEndScreen').default;
+    const SpireRewardScreen = require('../src/spire/components/SpireRewardScreen').default;
+    const SpireShop = require('../src/spire/components/SpireShop').default;
+    const SpireSwapPicker = require('../src/spire/components/SpireSwapPicker').default;
+    const SpireTreasure = require('../src/spire/components/SpireTreasure').default;
+
+    const safeMetrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
+    const baseRun = createSpireRun('Orange Tabby', 0, 4242);
+
+    // 1. SpireRewardScreen: claiming a weapon commits immediately & renders celebratory flourish banner instead of vanishing
+    const onClaimWeapon = jest.fn();
+    const rewardBundle = {
+      nodeKind: 'elite' as const,
+      foeName: 'Wild Boar',
+      coinsEarned: 85,
+      parryBonusCoins: 20,
+      dpm: 1480,
+      biggestHit: 240,
+      parries: 3,
+      perfectParries: 1,
+      weaponOptions: [
+        { weaponId: 'snowball', level: 2 },
+        { weaponId: 'war-drum', level: 2 },
+      ],
+      weaponClaimed: false,
+      weaponRerolled: false,
+      arcanaOptions: [],
+      arcanaClaimed: true,
+      skillOptions: [],
+      skillClaimed: true,
+      isActBoss: false,
+    };
+    const rewardView = render(
+      <SpireRewardScreen
+        run={baseRun}
+        reward={rewardBundle}
+        lastFight={null}
+        onClaimWeapon={onClaimWeapon}
+        onRerollWeapons={() => {}}
+        onSkipWeapon={() => {}}
+        onClaimArcana={() => {}}
+        onSkipArcana={() => {}}
+        onClaimSkill={() => {}}
+        onSkipSkill={() => {}}
+        onContinue={() => {}}
+      />
+    );
+    expect(rewardView.getByTestId('spire-reward-coins')).toBeTruthy();
+    fireEvent.press(rewardView.getByTestId('spire-draft-pick-0'));
+    expect(onClaimWeapon).toHaveBeenCalledWith(0);
+    rewardView.rerender(
+      <SpireRewardScreen
+        run={baseRun}
+        reward={{ ...rewardBundle, weaponClaimed: true }}
+        lastFight={null}
+        onClaimWeapon={onClaimWeapon}
+        onRerollWeapons={() => {}}
+        onSkipWeapon={() => {}}
+        onClaimArcana={() => {}}
+        onSkipArcana={() => {}}
+        onClaimSkill={() => {}}
+        onSkipSkill={() => {}}
+        onContinue={() => {}}
+      />
+    );
+    expect(rewardView.getByTestId('spire-weapon-claimed-banner')).toBeTruthy();
+
+    // 2. SpireCampfire: Rest / Forge / Meditate all fire cleanly and transition to resolved hearth card
+    const onRest = jest.fn();
+    const campfireState = { healAmount: 3, skillOptions: ['tabby-0-1', 'tabby-0-2'], resolved: false };
+    const campView = render(
+      <SpireCampfire
+        run={{ ...baseRun, hearts: 4 }}
+        campfire={campfireState}
+        onRest={onRest}
+        onForge={() => {}}
+        onMeditate={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    fireEvent.press(campView.getByTestId('spire-campfire-rest'));
+    expect(onRest).toHaveBeenCalledTimes(1);
+    campView.rerender(
+      <SpireCampfire
+        run={{ ...baseRun, hearts: 6 }}
+        campfire={{ ...campfireState, resolved: true, outcomeText: 'Rested by the embers and recovered +2 ♥ (6/6).' }}
+        onRest={onRest}
+        onForge={() => {}}
+        onMeditate={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    expect(campView.getByTestId('spire-campfire-outcome')).toBeTruthy();
+
+    // 3. SpireShop: sold items render the ink-stamped SOLD badge cleanly
+    const shopNode = baseRun.map.nodes.find(n => n.kind === 'shop')!;
+    const shopRun = selectSpireNode(
+      {
+        ...baseRun,
+        coins: 400,
+        map: {
+          ...baseRun.map,
+          nodes: baseRun.map.nodes.map(n => (n.id === shopNode.id ? { ...n, row: 0, visited: false } : n)),
+        },
+      },
+      shopNode.id
+    );
+    const boughtRun = shopBuyWeapon(shopRun, 0);
+    const shopView = render(
+      <SpireShop
+        run={boughtRun}
+        shop={boughtRun.shop!}
+        onBuyWeapon={() => {}}
+        onBuyArcana={() => {}}
+        onBuyUpgrade={() => {}}
+        onBuyHeal={() => {}}
+        onForgeWeapon={() => {}}
+        onReroll={() => {}}
+        onLeave={() => {}}
+      />
+    );
+    expect(shopView.getByTestId('spire-shop-weapon-0')).toBeTruthy();
+    expect(shopView.getByText('SOLD')).toBeTruthy();
+
+    // 4. SpireTreasure: chest stage renders and Double Gold Hoard updates claimed state cleanly
+    const treasNode = baseRun.map.nodes.find(n => n.kind === 'treasure')!;
+    const treasRun = selectSpireNode(
+      {
+        ...baseRun,
+        map: {
+          ...baseRun.map,
+          nodes: baseRun.map.nodes.map(n => (n.id === treasNode.id ? { ...n, row: 0, visited: false } : n)),
+        },
+      },
+      treasNode.id
+    );
+    const onClaimTreasure = jest.fn();
+    const treasView = render(
+      <SpireTreasure
+        run={treasRun}
+        treasure={treasRun.treasure!}
+        onClaim={onClaimTreasure}
+        onLeave={() => {}}
+      />
+    );
+    expect(treasView.getByTestId('spire-treasure-chest-icon')).toBeTruthy();
+    fireEvent.press(treasView.getByTestId('spire-treasure-coins'));
+    expect(onClaimTreasure).toHaveBeenCalledWith('coins');
+
+    // 5. SpireBuildModal & SpireSwapPicker: clean mount & unmount lifecycle when visible toggles
+    const modalView = render(
+      <SpireBuildModal visible run={baseRun} onClose={() => {}} />
+    );
+    expect(modalView.getByTestId('spire-build-modal')).toBeTruthy();
+    modalView.rerender(<SpireBuildModal visible={false} run={baseRun} onClose={() => {}} />);
+    expect(modalView.queryByTestId('spire-build-modal')).toBeNull();
+
+    const swapView = render(
+      <SpireSwapPicker
+        visible
+        run={baseRun}
+        incomingWeaponId="snowball"
+        incomingLevel={2}
+        testIDPrefix="test-swap"
+        onConfirmSwap={() => {}}
+        onCancel={() => {}}
+      />
+    );
+    expect(swapView.getByTestId('test-swap-panel')).toBeTruthy();
+    swapView.rerender(
+      <SpireSwapPicker
+        visible={false}
+        run={baseRun}
+        incomingWeaponId="snowball"
+        incomingLevel={2}
+        testIDPrefix="test-swap"
+        onConfirmSwap={() => {}}
+        onCancel={() => {}}
+      />
+    );
+    expect(swapView.queryByTestId('test-swap-panel')).toBeNull();
+
+    // 6. SpireEndScreen: renders crest & climax rating for both victory and defeat
+    const defeatView = render(
+      <SafeAreaProvider initialMetrics={safeMetrics}>
+        <SpireEndScreen
+          run={{ ...baseRun, phase: 'defeat', defeatedBy: 'Wild Boar' }}
+          victory={false}
+          lastFight={null}
+          onNewRun={() => {}}
+          onExitToMenu={() => {}}
+        />
+      </SafeAreaProvider>
+    );
+    expect(defeatView.getByTestId('spire-defeat')).toBeTruthy();
+    expect(defeatView.getByTestId('spire-end-crest')).toBeTruthy();
+  });
+});

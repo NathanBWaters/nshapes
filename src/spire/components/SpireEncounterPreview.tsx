@@ -6,21 +6,24 @@
  * `spireEncounterLoadout` (via Adventure's `startingLoadout`), `EnemyAvatar`,
  * `Skulls`, `Heart`, and shared `ui.tsx`.
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { OVERLAP, STAGGER } from '@/utils/motion';
 import { useColorblind } from '@/utils/cardColors';
 import { formatParryCounterMeta } from '@/utils/cardVisuals';
 import { getBiome } from '@/adventure/data/biomes';
 import { foeDisplay } from '@/adventure/data/foes';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice } from '@/adventure/components/SharedCards';
-import { Btn, CoinPill, Eyebrow, Heart, INK, PopIn, Skulls, TONE } from '@/adventure/components/ui';
+import { Btn, CoinPill, Eyebrow, Heart, INK, Skulls, TONE } from '@/adventure/components/ui';
 import { spireEncounterLoadout } from '../engine/bridge';
 import type { SpireEncounter, SpireRun } from '../types';
 import SpireBeltBar from './SpireBeltBar';
+import { SPIRE_MOTION_INSTANT, SpireStaggerItem } from './SpireMotion';
 
 interface Props {
   run: SpireRun;
@@ -40,6 +43,8 @@ const SpireEncounterPreview: React.FC<Props> = ({
   onBack,
 }) => {
   const colorblind = useColorblind();
+  const reducedMotion = useReducedMotion();
+  const [foeReactionId, setFoeReactionId] = useState(0);
   const biome = getBiome(encounter.biome);
   const foeDef = encounter.foes[0];
   const foe = foeDisplay(foeDef);
@@ -54,10 +59,17 @@ const SpireEncounterPreview: React.FC<Props> = ({
     ? formatParryCounterMeta(encounter.parry.counter, colorblind)
     : null;
 
+  // Stage foe entrance slightly behind card settle so card arrival and foe roar don't compete (Disney #3 Staging)
+  useEffect(() => {
+    if (reducedMotion || SPIRE_MOTION_INSTANT) return;
+    const t = setTimeout(() => setFoeReactionId(1), OVERLAP.tertiaryMs);
+    return () => clearTimeout(t);
+  }, [encounter.id, reducedMotion]);
+
   return (
     <View style={[st.root, { backgroundColor: biome.colors.sky }]} testID="spire-encounter-preview">
       <ScrollView contentContainerStyle={st.body}>
-        <PopIn style={st.card}>
+        <SpireStaggerItem index={0} count={1} distance={16} hero style={st.card}>
           <View style={[st.header, { backgroundColor: isBoss ? '#FEF3C7' : isElite ? '#FEE2E2' : COLORS.paperBeige }]}>
             <View style={st.headerTop}>
               <Eyebrow
@@ -72,7 +84,7 @@ const SpireEncounterPreview: React.FC<Props> = ({
                   enemy={foe}
                   size={isBoss ? 78 : 66}
                   mood={isBoss ? 'enraged' : 'menacing'}
-                  reaction={{ type: 'entrance', id: 1 }}
+                  reaction={foeReactionId > 0 ? { type: 'entrance', id: foeReactionId } : null}
                   interactive
                 />
               </View>
@@ -99,19 +111,24 @@ const SpireEncounterPreview: React.FC<Props> = ({
           </View>
 
           <View style={st.content}>
-            <FoeAbilityCard foe={foe} showAvatar={false} />
-
-            {/* Shared Set-Parry Pre-Battle Briefing */}
-            <ParryPreviewCard spec={encounter.parry} testID="spire-preview-parry" />
+            <SpireStaggerItem index={0} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
+              <View style={{ gap: 10 }}>
+                <FoeAbilityCard foe={foe} showAvatar={false} />
+                {/* Shared Set-Parry Pre-Battle Briefing */}
+                <ParryPreviewCard spec={encounter.parry} testID="spire-preview-parry" />
+              </View>
+            </SpireStaggerItem>
 
             {/* First-time Specific Counter-Parry 1-Line Callout (`[GP-25]`) */}
             {counterMeta && (
-              <View style={st.firstCounterCallout} testID="spire-first-counter-callout">
-                <Icon name="lorc/shield-reflect" size={15} color="#92400E" />
-                <Text style={st.firstCounterText}>
-                  FIRST COUNTER-PARRY: Match a {counterMeta.shortLabel} Trio while the foe winds up to break their strike for 2× Stagger!
-                </Text>
-              </View>
+              <SpireStaggerItem index={1} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
+                <View style={st.firstCounterCallout} testID="spire-first-counter-callout">
+                  <Icon name="lorc/shield-reflect" size={15} color="#92400E" />
+                  <Text style={st.firstCounterText}>
+                    FIRST COUNTER-PARRY: Match a {counterMeta.shortLabel} Trio while the foe winds up to break their strike for 2× Stagger!
+                  </Text>
+                </View>
+              </SpireStaggerItem>
             )}
 
             {encounter.shadingSurge && <ShadingSurgeNotice />}
@@ -129,32 +146,36 @@ const SpireEncounterPreview: React.FC<Props> = ({
             )}
 
             {/* Loot Preview */}
-            <View style={st.lootRow}>
-              <Text style={st.lootLabel}>VICTORY LOOT</Text>
-              <View style={st.lootPills}>
-                <CoinPill coins={encounter.coinReward} />
-                <View style={st.lootPill}>
-                  <Icon name="lorc/gems" size={13} color={INK} />
-                  <Text style={st.lootPillText}>{isBoss ? 'Lv 2 Weapon Draft' : 'Weapon Draft'}</Text>
-                </View>
-                {(isElite || isBoss) && (
-                  <View style={[st.lootPill, { backgroundColor: TONE.coinPale, borderColor: INK }]}>
-                    <Icon name="lorc/crystal-wand" size={13} color={TONE.upside} />
-                    <Text style={[st.lootPillText, { color: INK }]}>Arcana + Skill Node</Text>
+            <SpireStaggerItem index={2} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
+              <View style={st.lootRow}>
+                <Text style={st.lootLabel}>VICTORY LOOT</Text>
+                <View style={st.lootPills}>
+                  <CoinPill coins={encounter.coinReward} />
+                  <View style={st.lootPill}>
+                    <Icon name="lorc/gems" size={13} color={INK} />
+                    <Text style={st.lootPillText}>{isBoss ? 'Lv 2 Weapon Draft' : 'Weapon Draft'}</Text>
                   </View>
+                  {(isElite || isBoss) && (
+                    <View style={[st.lootPill, { backgroundColor: TONE.coinPale, borderColor: INK }]}>
+                      <Icon name="lorc/crystal-wand" size={13} color={TONE.upside} />
+                      <Text style={[st.lootPillText, { color: INK }]}>Arcana + Skill Node</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </SpireStaggerItem>
+
+            <SpireStaggerItem index={3} count={4} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
+              <View style={st.actions}>
+                <Btn testID="spire-enter-fight" label="FIGHT!" icon="lorc/crossed-swords" onPress={onFight} />
+                <Btn small variant="secondary" label="Inspect My Build" icon="lorc/gems" onPress={onInspectBuild} />
+                {onBack && (
+                  <Btn testID="spire-preview-back" small variant="ghost" label="Back to Map" onPress={onBack} />
                 )}
               </View>
-            </View>
-
-            <View style={st.actions}>
-              <Btn testID="spire-enter-fight" label="FIGHT!" icon="lorc/crossed-swords" onPress={onFight} />
-              <Btn small variant="secondary" label="Inspect My Build" icon="lorc/gems" onPress={onInspectBuild} />
-              {onBack && (
-                <Btn testID="spire-preview-back" small variant="ghost" label="Back to Map" onPress={onBack} />
-              )}
-            </View>
+            </SpireStaggerItem>
           </View>
-        </PopIn>
+        </SpireStaggerItem>
       </ScrollView>
     </View>
   );

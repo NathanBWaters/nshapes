@@ -10,6 +10,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CharacterName } from '@/types';
 import { music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
@@ -18,6 +19,7 @@ import { MusicStorage, SoundStorage } from '@/utils/storage';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { loadAdventureSave, writeAdventureSave } from '@/adventure/save';
+import { getBiome } from '@/adventure/data/biomes';
 import { battleRecord, wasFought } from '@/adventure/history';
 import type { FightTape } from '@/adventure/engine/replay';
 import AdventureRun from '@/adventure/components/AdventureRun';
@@ -101,6 +103,7 @@ import SpireEvent from './SpireEvent';
 import SpireTreasure from './SpireTreasure';
 import SpireEndScreen from './SpireEndScreen';
 import SpireBuildModal from './SpireBuildModal';
+import { useSpireScreenTransition } from './SpireMotion';
 
 interface Props {
   onExit: () => void;
@@ -146,6 +149,8 @@ const SpireMode: React.FC<Props> = ({
     funRating: FunRating | null;
     funTags: FunTag[];
   } | null>(null);
+  const screenTx = useSpireScreenTransition({ enterOnMount: false });
+  const roomTx = useSpireScreenTransition({ enterOnMount: false });
 
   const run = savedRun;
 
@@ -164,11 +169,11 @@ const SpireMode: React.FC<Props> = ({
       return true;
     }
     if (!run || run.phase === 'map' || run.phase === 'victory' || run.phase === 'defeat') {
-      setInSetup(true);
+      screenTx.go(() => setInSetup(true), 'descend');
       return true;
     }
     if (run.phase === 'preview') {
-      updateRun(cancelSpirePreview(run));
+      roomTx.go(() => updateRun(cancelSpirePreview(run)), 'descend');
       return true;
     }
     // Consume back during active fights/shops/rewards so players don't drop a run accidentally
@@ -246,15 +251,17 @@ const SpireMode: React.FC<Props> = ({
   ) => {
     commitSpireFight('spire_new_run');
     const fresh = createSpireRun(fighter, ascension, seed, options);
-    setLastFight(null);
-    setLastFightFeedback(null);
-    updateRun(fresh);
-    setInSetup(false);
-  }, [updateRun]);
+    screenTx.go(() => {
+      setLastFight(null);
+      setLastFightFeedback(null);
+      updateRun(fresh);
+      setInSetup(false);
+    }, 'ascend');
+  }, [screenTx, updateRun]);
 
   const handleResume = useCallback(() => {
-    if (savedRun) setInSetup(false);
-  }, [savedRun]);
+    if (savedRun) screenTx.go(() => setInSetup(false), 'ascend');
+  }, [savedRun, screenTx]);
 
   const handleAbandonActive = useCallback(() => {
     commitSpireFight('spire_abandon');
@@ -289,24 +296,27 @@ const SpireMode: React.FC<Props> = ({
       fightId,
       spire: spireFightMeta(run, fightRun),
     });
-    setLastFightFeedback({ fightId, funRating: null, funTags: [] });
-    setLastFight({
-      run: fightRun,
-      weapons: spireHeldWeapons(run),
-      builds: buildSpireWeaponBuilds(run),
-    });
     if (fightRun.forgedRecipes.length > 0) {
       syncSpireDiscoveriesToAdventure(fightRun.forgedRecipes);
     }
     const next = completeSpireBattle(run, fightRun);
-    if (next.phase === 'defeat') {
-      setMeta(recordSpireRunEnd(next, false));
-      writeSpireRun(null);
-      setSavedRun(next);
-    } else {
-      updateRun(next);
-    }
-  }, [run, updateRun]);
+    const snapshot: SpireLastFightSnapshot = {
+      run: fightRun,
+      weapons: spireHeldWeapons(run),
+      builds: buildSpireWeaponBuilds(run),
+    };
+    screenTx.go(() => {
+      setLastFightFeedback({ fightId, funRating: null, funTags: [] });
+      setLastFight(snapshot);
+      if (next.phase === 'defeat') {
+        setMeta(recordSpireRunEnd(next, false));
+        writeSpireRun(null);
+        setSavedRun(next);
+      } else {
+        updateRun(next);
+      }
+    }, 'ascend');
+  }, [run, screenTx, updateRun]);
 
   const handleRateFun = useCallback((rating: FunRating | null, tags: FunTag[]) => {
     setLastFightFeedback(prev => {
@@ -324,13 +334,19 @@ const SpireMode: React.FC<Props> = ({
     if (!run) return;
     const next = finishSpireRewards(run);
     if (next.phase === 'victory') {
-      setMeta(recordSpireRunEnd(next, true));
+      screenTx.go(() => {
+        setMeta(recordSpireRunEnd(next, true));
+        updateRun(next);
+      }, 'ascend');
     } else {
-      commitSpireFight('spire_reward_continue');
-      setLastFightFeedback(null);
+      const ascendingAct = next.act > run.act;
+      roomTx.go(() => {
+        commitSpireFight('spire_reward_continue');
+        setLastFightFeedback(null);
+        updateRun(next);
+      }, ascendingAct ? 'ascend' : 'descend');
     }
-    updateRun(next);
-  }, [run, updateRun]);
+  }, [run, screenTx, roomTx, updateRun]);
 
   const activeLevel = useMemo(
     () => (run && run.activeEncounter ? spireEncounterToLevel(run, run.activeEncounter) : null),
@@ -345,8 +361,10 @@ const SpireMode: React.FC<Props> = ({
     [run]
   );
 
+  let screenContent: React.ReactNode;
+
   if (inSetup || !run) {
-    return (
+    screenContent = (
       <SpireSetup
         activeRun={savedRun}
         meta={meta}
@@ -361,9 +379,7 @@ const SpireMode: React.FC<Props> = ({
         onExit={() => { music.stop(); onExit(); }}
       />
     );
-  }
-
-  if (run.phase === 'fight' && activeLevel && virtualSave && run.activeEncounter) {
+  } else if (run.phase === 'fight' && activeLevel && virtualSave && run.activeEncounter) {
     const enc = run.activeEncounter;
     const floorLabel = run.endless ? `Endless Act ${run.act} · Fl ${run.floor}` : `Act ${run.act} · Floor ${run.floor}`;
     const nodeLabel = enc.kind === 'boss' ? 'Act Boss' : enc.kind === 'elite' ? 'Elite' : 'Skirmish';
@@ -374,7 +390,7 @@ const SpireMode: React.FC<Props> = ({
       ((run.retreats ?? 0) * 2654435761)
     ) >>> 0;
     const isLastHeart = run.hearts <= 1;
-    return (
+    screenContent = (
       <AdventureRun
         key={`spire-fight-${run.act}-${run.floor}-${enc.id}-${run.retreats ?? 0}`}
         level={activeLevel}
@@ -395,13 +411,15 @@ const SpireMode: React.FC<Props> = ({
           }
           music.stop();
           const next = retreatSpireBattle(run, fightRun.foeName);
-          if (next.phase === 'defeat') {
-            setMeta(recordSpireRunEnd(next, false));
-            writeSpireRun(null);
-            setSavedRun(next);
-          } else {
-            updateRun(next);
-          }
+          screenTx.go(() => {
+            if (next.phase === 'defeat') {
+              setMeta(recordSpireRunEnd(next, false));
+              writeSpireRun(null);
+              setSavedRun(next);
+            } else {
+              updateRun(next);
+            }
+          }, 'descend');
         }}
         onRestart={() => {}}
         onCoachMarkSeen={() => {}}
@@ -428,10 +446,8 @@ const SpireMode: React.FC<Props> = ({
         }}
       />
     );
-  }
-
-  if (run.phase === 'victory' || run.phase === 'defeat') {
-    return (
+  } else if (run.phase === 'victory' || run.phase === 'defeat') {
+    screenContent = (
       <SpireEndScreen
         run={run}
         victory={run.phase === 'victory'}
@@ -443,18 +459,22 @@ const SpireMode: React.FC<Props> = ({
         onEnterEndless={
           run.phase === 'victory'
             ? () => {
-                commitSpireFight('spire_enter_endless');
-                setLastFightFeedback(null);
-                updateRun(enterEndlessSpire(run));
+                screenTx.go(() => {
+                  commitSpireFight('spire_enter_endless');
+                  setLastFightFeedback(null);
+                  updateRun(enterEndlessSpire(run));
+                }, 'ascend');
               }
             : undefined
         }
         onNewRun={() => {
-          commitSpireFight('spire_end_new_run');
-          setLastFightFeedback(null);
-          writeSpireRun(null);
-          setSavedRun(null);
-          setInSetup(true);
+          screenTx.go(() => {
+            commitSpireFight('spire_end_new_run');
+            setLastFightFeedback(null);
+            writeSpireRun(null);
+            setSavedRun(null);
+            setInSetup(true);
+          }, 'descend');
         }}
         onExitToMenu={() => {
           commitSpireFight('spire_end_exit');
@@ -468,129 +488,161 @@ const SpireMode: React.FC<Props> = ({
         }}
       />
     );
+  } else {
+    const roomBg =
+      run.phase === 'map' || run.phase === 'preview'
+        ? getBiome(run.map.biome).colors.sky
+        : '#2B2118';
+    screenContent = (
+      <View style={[st.root, { paddingTop: insets.top, backgroundColor: roomBg }]}>
+        <SpireHeader
+          run={run}
+          musicOn={prefs.musicOn}
+          sfxOn={prefs.sfxOn}
+          onToggleAudio={handleToggleAudio}
+          onOpenBuild={() => setBuildOpen(true)}
+          onExitToMenu={() => {
+            screenTx.go(() => {
+              commitSpireFight('spire_header_exit');
+              setLastFightFeedback(null);
+              writeSpireRun(run);
+              setInSetup(true);
+            }, 'descend');
+          }}
+        />
+
+        <Animated.View
+          style={[st.roomViewport, roomTx.style]}
+          pointerEvents={roomTx.leaving ? 'none' : 'auto'}
+        >
+          {run.phase === 'map' && (
+            <SpireMap
+              run={run}
+              onSelectNode={nodeId => roomTx.go(() => updateRun(selectSpireNode(run, nodeId)), 'ascend')}
+              onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+            />
+          )}
+
+          {run.phase === 'preview' && run.activeEncounter && (
+            <SpireEncounterPreview
+              run={run}
+              encounter={run.activeEncounter}
+              onFight={() => screenTx.go(() => updateRun(startSpireEncounter(run)), 'ascend')}
+              onInspectBuild={() => setBuildOpen(true)}
+              onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onBack={
+                run.prevNodeId !== undefined
+                  ? () => roomTx.go(() => updateRun(cancelSpirePreview(run)), 'descend')
+                  : undefined
+              }
+            />
+          )}
+
+          {run.phase === 'reward' && run.reward && (
+            <SpireRewardScreen
+              run={run}
+              reward={run.reward}
+              lastFight={lastFight}
+              funRating={lastFightFeedback?.funRating ?? null}
+              funTags={lastFightFeedback?.funTags}
+              onRateFun={lastFightFeedback ? handleRateFun : undefined}
+              onReplayOpened={handleReplayOpened}
+              onClaimWeapon={(idx, replaceId) => updateRun(claimRewardWeapon(run, idx, replaceId))}
+              onRerollWeapons={() => updateRun(rerollRewardWeapons(run))}
+              onSkipWeapon={() => updateRun(skipRewardWeapon(run))}
+              onClaimArcana={id => updateRun(claimRewardArcana(run, id))}
+              onSkipArcana={() => updateRun(skipRewardArcana(run))}
+              onClaimSkill={id => updateRun(claimRewardSkillNode(run, id))}
+              onSkipSkill={() => updateRun(skipRewardSkillNode(run))}
+              onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onContinue={handleFinishRewards}
+            />
+          )}
+
+          {run.phase === 'shop' && run.shop && (
+            <SpireShop
+              run={run}
+              shop={run.shop}
+              onBuyWeapon={(idx, replaceId) => updateRun(shopBuyWeapon(run, idx, replaceId))}
+              onBuyArcana={idx => updateRun(shopBuyArcana(run, idx))}
+              onBuyUpgrade={idx => updateRun(shopBuyUpgrade(run, idx))}
+              onBuyHeal={() => updateRun(shopBuyHeal(run))}
+              onForgeWeapon={wId => updateRun(shopForgeWeapon(run, wId))}
+              onReroll={() => updateRun(shopReroll(run))}
+              onToggleLock={(kind, idx) => updateRun(shopToggleLock(run, kind, idx))}
+              onSellWeapon={wId => updateRun(shopSellWeapon(run, wId))}
+              onPurgeArcana={id => updateRun(shopPurgeArcana(run, id))}
+              onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onLeave={() => roomTx.go(() => updateRun(leaveShop(run)), 'descend')}
+            />
+          )}
+
+          {run.phase === 'campfire' && run.campfire && (
+            <SpireCampfire
+              run={run}
+              campfire={run.campfire}
+              onRest={() => updateRun(campfireRest(run))}
+              onForge={wId => updateRun(campfireForge(run, wId))}
+              onMeditate={nodeId => updateRun(campfireMeditate(run, nodeId))}
+              onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onLeave={() => roomTx.go(() => updateRun(leaveCampfire(run)), 'descend')}
+            />
+          )}
+
+          {run.phase === 'event' && run.event && (
+            <SpireEvent
+              run={run}
+              eventState={run.event}
+              onChoose={optId => updateRun(chooseEventOption(run, optId))}
+              onPickWeapon={(idx, replaceId) => updateRun(resolveEventPendingWeapon(run, idx, replaceId))}
+              onSkipWeapon={() => updateRun(skipEventPendingWeapon(run))}
+              onPickSkill={id => updateRun(resolveEventPendingSkill(run, id))}
+              onPickForge={wId => updateRun(resolveEventPendingForge(run, wId))}
+              onResolveArcana={accept => updateRun(resolveEventPendingArcana(run, accept))}
+              onLeave={() => {
+                const next = leaveEvent(run);
+                roomTx.go(() => updateRun(next), next.phase === 'preview' ? 'ascend' : 'descend');
+              }}
+            />
+          )}
+
+          {run.phase === 'treasure' && run.treasure && (
+            <SpireTreasure
+              run={run}
+              treasure={run.treasure}
+              onClaim={(choice, replaceId) => updateRun(claimTreasure(run, choice, replaceId))}
+              onLeave={() => roomTx.go(() => updateRun(leaveTreasure(run)), 'descend')}
+            />
+          )}
+        </Animated.View>
+
+        <SpireBuildModal
+          visible={buildOpen}
+          run={run}
+          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+          onClose={() => setBuildOpen(false)}
+        />
+      </View>
+    );
   }
 
   return (
-    <View style={[st.root, { paddingTop: insets.top }]}>
-      <SpireHeader
-        run={run}
-        musicOn={prefs.musicOn}
-        sfxOn={prefs.sfxOn}
-        onToggleAudio={handleToggleAudio}
-        onOpenBuild={() => setBuildOpen(true)}
-        onExitToMenu={() => {
-          commitSpireFight('spire_header_exit');
-          setLastFightFeedback(null);
-          writeSpireRun(run);
-          setInSetup(true);
-        }}
-      />
-
-      {run.phase === 'map' && (
-        <SpireMap
-          run={run}
-          onSelectNode={nodeId => updateRun(selectSpireNode(run, nodeId))}
-          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
-        />
-      )}
-
-      {run.phase === 'preview' && run.activeEncounter && (
-        <SpireEncounterPreview
-          run={run}
-          encounter={run.activeEncounter}
-          onFight={() => updateRun(startSpireEncounter(run))}
-          onInspectBuild={() => setBuildOpen(true)}
-          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
-          onBack={run.prevNodeId !== undefined ? () => updateRun(cancelSpirePreview(run)) : undefined}
-        />
-      )}
-
-      {run.phase === 'reward' && run.reward && (
-        <SpireRewardScreen
-          run={run}
-          reward={run.reward}
-          lastFight={lastFight}
-          funRating={lastFightFeedback?.funRating ?? null}
-          funTags={lastFightFeedback?.funTags}
-          onRateFun={lastFightFeedback ? handleRateFun : undefined}
-          onReplayOpened={handleReplayOpened}
-          onClaimWeapon={(idx, replaceId) => updateRun(claimRewardWeapon(run, idx, replaceId))}
-          onRerollWeapons={() => updateRun(rerollRewardWeapons(run))}
-          onSkipWeapon={() => updateRun(skipRewardWeapon(run))}
-          onClaimArcana={id => updateRun(claimRewardArcana(run, id))}
-          onSkipArcana={() => updateRun(skipRewardArcana(run))}
-          onClaimSkill={id => updateRun(claimRewardSkillNode(run, id))}
-          onSkipSkill={() => updateRun(skipRewardSkillNode(run))}
-          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
-          onContinue={handleFinishRewards}
-        />
-      )}
-
-      {run.phase === 'shop' && run.shop && (
-        <SpireShop
-          run={run}
-          shop={run.shop}
-          onBuyWeapon={(idx, replaceId) => updateRun(shopBuyWeapon(run, idx, replaceId))}
-          onBuyArcana={idx => updateRun(shopBuyArcana(run, idx))}
-          onBuyUpgrade={idx => updateRun(shopBuyUpgrade(run, idx))}
-          onBuyHeal={() => updateRun(shopBuyHeal(run))}
-          onForgeWeapon={wId => updateRun(shopForgeWeapon(run, wId))}
-          onReroll={() => updateRun(shopReroll(run))}
-          onToggleLock={(kind, idx) => updateRun(shopToggleLock(run, kind, idx))}
-          onSellWeapon={wId => updateRun(shopSellWeapon(run, wId))}
-          onPurgeArcana={id => updateRun(shopPurgeArcana(run, id))}
-          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
-          onLeave={() => updateRun(leaveShop(run))}
-        />
-      )}
-
-      {run.phase === 'campfire' && run.campfire && (
-        <SpireCampfire
-          run={run}
-          campfire={run.campfire}
-          onRest={() => updateRun(campfireRest(run))}
-          onForge={wId => updateRun(campfireForge(run, wId))}
-          onMeditate={nodeId => updateRun(campfireMeditate(run, nodeId))}
-          onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
-          onLeave={() => updateRun(leaveCampfire(run))}
-        />
-      )}
-
-      {run.phase === 'event' && run.event && (
-        <SpireEvent
-          run={run}
-          eventState={run.event}
-          onChoose={optId => updateRun(chooseEventOption(run, optId))}
-          onPickWeapon={(idx, replaceId) => updateRun(resolveEventPendingWeapon(run, idx, replaceId))}
-          onSkipWeapon={() => updateRun(skipEventPendingWeapon(run))}
-          onPickSkill={id => updateRun(resolveEventPendingSkill(run, id))}
-          onPickForge={wId => updateRun(resolveEventPendingForge(run, wId))}
-          onResolveArcana={accept => updateRun(resolveEventPendingArcana(run, accept))}
-          onLeave={() => updateRun(leaveEvent(run))}
-        />
-      )}
-
-      {run.phase === 'treasure' && run.treasure && (
-        <SpireTreasure
-          run={run}
-          treasure={run.treasure}
-          onClaim={(choice, replaceId) => updateRun(claimTreasure(run, choice, replaceId))}
-          onLeave={() => updateRun(leaveTreasure(run))}
-        />
-      )}
-
-      <SpireBuildModal
-        visible={buildOpen}
-        run={run}
-        onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
-        onClose={() => setBuildOpen(false)}
-      />
+    <View style={st.shell}>
+      <Animated.View
+        style={[st.screenWrap, screenTx.style]}
+        pointerEvents={screenTx.leaving ? 'none' : 'auto'}
+      >
+        {screenContent}
+      </Animated.View>
     </View>
   );
 };
 
 const st = StyleSheet.create({
+  shell: { flex: 1, backgroundColor: '#2B2118' },
+  screenWrap: { flex: 1 },
   root: { flex: 1, backgroundColor: '#2B2118' },
+  roomViewport: { flex: 1 },
 });
 
 export default SpireMode;

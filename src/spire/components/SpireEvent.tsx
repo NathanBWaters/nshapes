@@ -4,20 +4,22 @@
  * Reuses shared `WeaponOfferRow` and `SkillNodeRow` for inline rewards.
  */
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
+import { OVERLAP, STAGGER } from '@/utils/motion';
 import { getArcana } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { ArcanaCard, SkillNodeRow, WeaponOfferRow, type OfferBadge } from '@/adventure/components/SharedCards';
-import { Btn, DARK, Eyebrow, INK, PopIn, TONE } from '@/adventure/components/ui';
+import { Btn, DARK, Eyebrow, INK, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { getSpireEvent } from '../data/events';
 import { clashesWithBelt, newEvolutionRecipesArmedBy, spireHeldWeapons } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireEventState, SpireRun } from '../types';
 import SpireSwapPicker from './SpireSwapPicker';
+import { SpireCrossfadeSwap, SpireStaggerItem, SpireTactilePressable } from './SpireMotion';
 
 interface Props {
   run: SpireRun;
@@ -66,7 +68,7 @@ const SpireEvent: React.FC<Props> = ({
   return (
     <View style={st.root} testID="spire-event">
       <ScrollView contentContainerStyle={st.body}>
-        <PopIn style={st.storyCard}>
+        <SpireStaggerItem index={0} count={1} distance={14} hero style={st.storyCard}>
           <View style={st.storyHead}>
             <View style={[st.iconBadge, { backgroundColor: def.accent }]}>
               <Icon name={def.icon} size={28} color={COLORS.canvasWhite} />
@@ -77,223 +79,236 @@ const SpireEvent: React.FC<Props> = ({
             </View>
           </View>
           <Text style={st.storyText}>{def.story}</Text>
-        </PopIn>
+        </SpireStaggerItem>
 
-        {!eventState.resolved ? (
-          <View style={st.optList}>
-            {def.options.map((opt, idx) => {
-              const lockedCoins = opt.minCoins !== undefined && run.coins < opt.minCoins;
-              const lockedHearts = opt.minHearts !== undefined && run.hearts < opt.minHearts;
-              const lockedWeapon = !!opt.needsWeapon && forgeable.length === 0;
-              const disabled = lockedCoins || lockedHearts || lockedWeapon;
-              const lockNote = lockedCoins
-                ? `Needs ${opt.minCoins}¢`
-                : lockedHearts
-                  ? `Needs ${opt.minHearts}+ ♥`
-                  : lockedWeapon
-                    ? 'No upgradeable weapon'
-                    : null;
+        <SpireCrossfadeSwap swapKey={eventState.resolved ? 'resolved' : 'choices'}>
+          {!eventState.resolved ? (
+            <View style={st.optList}>
+              {def.options.map((opt, idx) => {
+                const lockedCoins = opt.minCoins !== undefined && run.coins < opt.minCoins;
+                const lockedHearts = opt.minHearts !== undefined && run.hearts < opt.minHearts;
+                const lockedWeapon = !!opt.needsWeapon && forgeable.length === 0;
+                const disabled = lockedCoins || lockedHearts || lockedWeapon;
+                const lockNote = lockedCoins
+                  ? `Needs ${opt.minCoins}¢`
+                  : lockedHearts
+                    ? `Needs ${opt.minHearts}+ ♥`
+                    : lockedWeapon
+                      ? 'No upgradeable weapon'
+                      : null;
 
-              return (
-                <TouchableOpacity
-                  key={opt.id}
-                  testID={`spire-event-opt-${idx}`}
-                  disabled={disabled}
-                  onPress={() => {
-                    band.cue(opt.tone === 'bold' ? 'catalyst' : 'tap');
-                    onChoose(opt.id);
-                  }}
-                  style={[
-                    st.optCard,
-                    opt.tone === 'bold' && st.optBold,
-                    opt.tone === 'safe' && st.optSafe,
-                    disabled && { opacity: 0.45 },
-                  ]}
-                  activeOpacity={0.85}
-                >
-                  <View style={st.optHead}>
-                    <Text style={st.optLabel}>{opt.label}</Text>
-                    {lockNote && <Text style={st.lockTag}>{lockNote}</Text>}
-                  </View>
-                  <Text style={st.optDetail}>{opt.detail}</Text>
-                  {opt.id === 'arcana' && previewArcana && (
-                    <View style={{ marginTop: 6 }}>
-                      <ArcanaCard
-                        arcanaId={previewArcana}
-                        badgeText="PREVIEW"
-                        testID="spire-event-arcana-preview"
-                      />
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        ) : (
-          <PopIn style={st.outcomeCard}>
-            <Text style={st.outcomeTitle}>{eventState.outcomeTitle ?? 'Outcome'}</Text>
-            <Text style={st.outcomeText}>{eventState.outcomeText}</Text>
-
-            {/* Inline Weapon Pick */}
-            {eventState.pendingWeaponOptions && eventState.pendingWeaponOptions.length > 0 && (
-              <View style={{ gap: 8 }}>
-                {eventState.pendingWeaponOptions.map((o, i) => {
-                  const w = getArmoryWeapon(o.weaponId, { [o.weaponId]: { level: o.level, tuning: {} } });
-                  if (!w) return null;
-                  const heldLv = run.weaponLevels[o.weaponId];
-                  const isUpgrade = heldLv !== undefined;
-                  const needsSwap = beltFull && !isUpgrade;
-                  const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, o.weaponId);
-                  const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, o.weaponId);
-                  const badges: OfferBadge[] = [];
-                  if (isUpgrade) badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${o.level}`, bg: '#D97706' });
-                  if (newEvos.length > 0) {
-                    badges.push({
-                      icon: 'sbed/electric',
-                      text: newEvos.length > 1 ? `${newEvos[0].name} +${newEvos.length - 1}` : newEvos[0].name,
-                      bg: TONE.evoReady,
-                    });
-                  }
-                  if (clashes.length > 0) badges.push({ icon: 'lorc/laser-warning', text: 'CLASH', bg: '#B91C1C' });
-                  const handlePick = () => {
-                    if (needsSwap) {
-                      sfx('click');
-                      setSwapIdx(prev => (prev === i ? null : i));
-                      return;
-                    }
-                    band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
-                    setSwapIdx(null);
-                    onPickWeapon(i);
-                  };
-                  return (
-                    <View key={`${o.weaponId}-${i}`} style={{ gap: 5 }}>
-                      <WeaponOfferRow
-                        testID={`spire-event-weapon-${i}`}
-                        weapon={w}
-                        level={o.level}
-                        badges={badges.length > 0 ? badges : undefined}
-                        focused
-                        onPress={handlePick}
-                        right={
-                          <Btn
-                            testID={`spire-event-weapon-btn-${i}`}
-                            small
-                            label={isUpgrade ? 'Upgrade' : needsSwap ? 'Swap' : 'Claim'}
-                            onPress={handlePick}
+                return (
+                  <SpireStaggerItem
+                    key={opt.id}
+                    index={idx}
+                    count={def.options.length}
+                    baseDelayMs={OVERLAP.secondaryMs}
+                    gapMs={STAGGER.item}
+                  >
+                    <SpireTactilePressable
+                      testID={`spire-event-opt-${idx}`}
+                      disabled={disabled}
+                      onPress={() => {
+                        band.cue(opt.tone === 'bold' ? 'catalyst' : 'tap');
+                        onChoose(opt.id);
+                      }}
+                      style={[
+                        st.optCard,
+                        opt.tone === 'bold' && st.optBold,
+                        opt.tone === 'safe' && st.optSafe,
+                        disabled && { opacity: 0.45 },
+                      ]}
+                    >
+                      <View style={st.optHead}>
+                        <Text style={st.optLabel}>{opt.label}</Text>
+                        {lockNote && <Text style={st.lockTag}>{lockNote}</Text>}
+                      </View>
+                      <Text style={st.optDetail}>{opt.detail}</Text>
+                      {opt.id === 'arcana' && previewArcana && (
+                        <View style={{ marginTop: 6 }}>
+                          <ArcanaCard
+                            arcanaId={previewArcana}
+                            badgeText="PREVIEW"
+                            testID="spire-event-arcana-preview"
                           />
-                        }
-                      />
-                      {swapIdx === i && needsSwap && (
-                        <SpireSwapPicker
-                          run={run}
-                          incomingWeaponId={o.weaponId}
-                          incomingLevel={o.level}
-                          testIDPrefix="spire-event-swap"
-                          onConfirmSwap={dropId => {
-                            band.cue('weaponGet');
-                            setSwapIdx(null);
-                            onPickWeapon(i, dropId);
-                          }}
-                          onCancel={() => {
-                            sfx('click');
-                            setSwapIdx(null);
-                          }}
-                        />
+                        </View>
                       )}
-                    </View>
-                  );
-                })}
-                {beltFull && onSkipWeapon && (
-                  <Btn
-                    testID="spire-event-weapon-skip"
-                    small
-                    variant="ghost"
-                    label={`Keep current belt (+${SKIP_WEAPON_COINS}¢)`}
-                    onPress={() => {
-                      sfx('click');
+                    </SpireTactilePressable>
+                  </SpireStaggerItem>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={st.outcomeCard} testID="spire-event-outcome">
+              <Text style={st.outcomeTitle}>{eventState.outcomeTitle ?? 'Outcome'}</Text>
+              <Text style={st.outcomeText}>{eventState.outcomeText}</Text>
+
+              {/* Inline Weapon Pick */}
+              {eventState.pendingWeaponOptions && eventState.pendingWeaponOptions.length > 0 && (
+                <View style={{ gap: 8 }}>
+                  {eventState.pendingWeaponOptions.map((o, i) => {
+                    const w = getArmoryWeapon(o.weaponId, { [o.weaponId]: { level: o.level, tuning: {} } });
+                    if (!w) return null;
+                    const heldLv = run.weaponLevels[o.weaponId];
+                    const isUpgrade = heldLv !== undefined;
+                    const needsSwap = beltFull && !isUpgrade;
+                    const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, o.weaponId);
+                    const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, o.weaponId);
+                    const badges: OfferBadge[] = [];
+                    if (isUpgrade) badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${o.level}`, bg: '#D97706' });
+                    if (newEvos.length > 0) {
+                      badges.push({
+                        icon: 'sbed/electric',
+                        text: newEvos.length > 1 ? `${newEvos[0].name} +${newEvos.length - 1}` : newEvos[0].name,
+                        bg: TONE.evoReady,
+                      });
+                    }
+                    if (clashes.length > 0) badges.push({ icon: 'lorc/laser-warning', text: 'CLASH', bg: '#B91C1C' });
+                    const handlePick = () => {
+                      if (needsSwap) {
+                        sfx('click');
+                        setSwapIdx(prev => (prev === i ? null : i));
+                        return;
+                      }
+                      band.cue(isUpgrade ? 'levelUp' : 'weaponGet');
                       setSwapIdx(null);
-                      onSkipWeapon();
+                      onPickWeapon(i);
+                    };
+                    return (
+                      <SpireStaggerItem key={`${o.weaponId}-${i}`} index={i} count={eventState.pendingWeaponOptions!.length} gapMs={STAGGER.card} distance={8}>
+                        <View style={{ gap: 5 }}>
+                          <WeaponOfferRow
+                            testID={`spire-event-weapon-${i}`}
+                            weapon={w}
+                            level={o.level}
+                            badges={badges.length > 0 ? badges : undefined}
+                            focused
+                            onPress={handlePick}
+                            right={
+                              <Btn
+                                testID={`spire-event-weapon-btn-${i}`}
+                                small
+                                label={isUpgrade ? 'Upgrade' : needsSwap ? 'Swap' : 'Claim'}
+                                onPress={handlePick}
+                              />
+                            }
+                          />
+                          {needsSwap && (
+                            <SpireSwapPicker
+                              visible={swapIdx === i}
+                              run={run}
+                              incomingWeaponId={o.weaponId}
+                              incomingLevel={o.level}
+                              testIDPrefix="spire-event-swap"
+                              onConfirmSwap={dropId => {
+                                band.cue('weaponGet');
+                                setSwapIdx(null);
+                                onPickWeapon(i, dropId);
+                              }}
+                              onCancel={() => {
+                                sfx('click');
+                                setSwapIdx(null);
+                              }}
+                            />
+                          )}
+                        </View>
+                      </SpireStaggerItem>
+                    );
+                  })}
+                  {beltFull && onSkipWeapon && (
+                    <Btn
+                      testID="spire-event-weapon-skip"
+                      small
+                      variant="ghost"
+                      label={`Keep current belt (+${SKIP_WEAPON_COINS}¢)`}
+                      onPress={() => {
+                        sfx('click');
+                        setSwapIdx(null);
+                        onSkipWeapon();
+                      }}
+                    />
+                  )}
+                </View>
+              )}
+
+              {/* Inline Skill Node Pick */}
+              {availSkills.length > 0 && (
+                <View style={{ gap: 8 }}>
+                  {availSkills.map((id, i) => (
+                    <SpireStaggerItem key={id} index={i} count={availSkills.length} gapMs={STAGGER.card} distance={8}>
+                      <SkillNodeRow
+                        testID={`spire-event-skill-${i}`}
+                        nodeId={id}
+                        onPress={() => { band.cue('levelUp'); onPickSkill(id); }}
+                      />
+                    </SpireStaggerItem>
+                  ))}
+                </View>
+              )}
+
+              {/* Inline Arcana Accept / Decline (never forces a blind cursed Arcana!) */}
+              {pendingArcana && (
+                <View style={{ gap: 8 }}>
+                  <ArcanaCard
+                    arcanaId={pendingArcana}
+                    showTagline
+                    testID="spire-event-arcana-offer"
+                  />
+                  <Btn
+                    testID="spire-event-arcana-accept"
+                    label={`Accept ${getArcana(pendingArcana).name}`}
+                    icon="lorc/crystal-wand"
+                    onPress={() => {
+                      band.cue('catalyst');
+                      onResolveArcana?.(true);
                     }}
                   />
-                )}
-              </View>
-            )}
-
-            {/* Inline Skill Node Pick */}
-            {availSkills.length > 0 && (
-              <View style={{ gap: 8 }}>
-                {availSkills.map((id, i) => (
-                  <SkillNodeRow
-                    key={id}
-                    testID={`spire-event-skill-${i}`}
-                    nodeId={id}
-                    onPress={() => { band.cue('levelUp'); onPickSkill(id); }}
+                  <Btn
+                    testID="spire-event-arcana-decline"
+                    small
+                    variant="ghost"
+                    label="Decline & Keep Walking"
+                    onPress={() => {
+                      sfx('click');
+                      onResolveArcana?.(false);
+                    }}
                   />
-                ))}
-              </View>
-            )}
+                </View>
+              )}
 
-            {/* Inline Arcana Accept / Decline (never forces a blind cursed Arcana!) */}
-            {pendingArcana && (
-              <View style={{ gap: 8 }}>
-                <ArcanaCard
-                  arcanaId={pendingArcana}
-                  showTagline
-                  testID="spire-event-arcana-offer"
-                />
+              {/* Inline Forge (+1 or +2 Levels) */}
+              {eventState.pendingForge && (
+                <View style={{ gap: 8 }}>
+                  {forgeable.map((w, i) => {
+                    const lv = run.weaponLevels[w.id] ?? 1;
+                    const delta = eventState.pendingForgeDelta ?? 2;
+                    return (
+                      <SpireStaggerItem key={w.id} index={i} count={forgeable.length} gapMs={STAGGER.card} distance={8}>
+                        <WeaponOfferRow
+                          testID={`spire-event-forge-${w.id}`}
+                          weapon={w}
+                          level={lv}
+                          subtitle={`Level ${lv} → ${Math.min(MAX_WEAPON_LEVEL, lv + delta)}`}
+                          focused
+                          onPress={() => { band.cue('levelUp'); onPickForge(w.id); }}
+                        />
+                      </SpireStaggerItem>
+                    );
+                  })}
+                </View>
+              )}
+
+              {!hasPendingSubPick && (
                 <Btn
-                  testID="spire-event-arcana-accept"
-                  label={`Accept ${getArcana(pendingArcana).name}`}
-                  icon="lorc/crystal-wand"
-                  onPress={() => {
-                    band.cue('catalyst');
-                    onResolveArcana?.(true);
-                  }}
+                  testID="spire-event-leave"
+                  label={eventState.ambushEncounter ? 'Face the Guardian!' : 'Continue Climb'}
+                  icon={eventState.ambushEncounter ? 'lorc/crossed-swords' : 'lorc/mountaintop'}
+                  onPress={() => { sfx('confirm'); onLeave(); }}
                 />
-                <Btn
-                  testID="spire-event-arcana-decline"
-                  small
-                  variant="ghost"
-                  label="Decline & Keep Walking"
-                  onPress={() => {
-                    sfx('click');
-                    onResolveArcana?.(false);
-                  }}
-                />
-              </View>
-            )}
-
-            {/* Inline Forge (+1 or +2 Levels) */}
-            {eventState.pendingForge && (
-              <View style={{ gap: 8 }}>
-                {forgeable.map(w => {
-                  const lv = run.weaponLevels[w.id] ?? 1;
-                  const delta = eventState.pendingForgeDelta ?? 2;
-                  return (
-                    <WeaponOfferRow
-                      key={w.id}
-                      testID={`spire-event-forge-${w.id}`}
-                      weapon={w}
-                      level={lv}
-                      subtitle={`Level ${lv} → ${Math.min(MAX_WEAPON_LEVEL, lv + delta)}`}
-                      focused
-                      onPress={() => { band.cue('levelUp'); onPickForge(w.id); }}
-                    />
-                  );
-                })}
-              </View>
-            )}
-
-            {!hasPendingSubPick && (
-              <Btn
-                testID="spire-event-leave"
-                label={eventState.ambushEncounter ? 'Face the Guardian!' : 'Continue Climb'}
-                icon={eventState.ambushEncounter ? 'lorc/crossed-swords' : 'lorc/mountaintop'}
-                onPress={() => { sfx('confirm'); onLeave(); }}
-              />
-            )}
-          </PopIn>
-        )}
+              )}
+            </View>
+          )}
+        </SpireCrossfadeSwap>
       </ScrollView>
     </View>
   );

@@ -6,21 +6,24 @@
  * badges, bobbing reachable choices, and Act Boss preview.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Svg, Line } from 'react-native-svg';
 import Icon, { type IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { IDLE_LOOP } from '@/utils/motion';
 import { getBiome } from '@/adventure/data/biomes';
 import { foeDisplay } from '@/adventure/data/foes';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice } from '@/adventure/components/SharedCards';
-import { Bob, Btn, Eyebrow, INK, PopIn, Skulls, TONE } from '@/adventure/components/ui';
+import { Bob, Btn, Eyebrow, INK, Skulls, TONE } from '@/adventure/components/ui';
 import { sfx } from '@/audio';
 import { spireEncounterLoadout } from '../engine/bridge';
 import { reachableNodeIds } from '../engine/mapGen';
 import type { SpireNode, SpireNodeKind, SpireRun } from '../types';
 import SpireBeltBar from './SpireBeltBar';
+import { SpireModalShell, SpireStaggerItem, SpireTactilePressable } from './SpireMotion';
 
 interface Props {
   run: SpireRun;
@@ -43,7 +46,10 @@ const TOP_PAD = 36;
 const BOSS_ROW_EXTRA = 22;
 
 const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
+  const reducedMotion = useReducedMotion();
   const scrollRef = useRef<ScrollView>(null);
+  const didInitialScrollRef = useRef(false);
+  const lastActRef = useRef(run.map.act);
   const [canvasW, setCanvasW] = useState(340);
   const [viewH, setViewH] = useState(0);
   const [bossModalOpen, setBossModalOpen] = useState(false);
@@ -64,7 +70,7 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
     return TOP_PAD + (inv === 0 ? 18 : BOSS_ROW_EXTRA + inv * ROW_H);
   };
 
-  // Auto-scroll to the player's next reachable row (Row 0 bottom on Act start, climbing upward!)
+  // Auto-scroll to the player's next reachable row (instant on first paint / new Act, smooth climb on row advance!)
   const targetRow = useMemo(() => {
     const nextNode = map.nodes.find(n => reachable.has(n.id));
     return nextNode ? nextNode.row : 0;
@@ -73,9 +79,13 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
   useEffect(() => {
     if (viewH <= 0) return;
     const y = Math.max(0, centerY(targetRow) - viewH * 0.55);
-    scrollRef.current?.scrollTo({ y, animated: false });
+    const actChanged = lastActRef.current !== map.act;
+    const shouldAnimate = didInitialScrollRef.current && !actChanged && !reducedMotion;
+    didInitialScrollRef.current = true;
+    lastActRef.current = map.act;
+    scrollRef.current?.scrollTo({ y, animated: shouldAnimate });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewH, map.act, targetRow]);
+  }, [viewH, map.act, targetRow, reducedMotion]);
 
   const nodeById = useMemo(() => new Map(map.nodes.map(n => [n.id, n])), [map.nodes]);
   const bossNode = map.nodes.find(n => n.kind === 'boss');
@@ -89,33 +99,35 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
 
   return (
     <View style={[st.root, { backgroundColor: biome.colors.sky }]} testID="spire-map">
-      <View style={st.actBanner}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Eyebrow text={run.endless ? `ENDLESS ACT ${map.act}` : `ACT ${map.act} OF 3`} color={run.endless ? COLORS.impactOrange : COLORS.actionYellow} />
-          <Text style={st.actTitle} numberOfLines={1}>{map.title}</Text>
-          <Text style={st.actSub} numberOfLines={2}>{map.subtitle}</Text>
+      <SpireStaggerItem key={`act-banner-${map.act}`} index={0} count={1} distance={12} hero>
+        <View style={st.actBanner}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Eyebrow text={run.endless ? `ENDLESS ACT ${map.act}` : `ACT ${map.act} OF 3`} color={run.endless ? COLORS.impactOrange : COLORS.actionYellow} />
+            <Text style={st.actTitle} numberOfLines={1}>{map.title}</Text>
+            <Text style={st.actSub} numberOfLines={2}>{map.subtitle}</Text>
+          </View>
+          {bossFoe && bossEncounter && (
+            <SpireTactilePressable
+              testID="spire-map-boss-preview"
+              small
+              onPress={() => {
+                sfx('click');
+                setBossModalOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Inspect Act ${map.act} Boss: ${bossFoe.name}`}
+              style={st.bossPreview}
+            >
+              <EnemyAvatar enemy={bossFoe} size={40} mood="enraged" lightweight />
+              <Text style={st.bossPreviewText} numberOfLines={1}>{bossFoe.name}</Text>
+              <View style={st.bossInspectPill}>
+                <Icon name="lorc/magnifying-glass" size={9} color={INK} />
+                <Text style={st.bossInspectText}>BOSS</Text>
+              </View>
+            </SpireTactilePressable>
+          )}
         </View>
-        {bossFoe && bossEncounter && (
-          <TouchableOpacity
-            testID="spire-map-boss-preview"
-            onPress={() => {
-              sfx('click');
-              setBossModalOpen(true);
-            }}
-            activeOpacity={0.82}
-            accessibilityRole="button"
-            accessibilityLabel={`Inspect Act ${map.act} Boss: ${bossFoe.name}`}
-            style={st.bossPreview}
-          >
-            <EnemyAvatar enemy={bossFoe} size={40} mood="enraged" lightweight animate={false} />
-            <Text style={st.bossPreviewText} numberOfLines={1}>{bossFoe.name}</Text>
-            <View style={st.bossInspectPill}>
-              <Icon name="lorc/magnifying-glass" size={9} color={INK} />
-              <Text style={st.bossInspectText}>BOSS</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
+      </SpireStaggerItem>
 
       <ScrollView
         ref={scrollRef}
@@ -163,13 +175,16 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
           </Svg>
 
           {/* Interactive Nodes */}
-          {map.nodes.map(node => {
+          {map.nodes.map((node, nodeIdx) => {
             const isReachable = reachable.has(node.id);
             const canInspectBoss = node.kind === 'boss' && !isReachable && Boolean(bossEncounter);
             return (
               <MapNodeButton
                 key={node.id}
                 node={node}
+                bobActive={isReachable && !bossModalOpen}
+                bobPhase={node.col * IDLE_LOOP.triadPhaseRad + (nodeIdx % 3) * 0.45}
+                bobPeriodMs={1160 + (node.col % 3) * 180}
                 x={centerX(node.col, node.kind === 'boss')}
                 y={centerY(node.row)}
                 isCurrent={node.id === run.currentNodeId}
@@ -213,58 +228,58 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
       </ScrollView>
 
       {/* Floor-1 Act Boss Full Preview Modal (plan your build ahead for the Act Boss!) */}
-      {bossModalOpen && bossEncounter && bossFoe && bossFoeDef && (
-        <Modal visible transparent animationType="fade" onRequestClose={() => setBossModalOpen(false)}>
-          <View style={st.modalOverlay} testID="spire-map-boss-modal">
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              onPress={() => setBossModalOpen(false)}
-              accessibilityLabel="Close Act Boss preview"
-            />
-            <PopIn style={st.bossSheet}>
-              <View style={st.bossSheetHeader}>
-                <View style={st.bossHeaderTop}>
-                  <Eyebrow text={`ACT ${map.act} BOSS · PLAN AHEAD`} color={COLORS.actionYellow} />
-                  <Skulls n={bossEncounter.difficulty} />
+      {bossEncounter && bossFoe && bossFoeDef && (
+        <SpireModalShell
+          visible={bossModalOpen}
+          onClose={() => setBossModalOpen(false)}
+          backdropLabel="Close Act Boss preview"
+          overlayStyle={st.modalOverlay}
+          sheetStyle={st.bossSheet}
+          overlayTestID="spire-map-boss-modal"
+          header={
+            <View style={st.bossSheetHeader}>
+              <View style={st.bossHeaderTop}>
+                <Eyebrow text={`ACT ${map.act} BOSS · PLAN AHEAD`} color={COLORS.actionYellow} />
+                <Skulls n={bossEncounter.difficulty} />
+              </View>
+              <View style={st.bossHeaderRow}>
+                <View style={st.bossPortrait}>
+                  <EnemyAvatar enemy={bossFoe} size={64} mood="enraged" lightweight />
                 </View>
-                <View style={st.bossHeaderRow}>
-                  <View style={st.bossPortrait}>
-                    <EnemyAvatar enemy={bossFoe} size={64} mood="enraged" lightweight animate={false} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                    <Text style={st.bossSheetTitle}>{bossFoe.name}</Text>
-                    <Text style={st.bossHpLine}>
-                      {bossFoeDef.hp.toLocaleString()} HP · {bossLoadout?.timer ?? bossEncounter.timer}s clock
-                    </Text>
-                    {bossFoeDef.taunt && (
-                      <Text style={st.bossTaunt} numberOfLines={2}>“{bossFoeDef.taunt}”</Text>
-                    )}
-                  </View>
+                <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                  <Text style={st.bossSheetTitle}>{bossFoe.name}</Text>
+                  <Text style={st.bossHpLine}>
+                    {bossFoeDef.hp.toLocaleString()} HP · {bossLoadout?.timer ?? bossEncounter.timer}s clock
+                  </Text>
+                  {bossFoeDef.taunt && (
+                    <Text style={st.bossTaunt} numberOfLines={2}>“{bossFoeDef.taunt}”</Text>
+                  )}
                 </View>
               </View>
-
-              <ScrollView contentContainerStyle={st.bossSheetBody}>
-                <FoeAbilityCard foe={bossFoe} showAvatar={false} />
-                <ParryPreviewCard spec={bossEncounter.parry} testID="spire-map-boss-parry" />
-                {bossEncounter.shadingSurge && <ShadingSurgeNotice />}
-                {bossEncounter.hazards && (
-                  <HazardNotices hazards={bossEncounter.hazards} testID="spire-map-boss-hazards" />
-                )}
-              </ScrollView>
-
-              <View style={st.bossSheetFooter}>
-                <Btn
-                  testID="spire-map-boss-close"
-                  label="Back to Map"
-                  onPress={() => {
-                    sfx('click');
-                    setBossModalOpen(false);
-                  }}
-                />
-              </View>
-            </PopIn>
-          </View>
-        </Modal>
+            </View>
+          }
+          footer={
+            <View style={st.bossSheetFooter}>
+              <Btn
+                testID="spire-map-boss-close"
+                label="Back to Map"
+                onPress={() => {
+                  sfx('click');
+                  setBossModalOpen(false);
+                }}
+              />
+            </View>
+          }
+        >
+          <ScrollView contentContainerStyle={st.bossSheetBody}>
+            <FoeAbilityCard foe={bossFoe} showAvatar={false} />
+            <ParryPreviewCard spec={bossEncounter.parry} testID="spire-map-boss-parry" />
+            {bossEncounter.shadingSurge && <ShadingSurgeNotice />}
+            {bossEncounter.hazards && (
+              <HazardNotices hazards={bossEncounter.hazards} testID="spire-map-boss-hazards" />
+            )}
+          </ScrollView>
+        </SpireModalShell>
       )}
     </View>
   );
@@ -276,21 +291,37 @@ const MapNodeButton: React.FC<{
   y: number;
   isCurrent: boolean;
   isReachable: boolean;
+  bobActive: boolean;
+  bobPhase: number;
+  bobPeriodMs: number;
   canInspectBoss?: boolean;
   onPress: () => void;
-}> = ({ node, x, y, isCurrent, isReachable, canInspectBoss = false, onPress }) => {
+}> = ({
+  node,
+  x,
+  y,
+  isCurrent,
+  isReachable,
+  bobActive,
+  bobPhase,
+  bobPeriodMs,
+  canInspectBoss = false,
+  onPress,
+}) => {
   const cfg = NODE_STYLE[node.kind];
   const isBoss = node.kind === 'boss';
   const w = isBoss ? 132 : 84;
   const h = isBoss ? 56 : 54;
+  const foeDef = node.encounter?.foes[0] ?? null;
   const foeName = node.encounter?.name;
+  const liveFoe = (isReachable || isBoss) && !node.visited && foeDef ? foeDisplay(foeDef) : null;
 
   const inner = (
-    <TouchableOpacity
+    <SpireTactilePressable
       testID={`spire-node-${node.id}`}
       disabled={!isReachable && !canInspectBoss}
+      small
       onPress={onPress}
-      activeOpacity={0.82}
       accessibilityRole="button"
       accessibilityLabel={`${cfg.label}${foeName ? `: ${foeName}` : ''}${isReachable ? ', available' : canInspectBoss ? ', tap to inspect' : ''}`}
       style={[
@@ -307,7 +338,16 @@ const MapNodeButton: React.FC<{
       ]}
     >
       <View style={st.nodeTop}>
-        <Icon name={cfg.icon} size={isBoss ? 20 : 18} color={node.visited ? TONE.spent : cfg.fg} />
+        {liveFoe ? (
+          <EnemyAvatar
+            enemy={liveFoe}
+            size={isBoss ? 26 : 22}
+            mood={isBoss ? 'enraged' : 'menacing'}
+            lightweight
+          />
+        ) : (
+          <Icon name={cfg.icon} size={isBoss ? 20 : 18} color={node.visited ? TONE.spent : cfg.fg} />
+        )}
         {node.visited && <Text style={st.doneCheck}>✓</Text>}
       </View>
       <Text style={[st.nodeLabel, { color: node.visited ? TONE.spent : cfg.fg }]} numberOfLines={1}>
@@ -318,12 +358,18 @@ const MapNodeButton: React.FC<{
           <Text style={st.goText}>GO</Text>
         </View>
       )}
-    </TouchableOpacity>
+    </SpireTactilePressable>
   );
 
   return (
     <View style={{ position: 'absolute', left: x - w / 2, top: y - h / 2 }}>
-      {isReachable ? <Bob active amount={4}>{inner}</Bob> : inner}
+      {isReachable ? (
+        <Bob active={bobActive} amount={4} phase={bobPhase} periodMs={bobPeriodMs}>
+          {inner}
+        </Bob>
+      ) : (
+        inner
+      )}
     </View>
   );
 };

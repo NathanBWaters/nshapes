@@ -7,13 +7,23 @@
  * and Daily Climb (today's UTC deterministic seed, featured climber, rotating
  * Daily Mutator spotlight, and streak tracking).
  */
-import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
 import { WeaponAvatar } from '@/components/weapons';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { EASE, MS, SCALE, SPRING } from '@/utils/motion';
 import type { CharacterName } from '@/types';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { getArmoryWeapon } from '@/adventure/data/armory';
@@ -36,6 +46,13 @@ import {
 } from '../data/themePacks';
 import { MAX_SUMMIT_WEAPONS, type CreateSpireRunOptions } from '../engine/runState';
 import type { SpireMeta, SpireRun } from '../types';
+import {
+  SPIRE_MOTION_INSTANT,
+  SpireCrossfadeSwap,
+  SpireLightweightBreath,
+  SpireStatPop,
+  SpireTactilePressable,
+} from './SpireMotion';
 
 export interface SpireSetupProps {
   activeRun: SpireRun | null;
@@ -103,6 +120,8 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
   const [customPacks, setCustomPacks] = useState<SummitThemePackId[] | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
+  const [selectReactionSeq, setSelectReactionSeq] = useState(0);
+  const selectSeqRef = useRef(0);
 
   const hasSharedLaunch = Boolean(
     initialSeed || initialFighter || initialAscension !== undefined || initialDailyDate
@@ -181,14 +200,15 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
   return (
     <View style={[st.root, { paddingTop: insets.top }]} testID="spire-setup">
       <View style={st.topBar}>
-        <TouchableOpacity
+        <SpireTactilePressable
           testID="spire-setup-back"
+          small
           onPress={() => { sfx('click'); onExit(); }}
           style={st.backBtn}
           accessibilityLabel="Back to main menu"
         >
           <Icon name="ui/back-arrow" size={18} color={INK} noShadow />
-        </TouchableOpacity>
+        </SpireTactilePressable>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={st.headerTitle} numberOfLines={1}>STARFALL SUMMIT</Text>
           <Text style={st.headerSub} numberOfLines={1}>Climb where the star fell · 3 Acts & Endless</Text>
@@ -216,7 +236,9 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
         {activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' && (
           <PopIn style={st.resumeCard}>
             <View style={st.resumeHead}>
-              <FighterAvatar character={activeRun.fighter} size={44} health={activeRun.hearts} maxHealth={activeRun.maxHearts} animate={false} framed />
+              <SpireLightweightBreath keySeed={`resume-${activeRun.fighter}`} size={44}>
+                <FighterAvatar character={activeRun.fighter} size={44} health={activeRun.hearts} maxHealth={activeRun.maxHearts} animate={false} framed />
+              </SpireLightweightBreath>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Eyebrow
                   text={activeRun.isDaily ? `DAILY CLIMB · ${activeRun.dailyDate}` : 'CLIMB IN PROGRESS'}
@@ -269,8 +291,9 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
 
         {/* Mode Switcher: Standard Climb | Daily Climb (`[TP-19]`) */}
         <View style={st.tabRow}>
-          <TouchableOpacity
+          <SpireTactilePressable
             testID="spire-tab-standard"
+            small
             accessibilityRole="button"
             accessibilityState={{ selected: tab === 'standard' }}
             onPress={() => { sfx('click'); setTab('standard'); }}
@@ -278,9 +301,10 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
           >
             <Icon name="lorc/mountaintop" size={15} color={tab === 'standard' ? INK : TONE.onDusk} />
             <Text style={[st.tabText, tab === 'standard' && st.tabTextActive]}>STANDARD CLIMB</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </SpireTactilePressable>
+          <SpireTactilePressable
             testID="spire-tab-daily"
+            small
             accessibilityRole="button"
             accessibilityState={{ selected: tab === 'daily' }}
             onPress={() => { sfx('click'); setTab('daily'); }}
@@ -293,248 +317,264 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
                 <Text style={st.clearedDotText}>✓</Text>
               </View>
             )}
-          </TouchableOpacity>
+          </SpireTactilePressable>
         </View>
 
-        {tab === 'standard' ? (
-          <>
-            {/* Fighter Selection */}
-            <Text style={st.section}>CHOOSE YOUR CLIMBER</Text>
-            <View style={st.fighterGrid}>
-              {FIGHTERS.map(f => {
-                const sel = f.name === fighter;
-                const wins = meta.fighterWins[f.name] ?? 0;
-                return (
-                  <TouchableOpacity
-                    key={f.name}
-                    testID={`spire-fighter-${f.name}`}
-                    onPress={() => { sfx('click'); setFighter(f.name); }}
-                    style={[st.fighterCard, sel && st.fighterCardSel]}
-                    activeOpacity={0.85}
-                    accessibilityState={{ selected: sel }}
-                  >
-                    <FighterAvatar character={f.name} size={42} mood={sel ? 'anticipation' : 'idle'} animate={sel} />
-                    <Text style={[st.fighterName, sel && st.fighterNameSel]} numberOfLines={1}>{f.name}</Text>
-                    {wins > 0 && <Text style={[st.winBadge, sel && st.winBadgeSel]}>★ {wins}</Text>}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Selected Fighter Kit */}
-            <View style={st.kitCard} testID="spire-starter-kit">
-              <View style={st.kitTop}>
-                <Text style={st.kitTitle}>{fighter}</Text>
-                <View style={st.kitStats}>
-                  <Heart size={13} />
-                  <Text style={st.kitStatText}>{kit.maxHearts}</Text>
-                  <Icon name="lorc/crown-coin" size={13} color={TONE.coinBright} />
-                  <Text style={st.kitStatText}>{kit.startingCoins}¢</Text>
-                </View>
-              </View>
-              <Text style={st.kitBlurb}>{kit.tagline}</Text>
-
-              <FighterPassivesList fighter={fighter} compact />
-
-              <Text style={st.subSection}>STARTER WEAPONS (LV 2)</Text>
-              <View style={st.starterRow}>
-                {[w1, w2].map(w =>
-                  w ? (
-                    <View key={w.id} style={st.starterChip}>
-                      <WeaponAvatar weapon={w} size={24} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
-                        <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
-                      </View>
-                    </View>
-                  ) : null
-                )}
-              </View>
-            </View>
-
-            {/* Focused Draft Pool Theme Packs (`[GP-25]`) */}
-            <View style={st.packCard} testID="spire-theme-packs">
-              <View style={st.packHeadRow}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={st.packSecTitle}>FOCUSED DRAFT PACKS (2 ACTIVE · 80/20 POOL)</Text>
-                  <Text style={st.packSub}>
-                    80% of offers pull from your 2 packs; 20% Wildcards keep all 64 Armory weapons live.
-                  </Text>
-                </View>
-                {customPacks && (
-                  <TouchableOpacity
-                    testID="spire-packs-auto"
-                    onPress={() => { sfx('click'); setCustomPacks(null); }}
-                    style={st.autoPackBtn}
-                  >
-                    <Text style={st.autoPackText}>Auto</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              <View style={st.packGrid}>
-                {SUMMIT_THEME_PACKS.map(pack => {
-                  const selected = activePacks.includes(pack.id);
+        <SpireCrossfadeSwap swapKey={tab}>
+          {tab === 'standard' ? (
+            <View style={{ gap: 12 }}>
+              {/* Fighter Selection */}
+              <Text style={st.section}>CHOOSE YOUR CLIMBER</Text>
+              <View style={st.fighterGrid}>
+                {FIGHTERS.map(f => {
+                  const sel = f.name === fighter;
+                  const wins = meta.fighterWins[f.name] ?? 0;
                   return (
-                    <TouchableOpacity
-                      key={pack.id}
-                      testID={`spire-pack-${pack.id}`}
-                      onPress={() => toggleThemePack(pack.id)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      style={[
-                        st.packChip,
-                        selected && {
-                          backgroundColor: '#FFFBEB',
-                          borderColor: pack.accentColor,
-                          borderWidth: 2,
-                        },
-                      ]}
-                    >
-                      <Icon name={pack.icon} size={14} color={selected ? pack.accentColor : TONE.spent} />
-                      <Text style={[st.packChipName, selected && { color: INK }]} numberOfLines={1}>
-                        {pack.name}
-                      </Text>
-                    </TouchableOpacity>
+                    <SpireFighterTile
+                      key={f.name}
+                      name={f.name}
+                      selected={sel}
+                      wins={wins}
+                      reactionSeq={sel ? selectReactionSeq : 0}
+                      onSelect={() => {
+                        sfx('click');
+                        setFighter(f.name);
+                        setSelectReactionSeq(++selectSeqRef.current);
+                      }}
+                    />
                   );
                 })}
               </View>
-            </View>
 
-            {/* Ascension Selector */}
-            <Text style={st.section}>ASCENSION LEVEL</Text>
-            <View style={st.ascCard}>
-              <View style={st.ascRow}>
-                <TouchableOpacity
-                  testID="spire-asc-down"
-                  disabled={ascension <= 0}
-                  onPress={() => { sfx('click'); setAscension(a => Math.max(0, a - 1)); }}
-                  style={[st.stepBtn, ascension <= 0 && { opacity: 0.35 }]}
-                >
-                  <Text style={st.stepText}>−</Text>
-                </TouchableOpacity>
-                <View style={{ flex: 1, alignItems: 'center' }}>
-                  <Text testID="spire-asc-value" style={st.ascTitle}>
-                    ASCENSION {ascension}
-                  </Text>
-                  <Text style={st.ascUnlockHint}>
-                    Unlocked up to A{maxSelectableAsc} · Beat Act III to unlock higher tiers
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  testID="spire-asc-up"
-                  disabled={ascension >= maxSelectableAsc}
-                  onPress={() => { sfx('click'); setAscension(a => Math.min(maxSelectableAsc, a + 1)); }}
-                  style={[st.stepBtn, ascension >= maxSelectableAsc && { opacity: 0.35 }]}
-                >
-                  <Text style={st.stepText}>+</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={st.ascDesc}>{ASCENSION_DESCRIPTIONS[ascension]}</Text>
-            </View>
-
-            {/* Career Stats & Seed */}
-            <View style={st.statsStrip}>
-              <StatBox label="RUNS" value={String(meta.totalRuns)} />
-              <StatBox label="WINS" value={String(meta.victories)} />
-              <StatBox label="BEST FL" value={String(meta.bestFloor)} />
-              <StatBox
-                label="TOP RATING"
-                value={(meta.bestSummitRating ?? 0) > 0 ? (meta.bestSummitRating ?? 0).toLocaleString() : '—'}
-              />
-            </View>
-
-            <View style={st.seedRow}>
-              <Text style={st.seedText}>Run Seed: #{seed}</Text>
-              <View style={st.seedActions}>
-                <TouchableOpacity
-                  testID="spire-copy-seed-link"
-                  onPress={handleCopySeedLink}
-                  style={st.rerollSeedBtn}
-                >
-                  <Icon name="lorc/scroll-unfurled" size={13} color={INK} />
-                  <Text style={st.rerollSeedText}>{copiedLink ? 'Link Copied ✓' : 'Share Seed'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  testID="spire-reroll-seed"
-                  onPress={() => { sfx('click'); setSeed(randomSeed()); }}
-                  style={st.rerollSeedBtn}
-                >
-                  <Icon name="lorc/cycle" size={13} color={INK} />
-                  <Text style={st.rerollSeedText}>New Seed</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </>
-        ) : (
-          /* DAILY CLIMB TAB (`[TP-19]`) */
-          <View style={st.dailyStack} testID="spire-daily-panel">
-            <View style={st.dailyHeroCard}>
-              <View style={st.dailyTopRow}>
-                <View style={st.dailyDateBadge}>
-                  <Text style={st.dailyDateText}>{dailyConfig.dateKey}</Text>
-                </View>
-                <View style={[st.dailyStatusBadge, dailyClearedToday && st.dailyStatusCleared]}>
-                  <Text style={[st.dailyStatusText, dailyClearedToday && st.dailyStatusTextCleared]}>
-                    {dailyClearedToday ? 'CLEARED TODAY ✓' : 'UNPLAYED TODAY'}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={st.dailyHeadline}>Everyone Climbs the Exact Same Seed</Text>
-              <Text style={st.dailySeedSub}>Daily Seed #{dailyConfig.seed} · Ascension 0</Text>
-
-              {/* Daily Mutator Spotlight */}
-              <View
-                style={[st.mutatorBox, { borderColor: dailyConfig.mutator.accentColor }]}
-                testID="spire-daily-mutator"
-              >
-                <View style={[st.mutatorIcon, { borderColor: dailyConfig.mutator.accentColor }]}>
-                  <Icon name={dailyConfig.mutator.icon} size={24} color={dailyConfig.mutator.accentColor} />
-                </View>
-                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Text style={st.mutatorEyebrow}>TODAY&apos;S DAILY MUTATOR</Text>
-                  <Text style={st.mutatorName}>{dailyConfig.mutator.name}</Text>
-                  <Text style={st.mutatorDesc}>{dailyConfig.mutator.description}</Text>
-                </View>
-              </View>
-
-              {/* Daily Fighter Showcase */}
-              <View style={st.dailyFighterBox}>
-                <FighterAvatar character={dailyConfig.fighter} size={46} mood="anticipation" framed />
-                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Text style={st.mutatorEyebrow}>TODAY&apos;S FEATURED CLIMBER</Text>
-                  <Text style={st.kitTitle}>{dailyConfig.fighter}</Text>
-                  <Text style={st.kitBlurb}>{kit.tagline}</Text>
-                </View>
-              </View>
-
-              <View style={st.starterRow}>
-                {[w1, w2].map(w =>
-                  w ? (
-                    <View key={w.id} style={st.starterChip}>
-                      <WeaponAvatar weapon={w} size={24} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
-                        <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
-                      </View>
+              {/* Selected Fighter Kit — whole card shifts softly as one cohesive piece (zero hollow white box!) */}
+              <SpireCrossfadeSwap swapKey={fighter} fast minOpacity={0.22} style={st.kitCard} testID="spire-starter-kit">
+                <View style={{ gap: 8 }}>
+                  <View style={st.kitTop}>
+                    <Text style={st.kitTitle}>{fighter}</Text>
+                    <View style={st.kitStats}>
+                      <Heart size={13} />
+                      <Text style={st.kitStatText}>{kit.maxHearts}</Text>
+                      <Icon name="lorc/crown-coin" size={13} color={TONE.coinBright} />
+                      <Text style={st.kitStatText}>{kit.startingCoins}¢</Text>
                     </View>
-                  ) : null
-                )}
+                  </View>
+                  <Text style={st.kitBlurb}>{kit.tagline}</Text>
+
+                  <FighterPassivesList fighter={fighter} compact />
+
+                  <Text style={st.subSection}>STARTER WEAPONS (LV 2)</Text>
+                  <View style={st.starterRow}>
+                    {[w1, w2].map(w =>
+                      w ? (
+                        <View key={w.id} style={st.starterChip}>
+                          <WeaponAvatar weapon={w} size={24} />
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
+                            <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                          </View>
+                        </View>
+                      ) : null
+                    )}
+                  </View>
+                </View>
+              </SpireCrossfadeSwap>
+
+              {/* Focused Draft Pool Theme Packs (`[GP-25]`) */}
+              <View style={st.packCard} testID="spire-theme-packs">
+                <View style={st.packHeadRow}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.packSecTitle}>FOCUSED DRAFT PACKS (2 ACTIVE · 80/20 POOL)</Text>
+                    <Text style={st.packSub}>
+                      80% of offers pull from your 2 packs; 20% Wildcards keep all 64 Armory weapons live.
+                    </Text>
+                  </View>
+                  {customPacks && (
+                    <SpireTactilePressable
+                      testID="spire-packs-auto"
+                      small
+                      onPress={() => { sfx('click'); setCustomPacks(null); }}
+                      style={st.autoPackBtn}
+                    >
+                      <Text style={st.autoPackText}>Auto</Text>
+                    </SpireTactilePressable>
+                  )}
+                </View>
+                <View style={st.packGrid}>
+                  {SUMMIT_THEME_PACKS.map(pack => {
+                    const selected = activePacks.includes(pack.id);
+                    return (
+                      <SpireTactilePressable
+                        key={pack.id}
+                        testID={`spire-pack-${pack.id}`}
+                        small
+                        onPress={() => toggleThemePack(pack.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        style={[
+                          st.packChip,
+                          selected && {
+                            backgroundColor: '#FFFBEB',
+                            borderColor: pack.accentColor,
+                            borderWidth: 2,
+                          },
+                        ]}
+                      >
+                        <Icon name={pack.icon} size={14} color={selected ? pack.accentColor : TONE.spent} />
+                        <Text style={[st.packChipName, selected && { color: INK }]} numberOfLines={1}>
+                          {pack.name}
+                        </Text>
+                      </SpireTactilePressable>
+                    );
+                  })}
+                </View>
               </View>
 
-              {/* Daily Streak & Records */}
+              {/* Ascension Selector */}
+              <Text style={st.section}>ASCENSION LEVEL</Text>
+              <View style={st.ascCard}>
+                <View style={st.ascRow}>
+                  <SpireTactilePressable
+                    testID="spire-asc-down"
+                    small
+                    disabled={ascension <= 0}
+                    onPress={() => { sfx('click'); setAscension(a => Math.max(0, a - 1)); }}
+                    style={[st.stepBtn, ascension <= 0 && { opacity: 0.35 }]}
+                  >
+                    <Text style={st.stepText}>−</Text>
+                  </SpireTactilePressable>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <SpireStatPop value={ascension}>
+                      <Text testID="spire-asc-value" style={st.ascTitle}>
+                        ASCENSION {ascension}
+                      </Text>
+                    </SpireStatPop>
+                    <Text style={st.ascUnlockHint}>
+                      Unlocked up to A{maxSelectableAsc} · Beat Act III to unlock higher tiers
+                    </Text>
+                  </View>
+                  <SpireTactilePressable
+                    testID="spire-asc-up"
+                    small
+                    disabled={ascension >= maxSelectableAsc}
+                    onPress={() => { sfx('click'); setAscension(a => Math.min(maxSelectableAsc, a + 1)); }}
+                    style={[st.stepBtn, ascension >= maxSelectableAsc && { opacity: 0.35 }]}
+                  >
+                    <Text style={st.stepText}>+</Text>
+                  </SpireTactilePressable>
+                </View>
+                <SpireCrossfadeSwap swapKey={ascension}>
+                  <Text style={st.ascDesc}>{ASCENSION_DESCRIPTIONS[ascension]}</Text>
+                </SpireCrossfadeSwap>
+              </View>
+
+              {/* Career Stats & Seed */}
               <View style={st.statsStrip}>
-                <StatBox label="STREAK" value={String(meta.dailyStreak ?? 0)} />
-                <StatBox label="BEST STREAK" value={String(meta.bestDailyStreak ?? 0)} />
-                <StatBox label="CLEARS" value={String(meta.completedDailyDates?.length ?? 0)} />
+                <StatBox label="RUNS" value={String(meta.totalRuns)} />
+                <StatBox label="WINS" value={String(meta.victories)} />
+                <StatBox label="BEST FL" value={String(meta.bestFloor)} />
                 <StatBox
-                  label="TODAY BEST"
-                  value={dailyBestToday > 0 ? dailyBestToday.toLocaleString() : '—'}
+                  label="TOP RATING"
+                  value={(meta.bestSummitRating ?? 0) > 0 ? (meta.bestSummitRating ?? 0).toLocaleString() : '—'}
                 />
               </View>
+
+              <View style={st.seedRow}>
+                <SpireStatPop value={seed}>
+                  <Text style={st.seedText}>Run Seed: #{seed}</Text>
+                </SpireStatPop>
+                <View style={st.seedActions}>
+                  <SpireTactilePressable
+                    testID="spire-copy-seed-link"
+                    small
+                    onPress={handleCopySeedLink}
+                    style={st.rerollSeedBtn}
+                  >
+                    <Icon name="lorc/scroll-unfurled" size={13} color={INK} />
+                    <Text style={st.rerollSeedText}>{copiedLink ? 'Link Copied ✓' : 'Share Seed'}</Text>
+                  </SpireTactilePressable>
+                  <SpireTactilePressable
+                    testID="spire-reroll-seed"
+                    small
+                    onPress={() => { sfx('click'); setSeed(randomSeed()); }}
+                    style={st.rerollSeedBtn}
+                  >
+                    <Icon name="lorc/cycle" size={13} color={INK} />
+                    <Text style={st.rerollSeedText}>New Seed</Text>
+                  </SpireTactilePressable>
+                </View>
+              </View>
             </View>
-          </View>
-        )}
+          ) : (
+            /* DAILY CLIMB TAB (`[TP-19]`) */
+            <View style={st.dailyStack} testID="spire-daily-panel">
+              <View style={st.dailyHeroCard}>
+                <View style={st.dailyTopRow}>
+                  <View style={st.dailyDateBadge}>
+                    <Text style={st.dailyDateText}>{dailyConfig.dateKey}</Text>
+                  </View>
+                  <View style={[st.dailyStatusBadge, dailyClearedToday && st.dailyStatusCleared]}>
+                    <Text style={[st.dailyStatusText, dailyClearedToday && st.dailyStatusTextCleared]}>
+                      {dailyClearedToday ? 'CLEARED TODAY ✓' : 'UNPLAYED TODAY'}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={st.dailyHeadline}>Everyone Climbs the Exact Same Seed</Text>
+                <Text style={st.dailySeedSub}>Daily Seed #{dailyConfig.seed} · Ascension 0</Text>
+
+                {/* Daily Mutator Spotlight */}
+                <View
+                  style={[st.mutatorBox, { borderColor: dailyConfig.mutator.accentColor }]}
+                  testID="spire-daily-mutator"
+                >
+                  <View style={[st.mutatorIcon, { borderColor: dailyConfig.mutator.accentColor }]}>
+                    <Icon name={dailyConfig.mutator.icon} size={24} color={dailyConfig.mutator.accentColor} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                    <Text style={st.mutatorEyebrow}>TODAY&apos;S DAILY MUTATOR</Text>
+                    <Text style={st.mutatorName}>{dailyConfig.mutator.name}</Text>
+                    <Text style={st.mutatorDesc}>{dailyConfig.mutator.description}</Text>
+                  </View>
+                </View>
+
+                {/* Daily Fighter Showcase */}
+                <View style={st.dailyFighterBox}>
+                  <FighterAvatar character={dailyConfig.fighter} size={46} mood="anticipation" framed />
+                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                    <Text style={st.mutatorEyebrow}>TODAY&apos;S FEATURED CLIMBER</Text>
+                    <Text style={st.kitTitle}>{dailyConfig.fighter}</Text>
+                    <Text style={st.kitBlurb}>{kit.tagline}</Text>
+                  </View>
+                </View>
+
+                <View style={st.starterRow}>
+                  {[w1, w2].map(w =>
+                    w ? (
+                      <View key={w.id} style={st.starterChip}>
+                        <WeaponAvatar weapon={w} size={24} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={st.starterName} numberOfLines={1}>{w.name}</Text>
+                          <Text style={st.starterDesc} numberOfLines={2}>{w.shortDescription}</Text>
+                        </View>
+                      </View>
+                    ) : null
+                  )}
+                </View>
+
+                {/* Daily Streak & Records */}
+                <View style={st.statsStrip}>
+                  <StatBox label="STREAK" value={String(meta.dailyStreak ?? 0)} />
+                  <StatBox label="BEST STREAK" value={String(meta.bestDailyStreak ?? 0)} />
+                  <StatBox label="CLEARS" value={String(meta.completedDailyDates?.length ?? 0)} />
+                  <StatBox
+                    label="TODAY BEST"
+                    value={dailyBestToday > 0 ? dailyBestToday.toLocaleString() : '—'}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+        </SpireCrossfadeSwap>
       </ScrollView>
 
       <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -558,6 +598,70 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
         )}
       </View>
     </View>
+  );
+};
+
+/** Fighter selection card: unselected tiles breathe gently (0 frame loops); selecting plays a snappy lift & joy reaction. */
+const SpireFighterTile: React.FC<{
+  name: CharacterName;
+  selected: boolean;
+  wins: number;
+  reactionSeq: number;
+  onSelect: () => void;
+}> = ({ name, selected, wins, reactionSeq, onSelect }) => {
+  const reduced = useReducedMotion();
+  const prevSelRef = useRef(selected);
+  const liftY = useSharedValue(0);
+  const popScale = useSharedValue(1);
+
+  useEffect(() => {
+    const justSelected = selected && !prevSelRef.current;
+    prevSelRef.current = selected;
+    if (!justSelected || reduced || SPIRE_MOTION_INSTANT) return;
+    liftY.value = withSequence(
+      withTiming(-5, { duration: MS.feedback, easing: EASE.enter }),
+      withSpring(0, SPRING.lively)
+    );
+    popScale.value = withSequence(
+      withTiming(SCALE.pop, { duration: MS.feedback, easing: EASE.popSoft }),
+      withSpring(1, SPRING.snappy)
+    );
+  }, [selected, reduced, liftY, popScale]);
+
+  useEffect(
+    () => () => {
+      cancelAnimation(liftY);
+      cancelAnimation(popScale);
+    },
+    [liftY, popScale]
+  );
+
+  const hopStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: liftY.value }, { scale: popScale.value }],
+  }));
+
+  return (
+    <Animated.View style={[st.fighterCardSlot, hopStyle]}>
+      <SpireTactilePressable
+        testID={`spire-fighter-${name}`}
+        small
+        onPress={onSelect}
+        style={[st.fighterCard, selected && st.fighterCardSel]}
+        accessibilityState={{ selected }}
+      >
+        <SpireLightweightBreath keySeed={`setup-${name}`} size={42} active={!selected}>
+          <FighterAvatar
+            character={name}
+            size={42}
+            mood={selected ? 'anticipation' : 'idle'}
+            reaction={selected && reactionSeq > 0 ? { type: 'joy', id: reactionSeq } : null}
+            animate={selected}
+          />
+        </SpireLightweightBreath>
+        <Text style={[st.fighterName, selected && st.fighterNameSel]} numberOfLines={1}>{name}</Text>
+        {wins > 0 && <Text style={[st.winBadge, selected && st.winBadgeSel]}>★ {wins}</Text>}
+      </SpireTactilePressable>
+    </Animated.View>
   );
 };
 
@@ -594,18 +698,19 @@ const st = StyleSheet.create({
   clearedDotText: { fontSize: 10, fontWeight: '900', color: COLORS.canvasWhite },
   section: { fontSize: 11, fontWeight: '900', letterSpacing: 1.8, color: COLORS.actionYellow, marginTop: 2 },
   fighterGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  fighterCard: { width: '31%', flexGrow: 1, minWidth: 92, alignItems: 'center', gap: 4, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 2, borderColor: '#6B5A49', paddingVertical: 8, paddingHorizontal: 3 },
-  fighterCardSel: { backgroundColor: COLORS.canvasWhite, borderColor: COLORS.actionYellow, borderWidth: 3 },
+  fighterCardSlot: { width: '31%', flexGrow: 1, minWidth: 92 },
+  fighterCard: { width: '100%', alignItems: 'center', gap: 4, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 2, borderBottomWidth: 4, borderColor: '#6B5A49', paddingVertical: 8, paddingHorizontal: 3 },
+  fighterCardSel: { backgroundColor: COLORS.canvasWhite, borderColor: COLORS.actionYellow, borderWidth: 3, borderBottomWidth: 5 },
   fighterName: { fontSize: 10.5, fontWeight: '900', color: TONE.onDusk, textAlign: 'center' },
   fighterNameSel: { color: INK },
-  winBadge: { fontSize: 10, fontWeight: '900', color: COLORS.actionYellow },
+  winBadge: { fontSize: 10, fontWeight: '900', color: COLORS.actionYellow, fontVariant: ['tabular-nums'] },
   winBadgeSel: { color: '#92400E' },
   footer: { paddingHorizontal: 14, paddingTop: 10, backgroundColor: '#3A2D21', borderTopWidth: 2, borderTopColor: INK },
   kitCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
   kitTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   kitTitle: { fontSize: 17, fontWeight: '900', color: INK },
   kitStats: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  kitStatText: { fontSize: 13, fontWeight: '900', color: INK, marginRight: 4 },
+  kitStatText: { fontSize: 13, fontWeight: '900', color: INK, marginRight: 4, fontVariant: ['tabular-nums'] },
   kitBlurb: { fontSize: 12, lineHeight: 17, color: INK, opacity: 0.85 },
   subSection: { fontSize: 10, fontWeight: '900', letterSpacing: 1.1, color: TONE.spent, marginTop: 2 },
   starterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
@@ -625,7 +730,7 @@ const st = StyleSheet.create({
   ascRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   stepBtn: { width: 38, height: 38, borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },
   stepText: { fontSize: 22, fontWeight: '900', color: INK, lineHeight: 24 },
-  ascTitle: { fontSize: 16, fontWeight: '900', color: INK, letterSpacing: 1 },
+  ascTitle: { fontSize: 16, fontWeight: '900', color: INK, letterSpacing: 1, fontVariant: ['tabular-nums'] },
   ascUnlockHint: { fontSize: 10, fontWeight: '700', color: TONE.spent, textAlign: 'center' },
   ascDesc: { fontSize: 12, fontWeight: '700', color: INK, textAlign: 'center', backgroundColor: TONE.coinPale, borderRadius: 6, borderWidth: 1.5, borderColor: '#E5D5A3', padding: 7 },
   statsStrip: { flexDirection: 'row', gap: 6 },
