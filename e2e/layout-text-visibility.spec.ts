@@ -251,13 +251,13 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
     await assertAllTextVisible(page, 'Maxed Adventure Map (375x667)');
 
     await page.getByTestId('map-dock-guide').click();
-    await expect(page.getByTestId('guide-tab-recipes')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('guide-tab-evolutions')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(300);
     await assertAllTextVisible(page, 'FieldGuide Mechanics (375x667)');
 
-    await page.getByTestId('guide-tab-recipes').click();
+    await page.getByTestId('guide-tab-evolutions').click();
     await page.waitForTimeout(250);
-    await assertAllTextVisible(page, 'FieldGuide Recipes (375x667)');
+    await assertAllTextVisible(page, 'FieldGuide Evolutions (375x667)');
 
     await page.getByLabel('Back to map').click();
     await expect(page.getByTestId('map-dock-camp')).toBeVisible({ timeout: 10000 });
@@ -270,9 +270,41 @@ test.describe('Mobile Text Visibility & Zero-Clipping Guardrails', () => {
       await page.getByTestId(`camp-tab-${tabId}`).click();
       await page.waitForTimeout(300);
       await assertAllTextVisible(page, `Camp ${tabId} (375x667)`);
+      if (tabId === 'armory') {
+        // Verify WeaponExplainer 1-of-3 Evolution selector & 1-tap swap fit cleanly on 375px portrait
+        await page.getByTestId('camp-armory-blast-powder').click();
+        await expect(page.getByTestId('weapon-explainer-evo-selector-blast-powder')).toBeVisible({ timeout: 5000 });
+        await page.getByTestId('evo-option-blast-powder:napalm-payload').click();
+        await page.waitForTimeout(250);
+        await assertAllTextVisible(page, 'Camp Armory WeaponExplainer 1-of-3 Evo Picker (375x667)');
+      }
+      if (tabId === 'bounties') {
+        // Verify 200-bounty mobile layout across Evos & By Weapon filter tabs
+        await expect(page.getByTestId('bounty-total-count')).toContainText('/200');
+        await page.getByTestId('bounty-filter-evos').click();
+        await page.waitForTimeout(200);
+        await assertAllTextVisible(page, 'Camp 200-Bounty Board Evos Tab (375x667)');
+        await page.getByTestId('bounty-filter-by_weapon').click();
+        await page.waitForTimeout(200);
+        await assertAllTextVisible(page, 'Camp 200-Bounty Board By Weapon Tab (375x667)');
+      }
       await page.getByLabel('Back to camp').click();
       await expect(page.getByTestId('camp-tab-fighters')).toBeVisible({ timeout: 5000 });
     }
+
+    // 5-Slot GearBelt Portrait Fit (375x667) with active per-weapon evolution rails
+    const fiveWeapons = ['blast-powder', 'flint-spark', 'prismatic-ray', 'echo-stone', 'war-drum'];
+    await page.goto(`/dev/adventure?save=maxed&level=2-4&weapons=${fiveWeapons.join(',')}&intro=false`);
+    await expect(page.getByTestId('run-stage')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId('gear-belt')).toBeVisible({ timeout: 10000 });
+    for (const id of fiveWeapons) {
+      const box = await page.getByTestId(`belt-${id}`).boundingBox();
+      expect(box, `5-slot GearBelt slot belt-${id} should have bounding box`).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(-1);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(376);
+    }
+    await page.waitForTimeout(350);
+    await assertAllTextVisible(page, '5-Slot GearBelt Portrait Fight (375x667)');
   });
 
   test('iPad / Tablet portrait (768x1024) Main Menu, Options (Privacy & Support), and Adventure Map render with zero clipping', async ({ page }) => {

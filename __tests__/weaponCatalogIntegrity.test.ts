@@ -251,13 +251,14 @@ describe('[GP-11] Role sharpening & utility purity', () => {
     }
   });
 
-  it('updates BALANCE_TARGETS utility floors and synergy floors per [GP-11] & [GP-12]', () => {
+  it('updates BALANCE_TARGETS utility floors, base-damage share, and per-weapon evolution floors', () => {
+    expect(BALANCE_TARGETS.baseDamageShare[0]).toBe(0.6);
     expect(BALANCE_TARGETS.soloLate.board[0]).toBe(0.95);
     expect(BALANCE_TARGETS.soloLate.survival[0]).toBe(0.95);
     expect(BALANCE_TARGETS.soloLate.insight[0]).toBe(0.95);
     expect(BALANCE_TARGETS.soloLate.tempo[0]).toBe(0.95);
-    expect(BALANCE_TARGETS.inBuild[0]).toBe(1.08);
-    expect(BALANCE_TARGETS.recipeRuleLift[0]).toBe(1.2);
+    expect(BALANCE_TARGETS.inBuild[0]).toBe(1.06);
+    expect(BALANCE_TARGETS.evoRuleLift[0]).toBe(1.05);
   });
 });
 
@@ -280,12 +281,12 @@ describe('[GP-15] Arcana Kiss-Curse structural tradeoffs', () => {
       arcanaRules('tempo_surge'),
     ]);
     expect(combined.noHeal).toBe(true);
-    expect(combined.powerCardBonusOverride).toBe(4);
+    expect(combined.powerCardBonusOverride).toBe(10);
     expect(combined.zeroBaseSetCoins).toBe(true);
     expect(combined.overkillCarryPct).toBe(0.5);
     expect(combined.charmSlotDelta).toBe(-1);
-    expect(combined.levelUpPowerBonus).toBe(0.3);
-    expect(combined.nonEvolvedDamageScale).toBe(0.75);
+    expect(combined.levelUpBaseDamageBonus).toBe(6);
+    expect(combined.nonEvolvedDamageScale).toBe(0.8);
     expect(combined.setComboBonus).toBe(1);
   });
 
@@ -294,7 +295,8 @@ describe('[GP-15] Arcana Kiss-Curse structural tradeoffs', () => {
     const charms = ['blast-powder', 'flint-spark', 'echo-stone', 'war-drum'];
     const baseSave = {
       ...createMaxedSave(),
-      upgrades: { charm_belt: 1 }, // 4 base slots
+      stars: {}, // 3 base + 1 Charm Belt = 4 slots before boss unlocks
+      upgrades: { charm_belt: 1 },
       armory: charms,
       charms,
       equippedArcana: [] as ('scholars_gambit')[],
@@ -307,6 +309,13 @@ describe('[GP-15] Arcana Kiss-Curse structural tradeoffs', () => {
     expect(withoutGambit.weapons).toHaveLength(4);
     expect(withGambit.charmSlots).toBe(3);
     expect(withGambit.weapons).toHaveLength(3);
+
+    // With W1 (1-10) + W2 (2-10) + Charm Belt = 6 slots -> 5 slots under Scholar's Gambit
+    const sixCharms = ['blast-powder', 'flint-spark', 'echo-stone', 'war-drum', 'rally-horn', 'magnet'];
+    const fullSave = { ...createMaxedSave(), charms: sixCharms, equippedArcana: ['scholars_gambit'] as ('scholars_gambit')[] };
+    const fullWithGambit = startingLoadout(level, fullSave);
+    expect(fullWithGambit.charmSlots).toBe(5);
+    expect(fullWithGambit.weapons).toHaveLength(5);
   });
 });
 

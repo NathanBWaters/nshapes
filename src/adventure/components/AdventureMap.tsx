@@ -26,7 +26,7 @@ import type { AdventureSave, LevelDef } from '../types';
 import { MAIN_LEVELS, branchesOf } from '../data/levels';
 import { MAP_KEYS, isMapKeyClaimed, isMapKeyReached, lockedFighters, mapKeyAfter, readyMapKeys, type MapKeyDef } from '../data/mapKeys';
 import { BIOMES } from '../data/biomes';
-import { BOUNTIES } from '../data/bounties';
+import { BOUNTIES, isBountyUnlocked } from '../data/bounties';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
 import { getFighter } from '../data/fighters';
@@ -505,7 +505,7 @@ const AdventureMap: React.FC<Props> = ({
               campUnlocked && (
                 (skillTreeKnown && hasUnspentStars(save)) ||
                 (save.workshopUnlocked && refundableCoins(save) === 0 && save.coins >= 60) ||
-                (save.bountiesUnlocked && BOUNTIES.some(b => !save.completedBounties.includes(b.id) && b.progress(save) / b.target >= 0.75))
+                (save.bountiesUnlocked && BOUNTIES.some(b => isBountyUnlocked(save, b) && !save.completedBounties.includes(b.id) && b.progress(save) / b.target >= 0.75))
               )
             }
           />

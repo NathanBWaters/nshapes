@@ -1,6 +1,7 @@
 /** Storage wrapper for the adventure save (MMKV). Keep I/O out of progress.ts. */
 import { storage } from '@/utils/storage';
 import type { AdventureSave } from './types';
+import { LEGACY_BOUNTY_ID_MAP } from './data/bounties';
 import { createNewSave, pathsSeenBeforeSecrets, reconcileUnlocks } from './progress';
 import type { CauldronWagerTier } from './data/relief';
 import { resolveLegacyWeapon } from './data/armory';
@@ -46,9 +47,14 @@ const hasLegacyWeapon = (ids: unknown): boolean => {
   return list.some(id => typeof id === 'string' && resolveLegacyWeapon(id)?.id !== id);
 };
 
+/** True when a legacy list holds old pair evolution IDs (which lack the `<weaponId>:<slug>` separator). */
+const hasLegacyPairEvo = (ids: unknown): boolean =>
+  Array.isArray(ids) && ids.some(id => typeof id === 'string' && id.length > 0 && !id.includes(':'));
+
 /**
- * A stored save in an older shape: it has fighter levels, a single charm or
- * Arcana, or weapon ids from before each weapon family became one weapon.
+ * A stored save in an older shape: fighter levels, single charm/Arcana, merged
+ * weapon ids, Workshop weapon levels, legacy `charm_belt` tiers 2-3, legacy
+ * completed bounty ids, or unmigrated legacy pair evolutions.
  */
 const needsMigration = (stored: Record<string, unknown>): boolean =>
   (isRecord(stored.fighterLevels) && Object.keys(stored.fighterLevels).length > 0) ||
@@ -56,7 +62,12 @@ const needsMigration = (stored: Record<string, unknown>): boolean =>
   (stored.activeArcana !== undefined && stored.activeArcana !== null) ||
   hasLegacyWeapon(stored.armory) ||
   hasLegacyWeapon(stored.charms) ||
-  (isRecord(stored.weaponUpgrades) && Object.keys(stored.weaponUpgrades).length > 0);
+  (isRecord(stored.weaponUpgrades) && Object.keys(stored.weaponUpgrades).length > 0) ||
+  (isRecord(stored.upgrades) && typeof stored.upgrades.charm_belt === 'number' && stored.upgrades.charm_belt > 1) ||
+  (Array.isArray(stored.completedBounties) &&
+    stored.completedBounties.some(id => typeof id === 'string' && id in LEGACY_BOUNTY_ID_MAP)) ||
+  (!stored.legacyEvoMigrated &&
+    (hasLegacyPairEvo(stored.unlockedEvolutions) || hasLegacyPairEvo(stored.discoveredEvolutions)));
 
 const preserveRawBackup = (raw: string, why: unknown): void => {
   console.warn('Adventure save requires fallback; preserving raw backup.', why);
@@ -101,6 +112,39 @@ const sanitizeBestFoeHpPct = (raw: unknown): Record<string, number> => {
   return out;
 };
 
+const sanitizeStringRecord = (raw: unknown): Record<string, string> => {
+  if (!isRecord(raw)) return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof k === 'string' && k.length > 0 && typeof v === 'string' && v.length > 0) {
+      out[k] = v;
+    }
+  }
+  return out;
+};
+
+const sanitizeStringList = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item === 'string' && item.length > 0 && !out.includes(item)) {
+      out.push(item);
+    }
+  }
+  return out;
+};
+
+const sanitizeBountyProgress = (raw: unknown): Record<string, number> => {
+  if (!isRecord(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [bId, val] of Object.entries(raw)) {
+    if (typeof val === 'number' && Number.isFinite(val) && val > 0) {
+      out[bId] = val;
+    }
+  }
+  return out;
+};
+
 /**
  * Hydrate and reconcile a parsed AdventureSave object (supports version 1 and
  * best-effort forward-compatible hydration for future `version > 1` shapes).
@@ -111,12 +155,27 @@ export const hydrateAdventureSave = (parsed: unknown): AdventureSave | null => {
   const ver = parsed.version;
   if (typeof ver !== 'number' || !Number.isFinite(ver) || ver < 1) return null;
   const normalized = ver === 1 ? parsed : { ...parsed, version: 1 };
-  // reconcileUnlocks also migrates older shapes (fighter levels refunded, single charm/Arcana into slots, merged weapon ids)
+  // reconcileUnlocks also migrates older shapes (fighter levels & charm_belt refunded,
+  // single charm/Arcana into slots, merged weapon ids, veteran evolution goodwill credit)
   let save = reconcileUnlocks(withDefaults(createNewSave(), normalized) as AdventureSave);
   if (!Array.isArray(parsed.revealedPaths)) save = { ...save, revealedPaths: pathsSeenBeforeSecrets(save) };
-  // Sanitize [GP-18] persisted relief/wager fields defensively
+  // Sanitize persisted evolution, bounty, and relief/wager fields defensively
+  const parriesLanded =
+    typeof save.bountyStats?.parriesLanded === 'number' &&
+    Number.isFinite(save.bountyStats.parriesLanded) &&
+    save.bountyStats.parriesLanded > 0
+      ? Math.floor(save.bountyStats.parriesLanded)
+      : 0;
   save = {
     ...save,
+    equippedEvolutions: sanitizeStringRecord(save.equippedEvolutions),
+    unlockedWeaponEvolutions: sanitizeStringList(save.unlockedWeaponEvolutions),
+    bountyProgress: sanitizeBountyProgress(save.bountyProgress),
+    bountyStats: {
+      ...save.bountyStats,
+      parriesLanded,
+    },
+    legacyEvoMigrated: Boolean(save.legacyEvoMigrated),
     consecutiveLosses: sanitizeConsecutiveLosses(save.consecutiveLosses),
     hiddenPurse:
       typeof save.hiddenPurse === 'number' && Number.isFinite(save.hiddenPurse) && save.hiddenPurse > 0
@@ -154,7 +213,7 @@ export const loadAdventureSave = (): AdventureSave => {
     if (ver !== 1) throw new Error(`unsupported save version ${String(ver)}`);
     const save = hydrateAdventureSave(parsed);
     if (!save) throw new Error('could not hydrate adventure save');
-    // Store a migrated save right away so a refund can never be paid from the old shape twice
+    // Store a migrated save right away so a refund or veteran credit can never fire twice
     if (needsMigration(parsed)) writeAdventureSave(save);
     return save;
   } catch (e) {
@@ -182,9 +241,10 @@ export const backupAdventureSaveBeforeOverwrite = (): void => {
 };
 
 /**
- * Transactional cross-mode helper for merging newly discovered Evolution recipe IDs
- * (e.g. forged during Starfall Summit climbs) into Adventure's Recipe Guide without
- * clobbering concurrent Adventure fields or downgrading a future `version > 1` save.
+ * Transactional cross-mode helper for merging newly triggered Per-Weapon
+ * Evolution IDs (e.g. ignited during Starfall Summit climbs) into Adventure's
+ * `discoveredEvolutions` Field Guide set without clobbering concurrent
+ * Adventure fields or downgrading a future `version > 1` save.
  */
 export const mergeDiscoveredEvolutions = (ids: readonly string[]): AdventureSave | null => {
   const unique = [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];

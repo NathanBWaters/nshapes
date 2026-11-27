@@ -12,7 +12,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AttributeName, Card } from '@/types';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
+import { getWeaponBounties } from '@/adventure/data/bounties';
 import { getLevel } from '@/adventure/data/levels';
 import { PARRY_RULES } from '@/adventure/data/parry';
 import { BOTS, simulateRun } from '@/adventure/engine/bot';
@@ -21,7 +22,27 @@ import { boardHasCounterSet } from '@/adventure/engine/parry';
 import { createRng } from '@/adventure/engine/rng';
 import { createRun, runReducer } from '@/adventure/engine/run';
 import { allSets, hasAnySet } from '@/adventure/engine/sets';
-import { createMaxedSave, createNewSave } from '@/adventure/progress';
+import {
+  BOUNTY_EXCLUSIVE_CAPSTONE_LEVEL,
+  weaponLevel,
+} from '@/adventure/weaponLevels';
+import {
+  applyLoadoutPreset,
+  loadLoadoutPresets,
+  saveLoadoutPreset,
+} from '@/adventure/loadoutPresets';
+import {
+  LEGACY_CHARM_BELT_EXTRA_COSTS,
+  SLOT_4_UNLOCK_LEVEL,
+  SLOT_5_UNLOCK_LEVEL,
+  STARTER_EVOLUTION_ID,
+  charmSlots,
+  createMaxedSave,
+  createNewSave,
+  legacyCharmBeltRefund,
+  migrateSave,
+  reconcileUnlocks,
+} from '@/adventure/progress';
 import {
   ADVENTURE_BACKUP_KEY,
   ADVENTURE_IMPORT_BACKUP_KEY,
@@ -551,7 +572,7 @@ describe('[TP-18] save backup codes, version > 1 fallback & transactional evolut
   });
 
   it('syncs Starfall Summit evolution discoveries transactionally via mergeDiscoveredEvolutions', () => {
-    const [evoA, evoB, evoC] = EVOLUTION_RECIPES.map(r => r.id);
+    const [evoA, evoB, evoC] = WEAPON_EVOLUTIONS.map(r => r.id);
     const base = {
       ...createNewSave(),
       coins: 555,
@@ -592,6 +613,92 @@ describe('[TP-18] save backup codes, version > 1 fallback & transactional evolut
     expect(res).toBeNull();
     expect(mem.get(ADVENTURE_SAVE_KEY)).toBe('{corrupt json');
     expect(mem.get(ADVENTURE_BACKUP_KEY)).toBe('{corrupt json');
+  });
+
+  it('idempotently migrates v1 saves: charm_belt tier 2-3 refund, veteran evo goodwill credit, W1/W2 slots, Bounty-Exclusive Lv 1-5 & LoadoutPreset evos', () => {
+    // 1. Legacy charm_belt tier 3 refunds 900 + 2000 = 2900 coins ONCE and clamps to tier 1
+    expect(LEGACY_CHARM_BELT_EXTRA_COSTS).toEqual([900, 2000]);
+    expect(legacyCharmBeltRefund(1)).toBe(0);
+    expect(legacyCharmBeltRefund(2)).toBe(900);
+    expect(legacyCharmBeltRefund(3)).toBe(2900);
+
+    const legacyBelt = { ...createNewSave(), coins: 100, upgrades: { charm_belt: 3 } };
+    const mBelt = migrateSave(legacyBelt);
+    expect(mBelt.coins).toBe(100 + 2900);
+    expect(mBelt.upgrades.charm_belt).toBe(1);
+    // Idempotent: second migration pays 0
+    expect(migrateSave(mBelt).coins).toBe(mBelt.coins);
+
+    // 2. Veteran goodwill credit: legacy pair evolutions grant Evo A for equipped/highest-level Armory weapons ONCE
+    const veteran = {
+      ...createNewSave(),
+      armory: ['blast-powder', 'flint-spark', 'war-drum'],
+      charms: ['flint-spark', 'war-drum'],
+      stars: { [SLOT_4_UNLOCK_LEVEL]: 3, [SLOT_5_UNLOCK_LEVEL]: 3 },
+      unlockedEvolutions: ['phoenix-pyre', 'sunbeam-burst'],
+      discoveredEvolutions: ['phoenix-pyre', 'sunbeam-burst', 'inferno', 'aftershock'],
+    };
+    const rec = reconcileUnlocks(veteran);
+    expect(rec.legacyEvoMigrated).toBe(true);
+    expect(rec.unlockedWeaponEvolutions).toContain(STARTER_EVOLUTION_ID);
+    expect(rec.unlockedWeaponEvolutions).toContain('flint-spark:cinder-trail');
+    expect(rec.unlockedWeaponEvolutions).toContain('war-drum:battle-cadence');
+    // Equipped weapons auto-get their unlocked evolutions equipped
+    expect(rec.equippedEvolutions['flint-spark']).toBe('flint-spark:cinder-trail');
+    // Idempotent: re-reconciling grants no extra evolutions
+    const rec2 = reconcileUnlocks(rec);
+    expect(rec2.unlockedWeaponEvolutions).toEqual(rec.unlockedWeaponEvolutions);
+
+    // 3. W1 (1-10) grants 4th slot, W2 (2-10) grants 5th slot, optional charm_belt grants 6th
+    const s0 = createNewSave();
+    expect(charmSlots(s0)).toBe(3);
+    expect(charmSlots({ ...s0, stars: { [SLOT_4_UNLOCK_LEVEL]: 1 } })).toBe(4);
+    expect(charmSlots({ ...s0, stars: { [SLOT_4_UNLOCK_LEVEL]: 1, [SLOT_5_UNLOCK_LEVEL]: 1 } })).toBe(5);
+    expect(charmSlots({ ...s0, stars: { [SLOT_4_UNLOCK_LEVEL]: 1, [SLOT_5_UNLOCK_LEVEL]: 1 }, upgrades: { charm_belt: 1 } })).toBe(6);
+
+    // 4. Bounty-Exclusive Lv 1 -> 5 progression (own 3 bounties + 5-5 clear)
+    const exId = 'chaos-conduit';
+    const exBounties = getWeaponBounties(exId).map(b => b.id);
+    expect(exBounties).toHaveLength(3);
+    let exSave = { ...createNewSave(), armory: [exId], completedBounties: ['bounty_blast_powder_1'] };
+    expect(weaponLevel(exSave, exId)).toBe(1);
+    exSave = { ...exSave, completedBounties: [...exSave.completedBounties, exBounties[0]] };
+    expect(weaponLevel(exSave, exId)).toBe(2);
+    exSave = { ...exSave, completedBounties: [...exSave.completedBounties, exBounties[1]] };
+    expect(weaponLevel(exSave, exId)).toBe(3);
+    exSave = { ...exSave, completedBounties: [...exSave.completedBounties, exBounties[2]] };
+    expect(weaponLevel(exSave, exId)).toBe(4);
+    exSave = { ...exSave, stars: { [BOUNTY_EXCLUSIVE_CAPSTONE_LEVEL]: 1 } };
+    expect(weaponLevel(exSave, exId)).toBe(5);
+
+    // 5. LoadoutPreset persists and safely restores equippedEvolutions (ignoring locked/mismatched evos)
+    const presetSource = {
+      ...createMaxedSave(),
+      charms: ['blast-powder', 'flint-spark'],
+      equippedEvolutions: {
+        ...createMaxedSave().equippedEvolutions,
+        'blast-powder': 'blast-powder:napalm-payload',
+        'flint-spark': 'flint-spark:hellfire-corona',
+      },
+    };
+    saveLoadoutPreset(0, presetSource, 'Napalm');
+    const loadedPresets = loadLoadoutPresets();
+    expect(loadedPresets[0]?.equippedEvolutions).toEqual({
+      'blast-powder': 'blast-powder:napalm-payload',
+      'flint-spark': 'flint-spark:hellfire-corona',
+    });
+
+    // Applying to a save that only unlocked blast-powder:napalm-payload restores only the unlocked one!
+    const partialSave = {
+      ...createNewSave(),
+      armory: ['blast-powder', 'flint-spark'],
+      unlockedWeaponEvolutions: ['blast-powder:napalm-payload', 'flint-spark:cinder-trail'],
+      equippedEvolutions: { 'blast-powder': 'blast-powder:cluster-charge', 'flint-spark': 'flint-spark:cinder-trail' },
+    };
+    const applied = applyLoadoutPreset(partialSave, loadedPresets[0]!);
+    expect(applied.charms).toEqual(['blast-powder', 'flint-spark']);
+    expect(applied.equippedEvolutions['blast-powder']).toBe('blast-powder:napalm-payload');
+    expect(applied.equippedEvolutions['flint-spark']).toBe('flint-spark:cinder-trail'); // locked hellfire-corona ignored
   });
 });
 

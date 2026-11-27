@@ -19,7 +19,7 @@ import type { AdventureSave, ArcanaId } from '@/adventure/types';
  * - ?save=fresh  — brand new save
  * - ?save=before:1-4 — ★★★ on every main level before 1-4, so 1-4 is next (any main level id works)
  * - ?level=5-4   — jump straight into a live fight for that level id
- * - ?weapons=a,b — equip exact Armory weapon ids (ensures armory & charm_belt capacity)
+ * - ?weapons=a,b — equip exact Armory weapon ids (ensures armory, World boss slots & charm_belt capacity)
  * - ?arcana=a,b  — equip exact Arcana ids (ensures unlockedArcana & tarot_deck capacity)
  * - ?fighter=Sly+Fox — pick starting fighter
  * - ?seed=4242   — deterministic fight seed (with ?level=...)
@@ -70,9 +70,15 @@ export default function DevAdventure() {
         .filter(id => id.length > 0 && validIds.has(id));
       next.armory = [...new Set([...next.armory, ...list])];
       next.charms = list;
-      if (list.length > 3) {
-        const beltMax = UPGRADES.find(u => u.id === 'charm_belt')?.costs.length ?? 3;
-        next.upgrades = { ...next.upgrades, charm_belt: Math.min(beltMax, Math.max(next.upgrades.charm_belt ?? 0, list.length - 3)) };
+      if (list.length >= 4) {
+        next.stars = { ...next.stars, '1-10': Math.max(1, next.stars['1-10'] ?? 0) };
+      }
+      if (list.length >= 5) {
+        next.stars = { ...next.stars, '2-10': Math.max(1, next.stars['2-10'] ?? 0) };
+      }
+      if (list.length >= 6) {
+        const beltMax = UPGRADES.find(u => u.id === 'charm_belt')?.costs.length ?? 1;
+        next.upgrades = { ...next.upgrades, charm_belt: Math.max(next.upgrades.charm_belt ?? 0, beltMax) };
       }
     }
     if (params.arcana !== undefined) {

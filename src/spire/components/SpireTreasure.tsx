@@ -21,11 +21,12 @@ import { COLORS } from '@/utils/colors';
 import { MONO_FONT } from '@/utils/fonts';
 import { EASE, MS, OVERLAP, PHASE, SPRING, SQUASH_TIER, STAGGER, STAYS, reducedMs } from '@/utils/motion';
 import { getArmoryWeapon } from '@/adventure/data/armory';
+import { beltSynergyAttrSet, getSynergyAttrMeta } from '@/adventure/ui/synergyMeta';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { ArcanaCard, WeaponOfferRow, type OfferBadge } from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, INK, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
-import { clashesWithBelt, newEvolutionRecipesArmedBy } from '../engine/bridge';
+import { clashesWithBelt, spireWeaponSynergyOverlap } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun, SpireTreasureState } from '../types';
 import SpireSwapPicker from './SpireSwapPicker';
@@ -126,17 +127,21 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
   const isUpgrade = heldLv !== undefined;
   const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
   const needsSwap = beltFull && !isUpgrade;
-  const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, treasure.weaponOffer.weaponId);
+  const synergyAttrs = isUpgrade ? [] : spireWeaponSynergyOverlap(run, treasure.weaponOffer.weaponId);
   const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, treasure.weaponOffer.weaponId);
   const badges: OfferBadge[] = [];
   if (isUpgrade) {
     badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${treasure.weaponOffer.level}`, bg: '#D97706' });
   }
-  if (newEvos.length > 0) {
+  if (synergyAttrs.length > 0) {
+    const top = getSynergyAttrMeta(synergyAttrs[0]);
     badges.push({
-      icon: 'sbed/electric',
-      text: newEvos.length > 1 ? `${newEvos[0].name} +${newEvos.length - 1}` : newEvos[0].name,
-      bg: TONE.evoReady,
+      icon: top.icon,
+      text:
+        synergyAttrs.length > 1
+          ? `SYNERGY: ${top.label.toUpperCase()} +${synergyAttrs.length - 1}`
+          : `SYNERGY: ${top.label.toUpperCase()}`,
+      bg: top.color,
     });
   }
   if (clashes.length > 0) {
@@ -244,7 +249,14 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
                           }}
                         />
                       )}
-                      <WeaponExplainer weapon={w} build={{ level: treasure.weaponOffer.level, tuning: {} }} hidePowerNote />
+                      <WeaponExplainer
+                        weapon={w}
+                        build={{ level: treasure.weaponOffer.level, tuning: {} }}
+                        evolutionMode="preview"
+                        allEvolutionsUnlocked
+                        beltSynergyIds={beltSynergyAttrSet(run.weapons, treasure.weaponOffer.weaponId)}
+                        evolutionLabTier={run.upgrades?.evolution_lab ?? 0}
+                      />
                     </View>
                   </SpireStaggerItem>
                 )}
@@ -255,7 +267,7 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
                       testID="spire-treasure-arcana"
                       arcanaId={availArcana}
                       prefix="Arcana"
-                      onPress={() => { band.cue('catalyst'); onClaim('arcana'); }}
+                      onPress={() => { band.cue('arcanaGain'); onClaim('arcana'); }}
                     />
                   </SpireStaggerItem>
                 )}

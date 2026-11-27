@@ -31,7 +31,7 @@ const matchCards = (s: RunState, cards: Card[], resolveWeapons = false): RunStat
 };
 
 describe('Seam A: ExtendedArcanaRules kiss-curse hooks in engine', () => {
-  it('Monochrome Pact adds +8 flat & +0.15 Power on 1-diff Sets, halves Rainbows once (×0.5), and halves 4-trait 3-diff Sets', () => {
+  it('Monochrome Pact adds +16 flat & marks 1 card on 1-diff Sets, scales Rainbows once (×0.65), and scales 4-trait 3-diff Sets (×0.65)', () => {
     const level4 = testLevel({
       rules: { attributes: ['shape', 'color', 'number', 'shading'], boardSize: 12, hearts: 5 },
       foes: [{ name: 'Target', hp: 500 }],
@@ -54,39 +54,40 @@ describe('Seam A: ExtendedArcanaRules kiss-curse hooks in engine', () => {
     s = { ...s, board: [...oneDiff, ...s.board.slice(3)] };
     const hpBefore1 = s.foeHp;
     s = matchCards(s, oneDiff);
-    expect(s.power).toBeCloseTo(0.15, 4);
-    // Simple equation: (3 card base + 8 monochrome flat) × powerMultiplier(0.15 = 1.15) = round(11 * 1.15) = 13
-    expect(hpBefore1 - s.foeHp).toBe(Math.round((3 + 8) * 1.15));
+    // Simple equation: 6 card base (3 × 2) + 16 monochrome flat = 22, and marks 1 board card
+    expect(hpBefore1 - s.foeHp).toBe(6 + 16);
+    expect(s.board.some(c => c.marked)).toBe(true);
 
-    // Force a 3-diff NON-rainbow Set on 4-trait board (shading same, shape/color/number diff)
+    // Force a 3-diff NON-rainbow Set on a fresh 4-trait board (shading same, shape/color/number diff)
+    let s4 = startFight({ level: level4, save: baseSave });
     const threeDiff: Card[] = [
-      { ...s.board[0], shape: 'oval', color: 'red', number: 1, shading: 'solid' },
-      { ...s.board[1], shape: 'diamond', color: 'green', number: 2, shading: 'solid' },
-      { ...s.board[2], shape: 'squiggle', color: 'purple', number: 3, shading: 'solid' },
+      { ...s4.board[0], shape: 'oval', color: 'red', number: 1, shading: 'solid', marked: false, holo: false, bonusPoints: 0 },
+      { ...s4.board[1], shape: 'diamond', color: 'green', number: 2, shading: 'solid', marked: false, holo: false, bonusPoints: 0 },
+      { ...s4.board[2], shape: 'squiggle', color: 'purple', number: 3, shading: 'solid', marked: false, holo: false, bonusPoints: 0 },
     ];
-    expect(countDifferentAttributes(threeDiff, s.attributes)).toBe(3);
-    expect(isRainbow(threeDiff, s.attributes)).toBe(false);
-    s = { ...s, board: [...threeDiff, ...s.board.slice(3)], power: 0 };
-    const hpBefore3 = s.foeHp;
-    s = matchCards(s, threeDiff);
-    // highDiffDamageScale = 0.5 -> round(3 * 0.5) = 2
-    expect(hpBefore3 - s.foeHp).toBe(Math.round(3 * 0.5));
+    expect(countDifferentAttributes(threeDiff, s4.attributes)).toBe(3);
+    expect(isRainbow(threeDiff, s4.attributes)).toBe(false);
+    s4 = { ...s4, board: [...threeDiff, ...s4.board.slice(3)] };
+    const hpBefore3 = s4.foeHp;
+    s4 = matchCards(s4, threeDiff);
+    // highDiffDamageScale = 0.65 -> round(6 * 0.65) = 4
+    expect(hpBefore3 - s4.foeHp).toBe(Math.round(6 * 0.65));
 
-    // Verify 3-trait Rainbow is halved ONCE (×0.5), NOT double-halved to ×0.25
+    // Verify 3-trait Rainbow is scaled ONCE (×0.65), NOT double-scaled
     let s3 = startFight({ save: baseSave });
     const rainbow3: Card[] = [
       { ...s3.board[0], shape: 'oval', color: 'red', number: 1, shading: 'solid' },
       { ...s3.board[1], shape: 'diamond', color: 'green', number: 2, shading: 'solid' },
       { ...s3.board[2], shape: 'squiggle', color: 'purple', number: 3, shading: 'solid' },
     ];
-    s3 = { ...s3, board: [...rainbow3, ...s3.board.slice(3)], power: 0 };
+    s3 = { ...s3, board: [...rainbow3, ...s3.board.slice(3)] };
     const hpBeforeR = s3.foeHp;
     s3 = matchCards(s3, rainbow3);
-    expect(s3.lastSetIgnition?.math.multiplier).toBeCloseTo(0.5, 4);
-    expect(hpBeforeR - s3.foeHp).toBe(Math.round(3 * 0.5));
+    expect(s3.lastSetIgnition?.math.multiplier).toBeCloseTo(0.65, 4);
+    expect(hpBeforeR - s3.foeHp).toBe(Math.round(6 * 0.65));
   });
 
-  it('Controlled Burn adds +0.2 Power, stamps ×1.5 burn dmg on ignited cards, and deals 2 hearts on cooldown mistakes', () => {
+  it('Controlled Burn ignites cards at ×1.35 burn dmg instead of costing a heart, and deals 2 hearts on cooldown mistakes', () => {
     let s = startFight({
       save: {
         selectedFighter: 'Corgi',
@@ -103,18 +104,17 @@ describe('Seam A: ExtendedArcanaRules kiss-curse hooks in engine', () => {
     const bad = s.board.slice(0, 3);
     s = runReducer(s, { type: 'INVALID', cards: bad });
     expect(s.hearts).toBe(5);
-    expect(s.power).toBeCloseTo(0.2, 4);
     expect(s.arcanaBurnCooldownMs).toBe(5000);
     const burning = s.board.filter(c => c.onFire);
     expect(burning.length).toBeGreaterThan(0);
-    expect(s.burnMults?.[burning[0].id]).toBe(1.5);
+    expect(s.burnMults?.[burning[0].id]).toBe(1.35);
 
     // Mistake while burn is on cooldown costs 2 Hearts
     s = runReducer(s, { type: 'INVALID', cards: bad });
     expect(s.hearts).toBe(3);
   });
 
-  it('Glass Prism locks max hearts to 3, disables all healing, and boosts spawned Power cards to +4', () => {
+  it('Glass Prism locks max hearts to 3, disables all healing, and boosts spawned Power cards to +10', () => {
     let s = startFight({
       save: {
         unlockedArcana: ['glass_prism'],
@@ -135,10 +135,10 @@ describe('Seam A: ExtendedArcanaRules kiss-curse hooks in engine', () => {
     s = runReducer(s, { type: 'MATCH', cards: set, rewards: healedReward });
     expect(s.hearts).toBe(1);
 
-    // Newly drawn Power cards carry +4 bonusPoints instead of +2
+    // Newly drawn Power cards carry +10 bonusPoints instead of +5
     const powerCards = s.board.filter(c => (c.bonusPoints ?? 0) > 0);
     for (const c of powerCards) {
-      expect(c.bonusPoints).toBe(4);
+      expect(c.bonusPoints).toBe(10);
     }
   });
 
@@ -178,9 +178,9 @@ describe('Seam A: ExtendedArcanaRules kiss-curse hooks in engine', () => {
     );
     expect(afterGold.coins).toBeGreaterThanOrEqual(3);
 
-    // Overkill Wave 1 (5 HP) by dealing 25 dmg (20 overkill) -> carries 10 dmg into Wave 2!
+    // Overkill Wave 1 (5 HP) by dealing 25 dmg (6 card base + 19 bonusPoints -> 20 overkill) -> carries 10 dmg into Wave 2!
     const killSet = findSet(s)!;
-    const boosted = killSet.map((c, idx) => (idx === 0 ? { ...c, bonusPoints: 22 } : { ...c, bonusPoints: 0 }));
+    const boosted = killSet.map((c, idx) => (idx === 0 ? { ...c, bonusPoints: 19, holo: false } : { ...c, bonusPoints: 0, holo: false }));
     const killBoard = s.board.map(c => boosted.find(b => b.id === c.id) ?? c);
     s = runReducer({ ...s, board: killBoard }, { type: 'MATCH', cards: boosted, rewards: boosted.map(baseCardReward) });
     expect(s.status).toBe('intermission');
@@ -191,8 +191,8 @@ describe('Seam A: ExtendedArcanaRules kiss-curse hooks in engine', () => {
     expect(s.pendingOverkillCarry).toBe(0);
   });
 
-  it("Scholar's Gambit grants +0.3 Power on level-up; Catalyst Resonance scales non-evolved Sets ×0.75; Tempo Surge adds +1 Combo step", () => {
-    // Scholar's Gambit: level-up adds +0.3 Power
+  it("Scholar's Gambit grants +6 fight base damage on level-up; Evolution Resonance scales non-evolved Sets ×0.8; Tempo Surge adds +1 Combo step", () => {
+    // Scholar's Gambit: level-up adds +6 fightBaseDamageBonus
     let scholar = startFight({
       save: { unlockedArcana: ['scholars_gambit'], equippedArcana: ['scholars_gambit'], armory: ['blast-powder'], charms: [] },
       features: ['hearts', 'gear', 'xp'],
@@ -200,16 +200,16 @@ describe('Seam A: ExtendedArcanaRules kiss-curse hooks in engine', () => {
     scholar = { ...scholar, xp: 4 };
     scholar = matchCards(scholar, findSet(scholar)!);
     expect(scholar.levelUpsTaken).toBeGreaterThanOrEqual(1);
-    expect(scholar.power).toBeCloseTo(0.3 * scholar.levelUpsTaken, 4);
+    expect(scholar.fightBaseDamageBonus).toBe(6 * scholar.levelUpsTaken);
 
-    // Catalyst Resonance: non-evolved Set deals ×0.75
-    let cat = startFight({
+    // Evolution Resonance (catalyst_resonance): non-evolved Set deals ×0.8
+    let evoRes = startFight({
       save: { selectedFighter: 'Corgi', unlockedArcana: ['catalyst_resonance'], equippedArcana: ['catalyst_resonance'], armory: [], charms: [] },
     });
-    const hpBefore = cat.foeHp;
-    cat = matchCards(cat, findSet(cat)!);
-    expect(cat.lastSetIgnition?.math.multiplier).toBeCloseTo(0.75, 4);
-    expect(hpBefore - cat.foeHp).toBe(Math.round(3 * 0.75));
+    const hpBefore = evoRes.foeHp;
+    evoRes = matchCards(evoRes, findSet(evoRes)!);
+    expect(evoRes.lastSetIgnition?.math.multiplier).toBeCloseTo(0.8, 4);
+    expect(hpBefore - evoRes.foeHp).toBe(Math.round(6 * 0.8));
 
     // Tempo Surge: every Set adds +1 bonus Combo step (first Set reaches combo = 2, bonusCombo = 1)
     let tempo = startFight({

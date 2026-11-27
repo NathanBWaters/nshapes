@@ -8,6 +8,7 @@ import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
@@ -15,12 +16,12 @@ import { formatChallengeText, useColorblind } from '@/utils/cardColors';
 import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import type { ArcanaId, PassiveId, RunState } from '../types';
 import { getArcana } from '../data/arcana';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
 import { getFighter } from '../data/fighters';
 import { foeDisplay } from '../data/foes';
 import { getPassive } from '../data/passives';
 import { starGoals, type ChallengeProgress } from '../engine/challenges';
-import { EVOLUTION_RULES } from '../engine/sources';
+import { EVOLUTION_CHASSIS } from '../engine/sources';
+import { buildAllLiveEvolutions } from '../ui/evolutionViewModel';
 import ParryPreviewCard from './ParryPreviewCard';
 import { FoeAbilityCard, HazardNotices } from './SharedCards';
 import { buildBalatroBreakdown, computePrimedEquation } from '../fx/MultiplierIgnition';
@@ -170,57 +171,99 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
       }
 
       case 'evolutions': {
-        const activeList = run.activeEvolutions
-          .map(a => ({ active: a, recipe: EVOLUTION_RECIPES.find(r => r.id === a.id) }))
-          .filter((x): x is { active: typeof x.active; recipe: NonNullable<typeof x.recipe> } => !!x.recipe);
-        const armedList = run.armedRecipes
-          .map(id => EVOLUTION_RECIPES.find(r => r.id === id))
-          .filter((r): r is NonNullable<typeof r> => !!r);
-        const capText = Number.isFinite(run.evolutionCap) ? `${run.evolutionsTriggered}/${run.evolutionCap} used` : `${run.evolutionsTriggered} used`;
+        const liveEvos = buildAllLiveEvolutions(run.weaponEvolutions ?? [], { colorblind });
+        const activeCount = liveEvos.filter(e => e.phase === 'active').length;
+        const weaponById = new Map(run.weapons.map(w => [w.id, w]));
+        const cdSec = Math.round(EVOLUTION_CHASSIS.defaultCooldownMs / 1000);
         return (
           <>
             <View style={st.headerRow}>
               <View style={st.iconBadge}><Icon name="lorc/crystal-shine" size={26} color={TONE.combo} /></View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <Eyebrow text="Evolutions" color="#EDE9FE" />
-                <Text style={titleStyle}>Weapon Fusions</Text>
-                <Text style={metaStyle}>{Math.round(run.evolutionLikelihood)}% chance for a Catalyst on new cards · {capText}</Text>
+                <Eyebrow text="Equipped Evolutions" color="#EDE9FE" />
+                <Text style={titleStyle}>Weapon Awakenings</Text>
+                <Text style={metaStyle}>
+                  {activeCount} active · {liveEvos.length} equipped · {run.evolutionsTriggered} awakened this fight
+                </Text>
               </View>
             </View>
-            {activeList.length > 0 && (
-              <View style={{ gap: 6 }}>
-                <Text style={st.section}>ACTIVE NOW (SETS ×{EVOLUTION_RULES.setMultiplier} & +{EVOLUTION_RULES.setDamage})</Text>
-                {activeList.map(({ active, recipe }) => (
-                  <View key={recipe.id} style={st.passiveFocus}>
-                    <View style={st.rowCenter}>
-                      <Icon name={recipe.icon} size={18} color={TONE.evoReady} />
-                      <Text style={[st.cardTitle, { fontSize: scaleText(14, textScale) }]}>{recipe.name}</Text>
-                      <Text style={metaStyle}>{Math.ceil(active.remainingMs / 1000)}s left</Text>
-                    </View>
-                    <Text style={cardTextStyle}>{recipe.activeText}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-            {armedList.length > 0 && (
-              <View style={{ gap: 6 }}>
-                <Text style={st.section}>ARMED THIS FIGHT</Text>
-                {armedList.map(r => {
-                  const known = knownEvolutions?.has(r.id) || run.unlockedEvolutions.includes(r.id) || run.forgedRecipes.includes(r.id);
+            {liveEvos.length === 0 ? (
+              <Text style={bodyStyle}>Equip Armory weapons to track their timed Evolutions during combat.</Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                {liveEvos.map(evo => {
+                  const weapon = weaponById.get(evo.weaponId);
+                  const isActive = evo.phase === 'active';
+                  const isCooldown = evo.phase === 'cooldown';
+                  const isAlmost = evo.phase === 'charging' && evo.almostReady;
+                  const secs = Math.max(0, Math.ceil(evo.activeRemainingMs / 1000));
+                  const cdLeft = Math.max(1, Math.ceil(evo.cooldownRemainingMs / 1000));
+                  const pct = isActive
+                    ? Math.round((evo.activeRemainingMs / Math.max(1, evo.activeDurationMs)) * 100)
+                    : isCooldown
+                      ? Math.round((evo.cooldownRemainingMs / Math.max(1, EVOLUTION_CHASSIS.defaultCooldownMs)) * 100)
+                      : Math.round((evo.progress / Math.max(1, evo.target)) * 100);
+                  const statusLabel = isActive
+                    ? `ACTIVE · ${secs}s`
+                    : isCooldown
+                      ? `COOLDOWN · ${cdLeft}s`
+                      : isAlmost
+                        ? `ALMOST · ${evo.progress}/${evo.target}`
+                        : `${evo.progress}/${evo.target}`;
                   return (
-                    <View key={r.id} style={st.passiveCard}>
+                    <View
+                      key={evo.evolutionId}
+                      testID={`inspector-evo-${evo.weaponId}`}
+                      style={[st.passiveCard, isActive && st.passiveFocus, isAlmost && st.evoAlmostCard]}
+                    >
                       <View style={st.rowCenter}>
-                        <Icon name={r.icon} size={18} color={TONE.combo} />
-                        <Text style={[st.cardTitle, { fontSize: scaleText(14, textScale) }]}>{known ? r.name : '??? Evolution'}</Text>
+                        {weapon && <WeaponAvatar weapon={weapon} size={22} interactive={false} />}
+                        <Icon name={evo.icon} size={16} color={isActive ? TONE.evoReady : TONE.combo} />
+                        <Text style={[st.cardTitle, { fontSize: scaleText(14, textScale) }]} numberOfLines={1}>
+                          {evo.evolutionName}
+                        </Text>
+                        <Text
+                          style={[
+                            st.evoStatusTag,
+                            isActive && st.evoStatusActive,
+                            isAlmost && st.evoStatusAlmost,
+                            isCooldown && st.evoStatusCooldown,
+                          ]}
+                        >
+                          {statusLabel}
+                        </Text>
                       </View>
-                      <Text style={cardTextStyle}>{known ? r.activeText : `Armed by ${r.familyText}. Match a Catalyst to discover it!`}</Text>
+                      <Text style={metaStyle}>
+                        {weapon ? `${weapon.name} · ` : ''}{evo.conditionFull}
+                      </Text>
+                      <View style={st.evoTrack}>
+                        <View
+                          style={[
+                            st.evoTrackFill,
+                            {
+                              width: `${Math.max(0, Math.min(100, pct))}%`,
+                              backgroundColor: isActive
+                                ? TONE.evoReady
+                                : isCooldown
+                                  ? '#6B7280'
+                                  : isAlmost
+                                    ? '#D97706'
+                                    : '#7C3AED',
+                            },
+                          ]}
+                        />
+                      </View>
+                      <Text style={cardTextStyle}>{evo.effectText}</Text>
+                      {evo.triggersThisFight > 0 && (
+                        <Text style={metaStyle}>Awakened {evo.triggersThisFight}× this fight</Text>
+                      )}
                     </View>
                   );
                 })}
               </View>
             )}
             <Text style={noteStyle}>
-              Match any glowing Catalyst card in a valid Set to deal 10 damage and trigger an evolution for {EVOLUTION_RULES.durationMs / 1000}s. With 2+ armed evolutions, you&apos;ll choose 1 of up to 3 randomly drawn options.
+              Every active Evolution deals an {EVOLUTION_CHASSIS.ignitionBurstDamage}-damage Ignition Burst and adds +{EVOLUTION_CHASSIS.setFlatDamage} base &amp; +{EVOLUTION_CHASSIS.setAdditiveMult}× multiplier per Set. Evolutions can re-trigger after a {cdSec}s cooldown.
             </Text>
           </>
         );
@@ -283,7 +326,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
               ))}
             </View>
 
-            <Text style={noteStyle}>Equip weapons like Rainbow Charm, Catalyst Prism, or Arcana to multiply Sets and grow Power faster!</Text>
+            <Text style={noteStyle}>Match Holo cards (+4 base, ×1.2), link belt Synergies, and awaken Weapon Evolutions (+8 base, +0.2×) to multiply every Set!</Text>
           </>
         );
       }
@@ -387,6 +430,31 @@ const st = StyleSheet.create({
   tag: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: INK, opacity: 0.65 },
   passiveCard: { gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: TONE.spentEdge, padding: 10 },
   passiveFocus: { gap: 4, backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 10 },
+  evoAlmostCard: { backgroundColor: '#FEF3C7', borderColor: '#D97706' },
+  evoStatusTag: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#EDE9FE',
+    color: '#4C1D95',
+    overflow: 'hidden',
+  },
+  evoStatusActive: { backgroundColor: COLORS.actionYellow, color: INK },
+  evoStatusAlmost: { backgroundColor: '#D97706', color: '#FFFFFF' },
+  evoStatusCooldown: { backgroundColor: '#E5E7EB', color: '#4B5563' },
+  evoTrack: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: 'rgba(18, 18, 18, 0.12)',
+    overflow: 'hidden',
+  },
+  evoTrackFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.spentEdge, padding: 8 },
   goalMet: { backgroundColor: '#D4F4EE', borderColor: COLORS.tealSurface },
   goalMissed: { backgroundColor: '#FFF1F0', borderColor: COLORS.redSurface },

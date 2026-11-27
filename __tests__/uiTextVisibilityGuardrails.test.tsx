@@ -8,13 +8,12 @@ import AdventureRun from '@/adventure/components/AdventureRun';
 import BountyBoard from '@/adventure/components/BountyBoard';
 import Camp from '@/adventure/components/Camp';
 import DamageSourceExplainer from '@/adventure/components/DamageSourceExplainer';
-import EvolutionPickOverlay from '@/adventure/components/EvolutionPickOverlay';
 import FieldGuide from '@/adventure/components/FieldGuide';
 import { GearChips, gearModifiers, hasGearChips } from '@/adventure/components/GearChips';
 import SkillTree from '@/adventure/components/SkillTree';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { getArmoryWeapon } from '@/adventure/data/armory';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { evolutionsForWeapon } from '@/adventure/data/evolutions';
 import { getLevel } from '@/adventure/data/levels';
 import { createRun } from '@/adventure/engine/run';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
@@ -260,7 +259,7 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     staticFog.unmount();
   });
 
-  it('highlights Mirror Shard and Tightrope slots and previews Catalyst target Evolution on Card', () => {
+  it('highlights Mirror Shard, Tightrope, Holo sheen/badge, and Marked badge on Card without Catalyst copy', () => {
     const baseCard: CardType = {
       id: 'slot-card',
       shape: 'diamond',
@@ -275,21 +274,22 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
         overlay={{
           mirrorCardIds: new Set(['slot-card']),
           tightropeCardIds: new Set(['slot-card']),
-          catalystRecipeName: 'Wildfire Echo',
         }}
         clockMs={null}
       >
-        <Card card={{ ...baseCard, hasEvolutionItem: true, evolutionReady: true }} onClick={() => {}} />
+        <Card card={{ ...baseCard, holo: true, marked: true }} onClick={() => {}} />
       </CardBoardProvider>
     );
     expect(view.getByTestId('card-mirror-frame')).toBeTruthy();
     expect(view.getByTestId('card-slot-mirror')).toBeTruthy();
     expect(view.getByTestId('card-tightrope-frame')).toBeTruthy();
     expect(view.getByTestId('card-slot-tightrope')).toBeTruthy();
-    expect(view.getByTestId('card-catalyst-name')).toHaveTextContent('Wildfire Echo');
+    expect(view.getByTestId('card-holo-sheen')).toBeTruthy();
+    expect(view.getByTestId('card-holo-badge')).toBeTruthy();
+    expect(view.getByTestId('card-marked-badge')).toBeTruthy();
     view.unmount();
 
-    // Non-highlighted card shows neither slot indicator
+    // Non-highlighted card shows none of these overlays
     const plain = render(
       <CardBoardProvider
         overlay={{ mirrorCardIds: new Set(['other']), tightropeCardIds: new Set(['other']) }}
@@ -300,6 +300,8 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     );
     expect(plain.queryByTestId('card-slot-mirror')).toBeNull();
     expect(plain.queryByTestId('card-slot-tightrope')).toBeNull();
+    expect(plain.queryByTestId('card-holo-badge')).toBeNull();
+    expect(plain.queryByTestId('card-marked-badge')).toBeNull();
     plain.unmount();
   });
 
@@ -342,16 +344,18 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     explainer.unmount();
   });
 
-  it('wires enemy counter badges and Evolution preview (multi-choice & single) inside AdventureRun without Role Set chips', () => {
+  it('wires enemy counter badges and per-weapon evolution rails inside AdventureRun without Role Set or PowerMeter chips', () => {
     const maxed = createMaxedSave();
-    // 3 weapons arming 3 recipes -> multi-choice preview ("Pick 1 of 3")
+    const [flintEvoA] = evolutionsForWeapon('flint-spark');
+    const [blastEvoA] = evolutionsForWeapon('blast-powder');
     const multiSave = {
       ...createNewSave(),
       seenMechanics: maxed.seenMechanics,
       seenCoachMarks: maxed.seenCoachMarks,
       armory: ['flint-spark', 'blast-powder', 'mending-charm'],
       charms: ['flint-spark', 'blast-powder', 'mending-charm'],
-      unlockedEvolutions: ['wildfire'],
+      unlockedWeaponEvolutions: [flintEvoA.id, blastEvoA.id],
+      equippedEvolutions: { 'flint-spark': flintEvoA.id, 'blast-powder': blastEvoA.id },
     };
     const level = getLevel('3-5P'); // Wet Crab (counters Fire!)
     const view = render(
@@ -371,91 +375,57 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
     expect(view.queryByTestId('run-role-bonus-damage')).toBeNull();
     expect(view.getByTestId('belt-counter-flint-spark')).toBeTruthy();
     expect(view.queryByTestId('belt-counter-blast-powder')).toBeNull();
-    expect(view.getByTestId('run-evo-chip')).toHaveTextContent(/Pick 1 of 3|CATALYST: Pick 1 of 3/);
+    expect(view.getByTestId('belt-evo-rail-flint-spark')).toBeTruthy();
+    expect(view.getByTestId('belt-evo-rail-blast-powder')).toBeTruthy();
     view.unmount();
-
-    // 2 weapons arming exactly 1 recipe -> single exact preview ("Next: Phoenix Pyre")
-    const singleSave = {
-      ...multiSave,
-      armory: ['blast-powder', 'mending-charm'],
-      charms: ['blast-powder', 'mending-charm'],
-    };
-    const singleView = render(
-      <SafeAreaProvider initialMetrics={INSETS}>
-        <AdventureRun
-          level={level}
-          save={singleSave}
-          seed={42}
-          effects={false}
-          onFinish={() => {}}
-          onQuit={() => {}}
-          onRestart={() => {}}
-          onCoachMarkSeen={() => {}}
-        />
-      </SafeAreaProvider>
-    );
-    expect(singleView.getByTestId('run-evo-chip')).toHaveTextContent(/Next: Phoenix Pyre|CATALYST: Phoenix Pyre/);
-    singleView.unmount();
   });
 
-  it('renders EvolutionPickOverlay with 3 cards, ★ SIGNATURE & NEW! badges, concise shortVerb, 375px-safe layout, and invokes onPick on tap', () => {
-    const [r0, r1, r2] = EVOLUTION_RECIPES.slice(0, 3);
-    const onPick = jest.fn();
+  it('enforces 375px-safe width, shrinkable clamped text, and zero Spire/Catalyst copy on WeaponExplainer 1-of-3 Evolution selector', () => {
+    const flint = getArmoryWeapon('flint-spark')!;
+    const [evoA, evoB] = evolutionsForWeapon('flint-spark');
+    const onSelectEvolution = jest.fn();
     const view = render(
-      <EvolutionPickOverlay
-        optionIds={[r0.id, r1.id, r2.id]}
-        totalIdle={6}
-        knownIds={new Set([r0.id])}
-        onPick={onPick}
+      <WeaponExplainer
+        weapon={flint}
+        defaultOpen
+        evolutionMode="select"
+        showEvolutionsWhenClosed
+        equippedEvolutionId={evoA.id}
+        unlockedEvolutionIds={[evoA.id, evoB.id]}
+        beltSynergyIds={new Set(['burn'])}
+        onSelectEvolution={onSelectEvolution}
+        onJumpToBounty={() => {}}
       />
     );
 
-    expect(view.getByText('CATALYST IGNITED')).toBeTruthy();
-    expect(view.getByText('CHOOSE AN EVOLUTION')).toBeTruthy();
-    expect(view.getByTestId('evo-pick-subtitle')).toHaveTextContent('Pick 1 of 3 · 30s (+2 dmg & ×1.5 every Set)');
-    expect(view.getByTestId('evo-pick-drawn-note')).toHaveTextContent('3 drawn from 6 armed');
+    expect(view.getByTestId('weapon-explainer-evo-selector-flint-spark')).toBeTruthy();
 
-    // r0 is known -> no NEW! badge; r1 and r2 are new -> gold NEW! badge; all 3 are SIGNATURE recipes
-    expect(view.queryByTestId('evo-pick-new-0')).toBeNull();
-    expect(view.getByTestId('evo-pick-new-1')).toHaveTextContent('NEW!');
-    expect(view.getByTestId('evo-pick-new-2')).toHaveTextContent('NEW!');
-    expect(view.getByTestId('evo-pick-sig-0')).toHaveTextContent('★ SIGNATURE');
+    // Every clamped Text node inside WeaponExplainer carries flexShrink > 0 so it never clips off 375px screens
+    const nodes = collectNodes(view.toJSON());
+    for (const n of nodes) {
+      if (n.type === 'Text' && n.props?.numberOfLines) {
+        const ts = StyleSheet.flatten(n.props?.style) ?? {};
+        expect(ts.flexShrink).toBeGreaterThan(0);
+      }
+    }
 
-    [r0, r1, r2].forEach((r, idx) => {
-      const card = view.getByTestId(`evo-pick-option-${idx}`);
-      const cardStyle = StyleSheet.flatten(card.props.style);
-      expect(cardStyle.width).toBe('100%');
-      expect(cardStyle.maxWidth).toBe('100%');
-      expect(cardStyle.minWidth).toBe(0);
-
-      expect(view.getByLabelText(`icon-${r.icon}`)).toBeTruthy();
-      expect(view.getByText(r.name)).toBeTruthy();
-      expect(view.queryByText(r.familyText)).toBeNull();
-      expect(view.queryByText(r.flavor)).toBeNull();
-
-      const desc = view.getByTestId(`evo-pick-desc-${idx}`);
-      expect(desc.props.children.length).toBeLessThanOrEqual(55);
-      expect(desc.props.numberOfLines).toBeUndefined();
-      expect(StyleSheet.flatten(desc.props.style).flexShrink).toBeGreaterThan(0);
-    });
-
-    // Zero "Spire" copy anywhere in the modal
-    const allText = collectNodes(view.toJSON())
+    const allText = nodes
       .filter(n => n.type === 'Text')
       .map(n => (Array.isArray(n.children) ? n.children.join('') : String(n.children ?? '')))
       .join(' ');
-    expect(allText).not.toMatch(/spire/i);
+    expect(allText).not.toMatch(/spire|\bcatalyst\b/i);
 
-    fireEvent.press(view.getByTestId('evo-pick-option-1'));
-    expect(onPick).toHaveBeenCalledTimes(1);
-    expect(onPick).toHaveBeenCalledWith(r1.id);
+    fireEvent.press(view.getByTestId(`evo-option-${evoB.id}`));
+    expect(onSelectEvolution).toHaveBeenCalledWith('flint-spark', evoB.id);
     view.unmount();
   });
 
   it('enforces shrinkable row wrapping layout contracts on DamageSourceExplainer', () => {
+    const [evo] = evolutionsForWeapon('blast-powder');
+    const sourceId = `evo:${evo.id}`;
     const view = render(
       <DamageSourceExplainer
-        sourceId="evo:phoenix-pyre"
+        sourceId={sourceId}
         accentColor="#16AA98"
         badge="MVP"
         result={{ text: '240 cumulative dmg (48%) · 6 hits · biggest spike +72.', share: 0.48 }}
@@ -463,12 +433,12 @@ describe('UI Text Visibility Style-Contract Guardrails', () => {
       />
     );
 
-    const card = view.getByTestId('damage-source-explainer-evo:phoenix-pyre');
+    const card = view.getByTestId(`damage-source-explainer-${sourceId}`);
     const cardStyle = StyleSheet.flatten(card.props.style);
     expect(cardStyle.width).toBe('100%');
     expect(cardStyle.maxWidth).toBe('100%');
 
-    const whatNode = view.getByTestId('damage-source-what-evo:phoenix-pyre');
+    const whatNode = view.getByTestId(`damage-source-what-${sourceId}`);
     expect(StyleSheet.flatten(whatNode.props.style).flexShrink).toBeGreaterThan(0);
 
     // Check every row Text node with numberOfLines carries flexShrink: 1 so it never clips

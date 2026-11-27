@@ -1,18 +1,13 @@
 /**
  * The fight log: everything that happened in one fight, as data, for the
  * results-screen replay (components/FightReplay.tsx).
- *
- * `emit` (fight.ts) copies every event into the draft's `_lines` along with
- * the rule that was running when it fired. At the end of each reducer action
- * `recordLog` turns those lines plus the action and the state change into one
- * entry: a Set, a mistake, a burn, a pick… Clock-driven entries (foe attacks,
- * fuses, evolutions ending) and burns merge per second so the log stays short.
  */
 import type { Card } from '@/types';
 import type { FightLogCard, FightLogEntry, FightLogKind, FightLogLine, RunState } from '../types';
+import { BASE_RULES, TRICK_RULES } from '../data/rules';
 import type { RunAction } from './run';
 import { xpForLevel, type Draft } from './fight';
-import { getRecipe, getSkillNode } from './sources';
+import { getSkillNode, getWeaponEvolution } from './sources';
 
 /** Clock entries and burns closer together than this become one entry. */
 const MERGE_MS = 1000;
@@ -27,15 +22,16 @@ const append = (d: Draft, entry: FightLogEntry) => {
 
 const cardTags = (c: Card): string[] => {
   const tags: string[] = [];
+  if (c.holo) tags.push(`Holo +${BASE_RULES.holoCardBonus ?? 4} ×${1 + (BASE_RULES.holoCardMult ?? 0.2)}`);
   if ((c.bonusPoints ?? 0) > 0) tags.push(`Power +${c.bonusPoints}`);
   if ((c.charge ?? 0) > 0) tags.push(`Charged +${c.charge}`);
   if ((c.bonusMoney ?? 0) > 0) tags.push(`+${c.bonusMoney}¢`);
+  if (c.marked) tags.push('Marked');
   if (c.magnet) tags.push('Magnet');
   if (c.chest !== undefined && c.chest > 0) tags.push(`Chest +${c.chest}`);
-  if (c.doubler) tags.push('Cursed ×2');
+  if (c.doubler) tags.push(`Cursed ×${TRICK_RULES.curseMultiplier}`);
   if (c.hot) tags.push('Hot Potato');
   if (c.isWild) tags.push('Wild');
-  if (c.hasEvolutionItem) tags.push('Catalyst');
   if (c.onFire) tags.push('On fire');
   if ((c.health ?? 1) > 1) tags.push(`Armored ${c.health}`);
   if (c.isFaceDown || c.wasOriginallyFaceDown) tags.push('Face-down');
@@ -45,8 +41,9 @@ const cardTags = (c: Card): string[] => {
 };
 
 export const logCard = (c: Card): FightLogCard => {
-  const bonusPoints = (c.bonusPoints ?? 0) + (c.charge ?? 0);
-  const points = 1 + bonusPoints;
+  const holoBonus = c.holo ? (BASE_RULES.holoCardBonus ?? 4) : 0;
+  const bonusPoints = holoBonus + (c.bonusPoints ?? 0) + (c.charge ?? 0);
+  const points = (BASE_RULES.cardBasePoints ?? 2) + bonusPoints;
   return {
     shape: c.shape,
     color: c.color,
@@ -59,11 +56,15 @@ export const logCard = (c: Card): FightLogCard => {
   };
 };
 
-/** Rule key (`node:<id>#i`, `w<slot>:<id>#i`, `evo:<id>#i`) → the name players know it by. */
+/** Rule key (`node:<id>#i`, `w<slot>:<id>#i`, `evo:<evoId>#i`, `weapon:<id>`) → display name. */
 const sourceName = (d: RunState, key: string): string => {
   const base = key.split('#')[0];
   if (base.startsWith('node:')) return getSkillNode(base.slice(5))?.name ?? base;
-  if (base.startsWith('evo:')) return getRecipe(base.slice(4))?.name ?? base;
+  if (base.startsWith('evo:')) return getWeaponEvolution(base.slice(4))?.name ?? base;
+  if (base.startsWith('weapon:')) {
+    const wid = base.slice(7);
+    return d.weapons.find(w => w.id === wid)?.name ?? wid;
+  }
   const slot = /^w(\d+):(.*)$/.exec(base);
   if (slot) return d.weapons[Number(slot[1])]?.name ?? slot[2];
   return base;
@@ -76,7 +77,7 @@ const totalXp = (s: RunState): number => {
   return sum;
 };
 
-/** Rule key → "weapon:<id>" | "node:<id>" | "evo:<id>", for looking the source up after the fight. */
+/** Rule key → "weapon:<id>" | "node:<id>" | "evo:<evoId>", for looking the source up after the fight. */
 const sourceRef = (d: RunState, key: string): string => {
   const base = key.split('#')[0];
   const slot = /^w(\d+):(.*)$/.exec(base);
@@ -138,15 +139,12 @@ export const recordLog = (d: Draft, prev: RunState, action: RunAction) => {
     return;
   }
 
-  // Clock, burns and refills: only worth an entry if something happened
   if (!lines.length && !delta.damage && !delta.coins && !delta.heartsDelta) return;
   const last = d.log[d.log.length - 1];
   const foldKind: FightLogKind = action.type === 'BURN' ? 'burn' : 'time';
-  // Refills and chosen evolutions belong to the Set/wave that triggered them; ticks and burns merge with their own kind nearby
   const fold =
     last &&
     (action.type === 'REPLACE' ||
-      (action.type === 'PICK_EVOLUTION' && last.wave === d.wave && (last.kind === 'set' || last.kind === 'wave')) ||
       (last.kind === foldKind && d.elapsedMs - last.t < MERGE_MS));
   if (fold) {
     d.log = [...d.log.slice(0, -1), {

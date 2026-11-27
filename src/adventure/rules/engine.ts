@@ -1,30 +1,68 @@
 /**
  * The rule interpreter: resolves queued fight events against every live rule
- * (skill nodes, held weapons, active evolutions), checks conditions and runs
- * effects. Effects that fire weapon behaviour queue a `weapon` trigger of
- * their kind, so any source can chain into any other.
+ * (skill nodes, held weapons + Synergy cross-edges, active per-weapon timed
+ * evolutions), checks conditions and runs effects. Effects that fire weapon
+ * behaviour queue a `weapon` trigger of their kind, so any source can chain
+ * into any other.
  *
  * Loop safety: a rule never reacts to events its own effects caused (directly
  * or through other rules), and one action resolves at most 32 rule firings.
  */
-import type { Condition, Effect, Scale, Trigger, WeaponTriggerKind } from './types';
+import type { Condition, Effect, Scale, SynergyAttrId, Trigger, WeaponTriggerKind } from './types';
 import { cleanseBoard } from '../engine/hazards';
 import { isSelectable } from '../engine/sets';
 import { BASE_RULES } from '../data/rules';
 import {
-  addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard, canSpawnCatalyst, catalystOnBoard,
-  dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, foldSetRuleDamage, growBoard, heal, igniteCards, liveRulesOf,
-  newLinkSlots, placeCatalyst, powerCardBonusFor, recordRuleFiring, recordRuleZeroOp, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth,
+  addCoins, addGraces, addHints, addRandomConnections, addTime, addXp, areaIndices, armorCard,
+  bumpSynergy, dealDamage, destroyCards, emit, empowerBoard, enqueue, foeMultiplier, foldSetRuleDamage,
+  growBoard, heal, igniteCards, liveRulesOf, markCards, newLinkSlots, notifyEvoEvent, powerCardBonusFor,
+  recordRuleFiring, recordRuleZeroOp, redeal, simplify, touchable as touchableIdx, LUCK_CAP_PCT, mods, signalGrowth,
   type Draft, type FightEvent, type FoldedRuleItem,
 } from '../engine/fight';
 import { addMagnet, advanceTricks, feedChest, repairGlass, stampAlbum } from '../engine/gear';
-import { extendEvolutions } from '../engine/evolutions';
+import { chargeWeaponEvolutions, extendEvolutions } from '../engine/evolutions';
 import { addComboSteps, patienceMs } from '../engine/passives';
-import { getRecipe, getSkillNode, type KeyedRule } from '../engine/sources';
+import { activeWeaponEvolutions, getSkillNode, getWeaponEvolution, type KeyedRule } from '../engine/sources';
 
 export const MAX_FIRINGS_PER_ACTION = 32;
-/** Max times a single rule key may fire within one synchronous chain (allows 1 bounce for Pinball / Entropy Engine / Powder Keg). */
+/** Max times a single rule key may fire within one synchronous chain (allows 1 bounce for Pinball / Powder Keg). */
 export const MAX_CHAIN_OCCURRENCES = 2;
+/** Max times a single evolution rule may fire on high-frequency collateral triggers within one action. */
+export const MAX_COLLATERAL_EVO_FIRINGS_PER_ACTION = 2;
+/** Max free autoSets (`echo` / `autoSet`) triggered by evolution rules within a single player action. */
+export const MAX_EVO_ECHOES_PER_ACTION = 1;
+
+/**
+ * Triggers that fire per-card or per-proc (and can enqueue 5–20 sibling events inside
+ * one Set or burn wave). Synergy-scaled damage on these triggers uses tighter step & damage
+ * caps so linked/burning webs scale explosively without quadratic 20×–55× blowouts.
+ */
+const HIGH_FREQ_TRIGGERS = new Set<Trigger['on']>([
+  'linkDestroyed',
+  'cardBurned',
+  'weapon',
+  'healed',
+  'hurt',
+  'cardBroken',
+]);
+
+/**
+ * Step normalizers for high-velocity cumulative Synergy counters inside `{ per: <SynergyAttrId> }`
+ * rule effects (`Math.ceil(raw / div)` for `raw > 0` so early progress always pays >= 1 step).
+ */
+export const SYNERGY_RULE_DIVISOR: Partial<Record<SynergyAttrId, number>> = {
+  coins: 5,
+  destruction: 3,
+  links: 2,
+  burn: 2,
+};
+
+/** Max effective Synergy steps per rule firing (direct Set triggers vs high-frequency collateral triggers). */
+export const SET_SYNERGY_STEP_CAP = 14;
+export const COLLATERAL_SYNERGY_STEP_CAP = 7;
+/** Max single-firing Synergy-scaled damage (before Set multipliers) to prevent quadratic scaling blowouts. */
+export const SET_SYNERGY_DAMAGE_CAP = 20;
+export const COLLATERAL_SYNERGY_DAMAGE_CAP = 10;
 
 /**
  * Triggers that belong directly to the player's matched Set (as opposed to chained
@@ -38,10 +76,18 @@ const DIRECT_SET_TRIGGERS = new Set<Trigger['on']>([
   'setsWithin',
   'rainbow',
   'bonusCardMatched',
+  'holoMatched',
+  'markedMatched',
+  'parry',
   'graceUsed',
   'trapDefused',
   'trick',
   'grudgeRelease',
+]);
+
+const SYNERGY_KEYS = new Set<string>([
+  'field_size', 'destruction', 'marks', 'coins', 'burn', 'links', 'holo',
+  'graces', 'hints', 'vitality', 'streaks', 'hazards', 'parries', 'prism', 'echoes',
 ]);
 
 const ordinal = (n: number): string => {
@@ -53,6 +99,14 @@ const ordinal = (n: number): string => {
     case 3: return `${n}rd`;
     default: return `${n}th`;
   }
+};
+
+const ownerWeaponIdOfKey = (d: Draft, key: string): string | undefined => {
+  const base = key.split('#')[0];
+  if (base.startsWith('evo:')) return getWeaponEvolution(base.slice(4))?.weaponId;
+  const slot = /^w(\d+):(.*)$/.exec(base);
+  if (slot) return d.weapons[Number(slot[1])]?.id ?? slot[2];
+  return undefined;
 };
 
 const describeRuleSource = (
@@ -70,7 +124,7 @@ const describeRuleSource = (
     sourceRef = base;
   } else if (base.startsWith('evo:')) {
     const id = base.slice(4);
-    label = getRecipe(id)?.name ?? label;
+    label = getWeaponEvolution(id)?.name ?? label;
     sourceRef = base;
   } else {
     const slot = /^w(\d+):(.*)$/.exec(base);
@@ -92,15 +146,21 @@ const describeRuleSource = (
             ? 'Rainbow Set bonus'
             : trigger.on === 'bonusCardMatched'
               ? 'bonus card matched'
-              : trigger.on === 'trapDefused'
-                ? 'trap defused'
-                : trigger.on === 'graceUsed'
-                  ? 'Grace Set bonus'
-                  : trigger.on === 'trick'
-                    ? cleanCallout || 'trick payout'
-                    : trigger.on === 'grudgeRelease'
-                      ? 'Grudge release'
-                      : cleanCallout || 'Set trigger';
+              : trigger.on === 'holoMatched'
+                ? 'Holo card matched'
+                : trigger.on === 'markedMatched'
+                  ? 'marked card matched'
+                  : trigger.on === 'parry'
+                    ? 'Set-Parry counter'
+                    : trigger.on === 'trapDefused'
+                      ? 'trap defused'
+                      : trigger.on === 'graceUsed'
+                        ? 'Grace Set bonus'
+                        : trigger.on === 'trick'
+                          ? cleanCallout || 'trick payout'
+                          : trigger.on === 'grudgeRelease'
+                            ? 'Grudge release'
+                            : cleanCallout || 'Set trigger';
   return { label, note, ...(sourceRef ? { sourceRef } : {}) };
 };
 
@@ -120,7 +180,7 @@ const holds = (d: Draft, c: Condition): boolean => {
     case 'rainbowSet': return !!d._setCtx?.rainbow;
     case 'hintedSet': return !!d._setCtx?.hinted;
     case 'noMistakesThisFight': return d.mistakes === 0;
-    case 'evolutionActive': return d.activeEvolutions.length > 0;
+    case 'evolutionActive': return d.weaponEvolutions.some(e => e.phase === 'active');
     case 'timeSinceLastSetAtLeast': return sinceLastSet(d) >= c.ms;
     case 'patient': return sinceLastSet(d) >= patienceMs(d);
     case 'timeSinceLastSetAtMost': return sinceLastSet(d) <= c.ms;
@@ -129,6 +189,10 @@ const holds = (d: Draft, c: Condition): boolean => {
     case 'grudgeAtLeast': return (d._setCtx?.grudgeReleased ?? 0) >= c.n;
     case 'firstMistakeSinceSet': return !d.mistakeRewardUsedThisSet;
     case 'frozen': return d.frozenMs > 0;
+    case 'synergyAtLeast': return (d.synergy[c.attr] ?? 0) >= c.n;
+    case 'holoInSet': return (d._setCtx?.holoInSet ?? 0) >= (c.min ?? 1);
+    case 'activeEvosAtLeast': return activeWeaponEvolutions(d.weaponEvolutions).length >= c.n;
+    case 'weaponEvolved': return d.weaponEvolutions.some(e => e.phase === 'active' && (!c.weaponId || e.weaponId === c.weaponId));
   }
 };
 
@@ -155,6 +219,11 @@ const triggerMatches = (d: Draft, key: string, t: Trigger, ev: FightEvent): bool
     }
     case 'weapon': return ev.on === 'weapon' && ev.kind === t.kind;
     case 'trick': return ev.on === 'trick' && ev.trick === t.kind;
+    case 'parry': return ev.on === 'parry' && (!t.perfect || !!ev.perfect);
+    case 'weaponEvolutionStart':
+      return ev.on === 'weaponEvolutionStart' && (!t.weaponId || ev.weaponId === t.weaponId);
+    case 'weaponEvolutionEnd':
+      return ev.on === 'weaponEvolutionEnd' && (!t.weaponId || ev.weaponId === t.weaponId);
     case 'idle':
     case 'foeBelow':
     case 'finale':
@@ -163,9 +232,28 @@ const triggerMatches = (d: Draft, key: string, t: Trigger, ev: FightEvent): bool
   }
 };
 
-const fireRule = (d: Draft, kr: KeyedRule, chain: readonly string[]) => {
+interface DrainBudget {
+  collateralCounts: Map<string, number>;
+  evoEchoes: number;
+}
+
+const fireRule = (
+  d: Draft,
+  kr: KeyedRule,
+  chain: readonly string[],
+  budget?: DrainBudget
+) => {
   if (d._firings >= MAX_FIRINGS_PER_ACTION) return;
+  const isHighFreq = HIGH_FREQ_TRIGGERS.has(kr.rule.trigger.on);
+  const isEvoRule = kr.key.startsWith('evo:');
+  if (isHighFreq && budget && isEvoRule) {
+    const prevCount = budget.collateralCounts.get(kr.key) ?? 0;
+    if (prevCount >= MAX_COLLATERAL_EVO_FIRINGS_PER_ACTION) return;
+  }
   if (!conditionsHold(d, kr.rule.when)) return;
+  if (isHighFreq && budget && isEvoRule) {
+    budget.collateralCounts.set(kr.key, (budget.collateralCounts.get(kr.key) ?? 0) + 1);
+  }
   d._firings += 1;
   recordRuleFiring(d, kr.key);
   const prev = d._chain;
@@ -184,10 +272,16 @@ const fireRule = (d: Draft, kr: KeyedRule, chain: readonly string[]) => {
     DIRECT_SET_TRIGGERS.has(kr.rule.trigger.on)
   );
   const foldMeta = canFold ? describeRuleSource(d, kr.key, kr.rule.trigger, kr.rule.callout) : undefined;
+  const ownerWeaponId = ownerWeaponIdOfKey(d, kr.key);
   let foldedBaseSum = 0;
   let didWork = false;
   for (const e of kr.rule.effects) {
-    const res = runEffect(d, e, kr.rule.callout, foldMeta);
+    const isAutoSetEff = e.do === 'autoSet' || (e.do === 'trigger' && e.kind === 'echo');
+    if (isEvoRule && isAutoSetEff && budget) {
+      if (budget.evoEchoes >= MAX_EVO_ECHOES_PER_ACTION) continue;
+      budget.evoEchoes += 1;
+    }
+    const res = runEffect(d, e, kr.rule.callout, foldMeta, ownerWeaponId, isHighFreq);
     if (res.didWork) didWork = true;
     foldedBaseSum += res.foldedBase;
   }
@@ -202,9 +296,14 @@ const fireRule = (d: Draft, kr: KeyedRule, chain: readonly string[]) => {
     recordRuleZeroOp(d, kr.key);
   }
   d._chain = prev;
-  // A weapon's own rule fired: some weapons grow each time theirs does (data/weaponGrowth.ts)
+  // A weapon's own rule fired: feeds weapon growth, FightMetrics.ownTriggers, and `weapon_proc('own')` evolutions
   const own = /^w\d+:(.+)#\d+$/.exec(kr.key);
-  if (own) signalGrowth(d, { on: 'own', weaponId: own[1] });
+  if (own) {
+    const wid = own[1];
+    d.fightMetrics.ownTriggers[wid] = (d.fightMetrics.ownTriggers[wid] ?? 0) + 1;
+    signalGrowth(d, { on: 'own', weaponId: wid });
+    notifyEvoEvent(d, { on: 'own', weaponId: wid });
+  }
 };
 
 const checkFoeBelow = (d: Draft) => {
@@ -221,6 +320,7 @@ const checkFoeBelow = (d: Draft) => {
 /** Resolve every queued fight event (and whatever those cause) against the live rules. */
 export const drain = (d: Draft) => {
   const outerCtx = d._setCtx;
+  const budget: DrainBudget = { collateralCounts: new Map<string, number>(), evoEchoes: 0 };
   do {
     while (d._queue.length) {
       const item = d._queue.shift()!;
@@ -229,7 +329,7 @@ export const drain = (d: Draft) => {
         let seen = 0;
         for (const k of item.chain) if (k === kr.key) seen += 1;
         if (seen >= MAX_CHAIN_OCCURRENCES) continue;
-        if (triggerMatches(d, kr.key, kr.rule.trigger, item.ev)) fireRule(d, kr, item.chain);
+        if (triggerMatches(d, kr.key, kr.rule.trigger, item.ev)) fireRule(d, kr, item.chain, budget);
       }
     }
     d._setCtx = outerCtx;
@@ -237,23 +337,35 @@ export const drain = (d: Draft) => {
   } while (d._queue.length);
 };
 
-/** An evolution ran out: its own `finale` rules fire (looked up directly so expired evolutions can already leave `activeEvolutions`). */
-export const fireFinale = (d: Draft, recipeId: string) => {
+/** An evolution ran out: its `finaleEffects` and `finale` rules fire. */
+export const fireFinale = (d: Draft, evoId: string) => {
   if (d.blankEvolutionRules) return;
-  const recipe = getRecipe(recipeId);
-  if (!recipe?.source.rules) return;
-  recipe.source.rules.forEach((rule, i) => {
-    if (rule.trigger.on === 'finale') fireRule(d, { key: `evo:${recipeId}#${i}`, rule }, []);
+  const def = getWeaponEvolution(evoId);
+  if (!def) return;
+  if (def.finaleEffects?.length) {
+    const prev = d._chain;
+    d._chain = [...prev, `evo:${evoId}`];
+    for (const eff of def.finaleEffects) applyEffect(d, eff, def.name, def.weaponId);
+    d._chain = prev;
+  }
+  def.source.rules?.forEach((rule, i) => {
+    if (rule.trigger.on === 'finale') fireRule(d, { key: `evo:${evoId}#${i}`, rule }, []);
   });
 };
 
-/** Encore Mask: an evolution's opening rules (`evolutionStart`) fire once more as it ends. */
-export const fireOpening = (d: Draft, recipeId: string) => {
+/** Encore Mask: an evolution's opening effects & `evolutionStart` rules fire once more as it ends. */
+export const fireOpening = (d: Draft, evoId: string) => {
   if (d.blankEvolutionRules) return;
-  const recipe = getRecipe(recipeId);
-  if (!recipe?.source.rules) return;
-  recipe.source.rules.forEach((rule, i) => {
-    if (rule.trigger.on === 'evolutionStart') fireRule(d, { key: `evo:${recipeId}#${i}`, rule }, []);
+  const def = getWeaponEvolution(evoId);
+  if (!def) return;
+  if (def.openingEffects?.length) {
+    const prev = d._chain;
+    d._chain = [...prev, `evo:${evoId}`];
+    for (const eff of def.openingEffects) applyEffect(d, eff, def.name, def.weaponId);
+    d._chain = prev;
+  }
+  def.source.rules?.forEach((rule, i) => {
+    if (rule.trigger.on === 'evolutionStart') fireRule(d, { key: `evo:${evoId}#${i}`, rule }, []);
   });
 };
 
@@ -279,8 +391,21 @@ export const resetFoeBelowRules = (d: Draft) => resetFired(d, 'foeBelow');
 
 // ─── Effects ────────────────────────────────────────────────────────────────
 
-/** What a scaling effect counts right now. */
-export const scaleCount = (d: Draft, per: Scale): number => {
+/**
+ * What a scaling effect counts right now (supports all 15 Synergy Graph nodes + legacy scales).
+ * Cumulative Synergy Graph counters are normalized by `SYNERGY_RULE_DIVISOR` and bounded by
+ * `SET_SYNERGY_STEP_CAP` (or `COLLATERAL_SYNERGY_STEP_CAP` on high-frequency collateral triggers).
+ */
+export const scaleCount = (d: Draft, per: Scale, highFreq = false): number => {
+  if (SYNERGY_KEYS.has(per)) {
+    const attr = per as SynergyAttrId;
+    const raw = Math.max(0, d.synergy[attr] ?? 0);
+    if (raw <= 0) return 0;
+    const div = SYNERGY_RULE_DIVISOR[attr] ?? 1;
+    const normalized = div > 1 ? Math.ceil(raw / div) : raw;
+    const cap = highFreq ? COLLATERAL_SYNERGY_STEP_CAP : SET_SYNERGY_STEP_CAP;
+    return Math.min(cap, normalized);
+  }
   switch (per) {
     case 'boardCard': return d.board.length;
     case 'missingHeart': return d.hearts !== null && d.maxHearts !== null ? Math.max(0, d.maxHearts - d.hearts) : 0;
@@ -289,26 +414,41 @@ export const scaleCount = (d: Draft, per: Scale): number => {
     case 'grace': return d.stats.graces;
     case 'link': return d.connections.length;
     case 'combo': return d.combo;
-    case 'bonusCard': return d.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0).length;
+    case 'bonusCard': return d.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0 || !!c.holo).length;
     case 'burning': return d.board.filter(c => c.onFire).length;
-    case 'evolution': return d.activeEvolutions.length;
+    case 'evolution':
+    case 'activeEvos':
+      return activeWeaponEvolutions(d.weaponEvolutions).length;
     case 'grudgeReleased': return d._setCtx?.grudgeReleased ?? 0;
+    default: return 0;
   }
 };
 
-/** Turn random plain cards into power or gold cards. */
-const convertCards = (d: Draft, to: 'power' | 'gold', count: number) => {
+/** Turn random plain cards into Power, Gold, or Holo cards. */
+const convertCards = (d: Draft, to: 'power' | 'gold' | 'holo', count: number) => {
   const plain = d.board
-    .map((c, i) => (touchableIdx(d, i) && isSelectable(c) && !c.snare && !c.bonusPoints && !c.bonusMoney ? i : -1))
+    .map((c, i) => {
+      if (!touchableIdx(d, i) || !isSelectable(c) || c.snare) return -1;
+      if (to === 'holo') return c.holo ? -1 : i;
+      return !c.bonusPoints && !c.bonusMoney ? i : -1;
+    })
     .filter(i => i >= 0);
   const chosen = d._rng.shuffle(plain).slice(0, count);
   if (!chosen.length) return;
   const set = new Set(chosen);
   const powerBonus = powerCardBonusFor(d);
-  d.board = d.board.map((c, i) =>
-    !set.has(i) ? c : to === 'power' ? { ...c, bonusPoints: powerBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
-  );
-  emit(d, 'fetch', chosen.length, to, { slots: chosen });
+  d.board = d.board.map((c, i) => {
+    if (!set.has(i)) return c;
+    if (to === 'holo') return { ...c, holo: true };
+    if (to === 'power') return { ...c, bonusPoints: (c.bonusPoints ?? 0) + powerBonus };
+    return { ...c, bonusMoney: BASE_RULES.coinCardValue };
+  });
+  if (to === 'holo') {
+    bumpSynergy(d, 'holo', chosen.length);
+    emit(d, 'holo_spawn', chosen.length, 'holo', { slots: chosen });
+  } else {
+    emit(d, 'fetch', chosen.length, to, { slots: chosen });
+  }
 };
 
 const WEAPON_KIND: Partial<Record<Effect['do'], WeaponTriggerKind>> = {
@@ -363,8 +503,13 @@ export const runWeaponEffect = (d: Draft, e: Effect) => {
     case 'growBoard': growBoard(d, e.count); break;
     case 'trigger': {
       const inner = triggerEffect(d, e.kind);
-      if (inner === 'autoSet') d._hooks.autoSet(d);
-      else runWeaponEffect(d, inner);
+      if (inner === 'autoSet') {
+        d.fightMetrics.echoes += 1;
+        bumpSynergy(d, 'echoes', 1);
+        d._hooks.autoSet(d);
+      } else {
+        runWeaponEffect(d, inner);
+      }
       break;
     }
     default: break;
@@ -375,8 +520,11 @@ export const runWeaponEffect = (d: Draft, e: Effect) => {
 export const takeDouble = (d: Draft): boolean => {
   if (d.doubleNext <= 0) return false;
   d.doubleNext -= 1;
+  d.fightMetrics.doubledTriggers += 1;
+  bumpSynergy(d, 'echoes', 1);
   emit(d, 'doubled', d.doubleNext, '×2');
   signalGrowth(d, { on: 'doubled' });
+  notifyEvoEvent(d, { on: 'resource', action: 'double_triggered' });
   return true;
 };
 
@@ -396,15 +544,16 @@ const runEffect = (
   d: Draft,
   e: Effect,
   label?: string,
-  foldMeta?: FoldedRuleItem
+  foldMeta?: FoldedRuleItem,
+  ownerWeaponId?: string,
+  isHighFreq = false
 ): { didWork: boolean; foldedBase: number } => {
   const kind = e.do === 'trigger' ? e.kind : WEAPON_KIND[e.do];
   if (kind) {
     const times = takeDouble(d) ? 2 : 1;
     let ran = false;
     for (let i = 0; i < times; i++) {
-      // Skip queuing `weapon:xp` if a scaled xp rule (`per`) evaluated to 0
-      if (e.do === 'xp' && e.per && e.amount * scaleCount(d, e.per) <= 0) continue;
+      if (e.do === 'xp' && e.per && e.amount * scaleCount(d, e.per, isHighFreq) <= 0) continue;
       runWeaponEffect(d, e);
       enqueue(d, 'weapon', kind);
       ran = true;
@@ -413,9 +562,14 @@ const runEffect = (
   }
   switch (e.do) {
     case 'damage': {
-      const times = e.per ? scaleCount(d, e.per) : 1;
+      const isSynergyScaled = Boolean(e.per && SYNERGY_KEYS.has(e.per));
+      const times = e.per ? scaleCount(d, e.per, isHighFreq) : 1;
       if (times <= 0 || e.amount <= 0) return { didWork: false, foldedBase: 0 };
-      const rawBase = e.amount * times;
+      let rawBase = e.amount * times;
+      if (isSynergyScaled) {
+        const dmgCap = isHighFreq ? COLLATERAL_SYNERGY_DAMAGE_CAP : SET_SYNERGY_DAMAGE_CAP;
+        rawBase = Math.min(dmgCap, rawBase);
+      }
       if (foldMeta && d._setFold && !d._setFold.inAutoSet) {
         foldSetRuleDamage(d, rawBase, foldMeta);
         return { didWork: true, foldedBase: rawBase };
@@ -438,8 +592,10 @@ const runEffect = (
       return { didWork: dealt > 0, foldedBase: 0 };
     }
     case 'convert': convertCards(d, e.to, e.count); return { didWork: true, foldedBase: 0 };
+    case 'markCard': return { didWork: markCards(d, e.count) > 0, foldedBase: 0 };
     case 'shield':
       d.freeMistakesLeft += e.count;
+      bumpSynergy(d, 'vitality', e.count);
       emit(d, 'free_mistake', d.freeMistakesLeft);
       return { didWork: true, foldedBase: 0 };
     case 'cleanse': cleanseBoard(d); return { didWork: true, foldedBase: 0 };
@@ -452,29 +608,29 @@ const runEffect = (
       return { didWork: true, foldedBase: 0 };
     case 'freeze':
       d.frozenMs = Math.max(d.frozenMs, e.ms);
+      d.fightMetrics.freezes += 1;
       emit(d, 'freeze', e.ms);
       return { didWork: true, foldedBase: 0 };
     case 'redeal': redeal(d); return { didWork: true, foldedBase: 0 };
-    case 'autoSet': d._hooks.autoSet(d); return { didWork: true, foldedBase: 0 };
-    case 'comboStep': addComboSteps(d, e.amount); return { didWork: true, foldedBase: 0 };
-    case 'spawnCatalyst':
-      if (!canSpawnCatalyst(d)) return { didWork: false, foldedBase: 0 };
-      placeCatalyst(d, []);
+    case 'autoSet':
+      d.fightMetrics.echoes += 1;
+      bumpSynergy(d, 'echoes', 1);
+      d._hooks.autoSet(d);
       return { didWork: true, foldedBase: 0 };
-    case 'spawnCatalystForce':
-      if (d.features.has('evolutions') && d.armedRecipes.length > 0 && !catalystOnBoard(d) && d.evolutionsTriggered < d.evolutionCap) {
-        placeCatalyst(d, []);
-        return { didWork: true, foldedBase: 0 };
-      }
-      return { didWork: false, foldedBase: 0 };
-    case 'extendEvolutions': extendEvolutions(d, e.ms); return { didWork: d.activeEvolutions.length > 0, foldedBase: 0 };
+    case 'comboStep': addComboSteps(d, e.amount); return { didWork: true, foldedBase: 0 };
+    case 'chargeEvolution':
+      return { didWork: chargeWeaponEvolutions(d, e.target, e.amount, ownerWeaponId), foldedBase: 0 };
+    case 'extendEvolutions':
+      return { didWork: extendEvolutions(d, e.ms, e.target ?? 'all', ownerWeaponId), foldedBase: 0 };
+    case 'addFightBaseDamage':
+      if (e.amount === 0) return { didWork: false, foldedBase: 0 };
+      d.fightBaseDamageBonus += e.amount;
+      return { didWork: true, foldedBase: 0 };
     case 'nextSetMultiplier':
-      // Stacks add up (×2 + ×2 = ×3), capped (data/rules.ts)
       d.nextSetMultiplier = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier + (e.times - 1));
       emit(d, 'charged', d.nextSetMultiplier);
       return { didWork: true, foldedBase: 0 };
     case 'emptyHeart':
-      // The new heart arrives empty: more room to heal into, nothing healed
       if (d.maxHearts !== null) {
         d.maxHearts += e.amount;
         return { didWork: true, foldedBase: 0 };
@@ -498,4 +654,5 @@ const runEffect = (
 };
 
 /** Returns true when the effect actually performed non-zero work (used by lab dead-rule telemetry). */
-export const applyEffect = (d: Draft, e: Effect, label?: string): boolean => runEffect(d, e, label).didWork;
+export const applyEffect = (d: Draft, e: Effect, label?: string, ownerWeaponId?: string): boolean =>
+  runEffect(d, e, label, undefined, ownerWeaponId).didWork;

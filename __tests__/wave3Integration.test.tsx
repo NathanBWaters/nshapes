@@ -180,9 +180,13 @@ describe('Wave 3 Integration: Labs, Aura, Screen Music, Summit & Haptics', () =>
     state = runReducer(state, { type: 'TICK', ms: 500 });
     expect(state.elapsedMs).toBe(beforeTickMs + 500);
 
-    // DEV_SPAWN_CATALYST places Catalyst on board
-    state = runReducer(state, { type: 'DEV_SPAWN_CATALYST' });
-    expect(state.board.some(c => c.hasEvolutionItem)).toBe(true);
+    // DEV_ADVANCE_EVO advances charging progress and DEV_TRIGGER_EVO ignites the weapon's equipped timed evolution
+    state = runReducer(state, { type: 'DEV_ADVANCE_EVO', weaponId: 'blast-powder', amount: 1 });
+    expect(state.weaponEvolutions.find(e => e.weaponId === 'blast-powder')?.progress).toBeGreaterThanOrEqual(1);
+    state = runReducer(state, { type: 'DEV_TRIGGER_EVO', weaponId: 'blast-powder' });
+    const blastEvo = state.weaponEvolutions.find(e => e.weaponId === 'blast-powder');
+    expect(blastEvo?.phase).toBe('active');
+    expect(blastEvo?.activeRemainingMs).toBeGreaterThan(0);
 
     // DEV_TRIGGER_PARRY opens windup & perfect windows with specific counter
     state = runReducer(state, {

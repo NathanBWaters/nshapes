@@ -135,7 +135,6 @@ describe('Starfall Summit — full climb balance', () => {
 
     let totalBuildDmg = 0;
     let totalSetDmg = 0;
-    let totalPowerDmg = 0;
     let totalAllDmg = 0;
     let sumWeapons = 0;
     let sumAvgLv = 0;
@@ -165,7 +164,6 @@ describe('Starfall Summit — full climb balance', () => {
       for (const s of Object.values(avg.run.stats.sourceDamage ?? {})) {
         totalAllDmg += s.damage;
         if (s.kind === 'set') totalSetDmg += s.damage;
-        else if (s.kind === 'power') totalPowerDmg += s.damage;
         else totalBuildDmg += s.damage;
       }
       const lvs = Object.values(avg.run.weaponLevels);
@@ -191,7 +189,6 @@ describe('Starfall Summit — full climb balance', () => {
     const r = (n: number) => n / RUNS;
     a0ExpWinRate = r(expA3);
     const buildShare = totalAllDmg > 0 ? totalBuildDmg / totalAllDmg : 0;
-    const powerShare = totalAllDmg > 0 ? totalPowerDmg / totalAllDmg : 0;
     const setShare = totalAllDmg > 0 ? totalSetDmg / totalAllDmg : 0;
     const spendRatio = totalAvailable > 0 ? totalSpent / totalAvailable : 0;
 
@@ -206,14 +203,13 @@ describe('Starfall Summit — full climb balance', () => {
         `SPIRE A0 (${RUNS} runs across all 6 fighters):\n` +
           `  Average: Act1=${Math.round(r(avgA1) * 100)}% | Act2=${Math.round(r(avgA2) * 100)}% | Victory=${Math.round(r(avgA3) * 100)}%\n` +
           `  Expert : Act1=${Math.round(r(expA1) * 100)}% | Act2=${Math.round(r(expA2) * 100)}% | Victory=${Math.round(r(expA3) * 100)}%\n` +
-          `  Damage Share: Build/Items=${Math.round(buildShare * 100)}% | Bare Sets=${Math.round(setShare * 100)}% | Power=${Math.round(powerShare * 100)}%\n` +
+          `  Damage Share: Build/Items=${Math.round(buildShare * 100)}% | Bare Sets=${Math.round(setShare * 100)}%\n` +
           `  Economy Spend Ratio: ${Math.round(spendRatio * 100)}% | Avg Build: ${(sumWeapons / fightsCount).toFixed(1)} weapons (avg Lv ${(sumAvgLv / fightsCount).toFixed(2)}), ${(sumSkills / fightsCount).toFixed(1)} skills, ${(sumArcana / fightsCount).toFixed(1)} arcana, ${(sumEvos / fightsCount).toFixed(1)} evos/run, ${(sumSetsPerFight / fightsCount).toFixed(1)} sets/fight\n` +
           `  Per fighter:\n${fighterLines}`
       );
     }
 
-    // Pure item-driven Spire: generic global Power must be 0%, and real build items/synergies carry the vast majority of damage!
-    expect(powerShare).toBe(0);
+    // Pure item-driven Spire: real build items/synergies carry the vast majority of damage!
     expect(buildShare).toBeGreaterThanOrEqual(0.65);
     expect(spendRatio).toBeGreaterThanOrEqual(0.6);
 

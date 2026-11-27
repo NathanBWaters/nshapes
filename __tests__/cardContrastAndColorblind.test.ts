@@ -500,15 +500,19 @@ describe('[UI-11] [UI-12] [UI-14] Double-Stroke Selection, Zero Border Violation
     slotView.unmount();
   });
 
-  it('separates armor health pips from top-right Catalyst, caps bottom-left hazard chips to 2 + overflow, and enforces >=14px hazard icons', () => {
+  it('separates armor health pips from top-right HOLO badge, enforces WCAG contrast & zero outer border violation on Card.holo/Card.marked, and caps bottom-left hazard chips to 2 + overflow', () => {
     expect(MAX_VISIBLE_STATE_CHIPS).toBe(2);
     expect(CARD_HAZARD_ICON_SIZE).toBeGreaterThanOrEqual(14);
+    // HOLO badge pill contrast (#FFFFFF on #7C3AED) >= 4.5:1 WCAG AA, light wash #FAF5FF keeps >=3.0:1 vs all 3 shape hues
+    expect(contrastRatio('#FFFFFF', '#7C3AED')).toBeGreaterThanOrEqual(4.5);
+    for (const c of ['red', 'green', 'purple'] as Color[]) {
+      expect(contrastRatio(CARD_LIGHT_COLORS[c], '#FAF5FF')).toBeGreaterThanOrEqual(3.0);
+    }
 
-    // Armored Catalyst card + 5 simultaneous hazards/states
+    // Armored Holo card + 5 simultaneous hazards/states
     const heavyCard = mkCard({
       health: 3,
-      hasEvolutionItem: true,
-      evolutionReady: true,
+      holo: true,
       hasBomb: true,
       bombTimer: 9,
       snare: 'right',
@@ -517,9 +521,13 @@ describe('[UI-11] [UI-12] [UI-14] Double-Stroke Selection, Zero Border Violation
       twinOf: 'other-card',
     });
 
-    const view = render(
-      React.createElement(Card, { card: heavyCard, catalystLabel: 'Wildfire', onClick: () => {} })
-    );
+    const view = render(React.createElement(Card, { card: heavyCard, onClick: () => {} }));
+
+    // Zero outer border violation: Holo card keeps standard slateCharcoal border (selection stays exclusive!)
+    const holoRoot = view.getByTestId('card-oval-red-2-solid-bomb');
+    expect(StyleSheet.flatten(holoRoot.props.style).borderColor).toBe(COLORS.slateCharcoal);
+    expect(StyleSheet.flatten(holoRoot.props.style).backgroundColor).toBe('#FAF5FF');
+    expect(view.getByTestId('card-holo-sheen')).toBeTruthy();
 
     // Health badge sits in top-center (NOT top-right) with WCAG redSurface background
     const health = view.getByTestId('card-health-badge');
@@ -527,11 +535,14 @@ describe('[UI-11] [UI-12] [UI-14] Double-Stroke Selection, Zero Border Violation
     expect(healthStyle.backgroundColor).toBe(COLORS.redSurface);
     expect(healthStyle.right).toBeUndefined();
 
-    // Catalyst badge stays cleanly in top-right
-    const catalyst = view.getByTestId('card-evolution-catalyst');
-    const catalystStyle = StyleSheet.flatten(catalyst.props.style);
-    expect(catalystStyle.right).toBe(2);
-    expect(catalystStyle.top).toBe(2);
+    // HOLO badge stays cleanly in top-right (zero Catalyst legacy testID)
+    expect(view.queryByTestId('card-evolution-catalyst')).toBeNull();
+    const holoBadge = view.getByTestId('card-holo-badge');
+    const holoStyle = StyleSheet.flatten(holoBadge.props.style);
+    expect(holoStyle.right).toBe(2);
+    expect(holoStyle.top).toBe(2);
+    expect(holoStyle.backgroundColor).toBe('#7C3AED');
+    expect(holoBadge).toHaveTextContent('HOLO');
 
     // Bottom-left tray shows top 2 priority hazards (bomb + snare) + '+3' overflow pill
     expect(view.getByTestId('card-timer-bomb')).toBeTruthy();
@@ -541,6 +552,21 @@ describe('[UI-11] [UI-12] [UI-14] Double-Stroke Selection, Zero Border Violation
     const snareIcon = view.getByTestId('mock-icon-delapouite/plain-arrow');
     expect(snareIcon.props.iconSize).toBeGreaterThanOrEqual(14);
     view.unmount();
+
+    // Marked + Holo on Blueprint Mist / Charcoal preserves 5th-attribute stock background & border rule
+    const markedMist = render(
+      React.createElement(Card, {
+        card: mkCard({ background: 'beige', holo: true, marked: true }),
+        onClick: () => {},
+      })
+    );
+    const markedRoot = markedMist.getByTestId('card-oval-red-2-solid');
+    expect(StyleSheet.flatten(markedRoot.props.style).backgroundColor).toBe(BACKGROUND_COLORS.beige);
+    expect(StyleSheet.flatten(markedRoot.props.style).borderColor).not.toBe('#7C3AED');
+    expect(markedMist.getByTestId('card-marked-badge')).toBeTruthy();
+    expect(markedMist.getByTestId('mock-icon-lorc/archery-target').props.iconSize).toBeGreaterThanOrEqual(14);
+    expect(markedMist.getByLabelText(/holo card.*marked/)).toBeTruthy();
+    markedMist.unmount();
   });
 
   it('uses WCAG-AA tealSurface / redSurface tokens and updated O/B/P & W/M/D copy in OptionsMenu', () => {

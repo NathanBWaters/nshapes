@@ -2,16 +2,316 @@
  * Adventure Mode — core types.
  *
  * Everything about the campaign is DATA (levels, mechanics, fighters, upgrades,
- * rewards). The engine reads these tables; screens render them. To redesign the
- * campaign, edit the tables in `src/adventure/data/` — not the engine.
+ * synergy hooks, per-weapon timed evolutions, bounties, rewards). The engine
+ * reads these tables; screens render them.
  */
 
 import type { WeaponBuilds, WeaponStatDef } from './data/weaponStats';
-import type { AttributeName, BoardConnection, CharacterName, Card, CardReward, Weapon, PlayerStats } from '@/types';
+import type { AttributeName, BoardConnection, CharacterName, Card, CardReward, Color, Shape, Weapon, PlayerStats } from '@/types';
 import type { EnemyInstance, RoundStats } from '@/types/enemy';
 import type { IconName } from '@/components/Icon';
-import type { RuleSource } from './rules/types';
+import type { Effect, Modifiers, Rule, RuleSource, SynergyAttrId, TrickKind, WeaponTriggerKind } from './rules/types';
 import type { GrowthState } from './data/weaponGrowth';
+
+export type { SynergyAttrId };
+
+// ---------------------------------------------------------------------------
+// Synergy Graph (15 first-class scaling attributes & weapon hooks)
+// ---------------------------------------------------------------------------
+
+export type SynergyRole = 'producer' | 'consumer' | 'amplifier';
+
+export interface SynergyAttrDef {
+  id: SynergyAttrId;
+  label: string;
+  icon: IconName;
+  /** High-contrast accent hex (WCAG AA on paper/white) */
+  color: string;
+  /** Soft chip fill hex */
+  paleBg: string;
+  description: string;
+}
+
+/** Live 15-node Synergy Graph state stored on `RunState.synergy`. */
+export interface SynergyCounters {
+  field_size: number;
+  destruction: number;
+  marks: number;
+  coins: number;
+  burn: number;
+  links: number;
+  holo: number;
+  graces: number;
+  hints: number;
+  vitality: number;
+  streaks: number;
+  hazards: number;
+  parries: number;
+  prism: number;
+  echoes: number;
+}
+
+/** Declarative base-level scaling hook attached to a weapon in `data/synergy.ts`. */
+export interface SynergyHook {
+  id: string;
+  attr: SynergyAttrId;
+  role: SynergyRole;
+  /** Divide `synergy[attr]` by `step` (floor) before multiplying (default 1) */
+  step?: number;
+  /** Max counted steps (soft balance cap) */
+  cap?: number;
+  /** Flat base damage added to every Set per counted step at Lv1 (+ perLevel * (lv - 1)) */
+  baseDamagePerStep?: { base: number; perLevel: number };
+  /** Special live getter override (e.g., missing hearts, remaining clock, current hearts) */
+  liveSource?: 'missingHearts' | 'currentHearts' | 'timeLeftChunks' | 'liveLinks';
+  /** Optional standing modifier delta per counted step */
+  modPerStep?: { key: keyof Modifiers; base: number; perLevel: number };
+  /** Optional cross-edge rule active while the weapon is equipped */
+  crossEdgeRule?: Rule;
+  /** Crisp 1-line player-facing summary shown in WeaponExplainer */
+  summary: (level: number) => string;
+}
+
+export interface WeaponSynergyProfile {
+  weaponId: string;
+  produces: readonly SynergyAttrId[];
+  consumes: readonly SynergyAttrId[];
+  amplifies?: readonly SynergyAttrId[];
+  hooks: readonly SynergyHook[];
+}
+
+// ---------------------------------------------------------------------------
+// Per-Weapon Timed Evolutions (64 Armory weapons × 3 evolutions = 192 total)
+// ---------------------------------------------------------------------------
+
+/**
+ * 26 deterministic micro-objective conditions evaluated purely on RunState + Set context.
+ * Shared 100% verbatim across combat engine, 192 evolutions, UI, and tests.
+ */
+export type EvolutionCondition =
+  // ── SET Trait Patterns ──
+  | { kind: 'color_set'; color: Color | 'any_same'; target: number; consecutive?: boolean }
+  | { kind: 'shape_set'; shape: Shape | 'any_same'; target: number; consecutive?: boolean }
+  | { kind: 'number_set'; mode: 'same' | 'diff'; value?: 1 | 2 | 3; target: number; consecutive?: boolean }
+  | {
+      kind: 'exact_diff_traits';
+      diffCount: 1 | 2 | 3 | 4;
+      /** e.g. { diffCount: 1, onlyDiffAttr: 'number', target: 3 } = "3 Sets where ONLY the number differs" */
+      onlyDiffAttr?: AttributeName;
+      onlySameAttr?: AttributeName;
+      target: number;
+      consecutive?: boolean;
+    }
+  | { kind: 'rainbow_set'; target: number; consecutive?: boolean }
+  | { kind: 'purity_step'; minChain?: 2 | 3; target: number; consecutive?: boolean }
+  | {
+      kind: 'board_geometry';
+      geometry: 'corners' | 'same_row' | 'same_col' | 'adjacent_cluster' | 'reuse_last_slot' | 'touch_last_set';
+      target: number;
+      consecutive?: boolean;
+    }
+  /** Match 1 all-same Set for each of the 3 values of `attr` (e.g. Red + Green + Purple Sets, or 1s + 2s + 3s) */
+  | { kind: 'trait_cycle'; attr: 'color' | 'shape' | 'number' }
+
+  // ── Math & Output Thresholds ──
+  /** Pre-multiplier additive base damage (`PreMultBase`) >= threshold (e.g. "hit a base damage of 15") */
+  | { kind: 'base_damage_hit'; threshold: number; target?: number }
+  /** Final post-multiplier Set turn total damage >= threshold */
+  | { kind: 'total_damage_hit'; threshold: number; target?: number }
+  /** Set landed with combined multiplier >= threshold (e.g. 1.5×) */
+  | { kind: 'multiplied_hit'; threshold: number; target?: number }
+  /** Destroy >= threshold total cards (matched + collateral) in a single Set turn */
+  | { kind: 'cards_destroyed_single_set'; threshold: number; target?: number }
+
+  // ── Tempo & Discipline ──
+  | { kind: 'quick_sets'; withinMs: number; target: number; consecutive?: boolean }
+  | { kind: 'sets_in_window'; windowMs: number; target: number }
+  | { kind: 'clean_streak'; target: number }
+  | { kind: 'patient_sets'; minGapMs: number; target: number; consecutive?: boolean }
+  | { kind: 'combo_reach'; minCombo: number; setsRequired?: number }
+
+  // ── Special Cards, Tricks & Weapon Procs ──
+  | {
+      kind: 'special_cards_matched';
+      cardTag: 'power' | 'gold' | 'holo' | 'burning' | 'linked' | 'wild' | 'armored' | 'marked' | 'any_special';
+      target: number;
+      inSingleSet?: boolean;
+      consecutive?: boolean;
+    }
+  | { kind: 'trick_payout'; trick: TrickKind | 'any'; target: number; consecutive?: boolean }
+  | { kind: 'weapon_proc'; procKind: WeaponTriggerKind | 'own'; target: number }
+
+  // ── Synergy, Board State, Combat & Meta ──
+  /** Gain `target` delta in `synergy[attr]` since entering `'charging'` phase */
+  | { kind: 'synergy_delta'; attr: SynergyAttrId; target: number }
+  | {
+      kind: 'board_state';
+      check:
+        | 'board_at_least'
+        | 'links_at_least'
+        | 'burning_at_least'
+        | 'holo_on_board_at_least'
+        | 'hints_held_at_least'
+        | 'graces_held_at_least'
+        | 'hearts_full'
+        | 'hearts_at_most';
+      threshold: number;
+      /** Number of Sets made while this board state holds (default 1) */
+      setsRequired?: number;
+    }
+  | { kind: 'parry_feat'; mode: 'any' | 'perfect' | 'staggered_set'; target: number }
+  | { kind: 'hazard_feat'; hazardKind: 'any' | 'bomb' | 'snare' | 'dud' | 'face_down' | 'thorn' | 'fuse' | 'curse'; target: number }
+  | {
+      kind: 'resource_action';
+      action:
+        | 'hint_used'
+        | 'hinted_set'
+        | 'grace_save'
+        | 'healed'
+        | 'overhealed'
+        | 'hurt'
+        | 'mistake_forgiven'
+        | 'ally_evolution_started'
+        | 'surge_set'
+        | 'double_triggered';
+      target: number;
+    }
+  /** Understudy-exclusive: mirrors left neighbor's evolution condition, OR ignites simultaneously with left neighbor */
+  | { kind: 'understudy_mirror'; mode: 'copy_condition' | 'ignite_with_left' };
+
+export interface WeaponEvolutionDef {
+  /** Stable unique ID, e.g. `'blast-powder:cluster-charge'` */
+  id: string;
+  /** Parent Armory weapon ID (must exist in ALL_ARMORY_WEAPON_IDS) */
+  weaponId: string;
+  /** 0 = Evo A (Core Engine), 1 = Evo B (Synergy Bridge), 2 = Evo C (Apex Overdrive) */
+  slotIndex: 0 | 1 | 2;
+  name: string;
+  /** Plain-English 1-sentence evolved effect summary */
+  tagline: string;
+  /** Ultra-compact HUD summary (<= 58 chars) */
+  shortVerb?: string;
+  icon: IconName;
+  accent: string;
+  /** Deterministic micro-objective that ignites this weapon's evolution */
+  condition: EvolutionCondition;
+  /** Full plain-English trigger condition shown in WeaponExplainer */
+  conditionText: string;
+  /** Ultra-short HUD badge trigger (<= 22 chars, e.g. "3 Orange in a row") */
+  conditionShort?: string;
+  /** Base active duration in ms (12_000–28_000) */
+  durationMs: number;
+  /** Post-expiry recharge cooldown in ms (default 3_000) */
+  cooldownMs?: number;
+  /** Synergy attributes produced or amplified while evolved */
+  synergyTags: readonly SynergyAttrId[];
+  /** Live rules & modifiers active ONLY while `phase === 'active'` */
+  source: RuleSource;
+  /** Optional one-shot opening effects fired on ignition (replayed by Encore Mask) */
+  openingEffects?: readonly Effect[];
+  /** Optional one-shot finale effects fired on expiry */
+  finaleEffects?: readonly Effect[];
+}
+
+export type WeaponEvolutionPhase = 'charging' | 'active' | 'cooldown';
+
+/** Live per-weapon timed evolution tracker stored in `RunState.weaponEvolutions`. */
+export interface WeaponEvolutionRuntime {
+  weaponId: string;
+  evoId: string;
+  phase: WeaponEvolutionPhase;
+  /** Current progress toward `target` while in `'charging'` phase */
+  progress: number;
+  /** Goal count/threshold required to ignite */
+  target: number;
+  /** True when `phase === 'charging'` and within 1 step (or >= 75%) of ignition */
+  almostReady: boolean;
+  /** Remaining active ms while `phase === 'active'` (0 otherwise) */
+  activeRemainingMs: number;
+  /** Total active duration ms for HUD progress ring (includes Encore Mask + Evolution Lab) */
+  durationMs: number;
+  /** Remaining cooldown ms while `phase === 'cooldown'` (default 3_000ms) */
+  cooldownRemainingMs: number;
+  /** How many times this weapon has evolved in this fight (re-triggerable, zero global cap) */
+  triggersCount: number;
+  /** Internal sliding timestamps for `sets_in_window` conditions */
+  windowTimes?: number[];
+  /** Internal seen trait values for `trait_cycle` conditions */
+  seenCycleValues?: (string | number)[];
+  /** Baseline synergy counter snapshot when entering `'charging'` (for `synergy_delta`) */
+  synergyBaseline?: number;
+  /** Pending head-start ticks (e.g. Encore Mask) applied once cooldown finishes */
+  pendingHeadStart?: number;
+}
+
+/** Complete single-fight metrics snapshot evaluated at fight end for 200 Bounties & telemetry. */
+export interface FightMetrics {
+  /** End-of-fight values across all 15 Synergy Graph nodes */
+  synergy: SynergyCounters;
+  /** Peak values reached across all 15 Synergy Graph nodes (e.g. max board size, peak streak) */
+  synergyPeak: SynergyCounters;
+  sets: number;
+  rainbows: number;
+  sameColorSets: number;
+  colorSets: Record<Color, number>;
+  sameShapeSets: number;
+  oneDiffSets: number;
+  numberOnlyDiffSets: number;
+  numberTriadSets: number;
+  purityChains: number;
+  threeStepPurities: number;
+  maxBaseDamage: number;
+  maxSingleHit: number;
+  maxOverkill: number;
+  maxBoardSize: number;
+  maxCardsDestroyedInSet: number;
+  maxCleanStreak: number;
+  maxCombo: number;
+  quickSets: number;
+  patientSets: number;
+  surgeSets: number;
+  hintedSets: number;
+  hintsUsed: number;
+  gracesSaved: number;
+  heals: number;
+  overheals: number;
+  heartsLost: number;
+  mistakes: number;
+  blasts: number;
+  lasers: number;
+  burns: number;
+  cardsBurned: number;
+  ricochets: number;
+  maxRicochetChain: number;
+  echoes: number;
+  doubleEchoes: number;
+  linksCreated: number;
+  linksDestroyed: number;
+  powerCards: number;
+  goldCards: number;
+  holoCards: number;
+  bonusCardsMatched: number;
+  pinatasBroken: number;
+  trapsDefused: number;
+  parries: number;
+  perfectParries: number;
+  timeGainedSec: number;
+  xpGained: number;
+  levelUps: number;
+  shopBuys: number;
+  doubledTriggers: number;
+  simplifies: number;
+  freezes: number;
+  evolutionsTriggered: number;
+  maxSimultaneousEvos: number;
+  distinctWeaponsEvolved: number;
+  /** Per-weapon evolution trigger counts this fight (`weaponId -> count`) */
+  weaponEvos: Record<string, number>;
+  /** Per-trick payout counts this fight (`trickKind -> count`) */
+  trickPayouts: Partial<Record<TrickKind, number>>;
+  /** Per-weapon own rule/proc trigger counts this fight (`weaponId -> count`) */
+  ownTriggers: Record<string, number>;
+}
 
 // ---------------------------------------------------------------------------
 // Mechanics (the "tutorial is the game" backbone)
@@ -27,14 +327,14 @@ export type MechanicKind = 'feature' | 'threat' | 'rule' | 'fighter';
 export type FeatureFlag =
   | 'hearts'      // wrong sets cost a heart
   | 'gear'        // fighter gear, ability and charm are active (everywhere except bare levels)
-  | 'power'       // power cards: +2 damage when matched
-  | 'rainbow'     // all-different sets hit twice as hard
+  | 'power'       // power & holo cards: bonus damage when matched
+  | 'rainbow'     // all-different sets
   | 'purity'      // escalating attribute-diversity combos (1-diff -> 2-diff -> Rainbow)
   | 'coins'       // coins drop & bank to your purse
   | 'hints'       // hint button
   | 'graces'      // near-miss forgiveness
   | 'xp'          // in-level level-ups: pick a weapon
-  | 'evolutions'  // hidden evolution catalysts on cards + weapon fusions
+  | 'evolutions'  // per-weapon timed evolutions triggered by micro-objectives
   | 'shop';       // shop between waves
 
 export interface MechanicDef {
@@ -98,7 +398,7 @@ export interface DemoCard {
   number: Card['number'];
   shading: Card['shading'];
   background?: Card['background'];
-  modifiers?: Partial<Pick<Card, 'isDud' | 'isFaceDown' | 'health' | 'hasCountdown' | 'countdownTimer' | 'hasBomb' | 'bombTimer' | 'onFire' | 'bonusMoney' | 'bonusPoints' | 'hasEvolutionItem' | 'evolutionReady'>>;
+  modifiers?: Partial<Pick<Card, 'isDud' | 'isFaceDown' | 'health' | 'hasCountdown' | 'countdownTimer' | 'hasBomb' | 'bombTimer' | 'onFire' | 'bonusMoney' | 'bonusPoints' | 'holo' | 'marked'>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -232,7 +532,7 @@ export interface SetIgnition {
   math: FightLogSetMath;
   /** Follow-up weapon/rule damage lines triggered during this same Set turn */
   followUps?: SetFollowUpItem[];
-  /** Per-weapon value badges keyed by weapon id (e.g. "+3", "×2", "+11", "🔥4") */
+  /** Per-weapon value badges keyed by weapon id (e.g. "+6", "×1.3", "+14", "🔥4") */
   beltBadges?: Record<string, BeltBadge>;
   /** Total damage dealt across the entire Set turn (Set hit + follow-ups) */
   turnDamage?: number;
@@ -324,14 +624,18 @@ export interface ArcanaRules {
   untimedMoves?: { delta: number; min: number };
   /** Scales how often Power and Gold cards are dealt */
   specialCardChanceScale?: number;
+  /** Scales how often Holo cards are dealt */
+  holoCardChanceScale?: number;
   nonRainbowDamageDelta?: number;
   /** Bonus damage for a Set with exactly one all-different trait */
   singleTraitBonusDamage?: number;
-  /** Monochrome Pact: Power points added on 1-diff Sets */
-  singleTraitPowerBonus?: number;
+  /** Monochrome Pact: number of cards marked on 1-diff Sets */
+  singleTraitMarkCount?: number;
   /** Monochrome Pact: damage scale applied to 3+ diff Sets */
   highDiffDamageScale?: number;
   rainbowMultiplier?: number;
+  /** Prismatic Fever: flat base damage added on Rainbow Sets */
+  rainbowFlatBonus?: number;
   damageScale?: number;
   setTimeBonus?: number;
   /** Tempo Surge: extra Combo steps granted on every valid Set */
@@ -340,15 +644,15 @@ export interface ArcanaRules {
   timerSpeedScale?: number;
   /** A wrong Set ignites cards instead of costing a heart, at most once per cooldown */
   mistakeBurn?: { cooldownMs: number; cards: number };
+  /** Controlled Burn: flat base damage added to mistake-burn cards */
+  mistakeBurnFlatBonus?: number;
   /** Controlled Burn: multiplier applied to burn damage from mistake burns */
   mistakeBurnDamageScale?: number;
-  /** Controlled Burn: Power points added when mistake burn triggers */
-  mistakeBurnPowerBonus?: number;
   /** Controlled Burn: hearts lost on mistakes while burn is on cooldown */
   cooldownMistakeHearts?: number;
   /** Glass Prism: disables all healing while active */
   noHeal?: boolean;
-  /** Glass Prism: Power card bonus damage override (+4 = double base +2) */
+  /** Glass Prism: Power card bonus damage override (+10 = double base +5) */
   powerCardBonusOverride?: number;
   /** Overkill Harvest: normal Sets drop 0 base coins (only Overkill, Gold cards & Parries pay) */
   zeroBaseSetCoins?: boolean;
@@ -360,12 +664,14 @@ export interface ArcanaRules {
   pickOptions?: number;
   /** Scholar's Gambit: delta to equipped charm slots (-1 = enter with 1 fewer charm) */
   charmSlotDelta?: number;
-  /** Scholar's Gambit: Power points granted on each mid-fight level-up */
-  levelUpPowerBonus?: number;
-  catalystChanceScale?: number;
-  catalystRespawns?: number;
+  /** Scholar's Gambit: permanent fight-long base damage granted on each mid-fight level-up */
+  levelUpBaseDamageBonus?: number;
+  /** Evolution Resonance: bonus evolution progress ticks granted when advancing any condition */
+  evolutionChargeBonus?: number;
+  /** Evolution Resonance: extra active evolution duration (ms) */
+  evolutionDurationBonusMs?: number;
   evolutionBurstBonus?: { damage: number; time: number };
-  /** Catalyst Resonance: damage multiplier on Sets made while no Evolution is active */
+  /** Evolution Resonance: damage multiplier on Sets made while no Evolution is active */
   nonEvolvedDamageScale?: number;
 }
 
@@ -409,9 +715,8 @@ export interface CampaignFeatureDef {
 }
 
 /**
- * Every star pays coins (shown up front). Some stars ALSO unlock a weapon,
- * fighter, Arcana, Weapon Combo recipe, or campaign system — hidden as a
- * silhouette until earned, then revealed with fanfare.
+ * Every star or bounty pays coins. Some ALSO unlock a weapon, fighter, Arcana,
+ * Per-Weapon Evolution, or campaign system.
  */
 export interface RewardDef {
   coins: number;
@@ -419,11 +724,32 @@ export interface RewardDef {
   weapons?: string[];
   character?: CharacterName;
   arcana?: ArcanaId;
-  /** Weapon Evolution recipe id unlocked for the Recipe Guide & Hidden Catalysts */
+  /** Per-Weapon Evolution ID unlocked (e.g. `'blast-powder:cluster-charge'`) */
   evolution?: string;
   /** Campaign system unlocked by this star */
   unlockFeature?: UnlockableFeature;
 }
+
+/** One thing to reveal with fanfare after a level or bounty completion (`star === 0` indicates a Bounty reward). */
+export type UnlockReveal =
+  | { kind: 'fighter'; name: CharacterName; star: number }
+  /**
+   * A new weapon, or (with `level`) a reward naming a weapon already owned:
+   * another copy found, so it is now at that level.
+   */
+  | { kind: 'weapon'; id: string; star: number; firstWeapon: boolean; level?: number }
+  | { kind: 'arcana'; id: ArcanaId; star: number }
+  | { kind: 'evolution'; id: string; weaponId?: string; star: number; firstEvolution: boolean }
+  /** World 1 Boss (4th slot) or World 2 Boss (5th slot) weapon belt expansion */
+  | { kind: 'weapon_slot'; slotNumber: 4 | 5; levelId: string; star: number }
+  | { kind: 'feature'; feature: UnlockableFeature; star: number }
+  /** A secret side path opened on the map (`star` = the stars on its parent that opened it) */
+  | { kind: 'path'; levelId: string; star: number }
+  /** Starfall Summit roguelike mode unlocked upon clearing SUMMIT_UNLOCK_LEVEL_ID */
+  | { kind: 'summit'; star: number };
+
+/** Canonical alias for `UnlockReveal` (backwards-compatible with progress.ts callers). */
+export type Unlock = UnlockReveal;
 
 /** How stars are earned. Default 'combat': survive / knock out / knock out + challenge. */
 export type StarRule =
@@ -444,14 +770,14 @@ export interface LevelRules {
   /** Bare level: no passives, charms, Arcana or evolutions (the very first level) */
   noGear?: boolean;
   hazards?: LevelHazards;
-  /** Percentage points added to the Catalyst chance on every refill (e.g. the level that teaches evolutions) */
-  evolutionLikelihood?: number;
-  /** Extra Evolutions allowed per fight beyond the base cap (used by Spire boons) */
-  extraEvolutionCap?: number;
+  /** Optional bonus evolution duration (ms) for special stages/boons */
+  extraEvolutionDurationMs?: number;
+  /** Optional bonus evolution progress ticks granted when advancing any condition (Spire/daily boons) */
+  extraEvolutionChargeBonus?: number;
   /**
    * Shading Surge (Worlds 3-5): the board plays on `attributes` with every card
-   * solid, then for a short window shading turns on and every Set hits much
-   * harder (engine/surge.ts, numbers in data/rules.ts SURGE_RULES).
+   * solid, then for a short window shading turns on and every Set hits harder
+   * (engine/surge.ts, numbers in data/rules.ts SURGE_RULES).
    */
   shadingSurge?: boolean;
   /**
@@ -565,22 +891,6 @@ export type AdventureWeapon = Weapon & RuleSource & {
   build?: (v: Record<string, number>) => RuleSource & { description: string; shortDescription: string };
 };
 
-/** Two weapon families fused into a 30-second power state. */
-export interface EvolutionRecipe {
-  id: string;
-  name: string;
-  icon: IconName;
-  /** Weapon id prefixes; armed when the fighter holds one of each list */
-  families: [string[], string[]];
-  /** e.g. "Explosion + Healing" */
-  familyText: string;
-  /** What happens while it is active, for the Recipe Guide and the banner */
-  activeText: string;
-  flavor: string;
-  /** Live only while the evolution is active */
-  source: RuleSource;
-}
-
 export interface UpgradeDef {
   id: string;
   name: string;
@@ -596,7 +906,7 @@ export interface UpgradeDef {
 }
 
 // ---------------------------------------------------------------------------
-// Cross-run Bounties & Save data
+// Cross-run Bounties (200 total: 192 weapon-linked + 8 general) & Save data
 // ---------------------------------------------------------------------------
 
 export interface BountyStats {
@@ -606,24 +916,70 @@ export interface BountyStats {
   threeStepPurities: number;   // 3+ step escalations triggered
   flawlessTimedWins: number;   // timed stage knocked out (≥2★) with 0 mistakes
   maxOverkill: number;         // biggest overkill blow past 0 HP
-  evolutionsForged: number;    // total evolutions triggered across runs
+  evolutionsForged: number;    // total per-weapon evolutions triggered across runs
   destructiveFights: number;   // fights where fire/explosion/laser triggered
   trapsDefused: number;        // lifetime traps defused
   biggestHit: number;          // best single-action damage ever
+  parriesLanded: number;       // lifetime Parries landed
   fighterWins: Partial<Record<CharacterName, number>>;
 }
 
-export type BountyCategory = 'mastery' | 'chaos' | 'roster' | 'explorer';
+export type BountyCategory =
+  | 'weapon_intro'    // Tier 1 weapon-linked (64 bounties)
+  | 'weapon_feat'     // Tier 2 weapon-linked single-fight feats (64 bounties)
+  | 'weapon_mastery'  // Tier 3 weapon-linked synergy mastery feats (64 bounties)
+  | 'mastery'         // General combat mastery
+  | 'chaos'           // General evolution / synergy feats
+  | 'roster'          // General fighter roster feats
+  | 'explorer';       // General stars / elites / lifetime coins
+
+/** Deterministic metric keys evaluated against FightMetrics (single-fight) or AdventureSave (cumulative/save). */
+export type BountyMetricKey =
+  // ── Direct FightMetrics numeric fields ──
+  | 'sets' | 'rainbows' | 'sameColorSets' | 'sameShapeSets' | 'oneDiffSets'
+  | 'numberOnlyDiffSets' | 'numberTriadSets' | 'purityChains' | 'threeStepPurities'
+  | 'maxBaseDamage' | 'maxSingleHit' | 'maxOverkill' | 'maxBoardSize'
+  | 'maxCardsDestroyedInSet' | 'maxCleanStreak' | 'maxCombo'
+  | 'quickSets' | 'patientSets' | 'surgeSets' | 'hintedSets' | 'hintsUsed'
+  | 'gracesSaved' | 'heals' | 'overheals' | 'heartsLost' | 'mistakes'
+  | 'blasts' | 'lasers' | 'burns' | 'cardsBurned' | 'ricochets' | 'maxRicochetChain'
+  | 'echoes' | 'doubleEchoes' | 'linksCreated' | 'linksDestroyed'
+  | 'powerCards' | 'goldCards' | 'holoCards' | 'bonusCardsMatched' | 'pinatasBroken'
+  | 'trapsDefused' | 'parries' | 'perfectParries' | 'timeGainedSec'
+  | 'xpGained' | 'levelUps' | 'shopBuys' | 'doubledTriggers' | 'simplifies' | 'freezes'
+  | 'evolutionsTriggered' | 'maxSimultaneousEvos' | 'distinctWeaponsEvolved'
+  // ── Synergy peak / end-of-fight metrics (mirrored from FightMetrics.synergy / synergyPeak) ──
+  | `synergy_${SynergyAttrId}` | 'synergy_field_size_max' | 'synergy_streaks_max'
+  // ── Keyed FightMetrics maps ──
+  | `colorSets:${Color}`
+  | `trick:${TrickKind}`
+  | `own:${string}`
+  // ── Save-wide lifetime / progression counters (for General Bounties) ──
+  | 'evolutionsForged' | 'parriesLanded' | 'perfectStages'
+  | 'eliteClears' | 'lifetimeCoins' | 'uniqueFighterWins';
+
+export type BountyScope = 'single_fight' | 'cumulative' | 'save';
 
 export interface BountyDef {
   id: string;
   category: BountyCategory;
+  /** Armory weapon that unlocks this bounty on pickup AND must be equipped to advance it (undefined for the 8 General Bounties). */
+  requiresWeapon?: string;
+  /** 1 = Quick On-Ramp, 2 = Single-Fight Cross-Weapon Feat, 3 = Synergy Mastery (0 for General). */
+  tier: 0 | 1 | 2 | 3;
   name: string;
   description: string;
   icon: IconName;
+  scope: BountyScope;
+  metric: BountyMetricKey;
   target: number;
-  progress: (save: AdventureSave) => number;
   reward: RewardDef;
+  /** Convenience normalized reward pointers for UI & Bounty Board filtering */
+  rewardEvolutionId?: string;
+  rewardWeaponId?: string;
+  rewardArcanaId?: ArcanaId;
+  /** Derived current progress reader from AdventureSave (returns completed/best/cumulative value) */
+  progress: (save: AdventureSave) => number;
 }
 
 export interface AdventureSave {
@@ -654,8 +1010,12 @@ export interface AdventureSave {
   selectedFighter: CharacterName;
   /** @deprecated v1 single charm; migrated into `charms` on load */
   charm: string | null;
-  /** Equipped Armory weapons (3 slots, up to 6 with Charm Belt) */
+  /** Equipped Armory weapons (3 base -> 4th on 1-10 -> 5th on 2-10 -> optional 6th via Workshop Charm Belt) */
   charms: string[];
+  /** Equipped evolution ID per Armory weapon (`weaponId -> evoId`). Auto-populated when a weapon's first evo unlocks. */
+  equippedEvolutions: Record<string, string>;
+  /** Unlocked per-weapon evolution IDs (from `1-10` ★1 + 191 Weapon-Linked Bounties). */
+  unlockedWeaponEvolutions: string[];
   /** Unlocked Arcana tarot modifiers & currently active wildcard (null = standard rules) */
   unlockedArcana: ArcanaId[];
   /** @deprecated v1 single Arcana; migrated into `equippedArcana` on load */
@@ -665,11 +1025,15 @@ export interface AdventureSave {
   bountiesUnlocked: boolean;
   /** Completed bounty ids & lifetime counters */
   completedBounties: string[];
+  /** Sparse progress/personal-best tracker for incomplete weapon-linked bounties (`bountyId -> number`). */
+  bountyProgress: Record<string, number>;
   bountyStats: BountyStats;
-  /** Weapon Combo (Evolution) recipe ids unlocked via level/bounty rewards */
+  /** @deprecated Legacy pair evolution IDs retained ONLY for lossless v1 migration (never read by combat) */
   unlockedEvolutions: string[];
-  /** Evolution recipe ids forged at least once (unlocks full details in Recipe Guide) */
+  /** Per-weapon evolution IDs triggered at least once (tracks first-time Cut-In & Field Guide discovery) */
   discoveredEvolutions: string[];
+  /** One-time idempotent migration guard for legacy veteran evolution goodwill credit */
+  legacyEvoMigrated?: boolean;
   musicOn: boolean;
   /** Play the fight's effects (the clock waits while they play). Off: numbers only. */
   effectsOn: boolean;
@@ -695,7 +1059,7 @@ export interface AdventureSave {
 // Run (one attempt at a level)
 // ---------------------------------------------------------------------------
 
-export type RunStatus = 'playing' | 'pick' | 'pick_evolution' | 'intermission' | 'won' | 'lost';
+export type RunStatus = 'playing' | 'pick' | 'intermission' | 'won' | 'lost';
 
 /**
  * Things that happen in a fight, for floaters, sounds and coach marks.
@@ -726,8 +1090,12 @@ export type RunEventType =
   /** The next Set is multiplied (amount = multiplier) */
   | 'charged'
   | 'empowered' | 'simplified' | 'simplify_end' | 'pinata' | 'pinata_break' | 'link'
-  // purity, evolutions, hazards & arcana
-  | 'purity' | 'purity_max' | 'catalyst_spawn'
+  /** New Holo or Synergy-marked card spawned on the board */
+  | 'holo_spawn' | 'marked'
+  // purity, per-weapon timed evolutions, hazards & arcana
+  | 'purity' | 'purity_max'
+  /** Per-weapon evolution condition tick, almost-ready anticipation, external charge, ignition, expiry */
+  | 'evo_progress' | 'evo_almost' | 'evo_charge'
   | 'evolution_start' | 'evolution_end'
   | 'trap_placed' | 'trap_defused' | 'trap_sprung'
   | 'arcana_burn' | 'overkill'
@@ -743,7 +1111,7 @@ export type RunEventType =
   | 'breather'
   /** A weapon grew stronger for the rest of the fight (text = what it gained, amount = its stacks) */
   | 'power_up'
-  /** Set-Parry: foe entering golden Perfect Parry window, Counter Parry, Perfect Parry (Stagger ×2), or unparried strike */
+  /** Set-Parry: foe entering golden Perfect Parry window, Counter Parry, Perfect Parry (Stagger), or unparried strike */
   | 'parry_warn' | 'parry' | 'perfect_parry' | 'foe_strike';
 
 export interface RunEvent {
@@ -751,7 +1119,7 @@ export interface RunEvent {
   type: RunEventType;
   amount?: number;
   text?: string;
-  /** Rule key of the skill node, weapon or evolution that caused it ("w2:war-drum#0"), when a rule did */
+  /** Rule key or weapon/evolution anchor ("weapon:blast-powder", "w2:war-drum#0", "evo:blast-powder:cluster-charge") */
   source?: string;
   /** Board slots it touched, so the fight's effects can play where it happened (src/adventure/fx) */
   slots?: number[];
@@ -793,11 +1161,11 @@ export interface FightLogCard {
   number: Card['number'];
   shading: Card['shading'];
   background?: Card['background'];
-  /** Total damage points this card contributed (1 base + bonus) */
+  /** Total damage points this card contributed (2 base + bonus + holo + charge) */
   points?: number;
-  /** Extra bonus damage carried on this card (Power cards, Charge, etc.) */
+  /** Extra bonus damage carried on this card (Power cards, Holo, Charge, etc.) */
   bonusPoints?: number;
-  /** Short notes on what was special about the card: "+2 dmg", "Catalyst", "On fire"… */
+  /** Short notes on what was special about the card: "+5 Power", "Holo +4 ×1.2", "On fire"… */
   tags: string[];
 }
 
@@ -822,37 +1190,41 @@ export interface FightLogLine {
 
 /** How a Set's own hit was worked out. */
 export interface FightLogSetMath {
-  /** Points on the three matched cards (base 1 each + bonus + charge) */
+  /** Points on the three matched cards (base 2 each + bonus + holo + charge) */
   cards: number;
   /** Number of matched cards (normally 3) */
   cardCount?: number;
-  /** Base damage across matched cards (1 per card = 3) */
+  /** Base damage across matched cards (2 per card = 6) */
   baseCards?: number;
-  /** Extra damage stored on the matched cards (Power cards, Charge, etc.) */
+  /** Extra damage stored on the matched cards (Power cards, Holo, Charge, etc.) */
   cardBonus?: number;
   /** Plain-English note describing why the cards carried extra damage */
   cardBonusNote?: string;
-  /** Shading Surge multiplier applied to matched cards when active (e.g. ×5) */
+  /** Pre-multiplier total additive base damage (checked by `base_damage_hit` evolution conditions) */
+  baseDamageBeforeMult?: number;
+  /** Total Synergy Graph hook damage contributed on this Set */
+  synergyBonus?: number;
+  /** Shading Surge multiplier applied to matched cards when active (×1.8) */
   surgeMultiplier?: number;
+  /** Holo additive multiplier applied when Holo cards were matched (1.2 / 1.4 / 1.6) */
+  holoMultiplier?: number;
+  /** Active weapon evolutions additive multiplier (1 + 0.2 * activeCount) */
+  activeEvoMultiplier?: number;
   /** Points on cards the Set's weapon procs destroyed (explosion, laser, ricochet…) by kind */
   collateral: Partial<Record<NonNullable<CardReward['effectType']>, number>>;
-  /** Flat per-Set bonuses (gear, skill nodes, passives, conditional damage, active evolutions) */
+  /** Flat per-Set bonuses (gear, Synergy hooks, skill nodes, passives, conditional damage, active evolutions) */
   flatBonus: number;
   /** Itemized breakdown of every non-zero contributor to `flatBonus` */
   flatItems?: FightLogMathItem[];
-  /** Everything the flat total was multiplied by (rainbow, Hot Streak / next-Set ×N, foe, arcana) */
+  /** Everything the flat total was multiplied by (Surge, Rainbow, Evos, Holo, Parry/Stagger, Hot Streak, Arcana) */
   multiplier: number;
   /** Itemized breakdown of multipliers composing `multiplier` */
   multItems?: FightLogMathItem[];
   rainbow: boolean;
-  /** Purity chain and trap bonus damage, added after the multiplier */
+  /** Post-multiplier extras (if any) */
   extra: number;
   /** Itemized breakdown of post-multiplier extras */
   extraItems?: FightLogMathItem[];
-  /** Global Power multiplier applied at damage dealing (when > ×1) */
-  powerMultiplier?: number;
-  /** Accumulated Power points right after this Set */
-  powerPoints?: number;
   /** Damage the Set itself dealt */
   hit: number;
   /** How many traits were all different */
@@ -907,12 +1279,6 @@ export interface PassiveState {
   keenEyeCardId: string | null;
 }
 
-export interface ActiveEvolution {
-  id: string;
-  remainingMs: number;
-  durationMs: number;
-}
-
 /** Per-rule bookkeeping (sliding windows, once-only triggers). Keyed by rule key. */
 export interface RuleRuntime {
   /** setsWithin: times of recent Sets */
@@ -921,7 +1287,7 @@ export interface RuleRuntime {
   fired?: boolean;
 }
 
-/** Shading Surge clock: calm (shading off, every card solid) and surge (shading on, Sets ×5) alternate. */
+/** Shading Surge clock: calm (shading off, every card solid) and surge (shading on, ×1.8 +12 base) alternate. */
 export interface SurgeState {
   active: boolean;
   /** Time left in the current phase (fight-clock ms) */
@@ -1001,6 +1367,9 @@ export interface RunState {
   biggestHit: number;
   matches: number;
   mistakes: number;
+  /** Current unbroken valid Set streak (resets on mistake) */
+  cleanStreak: number;
+  maxCleanStreak: number;
   movesLeft: number | null;
   timeLeft: number | null;
   /** Rule and weapon time gains can't push the clock past this */
@@ -1011,12 +1380,12 @@ export interface RunState {
   gear: GearState;
   /** How far each held weapon has grown this fight (data/weaponGrowth.ts) */
   growth: GrowthState;
-  /** Power points this fight (data/weaponPower.ts): every held weapon's Scaling feeds them, and they multiply all damage */
-  power: number;
-  /** Multiplier on Power accumulation (default 1; 0 disables global Power scaling in item-driven modes like Starfall Spire) */
-  powerScaling?: number;
-  /** When true, concurrent active Evolutions stack their ×1.5 Set multiplier multiplicatively (used by Starfall Spire) */
-  stackEvolutionMultipliers?: boolean;
+  /** Live 15-node Synergy Graph counters */
+  synergy: SynergyCounters;
+  /** Peak values reached on each Synergy Graph node this fight */
+  synergyPeak: SynergyCounters;
+  /** Permanent fight-long base damage bonus added by Scholar's Tome, Scholar's Gambit, Time Drop, etc. */
+  fightBaseDamageBonus: number;
   /** Lab-only override: omit each active Evolution's bespoke rules/modifiers while keeping the universal chassis */
   blankEvolutionRules?: boolean;
   /** Opt-in lab telemetry: total firings per rule key (undefined in normal gameplay for zero overhead) */
@@ -1037,12 +1406,6 @@ export interface RunState {
   hintUsedThisSet?: boolean;
   /** Combo steps granted by rules/evolutions (E.combo), giving +1 Set dmg per step for non-Sly-Fox fighters */
   bonusCombo?: number;
-  /** Evolution recipe id pre-loaded onto the active Catalyst card on the board (null when none or when 2+ idle recipes offer a choice) */
-  catalystRecipeId?: string | null;
-  /** Up to 3 randomly chosen idle armed evolution recipe ids awaiting player selection */
-  evolutionPickOptions?: string[];
-  /** Preserved Catalyst slot & Set multiplier for the pending evolution choice */
-  evolutionPickContext?: { slot?: number; setMultiplier: number };
   coins: number;
   xp: number;
   xpLevel: number;
@@ -1103,21 +1466,18 @@ export interface RunState {
   purityChainsTriggered: number;
   threeStepPuritiesTriggered: number;
 
-  // Evolutions
-  unlockedEvolutions: string[];
-  /** Recipes whose two weapon families are held right now */
-  armedRecipes: string[];
-  activeEvolutions: ActiveEvolution[];
+  // Per-Weapon Timed Evolutions
+  /** Equipped evolution ID map copied from save/Spire (`weaponId -> evoId`) */
+  equippedEvolutions: Record<string, string>;
+  /** Unlocked evolution IDs for mid-fight picked/bought weapons */
+  unlockedWeaponEvolutions: string[];
+  /** Parallel per-weapon evolution trackers for currently held weapons that have an equipped evolution */
+  weaponEvolutions: WeaponEvolutionRuntime[];
   evolutionsTriggered: number;
-  evolutionCap: number;
-  /** Workshop Evolution Lab tier (feeds the likelihood) */
+  /** Workshop Evolution Lab tier (+2s duration per tier) */
   evolutionLabTier: number;
-  /** % chance per refill that a Catalyst appears (Rainbow refills add more) */
-  evolutionLikelihood: number;
-  /** Recipe ids triggered this fight (for the Recipe Guide) */
-  forgedRecipes: string[];
-  /** The next refill comes from a Rainbow Strike */
-  rainbowRefill: boolean;
+  /** Distinct evolution IDs ignited during this fight (merged into save.discoveredEvolutions) */
+  forgedEvolutions: string[];
 
   // Hazards
   /** Cards carrying a level time bomb (their fuse is `countdownTimer`, in seconds) */
@@ -1133,6 +1493,8 @@ export interface RunState {
   bonusCardsMatched: number;
   levelUpsTaken: number;
   shopBuys: number;
+  /** Full single-fight metrics snapshot read by the 200-Bounty evaluator & analytics */
+  fightMetrics: FightMetrics;
 
   // Set-Parrying & Live Multiplier Ignition / Kill-Cam
   /** Live telegraphed attack & Set-Parry state (null on early onboarding / sandbox) */
@@ -1143,8 +1505,6 @@ export interface RunState {
   perfectParriesLanded: number;
   /** Snapshot of the latest player Set for Live Multiplier Ignition & Kill-Cam visuals */
   lastSetIgnition: SetIgnition | null;
-  /** Per-weapon Power cadence progress (e.g. unbroken Sets for Glass Sword, full-HP streak for Life Vessel) */
-  powerProgress?: Record<string, number>;
   /** Remaining cooldown (ms) on the tactical Sacrifice / Redraw action in timed fights */
   sacrificeCooldownMs?: number;
   /** True once tactical Sacrifice / Redraw has been used in the current wave (gates untimed fights) */

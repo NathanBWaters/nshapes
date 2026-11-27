@@ -15,7 +15,7 @@ import type { Unlock } from '../progress';
 import { getFighter } from '../data/fighters';
 import { getArcana } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { getWeaponEvolution } from '../data/evolutions';
 import { CAMPAIGN_FEATURES } from '../data/features';
 import { getLevel } from '../data/levels';
 import { getMechanic } from '../data/mechanics';
@@ -23,7 +23,7 @@ import { isFighterTrial, unlockablesOf, type Unlockable } from '../data/rewards'
 import { DARK } from './ui';
 
 export interface UnlockableDisplay {
-  kind: Unlockable['kind'] | 'path' | 'summit';
+  kind: Unlockable['kind'] | 'path' | 'summit' | 'weapon_slot';
   /** Its name on the unlock reveal */
   name: string;
   /** Its label in a reward row once earned */
@@ -41,6 +41,10 @@ export interface UnlockableDisplay {
   fighter?: CharacterName;
   /** Drawn as a weapon relic instead of the icon */
   weapon?: Weapon;
+  /** For per-weapon evolutions: the recipient Armory weapon */
+  evolutionWeapon?: Weapon;
+  /** For weapon_slot unlocks: the new belt slot count (4 or 5) */
+  slotNumber?: 4 | 5;
 }
 
 export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
@@ -61,7 +65,7 @@ export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
     case 'weapon': {
       const w = getArmoryWeapon(u.id);
       return {
-        kind: u.kind, name: w?.name ?? '?', revealed: w?.name ?? '?', secret: 'A new weapon', bountySecret: 'Armory Weapon',
+        kind: u.kind, name: w?.name ?? '?', revealed: w?.name ?? '?', secret: 'A new weapon', bountySecret: w?.name ?? 'Armory Weapon',
         icon: w?.icon ?? 'lorc/gems', headline: 'New weapon unlocked!', tease: 'Something new for your Armory.',
         badge: w ? 'WEAPON' : null,
         accent: DARK.gold, weapon: w,
@@ -71,19 +75,30 @@ export const describeUnlockable = (u: Unlockable): UnlockableDisplay => {
       const a = getArcana(u.id);
       const name = `Arcana ${a.numeral}: ${a.name}`;
       return {
-        kind: u.kind, name, revealed: name, secret: 'A new Arcana', bountySecret: 'Arcana Wildcard',
+        kind: u.kind, name, revealed: name, secret: 'A new Arcana', bountySecret: name,
         icon: a.icon, headline: 'New Arcana unlocked!', tease: 'A tarot wildcard that twists the rules of battle.',
         badge: 'ARCANA WILDCARD', accent: '#A855F7',
       };
     }
     case 'evolution': {
-      const r = EVOLUTION_RECIPES.find(x => x.id === u.id);
-      const name = r?.name ?? 'Evolution';
+      const evo = getWeaponEvolution(u.id);
+      const parentWeapon = evo ? getArmoryWeapon(evo.weaponId) : undefined;
+      const name = evo?.name ?? 'Evolution';
+      const sec = evo ? Math.round(evo.durationMs / 1000) : 18;
       return {
-        kind: u.kind, name, revealed: `Evolution: ${name}`, secret: 'An evolution', bountySecret: 'An evolution',
-        icon: r?.icon ?? 'lorc/crystal-shine', headline: 'New evolution unlocked!',
-        tease: 'Two weapon families can now fuse into a 30-second power trip!',
-        badge: 'EVOLUTION RECIPE', accent: '#FFD700',
+        kind: u.kind,
+        name,
+        revealed: parentWeapon ? `${name} (${parentWeapon.name})` : `Evolution: ${name}`,
+        secret: 'A weapon evolution',
+        bountySecret: parentWeapon ? `${parentWeapon.name} Evo: ${name}` : `Evo: ${name}`,
+        icon: evo?.icon ?? 'lorc/crystal-shine',
+        headline: 'New evolution unlocked!',
+        tease: parentWeapon
+          ? `A ${sec}s timed evolution awakens for ${parentWeapon.name}!`
+          : 'A timed weapon evolution is ready to awaken!',
+        badge: parentWeapon ? `${parentWeapon.name.toUpperCase()} EVOLUTION` : 'WEAPON EVOLUTION',
+        accent: evo?.accent ?? '#7C3AED',
+        evolutionWeapon: parentWeapon,
       };
     }
   }
@@ -116,8 +131,26 @@ const describePath = (levelId: string): UnlockableDisplay => {
   };
 };
 
+const describeWeaponSlot = (slotNumber: 4 | 5): UnlockableDisplay => {
+  const ord = slotNumber === 4 ? '4th' : '5th';
+  return {
+    kind: 'weapon_slot',
+    slotNumber,
+    name: `${ord} Weapon Slot`,
+    revealed: `${ord} Weapon Slot`,
+    secret: `${ord} Weapon Slot`,
+    bountySecret: `${ord} Weapon Slot`,
+    icon: 'lorc/belt-buckles',
+    headline: `${ord} Weapon Slot Unlocked!`,
+    tease: `Carry ${slotNumber} weapons into every fight — deeper synergies, more evolutions!`,
+    badge: `BELT EXPANSION · ${slotNumber} SLOTS`,
+    accent: DARK.gold,
+  };
+};
+
 export const describeUnlock = (u: Unlock): UnlockableDisplay => {
   if (u.kind === 'path') return describePath(u.levelId);
+  if (u.kind === 'weapon_slot') return describeWeaponSlot(u.slotNumber);
   if (u.kind === 'summit') {
     return {
       kind: 'summit',
@@ -147,7 +180,7 @@ export const describeUnlock = (u: Unlock): UnlockableDisplay => {
   );
 };
 
-/** The unlocked thing itself: a fighter, a weapon relic, or its icon. */
+/** The unlocked thing itself: a fighter, a weapon relic, an evolution+weapon badge, or its icon. */
 export const UnlockableAvatar: React.FC<{
   display: UnlockableDisplay;
   size: number;
@@ -155,14 +188,25 @@ export const UnlockableAvatar: React.FC<{
   iconSize: number;
   iconColor: string;
   interactive?: boolean;
-}> = ({ display, size, fighterMood, iconSize, iconColor, interactive }) =>
-  display.fighter ? (
-    <FighterAvatar character={display.fighter} size={size} mood={fighterMood} />
-  ) : display.weapon ? (
-    <WeaponAvatar weapon={display.weapon} size={size} interactive={interactive} />
-  ) : (
-    <Icon name={display.icon} size={iconSize} color={iconColor} />
-  );
+}> = ({ display, size, fighterMood, iconSize, iconColor, interactive }) => {
+  if (display.fighter) {
+    return <FighterAvatar character={display.fighter} size={size} mood={fighterMood} />;
+  }
+  if (display.weapon) {
+    return <WeaponAvatar weapon={display.weapon} size={size} interactive={interactive} />;
+  }
+  if (display.evolutionWeapon) {
+    return (
+      <View style={sil.evoWrap}>
+        <WeaponAvatar weapon={display.evolutionWeapon} size={size} interactive={interactive} />
+        <View style={sil.evoDot}>
+          <Icon name="lorc/crystal-shine" size={Math.max(9, Math.round(size * 0.44))} color={COLORS.actionYellow} />
+        </View>
+      </View>
+    );
+  }
+  return <Icon name={display.icon} size={iconSize} color={iconColor} />;
+};
 
 /** A dark cut-out of an icon with a question mark — used wherever a reward is still secret. */
 export const Silhouette: React.FC<{ icon: IconName; size?: number; light?: boolean }> = ({ icon, size = 28, light }) => (
@@ -175,4 +219,15 @@ export const Silhouette: React.FC<{ icon: IconName; size?: number; light?: boole
 const sil = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
   q: { position: 'absolute', fontWeight: '900' },
+  evoWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  evoDot: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    backgroundColor: '#5B21B6',
+    borderRadius: 999,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
 });

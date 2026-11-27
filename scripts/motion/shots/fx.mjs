@@ -6,6 +6,18 @@ export default {
   'fx-hit-effects-off': studio('fx-hit-effects-off', 'fx-event-hit', "A Set's hit with the in-game Effects switch off: only its number shows (effects studio)", {
     prepare: (page, h) => h.tap('fx-reduced'),
   }),
-  'fx-evolution': studio('fx-evolution', 'fx-evolution', 'The evolution cut-in, dismissed with a tap after 1.6 s (effects studio)', { actions: [tapScreenAt(100)], maxFrames: 220 }),
-  'fx-evolution-2': studio('fx-evolution-2', 'fx-evolution-2', 'Two evolutions at once: two cut-ins in a row (effects studio)', { actions: [tapScreenAt(100), tapScreenAt(200)], maxFrames: 320 }),
+  'fx-evolution': studio('fx-evolution', 'fx-evolution', 'Single-weapon Evolution Awakening cut-in, dismissed with a tap after 1.6 s (effects studio)', {
+    actions: [tapScreenAt(100)],
+    maxFrames: 220,
+  }),
+  'fx-evolution-2': studio('fx-evolution-2', 'fx-evolution-2', 'Two simultaneous single-weapon Evolution Awakenings queued back-to-back (effects studio)', {
+    actions: [tapScreenAt(100), tapScreenAt(200)],
+    maxFrames: 320,
+  }),
+  'fx-evolution-banner': studio('fx-evolution-banner', 'fx-evolution-banner', 'Repeat multi-weapon non-blocking EvolutionBanner coalescing (effects studio)', {
+    maxFrames: 160,
+  }),
+  'fx-evo-almost': studio('fx-evo-almost', 'fx-showcase-evo-almost', 'Almost-Ready evolution anticipation pulse on GearBelt (effects studio)', {
+    maxFrames: 72,
+  }),
 };

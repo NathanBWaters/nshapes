@@ -2,20 +2,22 @@ import React from 'react';
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Card from '@/components/Card';
 import AdventureRun, { resetHudInspectTipForTest } from '@/adventure/components/AdventureRun';
 import { GearChips, gearModifiers } from '@/adventure/components/GearChips';
 import HudInspector from '@/adventure/components/HudInspector';
 import LevelPreview from '@/adventure/components/LevelPreview';
-import PowerExplainer from '@/adventure/components/PowerExplainer';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { ARCANA, arcanaShortName } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
+import { evolutionsForWeapon } from '@/adventure/data/evolutions';
 import { getLevel } from '@/adventure/data/levels';
 import { MECHANICS } from '@/adventure/data/mechanics';
 import { challengeProgress } from '@/adventure/engine/challenges';
 import { createRun } from '@/adventure/engine/run';
 import { GearBelt } from '@/adventure/fx/GearBelt';
 import MultiplierIgnition, { RECEIPT_HOLD_MS } from '@/adventure/fx/MultiplierIgnition';
+import { buildAllLiveEvolutions } from '@/adventure/ui/evolutionViewModel';
 import { createMaxedSave, createSaveBefore } from '@/adventure/progress';
 import {
   MIN_READABLE_FONT_PX,
@@ -205,9 +207,13 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
       )
     );
 
-    // [UI-13] Total damage & best hit are hidden during active play
+    // [UI-13] Total damage & best hit are hidden during active play; legacy PowerMeter/EvolutionPickOverlay/run-evo-chip are removed
     expect(view.queryByTestId('run-total-damage')).toBeNull();
     expect(view.queryByTestId('run-biggest-hit')).toBeNull();
+    expect(view.queryByTestId('power-meter')).toBeNull();
+    expect(view.queryByTestId('run-power-delta')).toBeNull();
+    expect(view.queryByTestId('run-evo-chip')).toBeNull();
+    expect(view.queryByTestId('evo-pick-option-0')).toBeNull();
 
     // [UI-13] Orange Tabby's Nine Lives (1 life left) is lit & expanded; Scrappy (+0 at full HP) collapses into dim pip
     const nineLives = view.getByTestId('run-passive-nine_lives');
@@ -218,7 +224,7 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
 
     // [UI-19] Arcana chip displays plain-English short name instead of bare Roman numeral "VII"
     const arcanaChip = view.getByTestId('run-arcana-chip');
-    expect(arcanaChip).toHaveTextContent('Catalyst');
+    expect(arcanaChip).toHaveTextContent('Evolve');
     expect(view.queryByText('VII')).toBeNull();
 
     // [UI-03] Zero raw sword emoji in active HUD
@@ -430,10 +436,10 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
     expect(enemyW / fighterW).toBeGreaterThanOrEqual(1.35);
   });
 
-  it('[UI-19] scrubs jargon across Arcana, Mechanics, GearChips, PowerExplainer & LevelPreview without raw emojis', () => {
+  it('[UI-19] scrubs jargon across Arcana, Mechanics, GearChips, HudInspector & LevelPreview without legacy Power/Catalyst strings', () => {
     // Arcana copy & short names
     const glassPrism = ARCANA.find(a => a.id === 'glass_prism')!;
-    expect(glassPrism.upside).toContain('Charged');
+    expect(glassPrism.upside).toMatch(/Charged|Holo|damage/i);
     expect(glassPrism.upside).not.toMatch(/Power \(\+/);
     const scholar = ARCANA.find(a => a.id === 'scholars_gambit')!;
     expect(scholar.tradeoff).toContain('Weapon slot');
@@ -445,7 +451,7 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
     }
 
     // Mechanics copy
-    expect(MECHANICS.power_cards.title).toBe('Charged Cards');
+    expect(MECHANICS.power_cards.title).toBe('Charged & Holo Cards');
     expect(MECHANICS.charm.title).toBe('Weapon Belt');
     expect(MECHANICS.charm_slots.title).toBe('Weapon Slots');
 
@@ -465,13 +471,21 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
     expect(chips.queryByText('Num')).toBeNull();
     expect(chips.queryByText('Shd')).toBeNull();
 
-    // PowerExplainer uses Weapons / Weapon Belt
-    const pe = render(<PowerExplainer points={2} weapons={[getArmoryWeapon('blast-powder')!]} />);
-    expect(pe.getByTestId('power-explainer')).toHaveTextContent(/Weapon triggers/);
-    expect(pe.getByTestId('power-explainer')).toHaveTextContent(/Weapon Belt/);
-    expect(pe.queryByText(/charm belt/i)).toBeNull();
+    // HudInspector evolutions view shows per-weapon awakenings without Catalyst/Power jargon
+    const insp = render(
+      <HudInspector
+        target={{ kind: 'evolutions' }}
+        run={run}
+        shownHp={run.foeHp}
+        challenge={challengeProgress(run)}
+        onClose={() => {}}
+      />
+    );
+    expect(insp.getByTestId('inspector-evo-collectors-album')).toBeTruthy();
+    expect(insp.queryByText(/Catalyst/i)).toBeNull();
+    expect(insp.queryByText(/charm belt/i)).toBeNull();
 
-    // LevelPreview uses plain-English Catalyst copy and zero raw ✦ glyph
+    // LevelPreview renders per-weapon slots without legacy Catalyst likelihood pill
     const preview = render(
       wrap(
         <LevelPreview
@@ -479,7 +493,6 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
           save={{
             ...createMaxedSave(),
             charms: ['blast-powder', 'mending-charm'],
-            unlockedEvolutions: ['phoenix-pyre'],
           }}
           initialTab="loadout"
           onClose={() => {}}
@@ -490,8 +503,50 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
         />
       )
     );
-    expect(preview.getByTestId('preview-evo-likelihood')).toHaveTextContent(/chance for a Catalyst on new cards/);
-    expect(preview.queryByText(/✦/)).toBeNull();
+    expect(preview.queryByTestId('preview-evo-likelihood')).toBeNull();
+    expect(preview.queryByText(/chance for a Catalyst/i)).toBeNull();
+  });
+
+  it('announces GearBelt live evolution states and Card.holo / Card.marked via accessibilityLabel', () => {
+    const save = {
+      ...createMaxedSave(),
+      charms: ['blast-powder', 'flint-spark', 'mending-charm'],
+    };
+    const run = createRun(getLevel('2-8'), save, { seed: 13 });
+    const liveEvos = buildAllLiveEvolutions(run.weaponEvolutions).map((vm, idx) =>
+      idx === 0
+        ? { ...vm, phase: 'active' as const, activeRemainingMs: 11_400 }
+        : idx === 1
+          ? { ...vm, phase: 'charging' as const, progress: vm.target - 1, almostReady: true }
+          : { ...vm, phase: 'cooldown' as const, cooldownRemainingMs: 2_200 }
+    );
+    const belt = render(
+      <GearBelt weapons={run.weapons} evolutions={liveEvos} width={375} onInspect={() => {}} />
+    );
+    expect(belt.getByTestId('belt-blast-powder').props.accessibilityLabel).toMatch(/active, 12 seconds remaining/);
+    expect(belt.getByTestId('belt-flint-spark').props.accessibilityLabel).toMatch(/almost ready/);
+    expect(belt.getByTestId('belt-mending-charm').props.accessibilityLabel).toMatch(/cooling down, 3 seconds/);
+    belt.unmount();
+
+    const cardView = render(
+      <Card
+        card={{
+          id: 'holo-marked',
+          shape: 'diamond',
+          color: 'purple',
+          number: 3,
+          shading: 'striped',
+          selected: false,
+          holo: true,
+          marked: true,
+        }}
+        onClick={() => {}}
+      />
+    );
+    expect(
+      cardView.getByLabelText(/3 pink striped triangle, holo card, plus 4 base damage and 1\.2x multiplier, marked/)
+    ).toBeTruthy();
+    cardView.unmount();
   });
 
   it('[UI-16] enforces >=11px typography floor across all owned HUD, inspector, belt, explainer & preview components', () => {
@@ -503,12 +558,17 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
     const run = createRun(getLevel('2-8'), save, { seed: 11 });
     const mods = gearModifiers(run);
     const blast = getArmoryWeapon('blast-powder')!;
+    const liveEvos = buildAllLiveEvolutions(run.weaponEvolutions);
+    const sampleEvo = evolutionsForWeapon('blast-powder')[0];
 
     assertMinFontFloor(render(<GearChips run={run} mods={mods} onInspectWeapon={() => {}} />));
     assertMinFontFloor(
       render(
         <GearBelt
           weapons={run.weapons}
+          evolutions={liveEvos.map((e, i) =>
+            i === 0 ? { ...e, phase: 'active' as const, activeRemainingMs: 12_000 } : { ...e, progress: 1 }
+          )}
           growth={{ 'blast-powder#0': { stacks: 2, progress: 0 } }}
           counters={[
             {
@@ -523,13 +583,13 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
           ignition={{
             id: 1,
             math: {
-              cards: 3,
+              cards: 6,
               collateral: {},
               flatBonus: 0,
               multiplier: 1,
               rainbow: false,
               extra: 0,
-              hit: 3,
+              hit: 6,
               diffTraits: 2,
               graceUsed: false,
               sinceLastMs: 1000,
@@ -547,8 +607,29 @@ describe('Wave 5 Lane B: HUD Diet, Thumb-Zone Safety, Typography, Tap Targets & 
       )
     );
     assertMinFontFloor(render(<MultiplierIgnition ignition={null} run={run} enabled onPress={() => {}} />));
-    assertMinFontFloor(render(<WeaponExplainer weapon={blast} defaultOpen />));
-    assertMinFontFloor(render(<PowerExplainer points={3} weapons={run.weapons} evolutionsTriggered={1} />));
+    assertMinFontFloor(
+      render(
+        <WeaponExplainer
+          weapon={blast}
+          evolutionMode="live"
+          equippedEvolutionId={sampleEvo.id}
+          liveEvolution={liveEvos[0] ?? null}
+          defaultOpen
+        />
+      )
+    );
+    assertMinFontFloor(
+      render(
+        <HudInspector
+          target={{ kind: 'evolutions' }}
+          run={run}
+          shownHp={run.foeHp}
+          challenge={challengeProgress(run)}
+          showGuardTip
+          onClose={() => {}}
+        />
+      )
+    );
     assertMinFontFloor(
       render(
         <HudInspector

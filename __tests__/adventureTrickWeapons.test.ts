@@ -11,13 +11,14 @@ import { SURGE_RULES, TRICK_RULES } from '@/adventure/data/rules';
 import { charmWeapons, getArmoryWeapon } from '@/adventure/data/armory';
 import { TRICK_WEAPON_IDS } from '@/adventure/data/adventureWeapons';
 import { hasWeaponRole } from '@/adventure/data/weaponRoles';
+import { getWeaponEvolution } from '@/adventure/data/evolutions';
+import { EVOLUTION_CHASSIS } from '@/adventure/engine/sources';
 import { createMaxedSave } from '@/adventure/progress';
 import { BOTS, simulateRun } from '@/adventure/engine/bot';
 import { getLevel } from '@/adventure/data/levels';
 import type { AdventureWeapon, RunState } from '@/adventure/types';
 import type { Modifiers } from '@/adventure/rules/types';
 import { eventsOf, findSet, miss, playSet, relic, startFight, testLevel, tick, withWeapons } from './testUtils/adventureFight';
-import { setPowerEnabled } from '@/adventure/data/weaponPower';
 
 /** A fight holding a weapon that brings these trick numbers. */
 const withTrick = (modifiers: Modifiers, s: RunState = startFight()): RunState => {
@@ -57,7 +58,6 @@ describe('Magnet', () => {
     expect(next.log[next.log.length - 1].lines).toContainEqual({ type: 'rule', amount: 6, text: 'Magnet!' });
     expect(next.board.filter(c => c.magnet)).toHaveLength(1);
     expect(next.board.find(c => c.magnet)!.id).not.toBe(marked[0].id);
-    // A Set without the marked card gets nothing from it
     const without = findSet(s, set => !set.some(c => c.magnet));
     if (without) expect(playSet(s, without).log.at(-1)!.lines.some(l => l.text === 'Magnet!')).toBe(false);
   });
@@ -101,12 +101,12 @@ describe('Odd One Out and the Collector\'s Album', () => {
   });
 
   it('the Album fills one page per trait, pays on the last and starts over', () => {
-    let s = withTrick({ albumDamage: 15 });
+    let s = withTrick({ albumDamage: 24 });
     let paid = false;
     for (let i = 0; i < 80 && !paid; i++) {
       const page = findSet(s, set => albumPageOf(set, s.attributes, s.gear.album) !== null);
       s = playSet(s, page ?? findSet(s)!);
-      paid = s.log[s.log.length - 1].lines.some(l => l.text === 'Album complete!' && l.amount === 15);
+      paid = s.log[s.log.length - 1].lines.some(l => l.text === 'Album complete!' && l.amount === 24);
     }
     expect(paid).toBe(true);
     expect(s.gear.album).toEqual([]);
@@ -144,11 +144,11 @@ describe('Snowball and the Glass Sword', () => {
 
 describe('Devil\'s Bargain', () => {
   it('pays for the heart it took and every other missing heart', () => {
-    let s = withTrick({ missingHeartDamage: 2 }, startFight({ save: { selectedFighter: 'Corgi' }, features: ['hearts', 'gear'] }));
+    let s = withTrick({ missingHeartDamage: 4 }, startFight({ save: { selectedFighter: 'Corgi' }, features: ['hearts', 'gear'] }));
     s = playSet(s);
-    expect(s.log[s.log.length - 1].lines).toContainEqual({ type: 'rule', amount: 2, text: "Devil's Bargain" });
-    s = playSet(miss(s));
     expect(s.log[s.log.length - 1].lines).toContainEqual({ type: 'rule', amount: 4, text: "Devil's Bargain" });
+    s = playSet(miss(s));
+    expect(s.log[s.log.length - 1].lines).toContainEqual({ type: 'rule', amount: 8, text: "Devil's Bargain" });
   });
 });
 
@@ -160,7 +160,6 @@ describe('Wild Card', () => {
     expect(isValidCombination([a, b, wild], s.attributes).isValid).toBe(true);
     const board = s.board.map(x => (x.id === c.id ? wild : x));
     const n = board.length - 1;
-    // Every pair of the other cards, plus the ordinary Sets among them
     expect(allSets(board, s.attributes).filter(set => set.some(x => x.isWild))).toHaveLength((n * (n - 1)) / 2);
   });
 
@@ -215,7 +214,6 @@ describe('Understudy', () => {
     expect(copy.effects.explosionChance).toBe(getArmoryWeapon('blast-powder', { 'blast-powder': { level: 2, tuning: {} } })!.effects.explosionChance);
     expect(copy.shortDescription).toContain(blast.name);
 
-    // Even a Lv 1 Understudy copies a higher-level left charm at the neighbor's level!
     const [, highCopy] = charmWeapons(['blast-powder', 'understudy'], {
       'blast-powder': { level: 4, tuning: { explosionChance: 4 } },
       understudy: { level: 1, tuning: {} },
@@ -234,7 +232,6 @@ describe('Understudy', () => {
     expect(s.weapons.map(w => w.id)).toEqual(['magnet', 'understudy']);
     const orig = (s.weapons[0] as AdventureWeapon).modifiers!;
     const copy = (s.weapons[1] as AdventureWeapon).modifiers!;
-    // Understudy copies Magnet at max(understudyLevel, magnetLevel), untuned
     const expectedLevel = Math.max(s.weaponBuilds.understudy?.level ?? 1, s.weaponBuilds.magnet?.level ?? 1);
     expect(copy.magnetDamage).toBe(
       (getArmoryWeapon('magnet', { magnet: { level: expectedLevel, tuning: {} } }) as AdventureWeapon).modifiers!.magnetDamage
@@ -244,24 +241,37 @@ describe('Understudy', () => {
 });
 
 describe('Encore Mask', () => {
-  // Exact hits: Power (which an evolution surges) is switched off here
-  beforeEach(() => setPowerEnabled(false));
-  afterEach(() => setPowerEnabled(true));
-  it('extends evolutions by 5s, boosts Sets while evolved, and ends with a blast + Curtain Call ×2', () => {
-    const save = { ...createMaxedSave(), charms: ['blast-powder', 'mending-charm', 'encore-mask'], skillNodes: {}, equippedArcana: [], upgrades: {} };
+  it('extends per-weapon evolutions, boosts Sets while evolved, blasts + arms Curtain Call ×1.3 & grants head-start tick on expiry', () => {
+    const evo = getWeaponEvolution('blast-powder:cluster-charge')!;
+    const save = {
+      ...createMaxedSave(),
+      selectedFighter: 'Pelican' as const,
+      charms: ['blast-powder', 'encore-mask'],
+      equippedEvolutions: { 'blast-powder': evo.id, 'encore-mask': 'encore-mask:standing-ovation' },
+      skillNodes: {},
+      equippedArcana: [],
+      upgrades: {},
+    };
     let s = startFight({ save, features: ['hearts', 'gear', 'evolutions'] });
-    const set = findSet(s)!;
-    s = { ...s, board: s.board.map(c => (c.id === set[0].id ? { ...c, hasEvolutionItem: true, evolutionReady: true } : c)) };
-    s = playSet(s, findSet(s, cards => cards.some(c => c.hasEvolutionItem)));
-    expect(s.activeEvolutions).toHaveLength(1);
-    // Base 30s + Encore Mask +5s = 35s
-    expect(s.activeEvolutions[0].durationMs).toBe(35000);
-    s = tick(s, 36000, 1000);
-    expect(s.activeEvolutions).toHaveLength(0);
-    const encoreDmg = (s.weapons.find(w => w.id === 'encore-mask') as AdventureWeapon).modifiers!.encoreDamage!;
+    const encore = s.weapons.find(w => w.id === 'encore-mask') as AdventureWeapon;
+    const extraMs = encore.modifiers!.evolutionDurationMs!;
+    const encoreDmg = encore.modifiers!.encoreDamage!;
+
+    s = runReducer(s, { type: 'DEV_TRIGGER_EVO', weaponId: 'blast-powder' });
+    const active = s.weaponEvolutions.find(t => t.weaponId === 'blast-powder')!;
+    expect(active.phase).toBe('active');
+    expect(active.durationMs).toBe(evo.durationMs + extraMs);
+
+    s = tick(s, active.durationMs + 1000, 1000);
+    expect(s.weaponEvolutions.find(t => t.weaponId === 'blast-powder')!.phase).toBe('cooldown');
     expect(s.log.flatMap(e => e.lines)).toContainEqual({ type: 'hit', amount: encoreDmg, text: 'Encore!' });
-    // Curtain Call arms next Set ×2 even for evolutions without evolutionStart rules
-    expect(s.nextSetMultiplier).toBe(2);
+    expect(s.nextSetMultiplier).toBeCloseTo(1.3, 4);
+
+    // After 3s cooldown finishes, Encore head-start tick pre-charges the weapon
+    s = tick(s, EVOLUTION_CHASSIS.defaultCooldownMs + 500, 500);
+    const recharged = s.weaponEvolutions.find(t => t.weaponId === 'blast-powder')!;
+    expect(recharged.phase).toBe('charging');
+    if (recharged.target > 1) expect(recharged.progress).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -274,7 +284,6 @@ describe('trick weapons in real fights', () => {
         const { state } = simulateRun(getLevel(id), { ...base, charms }, BOTS.average, 7 + i);
         expect(['won', 'lost']).toContain(state.status);
         expect(state.log.reduce((a, e) => a + e.damage, 0)).toBe(state.totalDamage);
-        // One wild card at a time, plus the two more its growth can allow
         expect(state.board.filter(c => c.isWild).length).toBeLessThanOrEqual(3);
       }
     }
@@ -286,7 +295,7 @@ describe('trick weapons in real fights', () => {
 const lastLines = (s: RunState) => s.log[s.log.length - 1].lines;
 
 describe('Cursed Idol', () => {
-  it('a cursed card is out of play, then becomes a ×2 card or passes the curse on', () => {
+  it('a cursed card is out of play, then lifts as a ×1.35 card or passes the curse on', () => {
     let s = withTrick({ curseChance: 100 });
     s = playSet(s);
     const cursed = s.board.filter(c => c.cursedUntil !== undefined);
@@ -294,7 +303,6 @@ describe('Cursed Idol', () => {
     expect(cursed.every(c => c.locked)).toBe(true);
     expect(allSets(s.board, s.attributes).flat().some(c => c.locked)).toBe(false);
     s = tick(s, 11000, 1000);
-    // Each of those curses ended one of two ways
     for (const c of cursed) {
       const now = s.board.find(b => b.id === c.id);
       if (now) expect(!!now.doubler || !now.locked).toBe(true);
@@ -302,7 +310,11 @@ describe('Cursed Idol', () => {
     const doubled = findSet(s, set => set.some(c => c.doubler));
     if (!doubled) return;
     s = playSet(s, doubled);
-    expect(lastLines(s)).toContainEqual({ type: 'rule', amount: 2, text: 'Curse broken ×2' });
+    expect(lastLines(s)).toContainEqual({
+      type: 'rule',
+      amount: TRICK_RULES.curseMultiplier,
+      text: `Curse broken ×${TRICK_RULES.curseMultiplier}`,
+    });
   });
 });
 
@@ -342,15 +354,14 @@ describe('Thorn Bush', () => {
 });
 
 describe('Rust', () => {
-  it('cards lose damage as they sit, never below nothing, and the oldest turns golden after 7 Sets', () => {
-    let s = withTrick({ rustGold: 15 });
+  it('cards lose damage as they sit, never below nothing, and the oldest turns golden (+8¢) after 7 Sets', () => {
+    let s = withTrick({ rustGold: 18 });
     s = playSet(s);
     expect(s.board.some(c => c.rust === 1)).toBe(true);
     for (let i = 0; i < 12; i++) s = playSet(s, findSet(s, set => !set.some(c => c.rusted)) ?? findSet(s));
     const golden = s.board.filter(c => c.rusted);
     expect(golden.length).toBeGreaterThan(0);
-    expect(golden.every(c => (c.bonusPoints ?? 0) >= 15 && (c.bonusMoney ?? 0) >= 5 && c.rust === undefined)).toBe(true);
-    // Three fully rusted plain cards are worth nothing, not less
+    expect(golden.every(c => (c.bonusPoints ?? 0) >= 18 && (c.bonusMoney ?? 0) >= TRICK_RULES.rustCoins && c.rust === undefined)).toBe(true);
     const rusty = findSet(s, set => set.every(c => (c.rust ?? 0) >= 1 && !c.bonusPoints && !c.charge));
     if (!rusty) return;
     const before = s.totalDamage;
@@ -419,7 +430,7 @@ describe('Ice Block', () => {
     expect(ice).toMatchObject({ frozen: 7, locked: true });
     for (let i = 0; i < 7; i++) s = playSet(s, findSet(s, set => !set.some(c => c.id === ice.id)));
     const thawed = s.board.find(c => c.id === ice.id);
-    if (!thawed) return; // destroyed by something else on the way
+    if (!thawed) return;
     expect(thawed).toMatchObject({ thawed: true });
     expect(thawed.locked).toBeFalsy();
     expect(thawed.bonusPoints).toBeGreaterThanOrEqual(25);
@@ -445,13 +456,12 @@ describe('Greedy Chest', () => {
       expect(paid.board.filter(c => c.chest !== undefined)).toHaveLength(1);
     }
     s = miss(s);
-    // A mistake loses what the chest grew, never its floor
     expect(s.board.find(c => c.chest !== undefined)?.chest).toBe(10);
   });
 });
 
 describe('Tightrope', () => {
-  it('pays Sets that touch the last Set and halves the others', () => {
+  it('pays Sets that touch the last Set and applies ×0.7 to off-rope Sets', () => {
     let s = withTrick({ tightropeDamage: 5 });
     const first = findSet(s)!;
     const slots = slotsOf(s, first);
@@ -461,8 +471,8 @@ describe('Tightrope', () => {
     const off = findSet(s, set => !slotsOf(s, set).some(i => near.has(i)));
     if (off) {
       const r = playSet(s, off);
-      expect(lastLines(r)).toContainEqual({ type: 'rule', amount: 0.5, text: 'Off the rope' });
-      expect(r.log[r.log.length - 1].set!.multiplier % 1).toBe(r.log[r.log.length - 1].set!.rainbow ? 0 : 0.5);
+      expect(lastLines(r)).toContainEqual({ type: 'rule', amount: TRICK_RULES.offRopeMultiplier, text: 'Off the rope' });
+      expect(r.log[r.log.length - 1].set!.multiplier).toBeCloseTo(TRICK_RULES.offRopeMultiplier, 2);
     }
     const onRope = findSet(s, set => slotsOf(s, set).some(i => near.has(i)));
     if (onRope) expect(lastLines(playSet(s, onRope))).toContainEqual({ type: 'rule', amount: 5, text: 'Tightrope' });
@@ -487,9 +497,6 @@ describe('Hot Potato', () => {
 });
 
 describe('trick & gamble engine bug fixes', () => {
-  beforeEach(() => setPowerEnabled(false));
-  afterEach(() => setPowerEnabled(true));
-
   it('frozenMs pauses elapsedMs and tickGear (Glass Sword and Thorn Bush timers freeze cleanly)', () => {
     let s = withTrick(
       { glassDamage: 8, thornChance: 100, thornDamage: 6 },
@@ -510,11 +517,9 @@ describe('trick & gamble engine bug fixes', () => {
       { bountyDamage: 12 },
       startFight({ level: testLevel({ rules: { attributes: ['shape', 'color', 'number'], shadingSurge: true, timer: 300 } }), features: ['hearts', 'gear'] })
     );
-    // Enter Shading Surge
     s = tick(s, SURGE_RULES.calmMs, 1000);
     expect(s.surge?.active).toBe(true);
     expect(s.attributes).toContain('shading');
-    // Force a poster roll during surge: must never pick 'shading'
     for (let i = 0; i < 6; i++) {
       s = { ...s, gear: { ...s.gear, bounty: { attribute: 'shading', value: 'striped', left: 1 } } };
       s = tick(s, 500);
@@ -527,11 +532,9 @@ describe('trick & gamble engine bug fixes', () => {
       startFight({ features: ['hearts', 'gear'] }),
       { ...relic([{ trigger: { on: 'mistake' }, effects: [{ do: 'cleanse' }] }]), modifiers: { fogChance: 100, fogBonus: 7 } } as AdventureWeapon
     );
-    // Play a Set so replacement cards are dealt face-down with fogBonus
     s = playSet(s);
     const fogged = s.board.find(c => c.isFaceDown && (c.fogBonus ?? 0) > 0)!;
     expect(fogged).toBeDefined();
-    // Pick 3 non-fogged cards for INVALID so cleanse runs without replacing the fogged card off the board
     const wrong = s.board.filter(c => c.id !== fogged.id).slice(0, 3);
     const afterInvalid = runReducer(s, { type: 'INVALID', cards: wrong });
     const after = runReducer(afterInvalid, { type: 'REPLACE', ids: wrong.map(c => c.id) });
@@ -542,7 +545,6 @@ describe('trick & gamble engine bug fixes', () => {
 
   it('Rust pays rustGold delta on already-gilded cards when rustGold increases later without double-counting', () => {
     let s = startFight({ features: ['hearts', 'gear'], level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }) });
-    // Mark one card from a valid set as already gilded with stamped value 10, then hold rustGold: 15 -> +5 delta
     const set = findSet(s)!;
     const gildedId = set[0].id;
     s = withWeapons(
@@ -554,7 +556,6 @@ describe('trick & gamble engine bug fixes', () => {
       { ...relic([]), modifiers: { rustGold: 15 } } as AdventureWeapon
     );
     const after = playSet(s, set);
-    // Delta = 15 - 10 = +5 paid in flatItems
     expect(after.log[after.log.length - 1].set?.flatItems).toContainEqual(
       expect.objectContaining({ label: 'Golden Rust', amount: 5, sourceRef: 'weapon:rust' })
     );
@@ -565,7 +566,6 @@ describe('trick & gamble engine bug fixes', () => {
     const set = findSet(s)!;
     const cardId = set[0].id;
     const slot = s.board.findIndex(c => c.id === cardId);
-    // Card is in the active Tar Pit row with tar: 1 and a thornAt that is about to expire (100ms left)
     s = {
       ...s,
       gear: { ...s.gear, tarRow: Math.floor(slot / 3) },
@@ -575,14 +575,12 @@ describe('trick & gamble engine bug fixes', () => {
     const stayed = afterMatch.board.find(c => c.id === cardId)!;
     expect(stayed.tar).toBe(2);
     expect(stayed.thornAt).toBeGreaterThanOrEqual(afterMatch.elapsedMs + TRICK_RULES.thornMs - 500);
-    // Ticking 1s must NOT trigger a thorn bite
     const heartsBefore = afterMatch.hearts!;
     const afterTick = tick(afterMatch, 1000, 500);
     expect(afterTick.hearts).toBe(heartsBefore);
   });
 
   it('Glass Sword scales its window by +1.5s per trait beyond 3 and reforges on a Rainbow Set or 3 clean Sets', () => {
-    // 4-trait board gets +1500ms window on top of glassWindowMs (5000ms -> 6500ms)
     let four = withTrick(
       { glassDamage: 9, glassWindowMs: 5000 },
       startFight({ level: testLevel({ rules: { attributes: ['shape', 'color', 'number', 'shading'], boardSize: 12 } }), features: ['hearts', 'gear'] })
@@ -592,24 +590,21 @@ describe('trick & gamble engine bug fixes', () => {
     four = tick(four, 1000, 500);
     expect(four.gear.glassBroken).toBe(true);
 
-    // Reforge on 3 consecutive clean Sets
     let s = withTrick({ glassDamage: 9 }, startFight({ features: ['hearts', 'gear'], level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }) }));
     s = miss(s);
     expect(s.gear.glassBroken).toBe(true);
-    // Play 3 non-rainbow Sets (or rainbow immediately reforges!)
     for (let i = 0; i < 3 && s.gear.glassBroken; i++) s = playSet(s);
     expect(s.gear.glassBroken).toBe(false);
     expect(eventsOf(s, 'rule').some(e => e.text === 'Glass Sword reforged!')).toBe(true);
   });
 
-  it('Collectors Album freezes pages at wave start, allows <=3 diff on 5-trait boards, and pays +3 mini-stamp per page', () => {
-    // 5-trait board: a 3-diff Set stamps a page when 1 trait is missing or matches
+  it('Collectors Album freezes pages at wave start, allows <=3 diff on 5-trait boards, and pays +6 mini-stamp per page', () => {
+    expect(ALBUM_PAGE_BONUS).toBe(6);
     const c1: Card = { id: '1', shape: 'oval', color: 'red', number: 1, shading: 'solid', background: 'white', selected: false };
     const c2: Card = { id: '2', shape: 'diamond', color: 'green', number: 2, shading: 'solid', background: 'white', selected: false };
     const c3: Card = { id: '3', shape: 'squiggle', color: 'purple', number: 3, shading: 'solid', background: 'white', selected: false };
     expect(albumPageOf([c1, c2, c3], ['shape', 'color', 'number', 'shading', 'background'])).toBe('shape');
 
-    // Wave-frozen albumPages during Shading Surge: never adds 'shading'
     let surgeFight = withTrick(
       { albumDamage: 24 },
       startFight({ level: testLevel({ rules: { attributes: ['shape', 'color', 'number'], shadingSurge: true, timer: 300 } }), features: ['hearts', 'gear'] })
@@ -619,7 +614,6 @@ describe('trick & gamble engine bug fixes', () => {
     expect(surgeFight.attributes).toContain('shading');
     expect(surgeFight.gear.albumPages).toEqual(['shape', 'color', 'number']);
 
-    // Intermediate page grants ALBUM_PAGE_BONUS (+3)
     let s = withTrick({ albumDamage: 24 }, startFight({ features: ['hearts', 'gear'], level: testLevel({ foes: [{ name: 'Dummy', hp: 500 }] }) }));
     const oneDiff = findSet(s, cards => countDifferentAttributes(cards, s.attributes) === 1);
     if (oneDiff) {

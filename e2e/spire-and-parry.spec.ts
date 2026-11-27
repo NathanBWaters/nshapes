@@ -139,11 +139,13 @@ test.describe('Set-Parrying, Multiplier Ignition, Kill-Cam & Starfall Summit E2E
 
     // Switch fighter & verify starter kit updates cleanly
     await page.getByTestId('spire-fighter-Badger').click();
-    await expect(page.getByTestId('spire-starter-kit')).toContainText('Bloodline');
+    await expect(page.getByTestId('spire-starter-kit')).toContainText('Prismatic Ray');
+    await expect(page.getByTestId('spire-starter-kit')).toContainText('Life Vessel');
     await assertAllTextVisible(page, 'Summit Setup Badger (375x667)');
 
     await page.getByTestId('spire-fighter-Corgi').click();
-    await expect(page.getByTestId('spire-starter-kit')).toContainText('Shard Garden');
+    await expect(page.getByTestId('spire-starter-kit')).toContainText('Growth Seed');
+    await expect(page.getByTestId('spire-starter-kit')).toContainText('Chaos Shard');
     await assertAllTextVisible(page, 'Summit Setup Corgi (375x667)');
 
     expect(pageErrors).toEqual([]);

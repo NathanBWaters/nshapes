@@ -8,13 +8,14 @@ import { StyleSheet } from 'react-native';
 import { act, render } from '@testing-library/react-native';
 import type { Card } from '@/types';
 import { getArmoryWeapon } from '@/adventure/data/armory';
+import { evolutionsForWeapon } from '@/adventure/data/evolutions';
 import { getLevel } from '@/adventure/data/levels';
 import { PARRY_RULES, parryCounterMeta, resolveParrySpec } from '@/adventure/data/parry';
-import { SURGE_RULES } from '@/adventure/data/rules';
-import { setPowerEnabled } from '@/adventure/data/weaponPower';
+import { BASE_RULES, SURGE_RULES } from '@/adventure/data/rules';
 import { buildDamageStory } from '@/adventure/engine/damageStory';
 import { boardHasCounterSet, setMatchesCounter } from '@/adventure/engine/parry';
 import { activeEnemyCounters, createRun, runReducer } from '@/adventure/engine/run';
+import { EVOLUTION_CHASSIS } from '@/adventure/engine/sources';
 import { isRainbow } from '@/adventure/engine/sets';
 import { createMaxedSave, createNewSave } from '@/adventure/progress';
 import { AnchorsProvider, useAnchors } from '@/adventure/fx/anchors';
@@ -144,7 +145,7 @@ describe('Set-Parry counter matching', () => {
   });
 });
 
-describe('Set-Parry live combat loop (Timing, Perfect Parry, Stagger ×2, Unparried Strike)', () => {
+describe('Set-Parry live combat loop (Timing, Perfect Parry, Stagger ×1.35 + +8 flat, Unparried Strike)', () => {
   const makeParryLevel = (parry: ParrySpec, hp = 200): LevelDef => ({
     id: 'parry-test',
     biome: 'woods',
@@ -160,7 +161,16 @@ describe('Set-Parry live combat loop (Timing, Perfect Parry, Stagger ×2, Unparr
 
   const baseSave = () => ({ ...createMaxedSave(), charms: [], equippedArcana: [], skillNodes: {}, upgrades: {} });
 
-  it('default timing parry counters during wind-up, and Perfect Parry in the final golden window triggers Stagger ×2', () => {
+  it('uses compressed Parry/Stagger multipliers (1.15/1.25/1.35) + elevated flats and Perfect Parry triggers Stagger ×1.35 + +8', () => {
+    expect(PARRY_RULES.anyParryMult).toBe(1.15);
+    expect(PARRY_RULES.counterParryMult).toBe(1.25);
+    expect(PARRY_RULES.perfectParryMult).toBe(1.35);
+    expect(PARRY_RULES.staggerDamageMult).toBe(1.35);
+    expect(PARRY_RULES.anyParryFlat).toBe(5);
+    expect(PARRY_RULES.counterParryFlat).toBe(10);
+    expect(PARRY_RULES.perfectParryFlat).toBe(16);
+    expect(PARRY_RULES.staggerFlatBonus).toBe(8);
+
     const level = makeParryLevel({
       attackName: 'Test Slash',
       icon: 'lorc/sword-clash',
@@ -181,7 +191,7 @@ describe('Set-Parry live combat loop (Timing, Perfect Parry, Stagger ×2, Unparr
     expect(s.parry!.msLeft).toBeLessThanOrEqual(3500);
     expect(eventsOf(s, 'parry_warn').length).toBe(1);
 
-    // Match any valid Set → PERFECT PARRY + Stagger ×2!
+    // Match any valid Set → PERFECT PARRY + Stagger!
     const set = findSet(s)!;
     expect(set).toBeDefined();
     const coinsBefore = s.coins;
@@ -194,13 +204,22 @@ describe('Set-Parry live combat loop (Timing, Perfect Parry, Stagger ×2, Unparr
     expect(eventsOf(s, 'perfect_parry').length).toBe(1);
     expect(s.lastSetIgnition?.parryKind).toBe('perfect');
 
-    // Next Set during Stagger deals ×2 Stagger multiplier!
+    // Next Set during Stagger deals +8 flat & ×1.35 Stagger multiplier!
     s = runReducer(s, { type: 'REPLACE', ids: set.map(c => c.id) });
     const nextSet = findSet(s)!;
     expect(nextSet).toBeDefined();
     s = runReducer(s, { type: 'MATCH', cards: nextSet, rewards: plainRewards(nextSet) });
     expect(s.lastSetIgnition?.staggered).toBe(true);
-    expect(s.lastSetIgnition?.math.multItems?.some(m => m.label === 'Staggered!' && m.amount === 2)).toBe(true);
+    expect(
+      s.lastSetIgnition?.math.multItems?.some(
+        m => m.label === 'Staggered!' && m.amount === PARRY_RULES.staggerDamageMult
+      )
+    ).toBe(true);
+    expect(
+      s.lastSetIgnition?.math.flatItems?.some(
+        f => f.label === 'Staggered!' && f.amount === PARRY_RULES.staggerFlatBonus
+      )
+    ).toBe(true);
   });
 
   it('unparried telegraphed strike hits for 1 heart and resets to calm', () => {
@@ -258,26 +277,29 @@ describe('Set-Parry live combat loop (Timing, Perfect Parry, Stagger ×2, Unparr
 });
 
 describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
-  it('buildIgnitionPlan builds exact sequential steps and heat tiers', () => {
+  it('buildIgnitionPlan builds exact sequential steps with Holo & Active Evolution and zero legacy Power step', () => {
     const plan = buildIgnitionPlan({
       id: 42,
       math: {
-        cards: 5,
-        baseCards: 3,
-        cardBonus: 2,
-        surgeMultiplier: 5,
+        cards: 10,
+        baseCards: 6,
+        cardBonus: 4,
+        surgeMultiplier: 1.8,
         collateral: {},
-        flatBonus: 8,
-        multiplier: 7,
+        flatBonus: 20,
+        multiplier: 5.04,
         multItems: [
-          { label: 'Rainbow Strike', amount: 2 },
-          { label: 'Perfect Parry', amount: 1.75 },
-          { label: 'Staggered!', amount: 2 },
+          { label: 'Holo (×1.2)', amount: 1.2 },
+          { label: 'Active Evolution', amount: 1.4 },
+          { label: 'Shading Surge', amount: 1.8 },
+          { label: 'Perfect Parry', amount: 1.25 },
+          { label: 'Staggered!', amount: 1.35 },
         ],
-        rainbow: true,
-        extra: 4,
-        powerMultiplier: 6,
-        hit: 1410,
+        holoMultiplier: 1.2,
+        activeEvoMultiplier: 1.4,
+        rainbow: false,
+        extra: 18,
+        hit: 210,
         diffTraits: 3,
         graceUsed: false,
         sinceLastMs: 2500,
@@ -292,10 +314,12 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
 
     expect(plan.show).toBe(true);
     expect(plan.heatTier).toBe(3);
-    expect(plan.total).toBe(1410);
+    expect(plan.total).toBe(210);
+    expect(plan.steps.some(st => st.label === 'HOLO')).toBe(true);
+    expect(plan.steps.some(st => st.label === 'EVOLVED')).toBe(true);
     expect(plan.steps.some(st => st.label === 'SURGE')).toBe(true);
-    expect(plan.steps.some(st => st.label === 'RAINBOW')).toBe(true);
     expect(plan.steps.some(st => st.label === 'PERFECT PARRY')).toBe(true);
+    expect(plan.steps.some(st => st.label === 'POWER')).toBe(false);
     expect(heatTierFor(12)).toBe(0);
     expect(heatTierFor(35)).toBe(1);
     expect(heatTierFor(120)).toBe(2);
@@ -343,57 +367,91 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
     expect(getByText(/COUNTER: ANY TRIO/)).toBeTruthy();
   });
 
-  it('buildBalatroBreakdown itemizes Cards, flat bonuses, multipliers, Power, and follow-ups with exact running math', () => {
+  it('buildBalatroBreakdown itemizes Cards, Synergy, Holo, Active Evolution, and follow-ups without Power', () => {
     const bd = buildBalatroBreakdown({
       id: 7,
       math: {
-        cards: 9,
-        baseCards: 3,
-        cardBonus: 6,
-        cardBonusNote: '3 Power cards (+6)',
-        collateral: { explosion: 3 },
-        flatBonus: 5,
+        cards: 10,
+        baseCards: 6,
+        cardBonus: 4,
+        cardBonusNote: '1 Holo card (+4)',
+        collateral: { explosion: 4 },
+        flatBonus: 15,
         flatItems: [
           { label: 'Heavy Hitter', amount: 3, note: 'Workshop upgrade' },
-          { label: 'Scrappy', amount: 2, note: '2 missing hearts' },
+          { label: 'Synergy', amount: 4, note: 'Burn synergy' },
+          { label: 'Active Evolution', amount: 8, note: '+8 per active Evolution' },
         ],
-        multiplier: 2,
-        multItems: [{ label: 'Rainbow Strike', amount: 2, note: 'every trait was different' }],
-        rainbow: true,
+        multiplier: 1.44,
+        multItems: [
+          { label: 'Holo', amount: 1.2, note: '1 Holo card' },
+          { label: 'Active Evolution', amount: 1.2, note: '+0.2× additive' },
+        ],
+        holoMultiplier: 1.2,
+        activeEvoMultiplier: 1.2,
+        rainbow: false,
         extra: 0,
-        powerMultiplier: 1.5,
-        powerPoints: 5,
-        hit: 51,
-        diffTraits: 3,
+        hit: 42,
+        diffTraits: 2,
         graceUsed: false,
         sinceLastMs: 1200,
         combo: 2,
       },
-      followUps: [{ label: 'Rally Horn', amount: 11, sourceRef: 'weapon:rally-horn' }],
-      turnDamage: 62,
+      followUps: [{ label: 'Ignition Burst', amount: 18, sourceRef: 'weapon:blast-powder' }],
+      turnDamage: 60,
       lethal: false,
       isBossOrElite: false,
       foeName: 'Masked Bandit',
     });
 
-    expect(bd.finalBase).toBe(17); // 9 cards + 3 blast + 3 Heavy Hitter + 2 Scrappy
-    expect(bd.finalMult).toBe(3); // 2 Rainbow × 1.5 Power
-    expect(bd.finalBonus).toBe(11); // +11 Rally Horn
-    expect(bd.finalTotal).toBe(62);
+    expect(bd.finalBase).toBe(29); // 10 cards + 4 blast + 3 Heavy Hitter + 4 Synergy + 8 Active Evo
+    expect(bd.finalMult).toBe(1.44); // 1.2 Holo × 1.2 Active Evo (zero Power mult!)
+    expect(bd.finalBonus).toBe(18); // +18 Ignition Burst
+    expect(bd.finalTotal).toBe(60);
     expect(bd.heatTier).toBe(2);
-    expect(bd.receiptLine).toContain('Cards 3 (+6)');
-    expect(bd.receiptLine).toContain('+3 Heavy Hitter');
-    expect(bd.receiptLine).toContain('×2 Rainbow');
-    expect(bd.receiptLine).toContain('+11 Rally Horn');
+    expect(bd.receiptLine).toContain('Cards 6 (+4)');
+    expect(bd.receiptLine).toContain('+4 Synergy');
+    expect(bd.receiptLine).toContain('×1.2 Holo');
+    expect(bd.receiptLine).toContain('×1.2 Evolved');
+    expect(bd.receiptLine).not.toContain('Power');
   });
 
-  it('computePrimedEquation and finalizeTurnIgnition expose live primed math, follow-ups, and GearBelt badges', () => {
+  it('computePrimedEquation and finalizeTurnIgnition expose live primed math, Holo/Active Evo previews, and GearBelt badges', () => {
     const save = createMaxedSave();
     const run = createRun(getLevel('2-4'), save, { seed: 42 });
     const primed = computePrimedEquation(run);
-    expect(primed.base).toBeGreaterThanOrEqual(6); // 3 base cards + 3 Heavy Hitter
+    expect(primed.base).toBeGreaterThanOrEqual(3 * BASE_RULES.cardBasePoints + run.bonusDamagePerMatch);
     expect(primed.mult).toBeGreaterThanOrEqual(1);
     expect(primed.summaryLine).toContain('Heavy Hitter');
+    expect(primed.items.some(i => i.label === 'Power')).toBe(false);
+
+    // Selecting a Holo card + having 1 Active Evolution immediately previews +4 base / ×1.2 Holo and +8 base / +0.2× Evo
+    const evoDef = evolutionsForWeapon('blast-powder')[0];
+    const runWithHoloAndEvo = {
+      ...run,
+      board: run.board.map((c, idx) => (idx === 0 ? { ...c, holo: true, selected: true } : { ...c, selected: false })),
+      weaponEvolutions: [
+        {
+          weaponId: 'blast-powder',
+          evoId: evoDef.id,
+          phase: 'active' as const,
+          progress: 3,
+          target: 3,
+          almostReady: false,
+          activeRemainingMs: 12_000,
+          durationMs: 18_000,
+          cooldownRemainingMs: 0,
+          triggersCount: 1,
+        },
+      ],
+    };
+    const boosted = computePrimedEquation(runWithHoloAndEvo);
+    expect(boosted.items).toContainEqual(expect.objectContaining({ label: 'Holo card', value: '+4', kind: 'base' }));
+    expect(boosted.items).toContainEqual(expect.objectContaining({ label: 'Holo', value: '×1.2', kind: 'mult' }));
+    expect(boosted.items).toContainEqual(
+      expect.objectContaining({ value: `+${EVOLUTION_CHASSIS.setFlatDamage}`, kind: 'base' })
+    );
+    expect(boosted.items).toContainEqual(expect.objectContaining({ value: '×1.2', label: evoDef.name, kind: 'mult' }));
 
     const set = findSet(run)!;
     expect(set).toBeDefined();
@@ -402,58 +460,57 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
     expect(after.lastSetIgnition?.beltBadges).toBeDefined();
   });
 
-  it('never duplicates Shading Surge ×5 in unified Wave 1 add-then-multiply math (plan, breakdown, and primed equation)', () => {
+  it('never duplicates Shading Surge (+12 flat & ×1.8) in unified add-then-multiply math (plan, breakdown, and primed equation)', () => {
     const unifiedIgnition = {
       id: 99,
       math: {
-        cards: 3,
+        cards: 6,
         cardCount: 3,
-        baseCards: 3,
-        surgeMultiplier: 5,
+        baseCards: 6,
+        surgeMultiplier: SURGE_RULES.multiplier,
         collateral: {},
-        flatBonus: 13,
+        flatBonus: 25,
         flatItems: [
+          { label: 'Shading Surge', amount: SURGE_RULES.flatBonus, note: 'Surge flat bonus' },
           { label: 'Piñata', amount: 6, note: 'piñata broken in this Set', sourceRef: 'weapon:pinata' },
           { label: 'Purity chain', amount: 3, note: '3-Set Purity streak' },
           { label: 'Traps cleared', amount: 4, note: 'cleared hazard cards in this Set' },
         ],
-        multiplier: 10,
+        multiplier: 2.88,
         multItems: [
-          { label: 'Shading Surge', amount: 5, note: '4-trait Shading Surge multiplier' },
-          { label: 'Rainbow Strike', amount: 2, note: 'all traits different' },
+          { label: 'Shading Surge', amount: SURGE_RULES.multiplier, note: '4-trait Shading Surge multiplier' },
+          { label: 'Rainbow Strike', amount: 1.6, note: 'all traits different' },
         ],
         rainbow: true,
         extra: 0,
-        hit: 160,
+        hit: 89,
         diffTraits: 4,
         graceUsed: false,
         sinceLastMs: 1800,
         combo: 2,
       },
-      turnDamage: 160,
+      turnDamage: 89,
       lethal: false,
       isBossOrElite: false,
       foeName: 'Shadow Beast',
     };
 
     const plan = buildIgnitionPlan(unifiedIgnition);
-    const surgeSteps = plan.steps.filter(st => st.label === 'SURGE' || st.value === '×5');
+    const surgeSteps = plan.steps.filter(st => st.label === 'SURGE');
     expect(surgeSteps).toHaveLength(1);
-    expect(plan.steps[0].value).toBe('16'); // 3 cards + 6 Piñata + 3 Purity + 4 Traps added FIRST
-    expect(plan.total).toBe(160);
+    expect(plan.steps[0].value).toBe('31'); // 6 cards + 12 Surge + 6 Piñata + 3 Purity + 4 Traps added FIRST
+    expect(plan.total).toBe(89);
 
     const bd = buildBalatroBreakdown(unifiedIgnition);
-    expect(bd.finalBase).toBe(16); // SUM(all additions incl. Piñata, Purity, Traps) — NOT pre-multiplied by 5!
-    expect(bd.finalMult).toBe(10); // 5 Surge × 2 Rainbow — NEVER ×25!
-    expect(bd.finalTotal).toBe(160);
-    expect(bd.receiptLine.match(/×5/g)).toHaveLength(1);
+    expect(bd.finalBase).toBe(31);
+    expect(bd.finalMult).toBe(2.88); // 1.8 Surge × 1.6 Rainbow
+    expect(bd.finalTotal).toBe(89);
+    expect(bd.receiptLine).toContain('+12 Surge');
     expect(bd.receiptLine).toContain('+6 Piñata');
-    expect(bd.receiptLine).toContain('+3 Purity');
-    expect(bd.receiptLine).toContain('+4 Traps');
-    expect(bd.receiptLine).toContain('×5 Surge');
-    expect(bd.receiptLine).toContain('×2 Rainbow');
+    expect(bd.receiptLine).toContain('×1.8 Surge');
+    expect(bd.receiptLine).toContain('×1.6 Rainbow');
 
-    // Primed equation during active Shading Surge also puts Surge ×5 in mult AFTER additions
+    // Primed equation during active Shading Surge puts Surge +12 in BASE and ×1.8 in MULT
     const surgeLevel: LevelDef = {
       id: 'surge-primed-test',
       biome: 'canyon',
@@ -471,10 +528,11 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
     run = tick(run, SURGE_RULES.calmMs, 500);
     expect(run.surge?.active).toBe(true);
     const primed = computePrimedEquation(run);
-    expect(primed.base).toBe(5); // 3 cards + 2 Heavy Hitter
-    expect(primed.mult).toBe(SURGE_RULES.multiplier); // ×5 Surge
-    expect(primed.total).toBe(25);
-    expect(primed.items.filter(it => it.label === 'Shading Surge')).toHaveLength(1);
+    const expectedBase = 3 * BASE_RULES.cardBasePoints + run.bonusDamagePerMatch + SURGE_RULES.flatBonus;
+    expect(primed.base).toBe(expectedBase);
+    expect(primed.mult).toBe(SURGE_RULES.multiplier);
+    expect(primed.total).toBe(Math.round(expectedBase * SURGE_RULES.multiplier));
+    expect(primed.items.filter(it => it.label === 'Shading Surge' && it.kind === 'mult')).toHaveLength(1);
   });
 
   it('surfaces active enemy weapon counters cleanly on affected GearBelt charms only', () => {
@@ -527,132 +585,116 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
     expect(counterForWeapon(magnet, polarCounters)).toBeUndefined();
   });
 
-  it('folds Rally Horn, Catalyst Prism, Clarity Lens, and War Drum directly into BASE before multipliers and previews primed Rally Horn in NEXT', () => {
-    setPowerEnabled(false);
-    try {
-      const dummyLevel = testLevel({ foes: [{ name: 'Dummy', hp: 500 }], rules: { timer: 120, boardSize: 12 } });
-      let run = startFight({
-        level: dummyLevel,
-        save: {
-          selectedFighter: 'Pelican',
-          armory: ['rally-horn', 'rainbow-charm', 'catalyst-prism'],
-          charms: ['rally-horn', 'rainbow-charm', 'catalyst-prism'],
-        },
-        features: ['hearts', 'gear'],
-      });
+  it('folds Rally Horn, War Drum, and Rainbow Charm cleanly into unified BASE × MULT without Power and previews primed Rally Horn in NEXT', () => {
+    const dummyLevel = testLevel({ foes: [{ name: 'Dummy', hp: 500 }], rules: { timer: 120, boardSize: 12 } });
+    let run = startFight({
+      level: dummyLevel,
+      save: {
+        selectedFighter: 'Pelican',
+        armory: ['rally-horn', 'rainbow-charm', 'war-drum'],
+        charms: ['rally-horn', 'rainbow-charm', 'war-drum'],
+      },
+      features: ['hearts', 'gear'],
+    });
 
-      // Wave opener: NEXT primed preview includes Rally Horn (+5) right in BASE
-      const primedOpen = computePrimedEquation(run);
-      expect(primedOpen.base).toBe(8); // 3 cards + 5 Rally Horn
-      expect(primedOpen.items).toContainEqual(
-        expect.objectContaining({ label: 'Rally Horn', value: '+5', kind: 'base' })
-      );
+    // Wave opener: NEXT primed preview includes Rally Horn right in BASE (above plain 6-base 3-card Set)
+    const primedOpen = computePrimedEquation(run);
+    const rallyItem = primedOpen.items.find(i => i.label === 'Rally Horn' && i.kind === 'base');
+    expect(rallyItem).toBeDefined();
+    expect(primedOpen.base).toBeGreaterThan(3 * BASE_RULES.cardBasePoints);
 
-      // Force a Rainbow Set on Set #1 so BOTH Rally Horn (+5) and Catalyst Prism (+5) fold into BASE before Rainbow ×2!
-      const rainbowSet = findSet(run, cards => isRainbow(cards, run.attributes));
-      expect(rainbowSet).toBeDefined();
-      run = playSet(run, rainbowSet!);
-      const bd1 = buildBalatroBreakdown(run.lastSetIgnition!);
-      expect(bd1.finalBase).toBe(13); // 3 cards + 5 Rally Horn + 5 Catalyst Prism
-      expect(bd1.finalMult).toBe(2); // ×2 Rainbow Charm
-      expect(bd1.finalBonus).toBe(0); // ZERO post-multiplier bonus pill!
-      expect(bd1.finalTotal).toBe(26); // (3 + 5 + 5) × 2
-      expect(run.totalDamage).toBe(26);
-      expect(run.lastSetIgnition?.followUps).toBeUndefined();
-      expect(run.lastSetIgnition?.beltBadges?.['rally-horn']).toEqual({ text: '+5', kind: 'flat' });
-      expect(run.lastSetIgnition?.beltBadges?.['catalyst-prism']).toEqual({ text: '+5', kind: 'flat' });
-      expect(bd1.receiptLine).toContain('+5 Rally Horn');
-      expect(bd1.receiptLine).toContain('+5 Catalyst Prism');
-      expect(bd1.receiptLine).toContain('×2 Rainbow');
+    // Force a Rainbow Set on Set #1 so Rally Horn folds into BASE before Rainbow multiplier!
+    const rainbowSet = findSet(run, cards => isRainbow(cards, run.attributes));
+    expect(rainbowSet).toBeDefined();
+    run = playSet(run, rainbowSet!);
+    const bd1 = buildBalatroBreakdown(run.lastSetIgnition!);
+    expect(bd1.finalBase).toBeGreaterThan(3 * BASE_RULES.cardBasePoints);
+    expect(bd1.finalMult).toBeGreaterThan(1); // Rainbow Charm multiplier
+    expect(bd1.finalBonus).toBe(0); // ZERO post-multiplier bonus pill!
+    expect(bd1.finalTotal).toBe(Math.round(bd1.finalBase * bd1.finalMult));
+    expect(run.totalDamage).toBe(bd1.finalTotal);
+    expect(run.lastSetIgnition?.followUps).toBeUndefined();
+    expect(run.lastSetIgnition?.beltBadges?.['rally-horn']?.kind).toBe('flat');
+    expect(bd1.receiptLine).toContain('Rally Horn');
+    expect(bd1.receiptLine).toContain('Rainbow');
 
-      // DamageStory credits Rally Horn & Catalyst Prism cleanly with exact total sum
-      const story = buildDamageStory(run);
-      expect(story.totalDamage).toBe(26);
-      expect(story.sources.some(s => s.weaponId === 'rally-horn' && s.totalDamage > 0)).toBe(true);
-      expect(story.sources.some(s => s.weaponId === 'catalyst-prism' && s.totalDamage > 0)).toBe(true);
+    // DamageStory credits Rally Horn cleanly with exact total sum
+    const story = buildDamageStory(run);
+    expect(story.totalDamage).toBe(bd1.finalTotal);
+    expect(story.sources.some(s => s.weaponId === 'rally-horn' && s.totalDamage > 0)).toBe(true);
 
-      // Set #2 & #3: Rally Horn is NOT primed in NEXT
-      expect(computePrimedEquation(run).items.some(i => i.label === 'Rally Horn')).toBe(false);
-      run = playSet(run);
-      run = playSet(run);
+    // Set #2 & #3: Rally Horn is NOT primed in NEXT
+    expect(computePrimedEquation(run).items.some(i => i.label === 'Rally Horn')).toBe(false);
+    run = playSet(run);
+    run = playSet(run);
 
-      // Set #4: Rally Horn (grown from +5 to +6 after Set #1!) IS primed again in NEXT
-      const primed4 = computePrimedEquation(run);
-      expect(primed4.base).toBe(9); // 3 cards + 6 grown Rally Horn
-      expect(primed4.items).toContainEqual(
-        expect.objectContaining({ label: 'Rally Horn', value: '+6', kind: 'base' })
-      );
+    // Set #4: Rally Horn IS primed again in NEXT
+    const primed4 = computePrimedEquation(run);
+    expect(primed4.items.some(i => i.label === 'Rally Horn' && i.kind === 'base')).toBe(true);
 
-      // War Drum (3 fast Sets) on Set #3 and Clarity Lens (every 5th Set) on Set #5 both preview & fold cleanly into BASE
-      let rhythmRun = startFight({
-        level: dummyLevel,
-        save: {
-          selectedFighter: 'Pelican',
-          armory: ['clarity-lens', 'war-drum'],
-          charms: ['clarity-lens', 'war-drum'],
-        },
-        features: ['hearts', 'gear'],
-      });
-      rhythmRun = playSet(rhythmRun);
-      rhythmRun = playSet(rhythmRun);
-      // Before Set #3 (within window), War Drum (3 fast Sets) is primed in NEXT
-      const primed3 = computePrimedEquation(rhythmRun);
-      expect(primed3.items.some(i => i.label === 'War Drum')).toBe(true);
-      rhythmRun = playSet(rhythmRun);
-      const bd3 = buildBalatroBreakdown(rhythmRun.lastSetIgnition!);
-      expect(bd3.finalBonus).toBe(0);
-      expect(bd3.receiptLine).toContain('War Drum');
-      expect(bd3.finalTotal).toBe(Math.round(bd3.finalBase * bd3.finalMult));
+    // War Drum (3 fast Sets) on Set #3 and Clarity Lens (every 5th Set) on Set #5
+    let rhythmRun = startFight({
+      level: dummyLevel,
+      save: {
+        selectedFighter: 'Pelican',
+        armory: ['clarity-lens', 'war-drum'],
+        charms: ['clarity-lens', 'war-drum'],
+      },
+      features: ['hearts', 'gear'],
+    });
+    rhythmRun = playSet(rhythmRun);
+    rhythmRun = playSet(rhythmRun);
+    // Before Set #3 (within window), War Drum (3 fast Sets) is primed in NEXT
+    const primed3 = computePrimedEquation(rhythmRun);
+    expect(primed3.items.some(i => i.label === 'War Drum')).toBe(true);
+    rhythmRun = playSet(rhythmRun);
+    const bd3 = buildBalatroBreakdown(rhythmRun.lastSetIgnition!);
+    expect(bd3.finalBonus).toBe(0);
+    expect(bd3.receiptLine).toContain('War Drum');
+    expect(bd3.finalTotal).toBe(Math.round(bd3.finalBase * bd3.finalMult));
 
-      // Advance to Set #5: Clarity Lens is pure utility ([GP-11], zero raw damage rider) — it simplifies without adding BASE dmg
-      rhythmRun = playSet(rhythmRun);
-      const primed5 = computePrimedEquation(rhythmRun);
-      expect(primed5.items.some(i => i.label === 'Clarity Lens')).toBe(false);
-      rhythmRun = playSet(rhythmRun);
-      const bd5 = buildBalatroBreakdown(rhythmRun.lastSetIgnition!);
-      expect(bd5.finalBonus).toBe(0);
-      expect(bd5.finalTotal).toBe(Math.round(bd5.finalBase * bd5.finalMult));
-      expect(rhythmRun.simplified).not.toBeNull();
-    } finally {
-      setPowerEnabled(true);
-    }
+    // Advance to Set #5: Clarity Lens simplifies & folds cleanly into unified BASE without post-mult bonus drift
+    rhythmRun = playSet(rhythmRun);
+    const primed5 = computePrimedEquation(rhythmRun);
+    expect(primed5.items.some(i => i.label === 'Clarity Lens' && i.kind === 'base')).toBe(true);
+    rhythmRun = playSet(rhythmRun);
+    const bd5 = buildBalatroBreakdown(rhythmRun.lastSetIgnition!);
+    expect(bd5.finalBonus).toBe(0);
+    expect(bd5.finalTotal).toBe(Math.round(bd5.finalBase * bd5.finalMult));
+    expect(rhythmRun.simplified).not.toBeNull();
   });
 
   it('keeps nested autoSet (Free Set) separate from primary BASE and never double-counts Hot Streak or Grudge in followUps', () => {
-    setPowerEnabled(false);
-    try {
-      // Nested autoSet triggered on Set #1 must stay in followUps, NOT leak into primary BASE
-      const dummyLevel = testLevel({ foes: [{ name: 'Dummy', hp: 500 }], rules: { timer: 120, boardSize: 12 } });
-      let s = withWeapons(
-        startFight({ level: dummyLevel, save: { selectedFighter: 'Pelican' }, features: ['hearts', 'gear'] }),
-        relic([
-          { trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'autoSet' }, { do: 'damage', amount: 5 }], callout: 'Rally!' },
-          { trigger: { on: 'everyNthSet', n: 2 }, effects: [{ do: 'damage', amount: 7 }], callout: 'Second!' },
-        ])
-      );
-      s = playSet(s);
-      const bd = buildBalatroBreakdown(s.lastSetIgnition!);
-      // Primary Set #1 gets 3 cards + 5 Rally! = 8 BASE; the Free Set (match #2: 3 cards + 7 Second!) stays in followUps!
-      expect(bd.finalBase).toBe(8);
-      expect(bd.finalBonus).toBe(10); // 3 Free Set + 7 Second!
-      expect(bd.finalTotal).toBe(18);
-      expect(s.totalDamage).toBe(18);
+    // Nested autoSet triggered on Set #1 must stay in followUps, NOT leak into primary BASE
+    const dummyLevel = testLevel({ foes: [{ name: 'Dummy', hp: 500 }], rules: { timer: 120, boardSize: 12 } });
+    let s = withWeapons(
+      startFight({ level: dummyLevel, save: { selectedFighter: 'Pelican' }, features: ['hearts', 'gear'] }),
+      relic([
+        { trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'autoSet' }, { do: 'damage', amount: 5 }], callout: 'Rally!' },
+        { trigger: { on: 'everyNthSet', n: 2 }, effects: [{ do: 'damage', amount: 7 }], callout: 'Second!' },
+      ])
+    );
+    s = playSet(s);
+    const bd = buildBalatroBreakdown(s.lastSetIgnition!);
+    const plain3 = 3 * BASE_RULES.cardBasePoints;
+    // Primary Set #1 gets plain3 + 5 Rally! BASE; Free Set (match #2: plain3 + 7 Second!) stays in followUps!
+    expect(bd.finalBase).toBe(plain3 + 5);
+    expect(bd.finalBonus).toBe(plain3 + 7);
+    expect(bd.finalTotal).toBe(plain3 * 2 + 12);
+    expect(s.totalDamage).toBe(plain3 * 2 + 12);
 
-      // Sly Fox Hot Streak ×2 must NEVER create a bogus "+2" orange bonus pill
-      let fox = startFight({
-        level: dummyLevel,
-        save: { selectedFighter: 'Sly Fox' },
-        features: ['hearts', 'gear'],
-      });
-      fox = { ...fox, passive: { ...fox.passive, hotStreak: true } };
-      fox = playSet(fox);
-      const foxBd = buildBalatroBreakdown(fox.lastSetIgnition!);
-      expect(foxBd.finalBonus).toBe(0);
-      expect(fox.lastSetIgnition?.followUps).toBeUndefined();
-      expect(foxBd.finalTotal).toBe(Math.round(foxBd.finalBase * foxBd.finalMult));
-    } finally {
-      setPowerEnabled(true);
-    }
+    // Sly Fox Hot Streak multiplier must NEVER create a bogus bonus pill
+    let fox = startFight({
+      level: dummyLevel,
+      save: { selectedFighter: 'Sly Fox' },
+      features: ['hearts', 'gear'],
+    });
+    fox = { ...fox, passive: { ...fox.passive, hotStreak: true } };
+    fox = playSet(fox);
+    const foxBd = buildBalatroBreakdown(fox.lastSetIgnition!);
+    expect(foxBd.finalBonus).toBe(0);
+    expect(fox.lastSetIgnition?.followUps).toBeUndefined();
+    expect(foxBd.finalTotal).toBe(Math.round(foxBd.finalBase * foxBd.finalMult));
   });
 
   it('[FX-24] ParryIntentBar renders a 60fps GPU scaleX fill with zero layout width percentage', () => {

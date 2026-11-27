@@ -23,8 +23,8 @@ import {
   type FightReplayData,
 } from '../history';
 import FightReplay, { DamageSplitBar, REPLAY_SERIES, barPath, niceMax, splitLogDamage } from './FightReplay';
-import PowerExplainer from './PowerExplainer';
 import WeaponExplainer from './WeaponExplainer';
+import { beltSynergyAttrSet } from '../ui/synergyMeta';
 import { Btn, INK, PopIn, StarRow, TONE } from './ui';
 import { STAGGER, staggerDelay } from '@/utils/motion';
 
@@ -68,7 +68,6 @@ const BattleHistory: React.FC<Props> = ({ history, now, onRateBattle }) => {
   const { width } = useWindowDimensions();
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
-  const [openPowerKey, setOpenPowerKey] = useState<string | null>(null);
   const [replay, setReplay] = useState<FightReplayData | null>(null);
   const clock = useMemo(() => now ?? Date.now(), [now]);
   const totals = useMemo(() => summarize(history), [history]);
@@ -272,32 +271,17 @@ const BattleHistory: React.FC<Props> = ({ history, now, onRateBattle }) => {
                 <View style={st.facts}>
                   <Fact label="Damage" value={b.damage.toLocaleString()} />
                   <Fact label="Biggest hit" value={`${b.biggestHit}`} />
+                  {(b.peakBaseDamage ?? 0) > 0 && (
+                    <Fact testID="history-peak-base" label="Peak base" value={`${Math.round(b.peakBaseDamage!)}`} />
+                  )}
                   <Fact label="Sets" value={`${b.sets}`} />
                   <Fact label="Mistakes" value={`${b.mistakes}`} />
                   <Fact label="Fight clock" value={formatDuration(b.durationMs)} />
                   {b.coins > 0 && <Fact label="Coins" value={`+${b.coins}`} />}
-                  {b.evolutions > 0 && <Fact label="Evolutions" value={`${b.evolutions}`} />}
-                  {(b.power ?? 1) > 1 && (
-                    <Fact
-                      testID="history-power"
-                      label={openPowerKey === key ? 'Power (hide)' : 'Power · tap ?'}
-                      value={`×${b.power}`}
-                      active={openPowerKey === key}
-                      onPress={() => { sfx('click'); setOpenPowerKey(prev => (prev === key ? null : key)); }}
-                    />
+                  {(b.evosTriggered ?? b.evolutions) > 0 && (
+                    <Fact testID="history-evos" label="Evolutions" value={`${b.evosTriggered ?? b.evolutions}`} />
                   )}
                 </View>
-
-                {openPowerKey === key && (b.power ?? 1) > 1 && (
-                  <PowerExplainer
-                    points={b.replay?.power}
-                    multiplier={b.power}
-                    weapons={heldWeapons}
-                    evolutionsTriggered={b.evolutions}
-                    subtitle={`Peak multiplier reached: ×${b.power}`}
-                    compact
-                  />
-                )}
 
                 {damageSplit && b.replay && b.replay.totalDamage > 0 && (
                   <DamageSplitBar
@@ -335,7 +319,13 @@ const BattleHistory: React.FC<Props> = ({ history, now, onRateBattle }) => {
                   heldWeapons.length > 0 && (
                     <View style={st.legacyGear} testID="history-legacy-gear">
                       {heldWeapons.map(w => (
-                        <WeaponExplainer key={w.id} weapon={w} />
+                        <WeaponExplainer
+                          key={w.id}
+                          weapon={w}
+                          evolutionMode="preview"
+                          equippedEvolutionId={b.equippedEvolutions?.[w.id] ?? null}
+                          beltSynergyIds={beltSynergyAttrSet(b.weapons, w.id)}
+                        />
                       ))}
                     </View>
                   )

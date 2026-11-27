@@ -1,8 +1,8 @@
 /**
- * The balance report: runs the lab over the whole Armory and every recipe,
- * judges each number against targets.ts, and renders the result as markdown
- * (docs/balance-report.md) and a snapshot (docs/balance-snapshot.json) that
- * the next report diffs against.
+ * The balance report: runs the lab over the whole Armory and every per-weapon
+ * timed evolution (192 total), judges each number against targets.ts, and
+ * renders the result as markdown (docs/balance-report.md) and a snapshot
+ * (docs/balance-snapshot.json) that the next report diffs against.
  *
  *   npm run balance:report
  */
@@ -11,15 +11,16 @@ import { weaponRole, type WeaponRole } from '../data/weaponRoles';
 import {
   benches,
   effectiveRuleFirings,
+  evolutionLifts,
   inBuild,
   isDummyUnreachableRule,
+  mean,
   median,
   play,
-  recipeLifts,
   soloSample,
   type BenchId,
+  type EvolutionLift,
   type Lift,
-  type RecipeLift,
   type Sample,
 } from './lab';
 import { BALANCE_TARGETS as T, PARTNER_WEAPONS, TIERS, type Tier } from './targets';
@@ -29,15 +30,15 @@ export type VerdictKind =
   | 'underpowered'
   | 'passenger'
   | 'no-slot-value'
-  | 'weak-recipe'
-  | 'empty-recipe'
-  | 'runaway-recipe'
-  | 'rare-recipe'
+  | 'weak-evolution'
+  | 'empty-evolution'
+  | 'runaway-evolution'
+  | 'rare-evolution'
   | 'dead-rule';
 
 export interface Verdict {
   kind: VerdictKind;
-  /** The thing judged (weapon or recipe id) */
+  /** The thing judged (weapon or evolution id) */
   id: string;
   detail: string;
 }
@@ -52,6 +53,10 @@ export interface WeaponReport {
   tier: Record<Tier, number>;
   /** Value inside real builds, late game, average tier */
   inBuild: Lift;
+  /** Mean share of Set damage from pre-multiplier base damage (late solo) */
+  baseDamageShare: number;
+  /** Mean Synergy Graph hook damage per late solo fight */
+  synergyDamage: number;
   /** Authored weapon rules (`w0:<id>#i`) that fired 0 effective times across all solo stages */
   deadRules: string[];
 }
@@ -59,7 +64,7 @@ export interface WeaponReport {
 export interface BalanceReport {
   runs: number;
   weapons: WeaponReport[];
-  recipes: RecipeLift[];
+  evolutions: EvolutionLift[];
   verdicts: Verdict[];
   summary: {
     /** Share of weapons that earn their slot in a real build */
@@ -67,8 +72,9 @@ export interface BalanceReport {
     /** Weapons within reach of the strongest solo weapon */
     topPicks: string[];
     soloEarlyMean: number;
-    recipeLiftMedian: number;
-    recipeRuleLiftMedian: number;
+    evoLiftMedian: number;
+    evoRuleLiftMedian: number;
+    meanBaseDamageShare: number;
   };
 }
 
@@ -78,11 +84,15 @@ export interface ReportOptions {
   /** Random builds per weapon for the in-build value, and their size */
   builds: number;
   buildSize: number;
-  /** Measure recipes too (the slowest part) */
-  recipes: boolean;
+  /** Measure all 192 per-weapon evolutions too (the slowest part) */
+  evolutions?: boolean;
+  /** Legacy alias for `evolutions` */
+  recipes?: boolean;
   /** Only these weapons (default: the whole Armory) */
   only?: readonly string[];
 }
+
+const SLOT_LABELS = ['A', 'B', 'C'] as const;
 
 /** What a weapon adds for an expert ÷ what it adds for a novice (what it adds, so a weak weapon isn't called even) */
 const skewOf = (w: WeaponReport) => (w.tier.expert - 1) / Math.max(0.05, w.tier.novice - 1);
@@ -101,7 +111,7 @@ const mergeRuleTelemetry = (samples: readonly Sample[]) => {
 };
 
 /** Measure everything. */
-export const measure = (opts: ReportOptions): Pick<BalanceReport, 'runs' | 'weapons' | 'recipes'> => {
+export const measure = (opts: ReportOptions): Pick<BalanceReport, 'runs' | 'weapons' | 'evolutions'> => {
   const b = benches();
   const armory = [...ALL_ARMORY_WEAPON_IDS];
   const nonPartner = armory.filter(id => !PARTNER_WEAPONS.includes(id));
@@ -149,15 +159,18 @@ export const measure = (opts: ReportOptions): Pick<BalanceReport, 'runs' | 'weap
         expert: lateSamples.expert.lift.ratio,
       },
       inBuild: inBuild(b.late, id, 'average', opts.runs, nonPartner, opts.buildSize, opts.builds),
+      baseDamageShare: lateSamples.average.sample.baseDamageShare,
+      synergyDamage: lateSamples.average.sample.synergyDamage,
       deadRules,
     };
   });
-  const recipes = opts.recipes ? recipeLifts(b.late, 'average', opts.runs) : [];
-  return { runs: opts.runs, weapons, recipes };
+  const runEvos = opts.evolutions ?? opts.recipes ?? false;
+  const evolutions = runEvos ? evolutionLifts(b.late, 'average', opts.runs) : [];
+  return { runs: opts.runs, weapons, evolutions };
 };
 
 /** Judge the measurements against the targets. */
-export const judge = (m: Pick<BalanceReport, 'runs' | 'weapons' | 'recipes'>): BalanceReport => {
+export const judge = (m: Pick<BalanceReport, 'runs' | 'weapons' | 'evolutions'>): BalanceReport => {
   const verdicts: Verdict[] = [];
   for (const w of m.weapons) {
     const partner = PARTNER_WEAPONS.includes(w.id);
@@ -179,31 +192,33 @@ export const judge = (m: Pick<BalanceReport, 'runs' | 'weapons' | 'recipes'>): B
       verdicts.push({ kind: 'dead-rule', id: w.id, detail: `0 effective firings on ${w.deadRules.join(', ')}` });
     }
   }
-  for (const r of m.recipes) {
-    const hasEncore = r.pair.includes('encore-mask');
-    if (r.ratio < T.recipeLift[0]) verdicts.push({ kind: 'weak-recipe', id: r.id, detail: `${x2(r.ratio)} over ${r.pair.join(' + ')} (floor ${x2(T.recipeLift[0])})` });
-    if (r.ruleLift < T.recipeRuleLift[0]) {
-      verdicts.push({ kind: 'empty-recipe', id: r.id, detail: `rule lift ${x2(r.ruleLift)} over blank shell (floor ${x2(T.recipeRuleLift[0])})` });
+  for (const e of m.evolutions) {
+    if (e.ratio < T.evoLift[0]) verdicts.push({ kind: 'weak-evolution', id: e.id, detail: `${x2(e.ratio)} on ${e.weaponId} Slot ${SLOT_LABELS[e.variantIndex]} (floor ${x2(T.evoLift[0])})` });
+    if (e.ruleLift < T.evoRuleLift[0]) {
+      verdicts.push({ kind: 'empty-evolution', id: e.id, detail: `rule lift ${x2(e.ruleLift)} over blank chassis (floor ${x2(T.evoRuleLift[0])})` });
     }
-    // For Encore Mask pairs, turning evolutions off disables Encore Mask itself, so judge runaway honestly via ruleLift
-    if (!hasEncore && r.ratio > T.recipeLift[1]) {
-      verdicts.push({ kind: 'runaway-recipe', id: r.id, detail: `${x2(r.ratio)} over ${r.pair.join(' + ')} (ceiling ${x2(T.recipeLift[1])})` });
-    } else if (r.ruleLift > T.recipeRuleLift[1]) {
-      verdicts.push({ kind: 'runaway-recipe', id: r.id, detail: `rule lift ${x2(r.ruleLift)} over blank shell (ceiling ${x2(T.recipeRuleLift[1])})` });
+    if (e.ratio > T.evoLift[1]) {
+      verdicts.push({ kind: 'runaway-evolution', id: e.id, detail: `${x2(e.ratio)} on ${e.weaponId} Slot ${SLOT_LABELS[e.variantIndex]} (ceiling ${x2(T.evoLift[1])})` });
+    } else if (e.ruleLift > T.evoRuleLift[1]) {
+      verdicts.push({ kind: 'runaway-evolution', id: e.id, detail: `rule lift ${x2(e.ruleLift)} over blank chassis (ceiling ${x2(T.evoRuleLift[1])})` });
     }
-    if (r.starts < T.recipeStartsPerFight) verdicts.push({ kind: 'rare-recipe', id: r.id, detail: `starts ${r.starts.toFixed(2)} times a fight` });
-    if (r.deadRules.length > 0) verdicts.push({ kind: 'dead-rule', id: r.id, detail: `0 effective firings on ${r.deadRules.join(', ')}` });
+    if (e.triggersPerFight < T.evoTriggersPerFight) {
+      verdicts.push({ kind: 'rare-evolution', id: e.id, detail: `triggers ${e.triggersPerFight.toFixed(2)} times a fight (${e.conditionType})` });
+    }
+    if (e.deadRules.length > 0) verdicts.push({ kind: 'dead-rule', id: e.id, detail: `0 effective firings on ${e.deadRules.join(', ')}` });
   }
   const best = Math.max(...m.weapons.map(w => w.tier.average), 1);
+  const nonPartners = m.weapons.filter(w => !PARTNER_WEAPONS.includes(w.id));
   return {
     ...m,
     verdicts,
     summary: {
       viablePool: m.weapons.filter(w => PARTNER_WEAPONS.includes(w.id) || w.inBuild.ratio >= T.inBuild[0]).length / Math.max(1, m.weapons.length),
       topPicks: m.weapons.filter(w => w.tier.average - 1 >= (best - 1) * (1 - T.topPickWithin)).map(w => w.id),
-      soloEarlyMean: m.weapons.filter(w => !PARTNER_WEAPONS.includes(w.id)).reduce((a, w) => a + w.stage.early.ratio, 0) / Math.max(1, m.weapons.filter(w => !PARTNER_WEAPONS.includes(w.id)).length),
-      recipeLiftMedian: median(m.recipes.map(r => r.ratio)),
-      recipeRuleLiftMedian: median(m.recipes.map(r => r.ruleLift)),
+      soloEarlyMean: nonPartners.reduce((a, w) => a + w.stage.early.ratio, 0) / Math.max(1, nonPartners.length),
+      evoLiftMedian: median(m.evolutions.map(e => e.ratio)),
+      evoRuleLiftMedian: median(m.evolutions.map(e => e.ruleLift)),
+      meanBaseDamageShare: mean(nonPartners.map(w => w.baseDamageShare)),
     },
   };
 };
@@ -221,9 +236,9 @@ export const snapshotOf = (r: BalanceReport): Snapshot => {
     s[`weapon:${w.id}:late`] = +w.tier.average.toFixed(3);
     s[`weapon:${w.id}:inBuild`] = +w.inBuild.ratio.toFixed(3);
   }
-  for (const x of r.recipes) {
-    s[`recipe:${x.id}`] = +x.ratio.toFixed(3);
-    s[`recipe:${x.id}:ruleLift`] = +x.ruleLift.toFixed(3);
+  for (const e of r.evolutions) {
+    s[`evo:${e.id}`] = +e.ratio.toFixed(3);
+    s[`evo:${e.id}:ruleLift`] = +e.ruleLift.toFixed(3);
   }
   return s;
 };
@@ -242,10 +257,10 @@ const VERDICT_TEXT: Record<VerdictKind, string> = {
   underpowered: 'Underpowered',
   passenger: 'Passenger (rarely does anything)',
   'no-slot-value': 'Not worth a slot in a real build',
-  'weak-recipe': 'Weak recipe',
-  'empty-recipe': 'Empty recipe (barely beats blank shell)',
-  'runaway-recipe': 'Runaway recipe',
-  'rare-recipe': 'Recipe rarely starts',
+  'weak-evolution': 'Weak evolution',
+  'empty-evolution': 'Empty evolution (barely beats blank chassis)',
+  'runaway-evolution': 'Runaway evolution',
+  'rare-evolution': 'Evolution rarely triggers',
   'dead-rule': 'Dead rule (0 effective firings)',
 };
 
@@ -260,9 +275,10 @@ export const renderMarkdown = (r: BalanceReport, moved: ReturnType<typeof movers
   row(['Weapons that earn their slot in a real build (viable pool)', pct(r.summary.viablePool), `≥ ${pct(T.viablePool)}`]);
   row(['Top picks (add at least 65% of what the strongest weapon adds)', `${r.summary.topPicks.length}: ${r.summary.topPicks.join(', ')}`, `≥ ${T.topPicksAtLeast}`]);
   row(['Mean level-1 weapon, early game', x2(r.summary.soloEarlyMean), `≥ ${x2(T.soloEarlyMean)}`]);
-  if (r.recipes.length) {
-    row(['Median evolution total lift (on ÷ off)', x2(r.summary.recipeLiftMedian), `≥ ${x2(T.recipeLiftMedian)}`]);
-    row(['Median evolution bespoke rule lift (on ÷ blank shell)', x2(r.summary.recipeRuleLiftMedian), `≥ ${x2(T.recipeRuleLift[0])}`]);
+  row(['Mean Set pre-multiplier base damage share', pct(r.summary.meanBaseDamageShare), `≥ ${pct(T.baseDamageShare[0])}`]);
+  if (r.evolutions.length) {
+    row(['Median evolution total lift (on ÷ off)', x2(r.summary.evoLiftMedian), `≥ ${x2(T.evoLiftMedian)}`]);
+    row(['Median evolution bespoke rule lift (on ÷ blank chassis)', x2(r.summary.evoRuleLiftMedian), `≥ ${x2(T.evoRuleLift[0])}`]);
   }
   row(['Flags', r.verdicts.length, '0']);
   out.push('', '## Flags', '');
@@ -279,9 +295,9 @@ export const renderMarkdown = (r: BalanceReport, moved: ReturnType<typeof movers
     for (const m of moved.slice(0, 40)) row([`\`${m.key}\``, x2(m.before), x2(m.now)]);
   }
   out.push('', '## Weapons', '');
-  out.push('Alone = the weapon as the only charm. Campaign = 3 traits + Shading Surge (15 cards, realistic Lv 1–2 gear). In a build = five random non-partner charms with it vs the same four without it. Leans = who it adds more for. Passenger = share of late-game fights it changes nothing in. Swing = spread of its effect from fight to fight.', '');
-  row(['Weapon', 'Shelf', 'Early Lv1 (3t)', 'Campaign Lv1–2 (Surge)', 'Mid Lv3 (4t)', 'Late Lv5 (5t): nov / avg / exp', 'Leans', 'In a build', 'Passenger', 'Swing']);
-  row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---']);
+  out.push('Alone = the weapon as the only charm. Campaign = 3 traits + Shading Surge (15 cards, realistic Lv 1–2 gear). In a build = five random non-partner charms with it vs the same four without it. Base% = share of Set damage from pre-multiplier base. Leans = who it adds more for.', '');
+  row(['Weapon', 'Shelf', 'Early Lv1 (3t)', 'Campaign Lv1–2 (Surge)', 'Mid Lv3 (4t)', 'Late Lv5 (5t): nov / avg / exp', 'Leans', 'In a build', 'Base%', 'Passenger', 'Swing']);
+  row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---']);
   for (const w of [...r.weapons].sort((a, b) => a.role.localeCompare(b.role) || b.tier.average - a.tier.average)) {
     row([
       w.name,
@@ -292,17 +308,26 @@ export const renderMarkdown = (r: BalanceReport, moved: ReturnType<typeof movers
       TIERS.map(t => x2(w.tier[t])).join(' / '),
       audience(w),
       x2(w.inBuild.ratio),
+      pct(w.baseDamageShare),
       pct(w.stage.late.dead),
       w.stage.late.swing.toFixed(2),
     ]);
   }
-  if (r.recipes.length) {
-    out.push('', '## Evolutions', '');
-    out.push('Total Lift = pair with evolutions on ÷ evolutions off. Rule Lift = pair with real evolution rules ÷ blank evolution shell (+10/+2/×1.5 chassis only). Firings = mean effective `evo:<id>#*` rule firings per fight.', '');
-    row(['Recipe', 'Pair', 'Total Lift', 'Rule Lift', 'Starts/fight', 'Firings/fight']);
-    row(['---', '---', '---', '---', '---', '---']);
-    for (const x of [...r.recipes].sort((a, b) => b.ruleLift - a.ruleLift)) {
-      row([`\`${x.id}\``, x.pair.join(' + '), x2(x.ratio), x2(x.ruleLift), x.starts.toFixed(1), x.ruleFirings.toFixed(1)]);
+  if (r.evolutions.length) {
+    out.push('', '## Per-Weapon Timed Evolutions (192)', '');
+    out.push('Total Lift = weapon with evolution on ÷ evolutions off. Rule Lift = real evolution rules ÷ blank evolution chassis (+18 burst / +8 base / +0.20× additive only). Triggers = mean ignitions per fight.', '');
+    row(['Evolution', 'Weapon (Slot)', 'Condition', 'Total Lift', 'Rule Lift', 'Triggers/fight', 'Firings/fight']);
+    row(['---', '---', '---', '---', '---', '---', '---']);
+    for (const e of [...r.evolutions].sort((a, b) => b.ruleLift - a.ruleLift)) {
+      row([
+        `\`${e.id}\``,
+        `\`${e.weaponId}\` (${SLOT_LABELS[e.variantIndex]})`,
+        e.conditionType,
+        x2(e.ratio),
+        x2(e.ruleLift),
+        e.triggersPerFight.toFixed(1),
+        e.ruleFirings.toFixed(1),
+      ]);
     }
   }
   return out.join('\n') + '\n';

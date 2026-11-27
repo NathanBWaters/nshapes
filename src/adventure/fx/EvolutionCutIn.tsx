@@ -1,24 +1,23 @@
 /**
- * The evolution cut-in: a blade crosses the screen, rising to the right, and
- * the cut opens into a slanted band that says what just started: the
- * evolution's icon and name, the two weapons that fused, what it does and
- * what every evolution gives. The fight waits until the player taps.
+ * Single-Weapon Evolution Awakening Cut-In:
  *
- * Several evolutions that start at once share one cut, one row each.
+ * Plays the first time a player awakens a given per-weapon timed evolution
+ * (repeat awakenings use the non-blocking `EvolutionBanner` in `RunFx.tsx`).
  *
- * [FX-17] Uses `ChiaroscuroFlash` (gated on `ScreenFlashStorage` & `useReducedMotion()`)
- * instead of a pure-white full-screen washout, while preserving Wave 3's [OB-08] 200 ms
- * tap guard and [AU-13] mount audio call.
+ * 3-beat choreography:
+ *   Beat 1 (`0–110ms`): ChiaroscuroFlash + diagonal slash + slanted comic band
+ *     + owning `WeaponAvatar` slam (`SCALE.slam` 1.5 -> 1.0, `EASE.impact`).
+ *   Beat 2 (`110–360ms`): 56px golden Evolution Medallion (`SPRING.lively`),
+ *     `"EVOLUTION AWAKENED!"` eyebrow, bold evolution name, trigger condition
+ *     chip, `<Xs> ACTIVE` chip, universal chassis chips (`+8 BASE`, `+0.2×`),
+ *     and 1-sentence effect card.
+ *   Beat 3: Always skippable on tap after `220ms` guard; steps cleanly through
+ *     a queue when multiple weapons awaken on the same Set.
  *
- * Lane 3 polish:
- * - Tokenized `motion.ts` curves (`EASE.enter`, `EASE.pop`, `EASE.popSoft`, `EASE.enterSoft`,
- *   `EASE.drift`, `EASE.exitSoft`, `OVERLAP`, `STAGGER`, `STAYS`).
- * - Staggered internal `RecipeRow` reveal (medal → title/fused → body/chips) + per-row stagger.
- * - Symmetric `EASE.drift` breathing on the `TAP TO CONTINUE` prompt (`reverse: true`).
- * - Content-lead, callback-driven exit via `runOnJS` (content clears before band collapses,
- *   zero text squash, zero timer drift).
+ * Strictly GPU-composited (`opacity`/`transform` only in all animated styles)
+ * with `useAppActive()` gating and `cancelAnimation` cleanup.
  */
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -29,6 +28,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
@@ -36,24 +36,26 @@ import Icon from '@/components/Icon';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
 import type { Weapon } from '@/types';
+import { useColorblind } from '@/utils/cardColors';
 import { COLORS } from '@/utils/colors';
-import { ACCESSIBLE, EASE, MS, OVERLAP, STAGGER, STAYS } from '@/utils/motion';
+import { ACCESSIBLE, EASE, MS, OVERLAP, SCALE, SPRING, STAGGER, STAYS } from '@/utils/motion';
 import { band } from '@/audio';
-import type { EvolutionRecipe } from '../types';
-import { fxMs } from './clock';
-import { EVOLUTION_RULES, inFamily } from '../engine/sources';
+import { evolutionConditionShort } from '../data/evolutions';
+import { EVOLUTION_CHASSIS } from '../engine/sources';
+import type { WeaponEvolutionDef } from '../types';
 import { ChiaroscuroFlash } from '../components/RunFx';
 import { DARK } from '../components/ui';
+import { fxMs } from './clock';
 
 const INK = COLORS.slateCharcoal;
 /** The cut rises to the right by this much */
 const SLANT_DEG = -9;
-/** Taps before this are ignored, so the tap that made the Set cannot close it ([OB-08]: tightened to 200ms) */
-const GUARD_MS = 200;
+/** Always skippable on tap after 220ms so the Set-completing tap cannot dismiss it accidentally */
+export const EVOLUTION_CUTIN_GUARD_MS = 220;
 const CLOSE_MS = 110;
+const SWAP_OUT_MS = 96;
 const BAND_OPEN_DELAY_MS = 96;
 const BAND_CLOSE_LAG_MS = 32;
-/** Reveal the TAP TO CONTINUE prompt briskly once the band opens ([OB-08]: 320ms) */
 const PROMPT_REVEAL_MS = 320;
 
 const SPEED_LINES = [
@@ -63,7 +65,13 @@ const SPEED_LINES = [
   { top: '80%', width: 180, ms: 970, delay: 440 },
 ] as const;
 
-const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: number; delay: number }> = ({ span, top, width, ms, delay }) => {
+const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: number; delay: number }> = ({
+  span,
+  top,
+  width,
+  ms,
+  delay,
+}) => {
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const x = useSharedValue(0);
@@ -81,137 +89,333 @@ const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: 
   return <Animated.View style={[st.speed, { top, width }, style]} />;
 };
 
-/** The first held weapon of each of the recipe's two families: the pair that fused. */
-const fusedWeapons = (recipe: EvolutionRecipe, held: readonly Weapon[]): Weapon[] =>
-  recipe.families.map(family => held.find(w => inFamily(w.id, family))).filter((w): w is Weapon => !!w);
+export interface EvolutionCutInEntry {
+  /** Per-weapon evolution definition */
+  evolution: WeaponEvolutionDef;
+  /** Optional owning weapon (auto-resolved from `weapons` prop if omitted) */
+  weapon?: Weapon;
+  /** Displayed active duration in seconds (defaults to `Math.round(evolution.durationMs / 1000)`) */
+  durationSec?: number;
+}
 
-const RecipeRow: React.FC<{
-  recipe: EvolutionRecipe;
-  weapons: readonly Weapon[];
-  seconds: number;
-  index: number;
+export interface EvolutionCutInProps {
+  /** Queue of 1+ single-weapon evolutions that just awakened */
+  evolutions: readonly EvolutionCutInEntry[];
+  /** Held weapons fallback lookup when entries omit `weapon` */
+  weapons?: readonly Weapon[];
+  /** Fallback duration (seconds) if an entry omits `durationSec` */
+  seconds?: number;
+  size: { w: number; h: number };
+  onDone: () => void;
+  /** Auto-advance / close after this long (dev auto-player) */
+  autoDismissMs?: number;
+  /** Optional extra onboarding line under the effect card */
+  hint?: string;
+}
+
+const AwakeningCard: React.FC<{
+  entry: EvolutionCutInEntry;
+  weapon?: Weapon;
+  durationSec: number;
+  queuePos: number;
+  queueTotal: number;
   appActive: boolean;
   reducedMotion: boolean;
+  colorblind: boolean;
   contentOut: SharedValue<number>;
   hint?: string;
-}> = ({ recipe, weapons, seconds, index, appActive, reducedMotion, contentOut, hint }) => {
-  const fused = fusedWeapons(recipe, weapons);
-  const medalP = useSharedValue(reducedMotion ? 1 : 0);
+}> = ({
+  entry,
+  weapon,
+  durationSec,
+  queuePos,
+  queueTotal,
+  appActive,
+  reducedMotion,
+  colorblind,
+  contentOut,
+  hint,
+}) => {
+  const { evolution } = entry;
+  const swapIn = queuePos > 0 && !reducedMotion;
+  const cardOp = useSharedValue(swapIn ? 0 : 1);
+  const cardY = useSharedValue(swapIn ? 14 : 0);
+  const cardScale = useSharedValue(swapIn ? 0.96 : 1);
+  const weaponScale = useSharedValue(reducedMotion ? 1 : SCALE.slam);
+  const weaponOp = useSharedValue(reducedMotion ? 1 : 0);
+  const medalScale = useSharedValue(reducedMotion ? 1 : 0.45);
+  const medalOp = useSharedValue(reducedMotion ? 1 : 0);
   const medalGlow = useSharedValue(1);
   const headP = useSharedValue(reducedMotion ? 1 : 0);
   const bodyP = useSharedValue(reducedMotion ? 1 : 0);
 
   useEffect(() => {
     if (reducedMotion) {
-      medalP.value = 1;
+      cardOp.value = 1;
+      cardY.value = 0;
+      cardScale.value = 1;
+      weaponScale.value = 1;
+      weaponOp.value = 1;
+      medalScale.value = 1;
+      medalOp.value = 1;
       headP.value = 1;
       bodyP.value = 1;
       return;
     }
-    const baseDelay = BAND_OPEN_DELAY_MS + OVERLAP.uiContentMs + index * STAGGER.item;
-    medalP.value = withDelay(fxMs(baseDelay), withTiming(1, { duration: fxMs(MS.quick), easing: EASE.popSoft }));
-    headP.value = withDelay(fxMs(baseDelay + STAGGER.card), withTiming(1, { duration: fxMs(MS.move - 40), easing: EASE.enterSoft }));
-    bodyP.value = withDelay(fxMs(baseDelay + STAGGER.card * 2), withTiming(1, { duration: fxMs(MS.move - 40), easing: EASE.enterSoft }));
+    if (queuePos > 0) {
+      cardOp.value = 0;
+      cardY.value = 14;
+      cardScale.value = 0.96;
+      cardOp.value = withDelay(fxMs(24), withTiming(1, { duration: fxMs(MS.quick), easing: EASE.enter }));
+      cardY.value = withDelay(fxMs(24), withTiming(0, { duration: fxMs(MS.quick), easing: EASE.enter }));
+      cardScale.value = withDelay(fxMs(24), withTiming(1, { duration: fxMs(MS.quick), easing: EASE.enter }));
+    } else {
+      cardOp.value = 1;
+      cardY.value = 0;
+      cardScale.value = 1;
+    }
+    const baseDelay = queuePos === 0 ? BAND_OPEN_DELAY_MS + OVERLAP.uiContentMs : 28;
+    // Beat 1: WeaponAvatar slam (SCALE.slam 1.5 -> 1.0, EASE.impact)
+    weaponOp.value = 0;
+    weaponScale.value = SCALE.slam;
+    weaponOp.value = withDelay(fxMs(baseDelay), withTiming(1, { duration: fxMs(MS.feedback), easing: EASE.enter }));
+    weaponScale.value = withDelay(fxMs(baseDelay), withTiming(1, { duration: fxMs(MS.quick), easing: EASE.impact }));
+
+    // Beat 2: 56px Evolution Medallion lively pop + staggered title & effect card
+    const medalDelay = baseDelay + 70;
+    medalOp.value = 0;
+    medalScale.value = 0.45;
+    medalOp.value = withDelay(fxMs(medalDelay), withTiming(1, { duration: fxMs(MS.feedback), easing: EASE.ui }));
+    medalScale.value = withDelay(fxMs(medalDelay), withSpring(1, SPRING.lively));
+
+    headP.value = 0;
+    bodyP.value = 0;
+    headP.value = withDelay(
+      fxMs(medalDelay + STAGGER.card),
+      withTiming(1, { duration: fxMs(MS.move - 40), easing: EASE.enterSoft })
+    );
+    bodyP.value = withDelay(
+      fxMs(medalDelay + STAGGER.card * 2),
+      withTiming(1, { duration: fxMs(MS.move - 40), easing: EASE.enterSoft })
+    );
+
     return () => {
-      cancelAnimation(medalP);
+      cancelAnimation(cardOp);
+      cancelAnimation(cardY);
+      cancelAnimation(cardScale);
+      cancelAnimation(weaponScale);
+      cancelAnimation(weaponOp);
+      cancelAnimation(medalScale);
+      cancelAnimation(medalOp);
       cancelAnimation(headP);
       cancelAnimation(bodyP);
     };
-  }, [index, reducedMotion, medalP, headP, bodyP]);
+  }, [evolution.id, queuePos, reducedMotion, cardOp, cardY, cardScale, weaponScale, weaponOp, medalScale, medalOp, headP, bodyP]);
 
-  // Subtle Disney #12 moving hold on the golden medal while awaiting player tap (zero static dead-stretch)
+  // Subtle moving hold on the golden medallion while waiting for tap
   useEffect(() => {
     if (!appActive || reducedMotion) {
       cancelAnimation(medalGlow);
       medalGlow.value = 1;
       return;
     }
-    const settleDelay = BAND_OPEN_DELAY_MS + OVERLAP.uiContentMs + index * STAGGER.item + MS.quick;
+    const settleDelay = (queuePos === 0 ? BAND_OPEN_DELAY_MS + OVERLAP.uiContentMs : 24) + MS.quick + 120;
+    medalGlow.value = 1;
     medalGlow.value = withDelay(
       fxMs(settleDelay),
-      withRepeat(withTiming(1.045, { duration: 720, easing: EASE.drift }), -1, true)
+      withRepeat(withTiming(1.05, { duration: MS.hero, easing: EASE.drift }), -1, true)
     );
     return () => cancelAnimation(medalGlow);
-  }, [appActive, reducedMotion, index, medalGlow]);
+  }, [appActive, reducedMotion, evolution.id, queuePos, medalGlow]);
 
-  const medalStyle = useAnimatedStyle(() => {
-    const outMul = 1 - contentOut.value;
-    return {
-      opacity: Math.min(1, medalP.value * 1.4) * outMul,
-      transform: [{ scale: (reducedMotion ? 1 : 0.72 + 0.28 * medalP.value) * medalGlow.value }],
-    };
-  });
+  const cardStyle = useAnimatedStyle(() => ({
+    opacity: cardOp.value,
+    transform: [{ translateY: cardY.value }, { scale: cardScale.value }],
+  }));
 
-  const headStyle = useAnimatedStyle(() => {
-    const outMul = 1 - contentOut.value;
-    return {
-      opacity: headP.value * outMul,
-      transform: [{ translateX: reducedMotion ? 0 : (1 - headP.value) * -28 }],
-    };
-  });
+  const weaponStyle = useAnimatedStyle(() => ({
+    opacity: weaponOp.value * (1 - contentOut.value),
+    transform: [{ scale: weaponScale.value }],
+  }));
 
-  const bodyStyle = useAnimatedStyle(() => {
-    const outMul = 1 - contentOut.value;
-    return {
-      opacity: bodyP.value * outMul,
-      transform: [{ translateY: reducedMotion ? 0 : (1 - bodyP.value) * 8 }],
-    };
-  });
+  const medalStyle = useAnimatedStyle(() => ({
+    opacity: medalOp.value * (1 - contentOut.value),
+    transform: [{ scale: medalScale.value * medalGlow.value }],
+  }));
+
+  const headStyle = useAnimatedStyle(() => ({
+    opacity: headP.value * (1 - contentOut.value),
+    transform: [{ translateX: reducedMotion ? 0 : (1 - headP.value) * -26 }],
+  }));
+
+  const bodyStyle = useAnimatedStyle(() => ({
+    opacity: bodyP.value * (1 - contentOut.value),
+    transform: [{ translateY: reducedMotion ? 0 : (1 - bodyP.value) * 8 }],
+  }));
+
+  const condShort = evolutionConditionShort(evolution, colorblind);
 
   return (
-    <View style={[st.row, index > 0 && st.rowNext]} testID="evolution-banner">
+    <Animated.View style={[st.row, cardStyle]} testID="evolution-banner">
       <View style={st.head}>
-        <Animated.View style={[st.medal, medalStyle]}>
-          <Icon name={recipe.icon} size={38} color={INK} />
-        </Animated.View>
+        <View style={st.emblemCluster}>
+          {weapon && (
+            <Animated.View style={[st.weaponSlamBadge, weaponStyle]} testID="evolution-cutin-weapon">
+              <WeaponAvatar weapon={weapon} size={46} interactive={false} />
+            </Animated.View>
+          )}
+          <Animated.View
+            style={[st.medal, weapon && st.medalOverlap, medalStyle]}
+            testID="evolution-cutin-medallion"
+          >
+            <Icon name={evolution.icon} size={32} color={INK} />
+          </Animated.View>
+        </View>
         <Animated.View style={[{ flex: 1 }, headStyle]}>
-          <Text style={st.eyebrow}>EVOLUTION</Text>
-          <Text style={st.name} numberOfLines={2} adjustsFontSizeToFit>{recipe.name}</Text>
-          <View style={st.fused}>
-            {fused.length === 2 ? (
-              <>
-                <WeaponAvatar weapon={fused[0]} size={20} interactive={false} />
-                <Text style={st.fusedText} numberOfLines={1}>{fused[0].name}</Text>
-                <Text style={st.plus}>+</Text>
-                <WeaponAvatar weapon={fused[1]} size={20} interactive={false} />
-                <Text style={st.fusedText} numberOfLines={1}>{fused[1].name}</Text>
-              </>
-            ) : (
-              <Text style={st.fusedText} numberOfLines={1}>{recipe.familyText}</Text>
+          <View style={st.eyebrowRow}>
+            <Icon name="lorc/crystal-shine" size={12} color={COLORS.actionYellow} noShadow />
+            <Text style={st.eyebrow} numberOfLines={1}>EVOLUTION AWAKENED!</Text>
+            {queueTotal > 1 && (
+              <View style={st.queuePill} testID="evolution-cutin-queue">
+                <Text style={st.queuePillText}>{queuePos + 1}/{queueTotal}</Text>
+              </View>
             )}
           </View>
+          <Text style={st.name} numberOfLines={2} adjustsFontSizeToFit>{evolution.name}</Text>
+          {weapon && (
+            <Text style={st.weaponLabel} numberOfLines={1}>{weapon.name}</Text>
+          )}
         </Animated.View>
       </View>
+
       <Animated.View style={[st.bodyGroup, bodyStyle]}>
-        <Text style={st.what}>{recipe.activeText}</Text>
         <View style={st.chips}>
-          <View style={st.chip}><Text style={st.chipText}>Sets ×{EVOLUTION_RULES.setMultiplier}</Text></View>
-          <View style={st.chip}><Text style={st.chipText}>+{EVOLUTION_RULES.setDamage} every Set</Text></View>
-          <View style={[st.chip, st.chipTime]}><Text style={st.chipText}>{seconds} seconds</Text></View>
+          <View style={[st.chip, st.chipTrigger]}>
+            <Icon name="lorc/archery-target" size={11} color="#0F766E" noShadow />
+            <Text style={[st.chipText, st.chipTriggerText]} numberOfLines={1}>{condShort}</Text>
+          </View>
+          <View style={[st.chip, st.chipActive]}>
+            <Icon name="lorc/stopwatch" size={11} color={INK} noShadow />
+            <Text style={st.chipText} numberOfLines={1}>{durationSec}s ACTIVE</Text>
+          </View>
+          <View style={[st.chip, st.chipChassis]}>
+            <Text style={st.chipText} numberOfLines={1}>+{EVOLUTION_CHASSIS.setFlatDamage} BASE</Text>
+          </View>
+          <View style={[st.chip, st.chipChassis]}>
+            <Text style={st.chipText} numberOfLines={1}>+{EVOLUTION_CHASSIS.setAdditiveMult}× MULT</Text>
+          </View>
         </View>
+        <Text style={st.what}>{evolution.tagline}</Text>
         {hint && <Text style={st.hint}>{hint}</Text>}
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 };
 
-interface Props {
-  recipes: EvolutionRecipe[];
-  /** Held weapons, to show the pair that fused */
-  weapons: readonly Weapon[];
-  /** How long the evolution lasts */
-  seconds: number;
-  size: { w: number; h: number };
-  onDone: () => void;
-  /** Close by itself after this long (the dev auto-player) */
-  autoDismissMs?: number;
-  /** One more line under the first row (the first evolution ever explains the ring) */
-  hint?: string;
-}
+/** Brief GPU slide-up/scale-down fade-out ghost so queued card handoffs never abruptly pop out. */
+const ExitingAwakeningCard: React.FC<{
+  entry: EvolutionCutInEntry;
+  weapon?: Weapon;
+  durationSec: number;
+  colorblind: boolean;
+}> = ({ entry, weapon, durationSec, colorblind }) => {
+  const { evolution } = entry;
+  const op = useSharedValue(1);
+  const y = useSharedValue(0);
+  const s = useSharedValue(1);
 
-export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, size, onDone, autoDismissMs, hint }) => {
+  useEffect(() => {
+    const dur = fxMs(SWAP_OUT_MS);
+    op.value = withTiming(0, { duration: dur, easing: EASE.exitSoft });
+    y.value = withTiming(-16, { duration: dur, easing: EASE.exitSoft });
+    s.value = withTiming(0.94, { duration: dur, easing: EASE.exitSoft });
+    return () => {
+      cancelAnimation(op);
+      cancelAnimation(y);
+      cancelAnimation(s);
+    };
+  }, [op, y, s]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: op.value,
+    transform: [{ translateY: y.value }, { scale: s.value }],
+  }));
+
+  const condShort = evolutionConditionShort(evolution, colorblind);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="evolution-cutin-exiting"
+      style={[st.row, st.exitingRow, animStyle]}
+    >
+      <View style={st.head}>
+        <View style={st.emblemCluster}>
+          {weapon && (
+            <View style={st.weaponSlamBadge}>
+              <WeaponAvatar weapon={weapon} size={46} interactive={false} />
+            </View>
+          )}
+          <View style={[st.medal, weapon && st.medalOverlap]}>
+            <Icon name={evolution.icon} size={32} color={INK} />
+          </View>
+        </View>
+        <View style={{ flex: 1 }}>
+          <View style={st.eyebrowRow}>
+            <Icon name="lorc/crystal-shine" size={12} color={COLORS.actionYellow} noShadow />
+            <Text style={st.eyebrow} numberOfLines={1}>EVOLUTION AWAKENED!</Text>
+          </View>
+          <Text style={st.name} numberOfLines={2} adjustsFontSizeToFit>{evolution.name}</Text>
+          {weapon && <Text style={st.weaponLabel} numberOfLines={1}>{weapon.name}</Text>}
+        </View>
+      </View>
+      <View style={st.bodyGroup}>
+        <View style={st.chips}>
+          <View style={[st.chip, st.chipTrigger]}>
+            <Icon name="lorc/archery-target" size={11} color="#0F766E" noShadow />
+            <Text style={[st.chipText, st.chipTriggerText]} numberOfLines={1}>{condShort}</Text>
+          </View>
+          <View style={[st.chip, st.chipActive]}>
+            <Icon name="lorc/stopwatch" size={11} color={INK} noShadow />
+            <Text style={st.chipText} numberOfLines={1}>{durationSec}s ACTIVE</Text>
+          </View>
+        </View>
+        <Text style={st.what}>{evolution.tagline}</Text>
+      </View>
+    </Animated.View>
+  );
+};
+
+export const EvolutionCutIn: React.FC<EvolutionCutInProps> = ({
+  evolutions,
+  weapons = [],
+  seconds,
+  size,
+  onDone,
+  autoDismissMs,
+  hint,
+}) => {
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
+  const colorblind = useColorblind();
+
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [exitingSwap, setExitingSwap] = useState<{
+    key: number;
+    entry: EvolutionCutInEntry;
+    weapon?: Weapon;
+    durationSec: number;
+  } | null>(null);
+  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clampedIdx = Math.min(activeIdx, Math.max(0, evolutions.length - 1));
+  const current = evolutions[clampedIdx];
+  const currentWeapon = current
+    ? (current.weapon ?? weapons.find(w => w.id === current.evolution.weaponId))
+    : undefined;
+  const currentDurationSec = current
+    ? (current.durationSec ?? seconds ?? Math.max(1, Math.round(current.evolution.durationMs / 1000)))
+    : (seconds ?? 18);
+
   const slash = useSharedValue(reducedMotion ? 1 : 0);
   const open = useSharedValue(reducedMotion ? 1 : 0);
   const reducedIn = useSharedValue(reducedMotion ? 0 : 1);
@@ -221,7 +425,6 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   const born = useRef(Date.now());
   const closing = useRef(false);
   const finishedRef = useRef(false);
-  // (kept in a ref so `close` stays the same function when the parent re-renders)
   const done = useRef(onDone);
   done.current = onDone;
   const fallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -237,6 +440,10 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   }, []);
 
   useEffect(() => {
+    if (evolutions.length === 0) {
+      finishClose();
+      return;
+    }
     if (reducedMotion) {
       slash.value = 1;
       open.value = 1;
@@ -253,21 +460,21 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
       cancelAnimation(contentOut);
       cancelAnimation(out);
     };
-  }, [reducedMotion, slash, open, reducedIn, contentOut, out]);
+  }, [evolutions.length, reducedMotion, slash, open, reducedIn, contentOut, out, finishClose]);
 
-  // [AU-13] Fire evolution fanfare synced to cut-in mount (90ms riser hits exact slash-flash frame!)
-  const firstRecipeId = recipes[0]?.id;
+  // [AU-13] Sync weapon-anchored evolution motif to mount / queue advance
+  const currentEvoId = current?.evolution.id;
   useEffect(() => {
-    if (!firstRecipeId) return;
+    if (!currentEvoId) return;
     const b = band as typeof band & {
       playCutInEvolve?: (id: string, opts?: { immediate?: boolean; leadMs?: number }) => void;
     };
     if (typeof b?.playCutInEvolve === 'function') {
-      b.playCutInEvolve(firstRecipeId, { immediate: true, leadMs: 90 });
+      b.playCutInEvolve(currentEvoId, { immediate: true, leadMs: reducedMotion ? 0 : 90 });
     } else if (typeof band?.evolve === 'function' && !band.inFight) {
-      band.evolve(firstRecipeId);
+      band.evolve(currentEvoId);
     }
-  }, [firstRecipeId]);
+  }, [currentEvoId, reducedMotion]);
 
   useEffect(() => {
     if (reducedMotion) {
@@ -291,10 +498,30 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
     return () => cancelAnimation(prompt);
   }, [appActive, reducedMotion, prompt]);
 
-  const close = useCallback(() => {
-    if (closing.current || Date.now() - born.current < fxMs(GUARD_MS)) return;
+  const handleTap = useCallback(() => {
+    if (closing.current || Date.now() - born.current < fxMs(EVOLUTION_CUTIN_GUARD_MS)) return;
+
+    // Queue step: cross-transition out the outgoing card smoothly while incoming card enters
+    if (clampedIdx < evolutions.length - 1) {
+      born.current = Date.now();
+      if (!reducedMotion && current) {
+        if (swapTimer.current) clearTimeout(swapTimer.current);
+        setExitingSwap({
+          key: clampedIdx,
+          entry: current,
+          weapon: currentWeapon,
+          durationSec: currentDurationSec,
+        });
+        swapTimer.current = setTimeout(() => {
+          swapTimer.current = null;
+          setExitingSwap(null);
+        }, fxMs(SWAP_OUT_MS) + 20);
+      }
+      setActiveIdx(i => Math.min(evolutions.length - 1, i + 1));
+      return;
+    }
+
     closing.current = true;
-    // Snap band open if tapped mid-entrance before briskly clearing content then collapsing band
     if (open.value < 1) open.value = 1;
     const closeDuration = fxMs(CLOSE_MS);
 
@@ -312,7 +539,6 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
       const contentLeadMs = fxMs(OVERLAP.exitContentLeadMs + 16);
       const bandDelayMs = fxMs(BAND_CLOSE_LAG_MS);
       const bandCloseMs = Math.max(16, closeDuration - bandDelayMs);
-      // Content leads exit so text clears cleanly before the band collapses (zero vertical text squash)
       contentOut.value = withTiming(1, { duration: contentLeadMs, easing: EASE.exitSoft, ...STAYS });
       out.value = withDelay(
         bandDelayMs,
@@ -328,21 +554,20 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
       );
     }
 
-    // Idempotent safety fallback for Jest fake-timer environments where mocked Reanimated skips completion callbacks
     fallbackTimer.current = setTimeout(finishClose, closeDuration + 4);
-  }, [open, contentOut, out, reducedMotion, finishClose]);
+  }, [clampedIdx, evolutions.length, current, currentWeapon, currentDurationSec, open, contentOut, out, reducedMotion, finishClose]);
 
   useEffect(() => () => {
     if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
+    if (swapTimer.current) clearTimeout(swapTimer.current);
   }, []);
 
   useEffect(() => {
     if (!autoDismissMs) return;
-    const t = setTimeout(close, autoDismissMs);
+    const t = setTimeout(handleTap, autoDismissMs);
     return () => clearTimeout(t);
-  }, [autoDismissMs, close]);
+  }, [autoDismissMs, clampedIdx, handleTap]);
 
-  // The slanted layer is a square bigger than the screen, so its corners stay covered when it turns
   const span = Math.ceil(Math.hypot(size.w, size.h) * 1.1);
   const contentWidth = Math.min(size.w - 28, 480);
 
@@ -361,40 +586,60 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
     opacity: prompt.value * (1 - contentOut.value),
   }));
 
+  if (!current) return null;
+
+  const hasMore = clampedIdx < evolutions.length - 1;
+
   return (
     <Pressable
       style={st.root}
-      onPress={close}
+      onPress={handleTap}
       accessibilityRole="button"
-      accessibilityLabel={`Evolution: ${recipes.map(r => r.name).join(' and ')}. Tap to continue.`}
+      accessibilityLabel={`Evolution awakened: ${current.evolution.name}. ${hasMore ? 'Tap for next evolution.' : 'Tap to continue.'}`}
       testID="evolution-cutin"
     >
       <Animated.View style={[StyleSheet.absoluteFill, st.dim, dimStyle]} />
-      <View style={[st.slanted, { width: span, height: span, left: (size.w - span) / 2, top: (size.h - span) / 2 }]} pointerEvents="none">
+      <View
+        style={[st.slanted, { width: span, height: span, left: (size.w - span) / 2, top: (size.h - span) / 2 }]}
+        pointerEvents="none"
+      >
         <Animated.View style={[st.band, bandStyle]}>
-          {SPEED_LINES.map((l, i) => <SpeedLine key={i} span={span} {...l} />)}
-          <View style={{ width: contentWidth }}>
-            {recipes.map((r, i) => (
-              <RecipeRow
-                key={r.id}
-                recipe={r}
-                weapons={weapons}
-                seconds={seconds}
-                index={i}
-                appActive={appActive}
-                reducedMotion={reducedMotion}
-                contentOut={contentOut}
-                hint={i === 0 ? hint : undefined}
+          {SPEED_LINES.map((l, i) => (
+            <SpeedLine key={i} span={span} {...l} />
+          ))}
+          <View style={{ width: contentWidth, position: 'relative' }}>
+            {exitingSwap && (
+              <ExitingAwakeningCard
+                key={`exit-${exitingSwap.key}`}
+                entry={exitingSwap.entry}
+                weapon={exitingSwap.weapon}
+                durationSec={exitingSwap.durationSec}
+                colorblind={colorblind}
               />
-            ))}
+            )}
+            <AwakeningCard
+              key={current.evolution.id}
+              entry={current}
+              weapon={currentWeapon}
+              durationSec={currentDurationSec}
+              queuePos={clampedIdx}
+              queueTotal={evolutions.length}
+              appActive={appActive}
+              reducedMotion={reducedMotion}
+              colorblind={colorblind}
+              contentOut={contentOut}
+              hint={clampedIdx === 0 ? hint : undefined}
+            />
           </View>
         </Animated.View>
         <Animated.View style={[st.slash, slashStyle]} />
       </View>
-      {/* [FX-17]: 112 ms chiaroscuro perimeter flash synced to 90 ms slash-riser peak (gated on ScreenFlashStorage & Reduced Motion) */}
-      <ChiaroscuroFlash trigger={1} delayMs={90} stageW={size.w} testID="evolution-cutin-flash" />
+      {/* [FX-17]: 112 ms chiaroscuro perimeter flash synced to 90 ms slash-riser peak */}
+      <ChiaroscuroFlash trigger={clampedIdx + 1} delayMs={90} stageW={size.w} testID="evolution-cutin-flash" />
       <Animated.View style={[st.prompt, promptStyle]} pointerEvents="none">
-        <Text style={st.promptText}>TAP TO CONTINUE</Text>
+        <Text style={st.promptText}>
+          {hasMore ? `TAP FOR NEXT (${clampedIdx + 2}/${evolutions.length})` : 'TAP TO CONTINUE'}
+        </Text>
       </Animated.View>
     </Pressable>
   );
@@ -403,8 +648,23 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
 const st = StyleSheet.create({
   root: { ...StyleSheet.absoluteFillObject, zIndex: 500, overflow: 'hidden' },
   dim: { backgroundColor: COLORS.deepOnyx },
-  slanted: { position: 'absolute', alignItems: 'center', justifyContent: 'center', transform: [{ rotate: `${SLANT_DEG}deg` }] },
-  slash: { position: 'absolute', left: 0, right: 0, height: 6, backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderBottomWidth: 2, borderColor: COLORS.actionYellow, transformOrigin: 'left center' },
+  slanted: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: `${SLANT_DEG}deg` }],
+  },
+  slash: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 6,
+    backgroundColor: COLORS.canvasWhite,
+    borderTopWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: COLORS.actionYellow,
+    transformOrigin: 'left center',
+  },
   band: {
     alignSelf: 'stretch',
     alignItems: 'center',
@@ -416,22 +676,117 @@ const st = StyleSheet.create({
     overflow: 'hidden',
   },
   speed: { position: 'absolute', left: 0, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.14)' },
-  row: { gap: 10 },
-  rowNext: { marginTop: 14, paddingTop: 14, borderTopWidth: 2, borderTopColor: DARK.goldEdge(0.35) },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  row: { gap: 12 },
+  exitingRow: { position: 'absolute', left: 0, right: 0, top: 0 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  emblemCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  weaponSlamBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: COLORS.paperBeige,
+    borderWidth: 2.5,
+    borderColor: COLORS.canvasWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  medal: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.actionYellow,
+    borderWidth: 3,
+    borderColor: COLORS.canvasWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  medalOverlap: {
+    marginLeft: -14,
+  },
+  eyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 2,
+  },
+  eyebrow: {
+    flexShrink: 1,
+    color: COLORS.actionYellow,
+    fontWeight: '900',
+    fontSize: 11,
+    letterSpacing: 2.6,
+  },
+  queuePill: {
+    backgroundColor: '#7C3AED',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  queuePillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+  },
+  name: {
+    color: COLORS.canvasWhite,
+    fontWeight: '900',
+    fontSize: 26,
+    lineHeight: 29,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  weaponLabel: {
+    color: DARK.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
+  },
   bodyGroup: { gap: 10 },
-  medal: { width: 68, height: 68, borderRadius: 34, backgroundColor: COLORS.actionYellow, borderWidth: 3, borderColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
-  eyebrow: { color: COLORS.actionYellow, fontWeight: '900', fontSize: 12, letterSpacing: 4 },
-  name: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 27, lineHeight: 30, textTransform: 'uppercase', letterSpacing: 0.5 },
-  fused: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  fusedText: { color: DARK.muted, fontSize: 12, fontWeight: '700', flexShrink: 1 },
-  plus: { color: COLORS.actionYellow, fontSize: 14, fontWeight: '900' },
-  what: { color: DARK.text, fontSize: 16, lineHeight: 22, fontWeight: '600' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { backgroundColor: COLORS.actionYellow, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  chipTime: { backgroundColor: COLORS.canvasWhite },
-  chipText: { color: INK, fontSize: 12, fontWeight: '900', letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+  },
+  chipTrigger: {
+    backgroundColor: '#CCFBF1',
+  },
+  chipTriggerText: {
+    color: '#0F766E',
+  },
+  chipActive: {
+    backgroundColor: COLORS.actionYellow,
+  },
+  chipChassis: {
+    backgroundColor: COLORS.canvasWhite,
+  },
+  chipText: {
+    flexShrink: 1,
+    color: INK,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+    fontVariant: ['tabular-nums'],
+  },
+  what: { color: DARK.text, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   hint: { color: DARK.muted, fontSize: 13, lineHeight: 18 },
   prompt: { position: 'absolute', left: 0, right: 0, bottom: 28, alignItems: 'center' },
-  promptText: { color: COLORS.actionYellow, backgroundColor: DARK.panel, fontWeight: '900', letterSpacing: 3, fontSize: 13, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, overflow: 'hidden' },
+  promptText: {
+    color: COLORS.actionYellow,
+    backgroundColor: DARK.panel,
+    fontWeight: '900',
+    letterSpacing: 3,
+    fontSize: 13,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
 });

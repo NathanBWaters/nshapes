@@ -24,10 +24,10 @@ import type { ArcanaId } from '@/adventure/types';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getUpgrade } from '@/adventure/data/upgrades';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
+import { beltSynergyAttrSet, getSynergyAttrMeta } from '@/adventure/ui/synergyMeta';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import {
   ArcanaCard,
-  ArmedEvolutionRow,
   UpgradeOfferRow,
   WeaponChip,
   WeaponOfferRow,
@@ -38,8 +38,8 @@ import { band, sfx } from '@/audio';
 import {
   buildSpireWeaponBuilds,
   clashesWithBelt,
-  newEvolutionRecipesArmedBy,
   spireHeldWeapons,
+  spireWeaponSynergyOverlap,
 } from '../engine/bridge';
 import {
   ARCANA_PURGE_COST,
@@ -74,6 +74,7 @@ interface Props {
   onSellWeapon?: (weaponId: string) => void;
   onPurgeArcana?: (arcanaId: ArcanaId) => void;
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
+  onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onLeave: () => void;
 }
 
@@ -90,6 +91,7 @@ const SpireShop: React.FC<Props> = ({
   onSellWeapon,
   onPurgeArcana,
   onReorderWeapon,
+  onSelectEvolution,
   onLeave,
 }) => {
   const [inspectWeaponId, setInspectWeaponId] = useState<string | null>(shop.weapons[0]?.weaponId ?? null);
@@ -220,17 +222,21 @@ const SpireShop: React.FC<Props> = ({
                   const w = getArmoryWeapon(offer.weaponId, { [offer.weaponId]: { level: offer.level, tuning: {} } });
                   if (!w) return null;
                   const afford = !offer.sold && run.coins >= offer.price;
-                  const evos = offer.sold || isUpgrade ? [] : newEvolutionRecipesArmedBy(run, offer.weaponId);
+                  const synergyAttrs = offer.sold || isUpgrade ? [] : spireWeaponSynergyOverlap(run, offer.weaponId);
                   const clashes = offer.sold || isUpgrade ? [] : clashesWithBelt(run.weapons, offer.weaponId);
                   const badges: OfferBadge[] = [];
                   if (offer.locked && !offer.sold) badges.push({ text: 'LOCKED', bg: '#2563EB' });
                   if (offer.onSale && !offer.sold) badges.push({ text: 'SALE', bg: '#DC2626' });
                   if (isUpgrade) badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${offer.level}`, bg: '#D97706' });
-                  if (evos.length > 0) {
+                  if (synergyAttrs.length > 0) {
+                    const top = getSynergyAttrMeta(synergyAttrs[0]);
                     badges.push({
-                      icon: 'sbed/electric',
-                      text: evos.length > 1 ? `${evos[0].name} +${evos.length - 1}` : evos[0].name,
-                      bg: TONE.evoReady,
+                      icon: top.icon,
+                      text:
+                        synergyAttrs.length > 1
+                          ? `SYNERGY: ${top.label.toUpperCase()} +${synergyAttrs.length - 1}`
+                          : `SYNERGY: ${top.label.toUpperCase()}`,
+                      bg: top.color,
                     });
                   }
                   if (clashes.length > 0) {
@@ -317,11 +323,23 @@ const SpireShop: React.FC<Props> = ({
                               }}
                             />
                           )}
-                          {evos.length > 0 && (
-                            <View style={st.evoCallouts} testID={`spire-shop-evo-${i}`}>
-                              {evos.slice(0, 2).map(r => (
-                                <ArmedEvolutionRow key={r.id} recipe={r} showFamily />
-                              ))}
+                          {synergyAttrs.length > 0 && (
+                            <View style={st.synergyStrip} testID={`spire-shop-synergy-${i}`}>
+                              <Text style={st.synergyPrefix}>LINKS WITH BELT:</Text>
+                              {synergyAttrs.slice(0, 3).map(attr => {
+                                const meta = getSynergyAttrMeta(attr);
+                                return (
+                                  <View
+                                    key={attr}
+                                    style={[st.synergyPill, { backgroundColor: meta.paleBg, borderColor: meta.color }]}
+                                  >
+                                    <Icon name={meta.icon} size={11} color={meta.color} noShadow />
+                                    <Text style={st.synergyPillText} numberOfLines={1}>
+                                      {meta.label}
+                                    </Text>
+                                  </View>
+                                );
+                              })}
                             </View>
                           )}
                           {clashes.length > 0 && (
@@ -346,7 +364,14 @@ const SpireShop: React.FC<Props> = ({
 
             {inspectedWeapon && inspectedOffer && !inspectedOffer.sold && (
               <SpireCrossfadeSwap swapKey={inspectedOffer.weaponId}>
-                <WeaponExplainer weapon={inspectedWeapon} build={{ level: inspectedOffer.level, tuning: {} }} hidePowerNote />
+                <WeaponExplainer
+                  weapon={inspectedWeapon}
+                  build={{ level: inspectedOffer.level, tuning: {} }}
+                  evolutionMode="preview"
+                  allEvolutionsUnlocked
+                  beltSynergyIds={beltSynergyAttrSet(run.weapons, inspectedOffer.weaponId)}
+                  evolutionLabTier={run.upgrades?.evolution_lab ?? 0}
+                />
               </SpireCrossfadeSwap>
             )}
           </View>
@@ -493,7 +518,7 @@ const SpireShop: React.FC<Props> = ({
                               testID: `spire-shop-arcana-${i}`,
                               disabled: !afford,
                               label: offer.sold ? 'SOLD' : `${offer.price}¢`,
-                              onPress: () => { band.cue('catalyst'); onBuyArcana(i); },
+                              onPress: () => { band.cue('arcanaGain'); onBuyArcana(i); },
                             })}
                           </View>
                         }
@@ -511,6 +536,7 @@ const SpireShop: React.FC<Props> = ({
           <SpireBeltBar
             run={run}
             onReorder={onReorderWeapon}
+            onSelectEvolution={onSelectEvolution}
             onSell={
               onSellWeapon
                 ? wId => {
@@ -660,7 +686,10 @@ const st = StyleSheet.create({
   lockBtnActive: { backgroundColor: '#2563EB', borderColor: '#1E3A8A' },
   lockSummary: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EFF6FF', borderRadius: 8, borderWidth: 1.5, borderColor: '#2563EB', paddingHorizontal: 8, paddingVertical: 5 },
   lockSummaryText: { flex: 1, fontSize: 11, fontWeight: '800', color: '#1D4ED8' },
-  evoCallouts: { gap: 4, paddingLeft: 4 },
+  synergyStrip: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5, paddingLeft: 4 },
+  synergyPrefix: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.7, color: TONE.upside },
+  synergyPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 7, paddingVertical: 2 },
+  synergyPillText: { flexShrink: 1, fontSize: 10, fontWeight: '900', color: INK },
   clashBox: { backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
   clashText: { fontSize: 11.5, fontWeight: '800', color: '#92400E', lineHeight: 16 },
   purgeBtn: { backgroundColor: '#FEE2E2', borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: '#991B1B', paddingHorizontal: 8, paddingVertical: 6, alignItems: 'center' },

@@ -2,30 +2,35 @@
  * Starfall Summit Build Inspector Modal.
  *
  * Reuses `WeaponExplainer.tsx` (single weapon explainer guardrail!) plus shared
- * domain cards (`FighterPassivesList`, `WeaponChip`, `ArmedEvolutionRow`,
- * `SkillNodeRow`, `ArcanaCard`) and Adventure's `UPGRADES` table.
+ * domain cards (`FighterPassivesList`, `WeaponChip`, `WeaponEvolutionChip`,
+ * `SynergySummaryChips`, `SkillNodeRow`, `ArcanaCard`) and Adventure's
+ * `UPGRADES` table.
  */
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { FighterAvatar } from '@/components/fighters';
+import { useColorblind } from '@/utils/cardColors';
 import { COLORS } from '@/utils/colors';
 import { OVERLAP, STAGGER } from '@/utils/motion';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { getWeaponEvolution } from '@/adventure/data/evolutions';
 import { getUpgrade } from '@/adventure/data/upgrades';
+import { beltSynergyAttrSet, summarizeBeltSynergies } from '@/adventure/ui/synergyMeta';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import {
   ArcanaCard,
-  ArmedEvolutionRow,
   FighterPassivesList,
   SkillNodeRow,
+  SynergySummaryChips,
   WeaponChip,
+  WeaponEvolutionChip,
 } from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, INK, TONE } from '@/adventure/components/ui';
 import Icon from '@/components/Icon';
+import { sfx } from '@/audio';
 import { ASCENSION_DESCRIPTIONS } from '../data/ascensions';
 import { getSummitDailyMutator } from '../data/dailyModifiers';
 import { getThemePack } from '../data/themePacks';
-import { buildSpireWeaponBuilds, spireArmedRecipes, spireHeldWeapons } from '../engine/bridge';
+import { buildSpireWeaponBuilds, spireEquippedEvolutions, spireHeldWeapons } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
 import {
@@ -40,16 +45,31 @@ interface Props {
   visible: boolean;
   run: SpireRun;
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
+  onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onClose: () => void;
 }
 
-const SpireBuildModal: React.FC<Props> = ({ visible, run, onReorderWeapon, onClose }) => {
+const SpireBuildModal: React.FC<Props> = ({
+  visible,
+  run,
+  onReorderWeapon,
+  onSelectEvolution,
+  onClose,
+}) => {
+  const colorblind = useColorblind();
   const [selectedWeaponId, setSelectedWeaponId] = useState<string | null>(null);
 
   const builds = buildSpireWeaponBuilds(run);
   const weapons = spireHeldWeapons(run);
-  const armedIds = spireArmedRecipes(run);
-  const armedRecipes = EVOLUTION_RECIPES.filter(r => armedIds.includes(r.id));
+  const equippedEvos = spireEquippedEvolutions(run);
+  const beltSynergyLinks = summarizeBeltSynergies(run.weapons);
+  const labTier = run.upgrades?.evolution_lab ?? 0;
+  const armedWeaponEvos = weapons
+    .map(w => ({ weapon: w, evolution: getWeaponEvolution(equippedEvos[w.id] ?? '') }))
+    .filter(
+      (item): item is { weapon: (typeof weapons)[number]; evolution: NonNullable<ReturnType<typeof getWeaponEvolution>> } =>
+        Boolean(item.evolution)
+    );
   const focusedWeapon = weapons.find(w => w.id === selectedWeaponId) ?? weapons[0] ?? null;
   const focusedIdx = focusedWeapon ? run.weapons.indexOf(focusedWeapon.id) : -1;
 
@@ -156,20 +176,49 @@ const SpireBuildModal: React.FC<Props> = ({ visible, run, onReorderWeapon, onClo
         {focusedWeapon && (
           <SpireStaggerItem index={2} count={4} baseDelayMs={OVERLAP.uiContentMs} gapMs={STAGGER.item} distance={10}>
             <SpireCrossfadeSwap swapKey={focusedWeapon.id}>
-              <WeaponExplainer weapon={focusedWeapon} build={builds[focusedWeapon.id]} defaultOpen hidePowerNote />
+              <WeaponExplainer
+                weapon={focusedWeapon}
+                build={builds[focusedWeapon.id]}
+                defaultOpen
+                evolutionMode={onSelectEvolution ? 'select' : 'preview'}
+                allEvolutionsUnlocked
+                showEvolutionsWhenClosed
+                equippedEvolutionId={equippedEvos[focusedWeapon.id]}
+                beltSynergyIds={beltSynergyAttrSet(run.weapons, focusedWeapon.id)}
+                evolutionLabTier={labTier}
+                onSelectEvolution={onSelectEvolution}
+              />
             </SpireCrossfadeSwap>
           </SpireStaggerItem>
         )}
 
-        {/* Armed Evolutions */}
+        {/* Belt Synergy Graph & Equipped Weapon Evolutions */}
         <SpireStaggerItem index={3} count={4} baseDelayMs={OVERLAP.uiContentMs} gapMs={STAGGER.item} distance={10} style={st.secBlock}>
-          <Text style={st.section}>ARMED EVOLUTIONS ({armedRecipes.length})</Text>
-          {armedRecipes.length === 0 ? (
-            <Text style={st.muted}>Draft synergy-badged weapons to arm 30-second Evolution power trips!</Text>
+          <Text style={st.section}>BELT SYNERGY GRAPH ({beltSynergyLinks.length})</Text>
+          <SynergySummaryChips
+            links={beltSynergyLinks}
+            emptyText="Draft matching-tag weapons to link Synergy Graph scaling across your belt."
+            testID="spire-build-synergy"
+          />
+
+          <Text style={st.section}>EQUIPPED WEAPON EVOLUTIONS ({armedWeaponEvos.length})</Text>
+          {armedWeaponEvos.length === 0 ? (
+            <Text style={st.muted}>Every weapon brings 1 of 3 timed Evolutions into battle — tap a weapon above to switch.</Text>
           ) : (
-            <View style={st.cardGroup}>
-              {armedRecipes.map(r => (
-                <ArmedEvolutionRow key={r.id} recipe={r} showFamily />
+            <View style={st.evoGrid}>
+              {armedWeaponEvos.map(({ weapon, evolution }) => (
+                <WeaponEvolutionChip
+                  key={`${weapon.id}-${evolution.id}`}
+                  testID={`spire-build-evo-${weapon.id}`}
+                  evolution={evolution}
+                  weapon={weapon}
+                  labTier={labTier}
+                  colorblind={colorblind}
+                  onPress={() => {
+                    sfx('click');
+                    setSelectedWeaponId(weapon.id);
+                  }}
+                />
               ))}
             </View>
           )}
@@ -269,6 +318,7 @@ const st = StyleSheet.create({
   fullPill: { backgroundColor: '#FEF3C7', borderRadius: 4, borderWidth: 1, borderColor: '#D97706', paddingHorizontal: 5, paddingVertical: 1 },
   fullPillText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.6, color: '#92400E' },
   cardGroup: { gap: 6 },
+  evoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   muted: { fontSize: 12, color: TONE.spent },
   weaponGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   reorderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', paddingHorizontal: 8, paddingVertical: 6 },

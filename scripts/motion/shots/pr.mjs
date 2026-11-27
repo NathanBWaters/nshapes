@@ -6,7 +6,7 @@
  * straight from live deterministic gameplay — zero manual screen recording.
  *
  * Showcase roster:
- *   - `pr:cascade`  Phoenix Pyre Cascade (Orange Tabby + Blast Powder + Mending Charm + Prismatic Ray + Echo Stone)
+ *   - `pr:cascade`  Cluster Charge Evolution Cascade (Orange Tabby + evolved Blast Powder + Flint Spark + Prismatic Ray + Echo Stone)
  *   - `pr:parry`    Perfect Orange Counter-Parry (Crimson Ambush ALL ORANGE golden window shatter)
  *   - `pr:rainbow`  Rainbow Nova Sweep (Emperor Penguin all-different Rainbow Set + Deep Freeze + Blast Powder)
  *   - `pr:boss-ko`  Boss Kill-Cam Knockout (Iron Shell 1-10 Boss lethal finisher + Clair-Obscur shatter)
@@ -42,7 +42,7 @@ const findSetMatching = (page, kind) =>
     const matchesKind = (a, b, c) => {
       if (matchKind === 'orange') return a.color === 'red' && b.color === 'red' && c.color === 'red';
       if (matchKind === 'rainbow') return attributes.every((k) => new Set([a[k], b[k], c[k]]).size === 3);
-      if (matchKind === 'catalyst') return Boolean(a.isCatalyst || b.isCatalyst || c.isCatalyst);
+      if (matchKind === 'holo') return Boolean(a.holo || b.holo || c.holo);
       return true;
     };
     let fallback = null;
@@ -73,6 +73,11 @@ const buildPrShot = ({ id, about, path, debugControls = [], matchKind = 'any', f
       await waitIntoDirectFight(h);
       if (debugControls.length > 0) {
         await triggerDebugControls(h, debugControls);
+        if (await h.present('evolution-cutin')) {
+          await h.advance(300);
+          await page.mouse.click(195, 300);
+          await h.advance(250);
+        }
       }
       const cards = (await findSetMatching(page, matchKind)) ?? (await findCards(page, true));
       if (!cards) throw new Error(`No matching Set (${matchKind}) available for ${id}`);
@@ -91,10 +96,10 @@ const buildPrShot = ({ id, about, path, debugControls = [], matchKind = 'any', f
 export default {
   'pr:cascade': buildPrShot({
     id: 'pr:cascade',
-    about: 'PR Showcase — Phoenix Pyre Cascade: Orange Tabby fires Catalyst + Blast Powder + Prismatic Ray + Echo Stone on 2-4',
-    path: '/dev/adventure?save=maxed&level=2-4&fighter=Orange+Tabby&weapons=blast-powder,mending-charm,prismatic-ray,echo-stone&seed=4242&intro=false',
-    debugControls: ['debug-spawn-catalyst'],
-    matchKind: 'catalyst',
+    about: 'PR Showcase — Cluster Charge Evolution Cascade: Orange Tabby fires evolved Blast Powder + Flint Spark + Prismatic Ray + Echo Stone on 2-4',
+    path: '/dev/adventure?save=maxed&level=2-4&fighter=Orange+Tabby&weapons=blast-powder,flint-spark,prismatic-ray,echo-stone&seed=4242&intro=false',
+    debugControls: ['debug-trigger-evo'],
+    matchKind: 'any',
     frames: 192,
   }),
   'pr:parry': buildPrShot({

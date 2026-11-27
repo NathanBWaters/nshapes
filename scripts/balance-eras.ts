@@ -10,7 +10,7 @@
  *   npm run validate:balance-eras
  *   npm run balance:era:status
  *   npm run balance:era:record -- --summary "Buff chrono-shard Lv1-5" --bump
- *   npx tsx scripts/balance-eras.ts valid-since --category evolutions --item stockpile --mode adventure
+ *   npx tsx scripts/balance-eras.ts valid-since --category evolutions --item blast-powder:cluster-charge --mode adventure
  */
 import { execSync } from 'child_process';
 import * as fs from 'fs';

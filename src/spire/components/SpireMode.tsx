@@ -6,7 +6,7 @@
  *   campfire / event / treasure ⇄ victory (→ Endless!) / defeat.
  *
  * Persists every decision automatically to MMKV and syncs newly discovered
- * Evolution recipes back into Adventure Mode's shared Recipe Guide!
+ * Per-Weapon Evolutions back into Adventure Mode's shared Field Guide!
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -56,6 +56,7 @@ import {
   createSpireRun,
   type CreateSpireRunOptions,
   enterEndlessSpire,
+  equipSpireWeaponEvolution,
   finishSpireRewards,
   leaveCampfire,
   leaveEvent,
@@ -296,8 +297,8 @@ const SpireMode: React.FC<Props> = ({
       fightId,
       spire: spireFightMeta(run, fightRun),
     });
-    if (fightRun.forgedRecipes.length > 0) {
-      syncSpireDiscoveriesToAdventure(fightRun.forgedRecipes);
+    if (fightRun.forgedEvolutions.length > 0) {
+      syncSpireDiscoveriesToAdventure(fightRun.forgedEvolutions);
     }
     const next = completeSpireBattle(run, fightRun);
     const snapshot: SpireLastFightSnapshot = {
@@ -520,6 +521,7 @@ const SpireMode: React.FC<Props> = ({
               run={run}
               onSelectNode={nodeId => roomTx.go(() => updateRun(selectSpireNode(run, nodeId)), 'ascend')}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
             />
           )}
 
@@ -530,6 +532,7 @@ const SpireMode: React.FC<Props> = ({
               onFight={() => screenTx.go(() => updateRun(startSpireEncounter(run)), 'ascend')}
               onInspectBuild={() => setBuildOpen(true)}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
               onBack={
                 run.prevNodeId !== undefined
                   ? () => roomTx.go(() => updateRun(cancelSpirePreview(run)), 'descend')
@@ -555,6 +558,7 @@ const SpireMode: React.FC<Props> = ({
               onClaimSkill={id => updateRun(claimRewardSkillNode(run, id))}
               onSkipSkill={() => updateRun(skipRewardSkillNode(run))}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
               onContinue={handleFinishRewards}
             />
           )}
@@ -573,6 +577,7 @@ const SpireMode: React.FC<Props> = ({
               onSellWeapon={wId => updateRun(shopSellWeapon(run, wId))}
               onPurgeArcana={id => updateRun(shopPurgeArcana(run, id))}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
               onLeave={() => roomTx.go(() => updateRun(leaveShop(run)), 'descend')}
             />
           )}
@@ -585,6 +590,7 @@ const SpireMode: React.FC<Props> = ({
               onForge={wId => updateRun(campfireForge(run, wId))}
               onMeditate={nodeId => updateRun(campfireMeditate(run, nodeId))}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+              onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
               onLeave={() => roomTx.go(() => updateRun(leaveCampfire(run)), 'descend')}
             />
           )}
@@ -620,6 +626,7 @@ const SpireMode: React.FC<Props> = ({
           visible={buildOpen}
           run={run}
           onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
+          onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
           onClose={() => setBuildOpen(false)}
         />
       </View>

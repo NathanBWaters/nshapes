@@ -7,12 +7,10 @@
  * balance bot (engine/bot.ts) drives this same reducer.
  *
  * Every action ends the same way: queued fight events are resolved against
- * the live rules (rules/engine.ts `drain`), then `resolve` decides what's next.
- *
- * Note: foes are EnemyInstance objects with internal timers (mutable). They're
- * owned by the run and only touched inside the reducer.
+ * the live rules (rules/engine.ts `drain`), per-weapon timed evolutions are
+ * evaluated, then `resolve` decides what's next.
  */
-import type { Card, CardReward, CharacterName, Weapon } from '@/types';
+import type { Card, CardReward, CharacterName, Color, Shape, Weapon } from '@/types';
 import type { EnemyEvent } from '@/types/enemy';
 import type { WeaponEffectResult } from '@/utils/weaponEffects';
 import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
@@ -22,17 +20,36 @@ import { resolveMatch } from '@/utils/matchResolution';
 import { getLinkedDestructionPositions, selectPositionsToConnect } from '@/utils/connectionUtils';
 import { DEFAULT_PLAYER_STATS, canObtainWeapon } from '@/utils/gameDefinitions';
 import { createInitialRoundStats } from '@/game/roundStats';
-import type { AdventureSave, AdventureWeapon, ArcanaDef, ArcanaId, BeltBadge, FeatureFlag, FightLogMathItem, LevelDef, ParryRequirement, ParrySpec, RunEventType, RunReliefOptions, RunState, SetFollowUpItem } from '../types';
+import type {
+  AdventureSave,
+  AdventureWeapon,
+  ArcanaDef,
+  ArcanaId,
+  BeltBadge,
+  FeatureFlag,
+  FightLogMathItem,
+  LevelDef,
+  ParryRequirement,
+  ParrySpec,
+  RunEventType,
+  RunReliefOptions,
+  RunState,
+  SetFollowUpItem,
+} from '../types';
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
 import { seedProcAccumulator } from './entropy';
-import { allSets, countDifferentAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
+import { allSets, countDifferentAttributes, differingAttributes, hasAnySet, isRainbow, isSelectable } from './sets';
 import { boardVariety, buildDeck, deckCopies, kindsOfSet } from './dealer';
 import { applyWeaponToStats, fighterPassives, resolveWholeStats, startingLoadout, type LoadoutOptions } from '../loadout';
 import { getArmoryWeapon, understudyOf } from '../data/armory';
 import { ownerOfEvent } from '../data/weaponGuide';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
-import { damageMultiplier, SKILL_FEAT_POWER } from '../data/weaponPower';
+import {
+  createInitialFightMetrics,
+  createInitialSynergyCounters,
+  evaluateWeaponSynergyDamage,
+} from '../data/synergy';
 import { weaponBuilds } from '../weaponLevels';
 import { createFoe } from '../data/foes';
 import { arcanaRules, getArcana } from '../data/arcana';
@@ -41,37 +58,88 @@ import { PARRY_RULES } from '../data/parry';
 import { challengeProgress } from './challenges';
 import { initParryState, resolveParryOnSet, tickParry } from './parry';
 import {
-  addCoins, addConnection, addPower, addRandomConnections, addTime, addXp, arcana, begin, chanceStatsOf, clearCardLocks, dealDamage, drawCard,
-  emit, empowerBoard, enqueue, ensureBoardHasSet, finish, foeMultiplier, growBoard, heal, hurt, igniteCards, keepCatalystMatchable, mods, newLinkSlots, placeCatalyst,
-  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, signalGrowth, syncEnemyCounters, syncTraps, toDeckCard, touchable, tuning, updateCards,
-  MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM,
-  CLOCK_SLOW_CAP_PCT,
+  addCoins, addConnection, addRandomConnections, addTime, addXp, arcana, begin, bumpSynergy, chanceStatsOf,
+  clearCardLocks, COLLATERAL_DAMAGE, dealDamage, drawCard, emit, empowerBoard, enqueue, ensureBoardHasSet,
+  finish, foeMultiplier, growBoard, heal, hurt, igniteCards, markCards, mods, newLinkSlots, notifyEvoEvent,
+  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, syncEnemyCounters,
+  syncLiveSynergy, syncTraps, synergyCtxOf, toDeckCard, touchable, tuning, updateCards,
+  MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM, CLOCK_SLOW_CAP_PCT,
 } from './fight';
-import { EVOLUTION_RULES, getRecipe, getSkillNode, liveSources } from './sources';
+import {
+  activeWeaponEvolutions,
+  effectiveWeaponIdAt,
+  effectiveWeaponLevelAt,
+  EVOLUTION_CHASSIS,
+  getSkillNode,
+  getWeaponEvolution,
+  liveSources,
+} from './sources';
 import { recordFightStart, recordLog } from './fightLog';
 import { afterSetGear, gearSetBonus, holdCards, initGear, onMistakeGear, onWaveStartGear, resolveTwins, syncGear, tickGear, type GearSet } from './gear';
-import { refreshArmedRecipes, resolveCatalyst, startEvolution, tickEvolutions } from './evolutions';
+import {
+  chargeWeaponEvolutions,
+  evaluateWeaponEvolutionsOnSet,
+  igniteWeaponEvolution,
+  initWeaponEvolutions,
+  syncWeaponEvolutions,
+  tickEvolutions,
+  type SetEvalTelemetry,
+} from './evolutions';
 import { growthModifiers, WEAPON_GROWTH } from '../data/weaponGrowth';
 import { isHintedSet, noteGrowth, seedGrowth } from './growth';
 import { placeOpeningTraps, resolveTrapsOnSet, springSnares, tickTimeBombs } from './hazards';
-import { initialSurge, setSurgeActive, surgeMultiplier, tickSurge } from './surge';
+import { initialSurge, setSurgeActive, surgeFlatBonus, surgeMultiplier, tickSurge } from './surge';
 import {
-  addComboSteps, advanceCombo, afterSetPassives, consumeHotStreak, decayCombo, initPassives, onMistakePassives, onWaveStartPassives,
-  passiveSetDamageBreakdown, restingPassiveState, tickPassives,
+  addComboSteps, advanceCombo, afterSetPassives, consumeHotStreak, decayCombo, initPassives, onMistakePassives,
+  onWaveStartPassives, passiveSetDamageBreakdown, restingPassiveState, tickPassives,
 } from './passives';
 import { applyEffect, checkIdle, conditionsHold, drain, resetFoeBelowRules, resetIdleRules, weaponFired } from '../rules/engine';
 
 export { xpForLevel, passiveTuningOf, activeEnemyCounters, type ActiveWeaponCounter } from './fight';
 
-/** What one matched card is worth before weapons and foes get involved. */
+const FREE_PLAY_COLLATERAL = { explosion: 1, laser: 2, ricochet: 1, connected: 1 } as const;
+
+/** What one matched card is worth in Adventure Mode (base 2 + Holo +4 + Power + Charge). */
 export const baseCardReward = (c: Card): CardReward => ({
   cardId: c.id,
-  points: MATCH_REWARDS.basePoints + (c.bonusPoints ?? 0) + (c.charge ?? 0),
+  points:
+    (BASE_RULES.cardBasePoints ?? 2) +
+    (c.holo ? (BASE_RULES.holoCardBonus ?? 4) : 0) +
+    (c.bonusPoints ?? 0) +
+    (c.charge ?? 0),
   money: MATCH_REWARDS.baseMoney + (c.bonusMoney ?? 0),
   experience: MATCH_REWARDS.baseExperience,
 });
 
-export const SACRIFICE_BASE_DAMAGE = 6;
+/** Normalize Free Play `resolveMatch` rewards to Adventure's elevated card base (2) & collateral (2/4/2/2) values. */
+const normalizeAdventureRewards = (
+  d: Draft,
+  cards: readonly Card[],
+  rewards: readonly CardReward[]
+): CardReward[] => {
+  const byId = new Map<string, Card>();
+  for (const c of cards) byId.set(c.id, d.board.find(b => b.id === c.id) ?? c);
+  const cardBase = BASE_RULES.cardBasePoints ?? 2;
+  const holoBonus = BASE_RULES.holoCardBonus ?? 4;
+  return rewards.map(r => {
+    if (!r.effectType || r.effectType === 'grace') {
+      const live = byId.get(r.cardId);
+      if (!live) return { ...r, points: Math.max(cardBase, r.points ?? cardBase) };
+      return {
+        ...r,
+        points: cardBase + (live.holo ? holoBonus : 0) + (live.bonusPoints ?? 0) + (live.charge ?? 0),
+      };
+    }
+    if (r.effectType in COLLATERAL_DAMAGE) {
+      const et = r.effectType as keyof typeof COLLATERAL_DAMAGE;
+      const delta = COLLATERAL_DAMAGE[et] - FREE_PLAY_COLLATERAL[et];
+      return delta !== 0 ? { ...r, points: (r.points ?? FREE_PLAY_COLLATERAL[et]) + delta } : r;
+    }
+    return r;
+  });
+};
+
+export const SACRIFICE_BASE_DAMAGE = 18;
 export const SACRIFICE_COOLDOWN_MS = 15000;
 
 /** Explicit Sacrifice / Redraw ([GP-05]) unlocks in World 2 from 2-6 onward (and in practice/sandbox). */
@@ -87,11 +155,6 @@ export const isSacrificeUnlocked = (level: LevelDef): boolean => {
 };
 
 export type RunAction =
-  /**
-   * `hinted`: one of the picked cards was being pointed out (a hint or an auto-hint).
-   * When `resolveWeapons` is true (or `rewards` is omitted), `runReducer` resolves
-   * board weapon rolls deterministically via `d._rng.next`.
-   */
   | {
       type: 'MATCH';
       cards: Card[];
@@ -103,7 +166,7 @@ export type RunAction =
     }
   /** Defensive Grace Save ([GP-04]): consumes 1 Grace, spares heart, resets chains, cycles 3 cards, 0 base damage */
   | { type: 'GRACE_SAVE'; cards: Card[] }
-  /** Tactical Sacrifice / Redraw ([GP-05]): costs 1♥, sweeps up to 3 cards (incl. clogged), deals 6×Power shockwave */
+  /** Tactical Sacrifice / Redraw ([GP-05]): costs 1♥, sweeps up to 3 cards, deals 18 shockwave */
   | { type: 'SACRIFICE'; cardIds: string[] }
   | { type: 'INVALID'; cards: Card[] }
   | { type: 'REPLACE'; ids: string[] }
@@ -111,7 +174,6 @@ export type RunAction =
   | { type: 'TICK'; ms: number }
   | { type: 'USE_HINT' }
   | { type: 'PICK'; weaponId: string | null }
-  | { type: 'PICK_EVOLUTION'; recipeId: string }
   | { type: 'BUY'; index: number }
   | { type: 'REROLL' }
   | { type: 'NEXT_WAVE' }
@@ -119,7 +181,8 @@ export type RunAction =
   /** Pure dev/sandbox actions for FightDebugDrawer ([TP-11]) & TrainingLabBar ([TP-12]); gated off in production non-sandbox fights */
   | { type: 'DEV_SET_FOE_HP'; hp: number }
   | { type: 'DEV_FREEZE_CLOCK'; frozen?: boolean }
-  | { type: 'DEV_SPAWN_CATALYST' }
+  | { type: 'DEV_TRIGGER_EVO'; weaponId?: string }
+  | { type: 'DEV_ADVANCE_EVO'; weaponId?: string; amount?: number }
   | { type: 'DEV_TRIGGER_PARRY'; window?: 'windup' | 'perfect'; counter?: ParryRequirement; clear?: boolean }
   | { type: 'DEV_TOGGLE_SURGE'; active?: boolean }
   | {
@@ -152,7 +215,6 @@ const ENEMY_EVENT_MAP: Partial<Record<EnemyEvent['type'], RunEventType>> = {
   countdown_warning: 'countdown',
 };
 
-/** Board slots of the cards with these ids (cards that already left are skipped). */
 const slotsOf = (d: Draft, ids: readonly string[]): number[] =>
   ids.map(id => d.board.findIndex(c => c.id === id)).filter(i => i >= 0);
 
@@ -174,19 +236,16 @@ const syncStats = (d: Draft) => {
   s.currentScore = d.totalDamage;
 };
 
-/** Armory weapons not already held: each weapon is one item, so a fight never offers a second copy. */
 const rollPickOptions = (d: Draft, count = 3): Weapon[] => {
   const weapons = d.armory
     .filter(id => !d.weapons.some(w => w.id === id))
     .map(id => getArmoryWeapon(id, d.weaponBuilds))
     .filter((w): w is Weapon => !!w && canObtainWeapon(w, d.weapons));
-  // Offers come from their own stream: what you are shown never changes how the fight itself plays out
   const offers = createRng((d._rng.state ^ 0x51ed270b) + d.levelUpsTaken * 7919 + d.rerolls * 104729 + d.wave * 1299709);
   return offers.shuffle(weapons).slice(0, count);
 };
 
 const acquireWeapon = (d: Draft, picked: Weapon) => {
-  // An Understudy picked up mid-fight copies the weapon picked up before it
   const built = picked.id === UNDERSTUDY_ID ? understudyOf(picked, d.weapons[d.weapons.length - 1]?.id, d.weaponBuilds) : picked;
   const weapon: Weapon = { ...built, effects: resolveWholeStats(built.effects, () => d._rng.next()) };
   d.weapons = [...d.weapons, weapon];
@@ -207,7 +266,7 @@ const acquireWeapon = (d: Draft, picked: Weapon) => {
     }
   }
   if (m?.coinPercent) d.coinBonusPercent += m.coinPercent;
-  refreshArmedRecipes(d);
+  syncWeaponEvolutions(d);
   refreshSources(d);
 };
 
@@ -236,43 +295,30 @@ const resolve = (d: Draft) => {
     if (brokenOnWin > 0) d.roundStats.tripleCardsCleared += brokenOnWin;
     d.status = 'won';
     d.endReason = 'defeated';
-    d.evolutionPickOptions = [];
-    d.evolutionPickContext = undefined;
     d.challengeMet = challengeProgress(d).met;
     emit(d, 'foe_defeated');
     return;
   }
   if (d.hearts !== null && d.hearts <= 0) {
     if (d.level.rules.sandbox && d.maxHearts !== null) {
-      // Practice cannot be lost: catch your breath and carry on
       d.hearts = d.maxHearts;
       emit(d, 'breather', d.maxHearts);
     } else {
       d.status = 'lost';
       d.endReason = 'hearts';
-      d.evolutionPickOptions = [];
-      d.evolutionPickContext = undefined;
       return;
     }
   }
   if (d.movesLeft !== null && d.movesLeft <= 0) {
     d.status = 'won';
     d.endReason = 'survived';
-    d.evolutionPickOptions = [];
-    d.evolutionPickContext = undefined;
     emit(d, 'moves_out');
     return;
   }
   if (d.timeLeft !== null && d.timeLeft <= 0) {
     d.status = 'won';
     d.endReason = 'survived';
-    d.evolutionPickOptions = [];
-    d.evolutionPickContext = undefined;
     emit(d, 'time_up');
-    return;
-  }
-  if ((d.evolutionPickOptions?.length ?? 0) > 0) {
-    d.status = 'pick_evolution';
     return;
   }
   if (d.pendingPicks > 0) {
@@ -284,7 +330,7 @@ const resolve = (d: Draft) => {
 
 // ─── Scoring a Set ──────────────────────────────────────────────────────────
 
-const PURITY_DAMAGE = [0, 0, 1, 3, 5, 8];
+const PURITY_DAMAGE = [0, 0, 3, 7, 12, 18];
 
 /** Escalating Purity: returns the bonus damage, coins, and chain step reached for this Set. */
 const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damage: number; coins: number; chain: number } => {
@@ -295,7 +341,6 @@ const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damag
     return { damage: 0, coins: 0, chain: 0 };
   }
   if (d.purityChain === 0 || diffCount <= d.lastDiffCount) {
-    // A repeated or lower diversity starts a new climb at this diversity
     d.purityChain = 1;
     d.lastDiffCount = diffCount;
     return { damage: 0, coins: 0, chain: 1 };
@@ -305,10 +350,12 @@ const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damag
   d.lastDiffCount = diffCount;
   d.maxPurityChain = Math.max(d.maxPurityChain, d.purityChain);
   d.purityChainsTriggered += 1;
+  d.fightMetrics.purityChains += 1;
+  bumpSynergy(d, 'prism', 1);
   if (d.purityChain >= 3) {
     d.threeStepPuritiesTriggered += 1;
-    // Skill-feat Power surge ([GP-01]): 3+ step Purity chain rewards careful Set discipline
-    addPower(d, SKILL_FEAT_POWER.purityChain3);
+    d.fightMetrics.threeStepPurities += 1;
+    bumpSynergy(d, 'prism', 1);
   }
   const damage = PURITY_DAMAGE[Math.min(d.purityChain, PURITY_DAMAGE.length - 1)];
   const coins = d.purityChain - 1;
@@ -321,11 +368,6 @@ const advancePurity = (d: Draft, diffCount: number, graceUsed: boolean): { damag
   return { damage, coins, chain };
 };
 
-/**
- * What the Set's weapons did on the board (GameBoard rolled them). Their damage
- * is already inside the Set's own hit, so these events carry no amount: they
- * say what happened and where, for the effects, the band and the fight log.
- */
 const emitBoardWeapons = (d: Draft, rewards: CardReward[], fx: WeaponEffectResult | undefined) => {
   const place = (cards: readonly Card[]) => {
     const on = cards.map(c => ({ c, i: d.board.findIndex(b => b.id === c.id) })).filter(x => x.i >= 0);
@@ -345,7 +387,6 @@ const emitBoardWeapons = (d: Draft, rewards: CardReward[], fx: WeaponEffectResul
   if (linked.size) tell('link_burst', d.board.filter(c => linked.has(c.id)));
 };
 
-/** Weapon effects GameBoard rolled for this Set: queue their triggers (and replay one if a double is waiting). */
 const fireBoardWeapons = (d: Draft, fx: WeaponEffectResult) => {
   const fired: [boolean, Parameters<typeof weaponFired>[1], Effect][] = [
     [fx.explosiveCards.length > 0, 'explosion', { do: 'explode', area: { shape: 'random', count: fx.explosiveCards.length } }],
@@ -361,7 +402,6 @@ const fireBoardWeapons = (d: Draft, fx: WeaponEffectResult) => {
     [fx.boardGrowth > 0, 'growth', { do: 'growBoard', count: fx.boardGrowth }],
   ];
   for (const [on, kind, replay] of fired) if (on) weaponFired(d, kind, replay);
-  // Fire weapon:echo once per echoed Set (including Chain Reaction's double-echo)
   for (let i = 0; i < fx.autoMatchedSets.length; i++) {
     weaponFired(d, 'echo', { do: 'trigger', kind: 'echo' });
   }
@@ -374,10 +414,31 @@ interface MatchOptions {
   hinted?: boolean;
 }
 
-/** Score a Set: traps, foe reaction, damage, rewards, weapon triggers, Catalyst, passives. */
-const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEffectResult | undefined, opts: MatchOptions = {}) => {
+/** Score a Set: traps, foe reaction, Synergy hooks, active evolutions, damage, rewards, weapon triggers, passives. */
+const applyMatch = (
+  d: Draft,
+  cards: Card[],
+  rawRewards: CardReward[],
+  fx: WeaponEffectResult | undefined,
+  opts: MatchOptions = {}
+): SetEvalTelemetry => {
+  const rewards = normalizeAdventureRewards(d, cards, rawRewards);
   const matched = cards.slice(0, 3).map(c => d.board.find(b => b.id === c.id) ?? c);
   const matchedIds = new Set(matched.map(c => c.id));
+  const matchedSlots = matched.map(mc => d.board.findIndex(bc => bc.id === mc.id)).filter(i => i >= 0);
+
+  // Snapshot board & resource state BEFORE Set mutations for `board_state` & `board_geometry` conditions
+  const prevSetSlots = [...d.gear.lastSetSlots];
+  const boardLengthSnap = d.board.length;
+  const activeLinksSnap = d.connections.length;
+  const linkedSlotSetSnap = new Set<number>(d.connections.flatMap(c => [c.positionA, c.positionB]));
+  const burningOnBoardSnap = d.board.filter(c => c.onFire).length;
+  const holoOnBoardSnap = d.board.filter(c => c.holo).length;
+  const heartsSnap = d.hearts;
+  const maxHeartsSnap = d.maxHearts;
+  const hintsSnap = d.stats.hints;
+  const gracesSnap = d.stats.graces;
+
   const prevCtx = d._setCtx;
   const prevSetMult = d._setMultiplier;
   const prevInAutoSet = d._setFold?.inAutoSet ?? false;
@@ -392,17 +453,52 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const simplifiedAttrs = d.simplified
     ? [d.simplified.attribute, ...(d.simplified.also ? [d.simplified.also.attribute] : [])]
     : undefined;
+  const diffAttrs = !graceUsed ? differingAttributes(matched, d.attributes) : [];
   const diffCount = !graceUsed ? countDifferentAttributes(matched, d.attributes) : 0;
-  // An all-different Set is always detected for gear/passives/challenges (evaluated over non-simplified traits during Clarity);
-  // base multiplier is 1× unless a weapon (e.g. Rainbow Charm), skill node, evolution, or Arcana adds a Rainbow multiplier.
   const rainbow = !graceUsed && isRainbow(matched, d.attributes, simplifiedAttrs);
   const sinceLastMs = d.elapsedMs - d.lastMatchAtMs;
   const hinted = !opts.auto && isHintedSet(d, opts.hinted);
-  d._setCtx = { diffCount, rainbow, sinceLastMs, firstOfWave: d.setsThisWave === 0, matchNo: d.matches + 1, hinted };
+
+  const concrete = matched.filter(c => !c.isWild);
+  const sameColor = !graceUsed && (concrete.length <= 1 || concrete.every(c => c.color === concrete[0].color));
+  const setColor: Color | null = sameColor && concrete.length > 0 ? concrete[0].color : null;
+  const sameShape = !graceUsed && (concrete.length <= 1 || concrete.every(c => c.shape === concrete[0].shape));
+  const setShape: Shape | null = sameShape && concrete.length > 0 ? concrete[0].shape : null;
+  const numberVals = concrete.map(c => c.number);
+  const numberMode: 'same' | 'diff' | 'none' = graceUsed
+    ? 'none'
+    : concrete.length <= 1 || numberVals.every(v => v === numberVals[0])
+      ? 'same'
+      : new Set(numberVals).size === concrete.length
+        ? 'diff'
+        : 'none';
+  const numberValue: 1 | 2 | 3 | null = numberMode === 'same' && concrete.length > 0 ? concrete[0].number : null;
+
+  const holoInSet = matched.filter(c => c.holo).length;
+  const explicitMarkedInSet = matched.filter(c => c.marked).length;
+  const markedInSet = matched.filter(c => c.marked || c.magnet || c.doubler || c.hot || c.chest !== undefined).length;
+
+  d._setCtx = { diffCount, rainbow, sinceLastMs, firstOfWave: d.setsThisWave === 0, matchNo: d.matches + 1, hinted, holoInSet };
+
+  // Update clean streak & live Synergy counters before Synergy hooks evaluate
+  if (!opts.auto) {
+    if (!graceUsed) {
+      d.cleanStreak += 1;
+      if (d.cleanStreak > d.maxCleanStreak) d.maxCleanStreak = d.cleanStreak;
+      if (d.cleanStreak > d.fightMetrics.maxCleanStreak) d.fightMetrics.maxCleanStreak = d.cleanStreak;
+    } else {
+      d.cleanStreak = 0;
+    }
+    syncLiveSynergy(d);
+  }
+  if (holoInSet > 0) bumpSynergy(d, 'holo', holoInSet);
+  if (explicitMarkedInSet > 0) bumpSynergy(d, 'marks', explicitMarkedInSet);
+  if (rainbow) bumpSynergy(d, 'prism', 2);
+  else if (!graceUsed && diffCount >= 4) bumpSynergy(d, 'prism', 1);
+  if (hinted) bumpSynergy(d, 'hints', 1);
 
   const traps = resolveTrapsOnSet(d, matched);
 
-  // Enemy reaction first (time theft, extra removals, flips, dynamic Tentacle Lock release)
   const enemyResult = d.foe.onValidMatch(matched, d.board, d._foeRng.next);
   syncEnemyCounters(d);
   const statMods = d.foe.getStatModifiers();
@@ -410,8 +506,9 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
 
   const purity = advancePurity(d, diffCount, graceUsed);
 
-  // Unified Balatro-style damage pipeline: SUM(all additions) × PRODUCT(all multipliers)
+  // Unified Balatro-style damage pipeline: SUM(all additions) × PRODUCT(tight multipliers)
   const parryRes = resolveParryOnSet(d, matched, graceUsed, !!opts.auto);
+  if (parryRes.wasStaggered && !opts.auto) bumpSynergy(d, 'parries', 1);
   const hotStreak = consumeHotStreak(d);
   const a = arcana(d);
   advanceCombo(d);
@@ -421,8 +518,10 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const m = mods(d);
   const rawPoints = rewards.reduce((sum, r) => sum + (r.points ?? 0), 0);
   const surgeMult = surgeMultiplier(d);
+  const surgeFlat = surgeFlatBonus(d);
   let points = rawPoints;
   const flatItems: FightLogMathItem[] = [];
+
   const describeSource = (key: string): { label: string; sourceRef?: string; defaultNote?: string } => {
     if (key.startsWith('node:')) {
       const id = key.slice(5);
@@ -430,7 +529,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     }
     if (key.startsWith('evo:')) {
       const id = key.slice(4);
-      return { label: getRecipe(id)?.name ?? id, sourceRef: key, defaultNote: 'active Evolution' };
+      return { label: getWeaponEvolution(id)?.name ?? id, sourceRef: key, defaultNote: 'active Evolution' };
     }
     const slot = /^w(\d+):(.*)$/.exec(key);
     if (slot) {
@@ -439,8 +538,15 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     }
     return { label: 'Weapon scaling', defaultNote: 'weapon growth' };
   };
+
   const findArcanaFor = (
-    field: 'nonRainbowDamageDelta' | 'singleTraitBonusDamage' | 'damageScale' | 'highDiffDamageScale' | 'nonEvolvedDamageScale'
+    field:
+      | 'nonRainbowDamageDelta'
+      | 'singleTraitBonusDamage'
+      | 'rainbowFlatBonus'
+      | 'damageScale'
+      | 'highDiffDamageScale'
+      | 'nonEvolvedDamageScale'
   ): ArcanaDef | undefined => {
     for (const id of d.arcana) {
       const def = getArcana(id);
@@ -448,6 +554,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     }
     return undefined;
   };
+
   if (a.nonRainbowDamageDelta !== undefined && !rainbow) {
     const before = points;
     points = Math.max(1, points + a.nonRainbowDamageDelta);
@@ -465,11 +572,37 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
         flatItems.push({ label: arc?.name ?? 'Monochrome Pact', amount: a.singleTraitBonusDamage, note: 'only 1 trait differed' });
       }
     }
-    if ((a.singleTraitPowerBonus ?? 0) > 0) {
-      addPower(d, a.singleTraitPowerBonus!);
+    if ((a.singleTraitMarkCount ?? 0) > 0) {
+      markCards(d, a.singleTraitMarkCount!);
     }
   }
-  // Fold Piñata break bounties for cards breaking on this Set into flat BEFORE multipliers!
+  let rainbowFlat = 0;
+  if (rainbow && (a.rainbowFlatBonus ?? 0) !== 0) {
+    rainbowFlat = a.rainbowFlatBonus!;
+    const arc = findArcanaFor('rainbowFlatBonus');
+    flatItems.push({ label: arc?.name ?? 'Prismatic Fever', amount: rainbowFlat, note: 'Rainbow flat bonus' });
+  }
+  if (surgeFlat !== 0) {
+    flatItems.push({ label: 'Shading Surge', amount: surgeFlat, note: '4-trait Shading Surge flat bonus' });
+  }
+  if (parryRes.flatBonus > 0) {
+    flatItems.push({
+      label: parryRes.kind === 'perfect' ? 'Perfect Parry' : 'Counter Parry',
+      amount: parryRes.flatBonus,
+      note: parryRes.kind === 'perfect' ? 'golden window parry bonus' : 'countered telegraphed strike',
+    });
+  }
+  if (parryRes.staggerFlatBonus > 0) {
+    flatItems.push({ label: 'Staggered!', amount: parryRes.staggerFlatBonus, note: 'bonus damage on staggered foe' });
+  }
+  if (hotStreak.flat > 0) {
+    flatItems.push({ label: 'Hot Streak', amount: hotStreak.flat, note: 'max Combo flat bonus' });
+  }
+  if (d.fightBaseDamageBonus !== 0) {
+    flatItems.push({ label: 'Battle Scaling', amount: d.fightBaseDamageBonus, note: 'fight-long base damage' });
+  }
+
+  // Fold Piñata break bounties for cards breaking on this Set into flat BEFORE multipliers
   let pinataBounty = 0;
   const breakingPinataIds: string[] = [];
   const seenCards = new Set<string>();
@@ -487,6 +620,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   }
   if (pinataBounty > 0) {
     d.paidPinataIds = [...new Set([...(d.paidPinataIds ?? []), ...breakingPinataIds])];
+    d.fightMetrics.pinatasBroken += breakingPinataIds.length;
     flatItems.push({
       label: 'Piñata',
       amount: pinataBounty,
@@ -494,7 +628,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       sourceRef: 'weapon:pinata',
     });
   }
-  // Fold Purity Chain & Traps Defused (Bomb Throw / Hot / Clutch Defuse + Snares) into flat BEFORE multipliers!
+
   if (purity.damage !== 0) {
     flatItems.push({ label: 'Purity chain', amount: purity.damage, note: `${purity.chain}-Set Purity streak` });
   }
@@ -503,13 +637,39 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   } else if (traps.bonus !== 0) {
     flatItems.push({ label: 'Traps cleared', amount: traps.bonus, note: 'cleared hazard cards in this Set' });
   }
+
+  const synCtx = synergyCtxOf(d);
   const sources = liveSources({
     skillNodes: d.skillNodes,
     weapons: d.weapons,
-    activeEvolutions: d.activeEvolutions,
+    weaponEvolutions: d.weaponEvolutions,
+    weaponBuilds: d.weaponBuilds,
+    synergy: d.synergy,
+    synergyCtx: synCtx,
     growth: growthModifiers(d.growth ?? {}),
     blankEvolutionRules: d.blankEvolutionRules,
   });
+
+  // Evaluate native per-weapon Synergy Graph base-damage scaling hooks (supports Understudy left-copy)
+  let synergyDamageTotal = 0;
+  d.weapons.forEach((w, slotIdx) => {
+    const effId = effectiveWeaponIdAt(d.weapons, slotIdx);
+    const effLv = effectiveWeaponLevelAt(d.weapons, slotIdx, d.weaponBuilds);
+    const syn = evaluateWeaponSynergyDamage(effId, effLv, d.synergy, synCtx);
+    if (syn.total > 0) {
+      synergyDamageTotal += syn.total;
+      for (const line of syn.items) {
+        flatItems.push({
+          label: w.name,
+          amount: line.amount,
+          note: line.note,
+          sourceRef: `weapon:${w.id}`,
+        });
+      }
+    }
+  });
+  synergyDamageTotal = Math.round(synergyDamageTotal * 100) / 100;
+
   let conditional = 0;
   for (const { key, source } of sources) {
     for (const c of source.modifiers?.conditionalDamage ?? []) {
@@ -561,16 +721,16 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       });
     }
   }
+
   const gearSet: GearSet = {
     matched,
-    slots: matched.map(mc => d.board.findIndex(bc => bc.id === mc.id)).filter(i => i >= 0),
+    slots: matchedSlots,
     diffCount,
     graceUsed,
     auto: !!opts.auto,
   };
   const tricks = gearSetBonus(d, gearSet);
   const passives = passiveSetDamageBreakdown(d, sinceLastMs);
-  // Weapon growth & riders: hints held are worth damage (Seeker Lens), and so is a Set made on a pointed-out card (Oracle Eye)
   const growthDamage = (m.hintHeldDamage ?? 0) * d.stats.hints + (hinted ? m.hintedSetDamage ?? 0 : 0);
   for (const { key, source } of sources) {
     if (key === 'growth') continue;
@@ -589,53 +749,62 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     if (hs !== 0) flatItems.push({ label: g.wName, amount: hs, note: 'matched pointed-out card', sourceRef: `weapon:${g.wId}` });
   }
   flatItems.push(...passives.items, ...tricks.flatItems);
-  for (const evo of d.activeEvolutions) {
+
+  const activeEvos = activeWeaponEvolutions(d.weaponEvolutions);
+  for (const evo of activeEvos) {
     flatItems.push({
-      label: getRecipe(evo.id)?.name ?? 'Active Evolution',
-      amount: EVOLUTION_RULES.setDamage,
+      label: getWeaponEvolution(evo.evoId)?.name ?? 'Active Evolution',
+      amount: EVOLUTION_CHASSIS.setFlatDamage,
       note: 'active Evolution bonus',
-      sourceRef: `evo:${evo.id}`,
+      sourceRef: `evo:${evo.evoId}`,
     });
   }
-  // Rust can take damage off a Set, never below nothing
+
   const unclampedFlat =
-    points + pinataBounty + purity.damage + traps.bonus + d.bonusDamagePerMatch + (m.setDamage ?? 0) + conditional +
-    passives.bonus + tricks.flat + growthDamage + d.activeEvolutions.length * EVOLUTION_RULES.setDamage;
+    points +
+    rainbowFlat +
+    surgeFlat +
+    parryRes.flatBonus +
+    parryRes.staggerFlatBonus +
+    hotStreak.flat +
+    d.fightBaseDamageBonus +
+    pinataBounty +
+    purity.damage +
+    traps.bonus +
+    d.bonusDamagePerMatch +
+    synergyDamageTotal +
+    (m.setDamage ?? 0) +
+    conditional +
+    passives.bonus +
+    tricks.flat +
+    growthDamage +
+    activeEvos.length * EVOLUTION_CHASSIS.setFlatDamage;
   const flat = Math.max(0, unclampedFlat);
   if (unclampedFlat < 0) {
     flatItems.push({ label: 'Minimum damage floor', amount: -unclampedFlat, note: 'Set damage cannot drop below 0' });
   }
+
+  // Tight, readable multipliers (nerfed from ~2.0× toward ~1.2–1.35×; Evolutions & Holo stack ADDITIVELY)
   const weaponRainbowMult = rainbow ? Math.max(0.1, 1 + (m.rainbowMultiplierBonus ?? 0)) : 1;
   const arcanaRainbowMult = rainbow ? (a.rainbowMultiplier ?? BASE_RULES.rainbowMultiplier) : 1;
-  // Combine positive Arcana Rainbow bonuses (Prismatic Fever) additively with Rainbow Charm / Rainbow Hunter
-  // so they stack cleanly instead of compounding exponentially, while penalties (Monochrome ×0.5) still halve.
   const rainbowBaseMult = !rainbow
     ? 1
     : arcanaRainbowMult > 1
       ? weaponRainbowMult + (arcanaRainbowMult - 1)
       : weaponRainbowMult * arcanaRainbowMult;
   const rainbowBoosted = rainbow && rainbowBaseMult > 1;
-  const evoCount = d.activeEvolutions.length;
-  const stackEvos = d.stackEvolutionMultipliers !== false;
-  const evoMult =
-    evoCount > 0
-      ? stackEvos
-        ? Math.pow(EVOLUTION_RULES.setMultiplier, evoCount)
-        : EVOLUTION_RULES.setMultiplier
-      : 1;
-  const rainbowMult = rainbowBaseMult * evoMult;
+
+  const perEvoAdd = EVOLUTION_CHASSIS.setAdditiveMult + (m.evoAdditiveMultBonus ?? 0);
+  const activeEvoMult = activeEvos.length > 0 ? Math.max(1, 1 + activeEvos.length * perEvoAdd) : 1;
+  const holoMult = holoInSet > 0 ? 1 + holoInSet * (BASE_RULES.holoCardMult ?? 0.2) : 1;
   const enemyMult = (enemyResult.pointsMultiplier || 1) * (statMods.pointsMultiplier || 1);
-  // "Next Set ×N" effects and Hot Streak together top out at the same cap (data/rules.ts)
-  const preTricksSetMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak);
+  const preTricksSetMult = Math.min(BASE_RULES.maxNextSetMultiplier, d.nextSetMultiplier * hotStreak.mult);
   const setMult = preTricksSetMult * tricks.multiplier;
   d.nextSetMultiplier = 1;
+
   const multItems: FightLogMathItem[] = [];
   if (surgeMult !== 1) {
-    multItems.push({
-      label: 'Shading Surge',
-      amount: surgeMult,
-      note: '4-trait Shading Surge multiplier',
-    });
+    multItems.push({ label: 'Shading Surge', amount: surgeMult, note: '4-trait Shading Surge multiplier' });
   }
   if (rainbow) {
     let runningRainbow = 1;
@@ -678,18 +847,26 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       });
     }
   }
-  if (evoMult !== 1) {
-    const perEvo = stackEvos
-      ? EVOLUTION_RULES.setMultiplier
-      : Math.pow(evoMult, 1 / evoCount);
-    for (const evo of d.activeEvolutions) {
+  if (activeEvoMult !== 1) {
+    let runningEvo = 1;
+    for (const evo of activeEvos) {
+      const next = runningEvo + perEvoAdd;
+      const factor = next / runningEvo;
       multItems.push({
-        label: getRecipe(evo.id)?.name ?? 'Active Evolution',
-        amount: Math.round(perEvo * 1000) / 1000,
-        note: 'active Evolution multiplier',
-        sourceRef: `evo:${evo.id}`,
+        label: getWeaponEvolution(evo.evoId)?.name ?? 'Active Evolution',
+        amount: Math.round(factor * 1000) / 1000,
+        note: `+${Math.round(perEvoAdd * 100)}% active Evolution`,
+        sourceRef: `evo:${evo.evoId}`,
       });
+      runningEvo = next;
     }
+  }
+  if (holoMult !== 1) {
+    multItems.push({
+      label: holoInSet === 1 ? 'Holo Card' : `${holoInSet}× Holo Cards`,
+      amount: Math.round(holoMult * 1000) / 1000,
+      note: `+${Math.round((holoMult - 1) * 100)}% Holo shine`,
+    });
   }
   let conditionalMult = 1;
   for (const { key, source } of sources) {
@@ -710,7 +887,6 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     const arc = findArcanaFor('damageScale');
     multItems.push({ label: arc?.name ?? 'Arcana', amount: a.damageScale!, note: 'Arcana Set multiplier' });
   }
-  // Monochrome Pact: 3+ diff non-Rainbow Sets (or any 3+ diff if no rainbowMultiplier already resolved it)
   const highDiffScale =
     !graceUsed && diffCount >= 3 && (!rainbow || a.rainbowMultiplier === undefined)
       ? (a.highDiffDamageScale ?? 1)
@@ -719,14 +895,14 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     const arc = findArcanaFor('highDiffDamageScale');
     multItems.push({ label: arc?.name ?? 'Monochrome Pact', amount: highDiffScale, note: '3+ different traits penalty' });
   }
-  // Catalyst Resonance: Sets made without an active Evolution
-  const nonEvoScale = d.activeEvolutions.length === 0 ? (a.nonEvolvedDamageScale ?? 1) : 1;
+  const nonEvoScale = activeEvos.length === 0 ? (a.nonEvolvedDamageScale ?? 1) : 1;
   if (nonEvoScale !== 1) {
     const arc = findArcanaFor('nonEvolvedDamageScale');
-    multItems.push({ label: arc?.name ?? 'Catalyst Resonance', amount: nonEvoScale, note: 'no active Evolution' });
+    multItems.push({ label: arc?.name ?? 'Evolution Resonance', amount: nonEvoScale, note: 'no active Evolution' });
   }
   if (enemyMult !== 1) multItems.push({ label: enemyMult > 1 ? `${d.foeName} Weakness` : d.foeName, amount: enemyMult, note: enemyMult < 1 ? 'foe resistance' : 'foe vulnerability' });
-  if (preTricksSetMult !== 1) multItems.push({ label: hotStreak > 1 ? 'Hot Streak' : 'Next-Set boost', amount: preTricksSetMult, note: hotStreak > 1 ? 'max Combo passive' : 'saved multiplier' });
+  if (preTricksSetMult !== 1) multItems.push({ label: hotStreak.mult > 1 ? 'Hot Streak' : 'Next-Set boost', amount: preTricksSetMult, note: hotStreak.mult > 1 ? 'max Combo passive' : 'saved multiplier' });
+
   const staggerMult = parryRes.wasStaggered ? PARRY_RULES.staggerDamageMult : 1;
   const parryMult = parryRes.multiplier;
   if (parryMult !== 1) {
@@ -737,16 +913,15 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     });
   }
   if (staggerMult !== 1) {
-    multItems.push({
-      label: 'Staggered!',
-      amount: staggerMult,
-      note: 'foe staggered by Parry',
-    });
+    multItems.push({ label: 'Staggered!', amount: staggerMult, note: 'foe staggered by Parry' });
   }
   multItems.push(...tricks.multItems);
+
   const totalMult =
     surgeMult *
-    rainbowMult *
+    rainbowBaseMult *
+    activeEvoMult *
+    holoMult *
     conditionalMult *
     (a.damageScale ?? 1) *
     highDiffScale *
@@ -755,16 +930,18 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     setMult *
     parryMult *
     staggerMult;
-  // Store the non-foe Set multiplier so synchronous same-Set rules, Twins, blasts, and burns inherit it!
   d._setMultiplier = enemyMult !== 0 ? totalMult / enemyMult : totalMult;
+
   const dmg = flat * totalMult;
-  const powerMult = damageMultiplier(d.power ?? 0);
   const hpBeforeSet = d.foeHp;
   const hit = dealDamage(d, dmg);
   emit(d, surgeMult > 1 ? 'surge_hit' : rainbowBoosted ? 'rainbow' : 'hit', hit, undefined, { slots: gearSet.slots });
   const primaryEventId = d.eventSeq;
   const primaryLineIdx = d._lines.length - 1;
-  if (surgeMult > 1 && d.surge) d.surge = { ...d.surge, sets: d.surge.sets + 1 };
+  if (surgeMult > 1 && d.surge) {
+    d.surge = { ...d.surge, sets: d.surge.sets + 1 };
+    d.fightMetrics.surgeSets += 1;
+  }
   if (!opts.auto) emitBoardWeapons(d, rewards, fx);
   if (opts.auto) {
     d._lines[d._lines.length - 1].text = 'Free Set';
@@ -775,32 +952,40 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       collateral[r.effectType] = (collateral[r.effectType] ?? 0) + (r.points ?? 0);
     }
     const matchedPts = rewards.filter(r => matchedIds.has(r.cardId)).reduce((sum, r) => sum + (r.points ?? 0), 0);
-    const baseCards = matched.length * MATCH_REWARDS.basePoints;
+    const cardBase = BASE_RULES.cardBasePoints ?? 2;
+    const baseCards = matched.length * cardBase;
     const cardBonus = Math.max(0, matchedPts - baseCards);
+    const holoPts = holoInSet * (BASE_RULES.holoCardBonus ?? 4);
     const powerBonus = matched.reduce((sum, c) => sum + (c.bonusPoints ?? 0), 0);
     const chargeBonus = matched.reduce((sum, c) => sum + (c.charge ?? 0), 0);
     const cardBonusParts: string[] = [];
+    if (holoPts > 0) cardBonusParts.push(`${holoInSet} Holo card${holoInSet === 1 ? '' : 's'} (+${holoPts})`);
     if (powerBonus > 0) {
       const cnt = matched.filter(c => (c.bonusPoints ?? 0) > 0).length;
       cardBonusParts.push(`${cnt} Power card${cnt === 1 ? '' : 's'} (+${powerBonus})`);
     }
     if (chargeBonus > 0) cardBonusParts.push(`charged cards (+${chargeBonus})`);
-    if (cardBonus > powerBonus + chargeBonus) cardBonusParts.push(`extra card points (+${cardBonus - powerBonus - chargeBonus})`);
+    if (cardBonus > holoPts + powerBonus + chargeBonus) {
+      cardBonusParts.push(`extra card points (+${cardBonus - holoPts - powerBonus - chargeBonus})`);
+    }
     d._logSet = {
       cards: matchedPts,
       cardCount: matched.length,
       baseCards,
       ...(cardBonus > 0 ? { cardBonus } : {}),
       ...(cardBonusParts.length > 0 ? { cardBonusNote: cardBonusParts.join(', ') } : {}),
+      baseDamageBeforeMult: Math.round(flat * 10) / 10,
+      ...(synergyDamageTotal > 0 ? { synergyBonus: Math.round(synergyDamageTotal * 10) / 10 } : {}),
       ...(surgeMult !== 1 ? { surgeMultiplier: surgeMult } : {}),
+      ...(holoMult !== 1 ? { holoMultiplier: Math.round(holoMult * 1000) / 1000 } : {}),
+      ...(activeEvoMult !== 1 ? { activeEvoMultiplier: Math.round(activeEvoMult * 1000) / 1000 } : {}),
       collateral,
-      flatBonus: flat - rawPoints,
+      flatBonus: Math.round((flat - rawPoints) * 10) / 10,
       ...(flatItems.length > 0 ? { flatItems } : {}),
       multiplier: totalMult,
       ...(multItems.length > 0 ? { multItems } : {}),
       rainbow: rainbowBoosted,
       extra: 0,
-      ...(powerMult > 1 ? { powerMultiplier: powerMult, powerPoints: d.power ?? 0 } : {}),
       hit,
       diffTraits: diffCount,
       graceUsed,
@@ -820,7 +1005,6 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       setCtx: d._setCtx,
       baseFlat: flat,
       totalMult,
-      powerMult,
       dealtSoFar: hit,
       hpBeforeSet,
       overkillCredited: hpBeforeSet > 0 && hit > hpBeforeSet ? hit - hpBeforeSet : 0,
@@ -829,15 +1013,16 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
       primaryLineIdx,
     };
   }
-  if (hotStreak > 1) emit(d, 'hot_streak_hit', hotStreak);
+  if (hotStreak.mult > 1 || hotStreak.flat > 0) emit(d, 'hot_streak_hit', hotStreak.mult);
   resolveTwins(d, matched);
   holdCards(d, matched);
   afterSetGear(d, gearSet);
   springSnares(d, traps.sprung);
 
-  // Bookkeeping & stats for defeat conditions
+  // Bookkeeping & stats for defeat conditions and 200 Bounties (`fightMetrics`)
   d.matches += 1;
   d.setsThisWave += 1;
+  d.fightMetrics.sets += 1;
   if (d.movesLeft !== null && !opts.auto) d.movesLeft -= 1;
   const s = d.roundStats;
   s.totalMatches += 1;
@@ -851,24 +1036,59 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     s.colorsMatched.add(c.color);
     s.colorMatchCounts.set(c.color, (s.colorMatchCounts.get(c.color) ?? 0) + 1);
   }
-  if (!graceUsed && isRainbow(matched, d.attributes, simplifiedAttrs)) s.allDifferentMatches += 1;
-  if (!graceUsed && matched.every(c => c.color === matched[0].color)) {
-    s.allSameColorMatches += 1;
-    d.colorSets[matched[0].color] += 1;
+  if (!graceUsed && rainbow) {
+    s.allDifferentMatches += 1;
+    d.fightMetrics.rainbows += 1;
   }
+  if (sameColor && setColor) {
+    s.allSameColorMatches += 1;
+    d.colorSets[setColor] += 1;
+    d.fightMetrics.sameColorSets += 1;
+    d.fightMetrics.colorSets[setColor] += 1;
+  }
+  if (sameShape) d.fightMetrics.sameShapeSets += 1;
+  if (!graceUsed && diffCount === 1) {
+    d.fightMetrics.oneDiffSets += 1;
+    if (diffAttrs.length === 1 && diffAttrs[0] === 'number') d.fightMetrics.numberOnlyDiffSets += 1;
+  }
+  if (!graceUsed && numberMode === 'diff' && d.attributes.includes('number')) {
+    d.fightMetrics.numberTriadSets += 1;
+  }
+  if (!opts.auto && !graceUsed && sinceLastMs <= 4500) d.fightMetrics.quickSets += 1;
+  if (!opts.auto && !graceUsed && sinceLastMs >= 6000) d.fightMetrics.patientSets += 1;
+  if (hinted) d.fightMetrics.hintedSets += 1;
   if (matched.some(c => c.shape === 'squiggle')) s.squiggleMatches += 1;
-  s.faceDownCardsMatched += matched.filter(c => c.wasOriginallyFaceDown || c.isFaceDown).length;
+
+  const faceDownCount = matched.filter(c => c.wasOriginallyFaceDown || c.isFaceDown).length;
+  s.faceDownCardsMatched += faceDownCount;
+  if (faceDownCount > 0) {
+    bumpSynergy(d, 'hazards', faceDownCount);
+    for (let k = 0; k < faceDownCount; k++) notifyEvoEvent(d, { on: 'hazard', hazardKind: 'face_down' });
+  }
   s.bombsDefused += matched.filter(c => c.hasBomb).length;
   s.countdownCardsMatched += matched.filter(c => c.hasCountdown).length;
-  const bonusCards = matched.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0).length;
+
+  const powerCards = matched.filter(c => (c.bonusPoints ?? 0) > 0).length;
+  const goldCards = matched.filter(c => (c.bonusMoney ?? 0) > 0).length;
+  const bonusCards = matched.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0 || !!c.holo).length;
   d.bonusCardsMatched += bonusCards;
+  d.fightMetrics.powerCards += powerCards;
+  d.fightMetrics.goldCards += goldCards;
+  d.fightMetrics.holoCards += holoInSet;
+  d.fightMetrics.bonusCardsMatched += bonusCards;
+
   if (graceUsed) {
     d.stats = { ...d.stats, graces: Math.max(0, d.stats.graces - 1) };
     s.gracesUsed += 1;
+    d.fightMetrics.gracesSaved += 1;
     emit(d, 'grace');
   }
 
-  // Rewards (Overkill Harvest zeroes base Set coins; Gold cards, Overkill, Parries & coin weapons still pay)
+  // Destruction synergy from collateral/linked cards in resolveMatch
+  const collateralCount = Math.max(0, cards.length - matched.length);
+  if (collateralCount > 0) bumpSynergy(d, 'destruction', collateralCount);
+
+  // Rewards
   const rewardMoney = a.zeroBaseSetCoins
     ? rewards.reduce((sum, r) => sum + (!r.effectType ? Math.max(0, (r.money ?? 0) - MATCH_REWARDS.baseMoney) : 0), 0)
     : rewards.reduce((sum, r) => sum + (r.money ?? 0), 0);
@@ -897,12 +1117,18 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   const hints = baseHints + bridgeHints;
   if (hints > 0 && d.features.has('hints')) {
     d.stats = { ...d.stats, hints: Math.min(d.stats.maxHints, d.stats.hints + hints) };
+    bumpSynergy(d, 'hints', hints);
     emit(d, 'hint', hints);
   }
   if (fx?.bonusGraces && d.features.has('graces')) {
     d.stats = { ...d.stats, graces: Math.min(d.stats.maxGraces, d.stats.graces + fx.bonusGraces) };
+    bumpSynergy(d, 'graces', fx.bonusGraces);
   }
   const connected = rewards.filter(r => r.effectType === 'connected').length;
+  if (connected > 0) {
+    d.fightMetrics.linksDestroyed += connected;
+    bumpSynergy(d, 'links', connected);
+  }
   const linkTimeBonus = connected * (d.stats.echoTimeBonusPerLink || 0);
   const arcanaTimeBonus = (rainbow ? a.rainbowTimeBonus ?? 0 : 0) + (a.setTimeBonus ?? 0);
   const timeGained = addTime(d, (fx?.bonusTime ?? 0) + (enemyResult.timeDelta ?? 0) + arcanaTimeBonus + linkTimeBonus);
@@ -912,15 +1138,27 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     if (fx.explosiveCards.length) {
       s.weaponEffectsTriggered.add('explosion');
       d.explosionsTriggered += 1;
+      d.fightMetrics.blasts += 1;
     }
-    if (fx.laserCards.length) s.weaponEffectsTriggered.add('laser');
-    // Support effects count as weapon effects too (e.g. Goblin Saboteur wants 3 different ones)
+    if (fx.laserCards.length) {
+      s.weaponEffectsTriggered.add('laser');
+      d.fightMetrics.lasers += 1;
+    }
     const support: [number, string][] = [
       [fx.bonusHealing, 'heal'], [fx.bonusHints, 'hint'], [fx.bonusTime, 'time'], [fx.bonusGraces, 'grace'],
       [fx.bonusCoins, 'coin'], [fx.bonusExperience, 'xp'], [fx.boardGrowth, 'growth'], [fx.autoMatchedSets.length, 'echo'],
     ];
     for (const [amount, kind] of support) if (amount > 0) s.weaponEffectsTriggered.add(kind);
-    if (fx.ricochetCards.length) s.weaponEffectsTriggered.add('ricochet');
+    if (fx.autoMatchedSets.length > 0) {
+      d.fightMetrics.echoes += fx.autoMatchedSets.length;
+      if (fx.autoMatchedSets.length >= 2) d.fightMetrics.doubleEchoes += 1;
+      bumpSynergy(d, 'echoes', fx.autoMatchedSets.length);
+    }
+    if (fx.ricochetCards.length) {
+      s.weaponEffectsTriggered.add('ricochet');
+      d.fightMetrics.ricochets += fx.ricochetCards.length;
+      d.fightMetrics.maxRicochetChain = Math.max(d.fightMetrics.maxRicochetChain, fx.ricochetCards.length);
+    }
     if (fx.fireCards.length) {
       s.weaponEffectsTriggered.add('fire');
       const ids = new Set(fx.fireCards.map(c => c.id));
@@ -933,11 +1171,12 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
         d.burnMults = nextMults;
       }
       d.board = d.board.map(c => (ids.has(c.id) && !c.onFire ? { ...c, onFire: true, fireStartTime: stamp } : c));
+      bumpSynergy(d, 'burn', fx.fireCards.length);
       emit(d, 'fire', fx.fireCards.length, undefined, { slots: slotsOf(d, [...ids]) });
     }
   }
 
-  // Enemy board effects (no replacement)
+  // Enemy board effects
   if (enemyResult.cardsToFlip.length) {
     const flip = new Set(enemyResult.cardsToFlip);
     d.board = d.board.map(c => (flip.has(c.id) ? { ...c, isFaceDown: false, wasOriginallyFaceDown: true } : c));
@@ -947,13 +1186,13 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     const keep = new Set(cards.map(c => c.id));
     d.board = d.board.filter(c => !rm.has(c.id) || keep.has(c.id));
     pruneConnections(d);
+    syncLiveSynergy(d);
     emit(d, 'card_removed');
   }
-  // Grow the board (at MAX_BOARD, growBoard overflows into empowerBoard(1) and still fires weapon:growth!)
   const growthFired = fx?.boardGrowth ?? 0;
   if (growthFired > 0) growBoard(d, growthFired);
 
-  // Connector weapons: chance to link two of the matched board positions for the wave
+  // Connector weapons
   if (d.stats.connectionChance > 0 && d._rng.next() * 100 < d.stats.connectionChance) {
     const positions = matched.map(mc => d.board.findIndex(bc => bc.id === mc.id)).filter(p => p >= 0);
     const pair = selectPositionsToConnect(positions, d.connections);
@@ -965,9 +1204,7 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     }
   }
 
-  if (rainbow) d.rainbowRefill = true;
   if (!opts.auto) noteGrowth(d, { on: 'set', cards: matched, slots: gearSet.slots, rainbow, hinted, sinceLastMs });
-  resolveCatalyst(d, matched);
 
   // Rule triggers (resolved by drain at the end of the action)
   if (fx) fireBoardWeapons(d, { ...fx, boardGrowth: growthFired });
@@ -983,6 +1220,8 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
   enqueue(d, 'set');
   if (rainbow) enqueue(d, 'rainbow');
   if (bonusCards > 0) enqueue(d, 'bonusCardMatched');
+  if (holoInSet > 0) enqueue(d, 'holoMatched');
+  if (markedInSet > 0) enqueue(d, 'markedMatched');
   if (graceUsed) enqueue(d, 'graceUsed');
   for (let i = 0; i < connected; i++) enqueue(d, 'linkDestroyed');
   resetIdleRules(d);
@@ -993,13 +1232,46 @@ const applyMatch = (d: Draft, cards: Card[], rewards: CardReward[], fx: WeaponEf
     d._setMultiplier = prevSetMult;
     if (d._setFold) d._setFold.inAutoSet = prevInAutoSet;
   }
+
+  return {
+    matched,
+    slots: matchedSlots,
+    prevSetSlots,
+    diffCount,
+    differingAttrs: diffAttrs,
+    sameColor,
+    color: setColor,
+    sameShape,
+    shape: setShape,
+    numberMode,
+    numberValue,
+    rainbow,
+    purityChain: purity.chain,
+    baseDamage: flat,
+    totalDamage: hit,
+    combinedMultiplier: totalMult,
+    cardsDestroyedInSet: cards.length,
+    sinceLastMs,
+    combo: d.combo,
+    cleanStreak: d.cleanStreak,
+    graceUsed,
+    hinted,
+    surgeSet: surgeMult > 1,
+    parryKind: parryRes.kind,
+    wasStaggered: parryRes.wasStaggered,
+    tricksPaid: d._turnTricksPaid,
+    boardLength: boardLengthSnap,
+    activeLinks: activeLinksSnap,
+    linkedSlotSet: linkedSlotSetSnap,
+    burningOnBoard: burningOnBoardSnap,
+    holoOnBoard: holoOnBoardSnap,
+    hearts: heartsSnap,
+    maxHearts: maxHeartsSnap,
+    hints: hintsSnap,
+    graces: gracesSnap,
+  };
 };
 
-/**
- * Cards leaving the board after a Set or a miss: armored cards lose a hit, a
- * multi-hit card that breaks pays its bounty (unless already folded into the Set's hit).
- * Returns the slots to refill.
- */
 const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
   const indices: number[] = [];
   const broken: number[] = [];
@@ -1008,8 +1280,6 @@ const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
     d.elapsedMs + TRICK_RULES.thornMs + TRICK_RULES.thornMsPerExtraTrait * Math.max(0, d.attributes.length - 3);
   d.board = d.board.map((c, i) => {
     if (!ids.has(c.id)) return c;
-    // A chained card matched alone and a fresh Tar Pit card stay for one more match (engine/gear.ts holdCards)
-    // Reset any thorn timer on staying cards so Tar + Thorn doesn't silently expire and bite immediately
     if (c.stay) {
       return {
         ...c,
@@ -1031,9 +1301,9 @@ const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
     enqueue(d, 'cardBroken');
     if (c.bounty) {
       if (paidSet.has(c.id)) {
-        // Bounty was already added to the breaking Set's flat damage before multipliers: emit visual burst only
         emit(d, 'pinata_break', undefined, undefined, { slots: [i] });
       } else {
+        d.fightMetrics.pinatasBroken += 1;
         emit(d, 'pinata_break', dealDamage(d, c.bounty * d._setMultiplier * foeMultiplier(d)), undefined, { slots: [i] });
       }
     }
@@ -1051,22 +1321,10 @@ const replaceCards = (d: Draft, ids: Set<string>, ended: boolean): number[] => {
   return indices;
 };
 
-/** Refill slots after cards left; a Catalyst that left unmatched moves to another card. */
-const refillAfterLeaving = (d: Draft, indices: number[]) => {
-  const hadCatalyst = indices.some(i => d.board[i]?.hasEvolutionItem);
-  refill(d, indices, { rainbow: d.rainbowRefill });
-  d.rainbowRefill = false;
-  if (hadCatalyst) placeCatalyst(d, indices);
-};
-
-/**
- * Make three of these freshly dealt cards a Set: the third is rewritten into the
- * card that completes the first two. Only plain cards are touched.
- */
 const plantSet = (d: Draft, indices: number[]) => {
   const plain = indices.filter(i => {
     const c = d.board[i];
-    return !!c && isSelectable(c) && !c.isWild && !c.hasEvolutionItem && !c.twinOf && !c.decoyOf && !d.replacing.includes(c.id);
+    return !!c && isSelectable(c) && !c.isWild && !c.twinOf && !c.decoyOf && !d.replacing.includes(c.id);
   });
   if (plain.length < 3) return;
   const [a, b, c] = plain.slice(0, 3).map(i => d.board[i]);
@@ -1080,7 +1338,6 @@ const plantSet = (d: Draft, indices: number[]) => {
   updateCards(d, [plain[2]], () => third);
 };
 
-/** The weapon trigger a held weapon fires when something "triggers every weapon you hold". */
 const WEAPON_TRIGGER: Partial<Record<NonNullable<Weapon['specialEffect']>, WeaponTriggerKind>> = {
   explosive: 'explosion',
   laser: 'laser',
@@ -1100,7 +1357,6 @@ const autoSet = (d: Draft, source?: 'scoop') => {
   const sets = allSets(d.board.filter(c => !d.replacing.includes(c.id)), d.attributes);
   if (sets.length === 0) return;
   const set = d._rng.pick(sets);
-  // Allow auto/echoed Sets to break linked partners (linkDestroyed) just like player Sets!
   const linkedPos: number[] = [];
   if (d.connections.length > 0) {
     const setPos = new Set(set.map(c => d.board.findIndex(b => b.id === c.id)).filter(i => i >= 0));
@@ -1119,8 +1375,9 @@ const autoSet = (d: Draft, source?: 'scoop') => {
   const allCards = [...set, ...linkedCards];
   const allRewards: CardReward[] = [
     ...set.map(baseCardReward),
-    ...linkedCards.map(c => ({ cardId: c.id, points: 1, money: 1, effectType: 'connected' as const })),
+    ...linkedCards.map(c => ({ cardId: c.id, points: COLLATERAL_DAMAGE.connected, money: 1, effectType: 'connected' as const })),
   ];
+  d._turnCardsDestroyed += allCards.length;
   applyMatch(d, allCards, allRewards, undefined, { auto: true });
   if (linkedCards.length > 0) {
     emit(d, 'link_burst', undefined, String(linkedCards.length), { slots: linkedPos, cards: linkedCards });
@@ -1154,11 +1411,7 @@ const HOOKS: FightHooks = { autoSet };
 export interface RunOverrides extends LoadoutOptions {
   /** Override starting hearts (e.g. carry HP across floors in Starfall Summit) */
   startingHearts?: number;
-  /** Scale Power accumulation (default 1; 0 disables generic global Power scaling in Starfall Summit) */
-  powerScaling?: number;
-  /** Stack concurrent active Evolution Set multipliers multiplicatively (used by Starfall Summit) */
-  stackEvolutionMultipliers?: boolean;
-  /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal shell) */
+  /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal chassis) */
   blankEvolutionRules?: boolean;
 }
 
@@ -1218,6 +1471,13 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
   const reliefHpScale = relief?.foeHpScale ?? 1;
   const firstFoeHp = scaledFoeHp(level.foes[0].hp, arcanaIds, reliefHpScale);
   const totalFoeHp = level.foes.reduce((sum, f) => sum + scaledFoeHp(f.hp, arcanaIds, reliefHpScale), 0);
+  const initialSynergy = createInitialSynergyCounters(boardSize);
+  initialSynergy.hints = features.has('hints') ? stats.hints : 0;
+  initialSynergy.graces = features.has('graces') ? stats.graces : 0;
+  initialSynergy.vitality = features.has('hearts') && maxHearts !== null ? Math.max(0, maxHearts - 3) : 0;
+  const initialMetrics = createInitialFightMetrics(boardSize);
+  initialMetrics.synergy = { ...initialSynergy };
+  initialMetrics.synergyPeak = { ...initialSynergy };
 
   const state: RunState = {
     level,
@@ -1245,15 +1505,17 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     biggestHit: 0,
     matches: 0,
     mistakes: 0,
+    cleanStreak: 0,
+    maxCleanStreak: 0,
     movesLeft: startingMoves,
     timeLeft: timer,
     timeCap: timer === null ? null : timer + TIME_HEADROOM,
     timeBank: timer === null ? null : Math.round(timer * BASE_RULES.maxTimeGainShare),
     gear: initGear(),
     growth: {},
-    power: 0,
-    ...(ov?.powerScaling !== undefined ? { powerScaling: ov.powerScaling } : {}),
-    stackEvolutionMultipliers: ov?.stackEvolutionMultipliers ?? true,
+    synergy: initialSynergy,
+    synergyPeak: { ...initialSynergy },
+    fightBaseDamageBonus: 0,
     ...(ov?.blankEvolutionRules ? { blankEvolutionRules: true } : {}),
     ...(opts.trackRuleFirings ? { ruleFirings: {}, ruleZeroOps: {} } : {}),
     sacrificeCooldownMs: 0,
@@ -1272,9 +1534,6 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     burnMults: {},
     hintUsedThisSet: false,
     bonusCombo: 0,
-    catalystRecipeId: null,
-    evolutionPickOptions: [],
-    evolutionPickContext: undefined,
     coins: 0,
     xp: 0,
     xpLevel: 0,
@@ -1316,15 +1575,12 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     maxPurityChain: 0,
     purityChainsTriggered: 0,
     threeStepPuritiesTriggered: 0,
-    unlockedEvolutions: save.unlockedEvolutions,
-    armedRecipes: [],
-    activeEvolutions: [],
+    equippedEvolutions: { ...(save.equippedEvolutions ?? {}) },
+    unlockedWeaponEvolutions: [...(save.unlockedWeaponEvolutions ?? [])],
+    weaponEvolutions: [],
     evolutionsTriggered: 0,
-    evolutionCap: loadout.evolutionCap,
     evolutionLabTier: loadout.evolutionLabTier,
-    evolutionLikelihood: 0,
-    forgedRecipes: [],
-    rainbowRefill: false,
+    forgedEvolutions: [],
     timeBombIds: [],
     hazardRefills: { timeBombs: 0, snares: 0 },
     colorSets: { red: 0, green: 0, purple: 0 },
@@ -1334,6 +1590,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     bonusCardsMatched: 0,
     levelUpsTaken: 0,
     shopBuys: 0,
+    fightMetrics: initialMetrics,
     parry: initParryState(level, level.foes[0], relief?.parryWindupScale ?? 1),
     parriesLanded: 0,
     perfectParriesLanded: 0,
@@ -1341,10 +1598,15 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
   };
 
   const d = begin(state, HOOKS);
-  refreshArmedRecipes(d);
+  d.weaponEvolutions = initWeaponEvolutions(
+    d.weapons,
+    d.equippedEvolutions,
+    d.unlockedWeaponEvolutions,
+    d.synergy,
+    d.features.has('evolutions')
+  );
   refreshSources(d);
   initPassives(d);
-  // Deal a board that contains at least one Set
   const varied = deckCopies(level) > 1;
   for (let attempt = 0; attempt < 30; attempt++) {
     d.deck.push(...d.board.map(toDeckCard));
@@ -1352,7 +1614,6 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     const dealt: Card[] = [];
     for (let i = 0; i < boardSize; i++) dealt.push(drawCard(d));
     d.board = dealt;
-    // A deck with copies opens on every kind of Set its traits allow (the first level shows one of each)
     if (varied ? boardVariety(d.board, attributes).kinds >= kindsOfSet(attributes) : hasAnySet(d.board, attributes)) break;
   }
   if (!hasAnySet(d.board, attributes)) {
@@ -1360,8 +1621,9 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     ensureBoardHasSet(d, fixed, fixed.map((_, i) => i));
     d.board = fixed;
   }
-  d.events = []; // don't coach-mark the deal itself
+  d.events = [];
   d._lines = [];
+  syncLiveSynergy(d);
   if (boardOverflow > 0) empowerBoard(d, boardOverflow);
   startFoe(d);
   placeOpeningTraps(d);
@@ -1393,12 +1655,19 @@ const fmtBadgeNum = (n: number): string => {
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 };
 
-/** Resolve a rule source key (`w0:rally-horn#0`, `evo:...`, `node:...`) to a readable name + ref. */
 const resolveLineSource = (d: Draft, key?: string): { label?: string; sourceRef?: string; weaponId?: string } => {
   if (!key) return {};
   const base = key.split('#')[0];
   if (base.startsWith('node:')) return { label: getSkillNode(base.slice(5))?.name ?? base, sourceRef: base };
-  if (base.startsWith('evo:')) return { label: getRecipe(base.slice(4))?.name ?? base, sourceRef: base };
+  if (base.startsWith('evo:')) {
+    const evo = getWeaponEvolution(base.slice(4));
+    return { label: evo?.name ?? base, sourceRef: base, ...(evo?.weaponId ? { weaponId: evo.weaponId } : {}) };
+  }
+  if (base.startsWith('weapon:')) {
+    const wid = base.slice(7);
+    const w = d.weapons.find(x => x.id === wid);
+    return { label: w?.name ?? wid, sourceRef: base, weaponId: wid };
+  }
   const slot = /^w(\d+):(.*)$/.exec(base);
   if (slot) {
     const w = d.weapons[Number(slot[1])];
@@ -1408,12 +1677,6 @@ const resolveLineSource = (d: Draft, key?: string): { label?: string; sourceRef?
   return {};
 };
 
-/**
- * Enrich `d.lastSetIgnition` after `drain(d)` with any follow-up turn damage
- * lines (Rally Horn, Free Set, Piñata, Blast rules, etc.) and per-weapon
- * Balatro trigger badges so the docked Scoreboard and GearBelt reconcile 100%
- * with the exact damage dealt on this move.
- */
 const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
   if (!d.lastSetIgnition) return;
   const turnDamage = Math.max(0, Math.round(d.totalDamage - beforeDamage));
@@ -1425,7 +1688,6 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
   const multByWeapon = new Map<string, number>();
   const fxByWeapon = new Map<string, string>();
 
-  // 1. Direct Set contributors already itemized in `math`
   for (const item of math.flatItems ?? []) {
     if (item.amount !== 0 && item.sourceRef?.startsWith('weapon:')) {
       const id = item.sourceRef.slice(7);
@@ -1451,8 +1713,6 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
     if (owner) dmgByWeapon.set(owner, (dmgByWeapon.get(owner) ?? 0) + amt);
   }
 
-  // 2. Post-Set rule/weapon lines emitted during the same `MATCH` turn
-  // (`hot_streak_hit` and `grudge_release` are already inside `math.multItems` / `math.flatItems`)
   const FOLLOW_UP_DMG = new Set<RunEventType>(['hit', 'blast', 'laser', 'ricochet', 'pinata_break']);
   let skippedPrimarySetHit = false;
   for (const line of d._lines) {
@@ -1482,6 +1742,8 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
     else if (line.type === 'link') fxByWeapon.set(owner, 'LINK');
     else if (line.type === 'echo') fxByWeapon.set(owner, 'ECHO');
     else if (line.type === 'grow') fxByWeapon.set(owner, '+1 CARD');
+    else if (line.type === 'holo_spawn') fxByWeapon.set(owner, 'HOLO');
+    else if (line.type === 'marked') fxByWeapon.set(owner, 'MARK');
   }
 
   const beltBadges: Record<string, BeltBadge> = {};
@@ -1507,12 +1769,7 @@ const finalizeTurnIgnition = (d: Draft, beforeDamage: number) => {
   };
 };
 
-/**
- * Defensive Grace Save ([GP-04]): consumes 1 Grace, spares the heart, resets chains,
- * cycles the 3 cards with 0 base Set damage, and queues `graceUsed` so defensive
- * Grace-reaction rules (Second Chance, Grace Conduit, Judgement Beam, Badger 1-8,
- * Chaos Conduit) fire cleanly without rolling offensive Set weapons.
- */
+/** Defensive Grace Save ([GP-04]). */
 const applyGraceSave = (d: Draft, cards: Card[]) => {
   const picked = cards.slice(0, 3).map(c => d.board.find(b => b.id === c.id) ?? c);
   d.replacing = [...new Set([...d.replacing, ...picked.map(c => c.id)])];
@@ -1520,13 +1777,18 @@ const applyGraceSave = (d: Draft, cards: Card[]) => {
   d.lastDiffCount = 0;
   d.combo = 0;
   d.bonusCombo = 0;
+  d.cleanStreak = 0;
   d.passive.hotStreak = false;
   d.hintUsedThisSet = false;
   d.roundStats.currentStreak = 0;
   d.stats = { ...d.stats, graces: Math.max(0, d.stats.graces - 1) };
   d.roundStats.gracesUsed += 1;
+  d.fightMetrics.gracesSaved += 1;
+  bumpSynergy(d, 'graces', 1);
+  syncLiveSynergy(d);
   emit(d, 'grace');
   enqueue(d, 'graceUsed');
+  notifyEvoEvent(d, { on: 'resource', action: 'grace_save' });
 };
 
 // ─── Reducer ────────────────────────────────────────────────────────────────
@@ -1576,12 +1838,29 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       if (matchEffects?.nextProcAccum) {
         d.procAccum = matchEffects.nextProcAccum;
       }
-      applyMatch(d, matchCards, matchRewards, matchEffects, { hinted: action.hinted });
+      d._turnCardsDestroyed = matchCards.length;
+      d._turnTricksPaid = new Set();
+      const setTel = applyMatch(d, matchCards, matchRewards, matchEffects, { hinted: action.hinted });
       drain(d);
+
+      // Finalize exact Set-turn metrics AFTER synchronous folds & weapon procs, then evaluate per-weapon evolutions!
+      setTel.baseDamage = d._setFold?.baseFlat ?? setTel.baseDamage;
+      setTel.totalDamage = Math.max(0, Math.round(d.totalDamage - before));
+      setTel.cardsDestroyedInSet = d._turnCardsDestroyed;
+      setTel.tricksPaid = d._turnTricksPaid;
+      d.fightMetrics.maxBaseDamage = Math.max(d.fightMetrics.maxBaseDamage, Math.round(setTel.baseDamage));
+      d.fightMetrics.maxSingleHit = Math.max(d.fightMetrics.maxSingleHit, setTel.totalDamage);
+      d.fightMetrics.maxCardsDestroyedInSet = Math.max(d.fightMetrics.maxCardsDestroyedInSet, setTel.cardsDestroyedInSet);
+
+      evaluateWeaponEvolutionsOnSet(d, setTel);
+      if (d._queue.length > 0) drain(d);
+
       d._setMultiplier = 1;
       d._setFold = null;
       finalizeTurnIgnition(d, before);
-      d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
+      const turnDmg = Math.max(0, Math.round(d.totalDamage - before));
+      d.biggestHit = Math.max(d.biggestHit, turnDmg);
+      d.fightMetrics.maxSingleHit = Math.max(d.fightMetrics.maxSingleHit, turnDmg);
       break;
     }
 
@@ -1601,7 +1880,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       if (isTimed ? (d.sacrificeCooldownMs ?? 0) > 0 : Boolean(d.sacrificeUsedThisWave)) return state;
 
       const before = d.totalDamage;
-      const eligible = (c: Card) => !c.hasEvolutionItem && !d.replacing.includes(c.id);
+      const eligible = (c: Card) => !d.replacing.includes(c.id);
       const clogPriority = (c: Card): number => {
         if (c.isDud) return 0;
         if (c.locked || c.cursedUntil !== undefined || (c.frozen ?? 0) > 0) return 1;
@@ -1633,12 +1912,18 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       }
       if (chosenIndices.length === 0) return state;
 
-      // Intentional 1♥ sacrifice: bypasses Graces, Thick Hide, freeMistakes, Wave-1 Shield; triggers `hurt` synergies
       hurt(d, 1, { bypassWaveShield: true });
 
       const sweptCards = chosenIndices.map(i => d.board[i]);
       const shockDmg = dealDamage(d, SACRIFICE_BASE_DAMAGE * foeMultiplier(d));
       emit(d, 'hit', shockDmg, 'Sacrifice!', { slots: chosenIndices, cards: sweptCards });
+      bumpSynergy(d, 'destruction', sweptCards.length);
+      for (const c of sweptCards) {
+        if (c.isDud) { bumpSynergy(d, 'hazards', 1); notifyEvoEvent(d, { on: 'hazard', hazardKind: 'dud' }); }
+        if (c.isFaceDown) { bumpSynergy(d, 'hazards', 1); notifyEvoEvent(d, { on: 'hazard', hazardKind: 'face_down' }); }
+        if (c.hasCountdown || c.hasBomb) { bumpSynergy(d, 'hazards', 1); notifyEvoEvent(d, { on: 'hazard', hazardKind: 'bomb' }); }
+        if (c.snare) { bumpSynergy(d, 'hazards', 1); notifyEvoEvent(d, { on: 'hazard', hazardKind: 'snare' }); }
+      }
 
       const sweptIds = new Set(sweptCards.map(c => c.id));
       if (d.timeBombIds.length) {
@@ -1663,8 +1948,11 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
     case 'INVALID': {
       if (d.status !== 'playing') return state;
       d.mistakes += 1;
+      d.fightMetrics.mistakes += 1;
       d.purityChain = 0;
       d.lastDiffCount = 0;
+      d.cleanStreak = 0;
+      syncLiveSynergy(d);
       d.replacing = [...new Set([...d.replacing, ...action.cards.map(c => c.id)])];
       const s = d.roundStats;
       s.invalidMatches += 1;
@@ -1673,14 +1961,14 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       const a = arcana(d);
       const mistakeBurn = a.mistakeBurn;
       if (onMistakePassives(d)) {
-        // Thick Hide took it
+        notifyEvoEvent(d, { on: 'resource', action: 'mistake_forgiven' });
       } else if (d.freeMistakesLeft > 0) {
         d.freeMistakesLeft -= 1;
         emit(d, 'free_mistake', d.freeMistakesLeft);
+        notifyEvoEvent(d, { on: 'resource', action: 'mistake_forgiven' });
       } else if (mistakeBurn && d.arcanaBurnCooldownMs <= 0) {
         d.arcanaBurnCooldownMs = mistakeBurn.cooldownMs;
         igniteCards(d, mistakeBurn.cards, a.mistakeBurnDamageScale ?? 1);
-        if ((a.mistakeBurnPowerBonus ?? 0) > 0) addPower(d, a.mistakeBurnPowerBonus!);
         emit(d, 'arcana_burn');
       } else {
         const baseHearts =
@@ -1691,6 +1979,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       }
       onMistakeGear(d);
       noteGrowth(d, { on: 'mistake', cards: action.cards });
+      notifyEvoEvent(d, { on: 'mistake' });
       emit(d, 'mistake');
       enqueue(d, 'mistake');
       const res = d.foe.onInvalidMatch(action.cards, d.board, d._foeRng.next);
@@ -1699,6 +1988,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
         const picked = new Set(action.cards.map(c => c.id));
         d.board = d.board.filter(c => !rm.has(c.id) || picked.has(c.id));
         pruneConnections(d);
+        syncLiveSynergy(d);
         emit(d, 'card_removed');
       }
       emitEnemyEvents(d, res.events);
@@ -1712,11 +2002,9 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.replacing = d.replacing.filter(id => !ids.has(id));
       const indices = replaceCards(d, ids, ended);
       if (ended) {
-        // keep the board stable behind the results screen
         return finish(d, state);
       }
-      refillAfterLeaving(d, indices);
-      // Prismatic Ray's growth: the cards that replace a laser's cards hold a Set among themselves
+      refill(d, indices);
       if (d.growthMemo.plantSet) {
         d.growthMemo = { ...d.growthMemo, plantSet: false };
         plantSet(d, indices);
@@ -1731,59 +2019,72 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       if (idx === -1) return state;
       const linked = d.connections.length
         ? getLinkedDestructionPositions(d.connections, idx, new Set()).filter(
-            p => p !== idx && p >= 0 && p < d.board.length && (d.board[p].health ?? 1) <= 1 && !d.board[p].hasEvolutionItem
+            p => p !== idx && p >= 0 && p < d.board.length && (d.board[p].health ?? 1) <= 1
           )
         : [];
       const burned = [idx, ...linked];
+      const burnedCards = burned.map(i => ({ slot: i, card: d.board[i] })).filter((x): x is { slot: number; card: Card } => Boolean(x.card));
+      const burnedCount = burnedCards.length;
       const baseBurnMult = d.burnMults?.[action.card.id] ?? 1;
-      const rawBurn = burned.reduce((sum, i) => {
-        const cMult = d.burnMults?.[d.board[i].id] ?? baseBurnMult;
-        return sum + (1 + (d.stats.burnDamage ?? 0)) * cMult;
+      const m = mods(d);
+      const a = arcana(d);
+      const burnPerCard = 2 + (d.stats.burnDamage ?? 0) + (m.burnBonusDamage ?? 0) + (a.mistakeBurnFlatBonus ?? 0);
+      const burnScale = Math.max(0.1, 1 + (m.burnDamageScale ?? 0));
+      const rawBurn = burnedCards.reduce((sum, { card }) => {
+        const cMult = d.burnMults?.[card.id] ?? baseBurnMult;
+        return sum + burnPerCard * burnScale * cMult;
       }, 0);
       emit(d, 'hit', dealDamage(d, rawBurn * foeMultiplier(d)), 'Burn', { slots: burned });
-      addCoins(d, burned.length);
-      // Soul Harvest: roll onDestruction once per burned card (including linked partners)
-      for (let k = 0; k < burned.length; k++) {
-        for (const bw of rollBridges(d, 'onDestruction')) {
-          if (bw.bridgeEffect?.effect === 'heal') {
-            if (heal(d, bw.bridgeEffect.amount ?? 1)) enqueue(d, 'weapon', 'heal');
-          }
-        }
-      }
-      // 10% chance the fire jumps to a neighbour (inheriting the triggering Set's burnMult)
+      // 10% chance the fire jumps to a neighbour (before recycling burned slots)
       if (d._rng.next() < 0.1) {
         const burnedSet = new Set(burned);
-        const adj = getAdjacentIndices(idx, d.board.length).filter(i => d.board[i] && !d.board[i].onFire && !burnedSet.has(i) && !d.board[i].hasEvolutionItem);
+        const adj = getAdjacentIndices(idx, d.board.length).filter(i => d.board[i] && !d.board[i].onFire && !burnedSet.has(i));
         if (adj.length) {
           const t = d._rng.pick(adj);
           if (baseBurnMult !== 1) d.burnMults = { ...(d.burnMults ?? {}), [d.board[t].id]: baseBurnMult };
           updateCards(d, [t], c => ({ ...c, onFire: true, fireStartTime: d.elapsedMs + 1 }));
         }
       }
-      const hadCatalyst = burned.some(i => d.board[i].hasEvolutionItem);
       const paidPinatas = new Set(d.paidPinataIds ?? []);
-      for (const i of burned) {
-        const c = d.board[i];
+      let brokenCount = 0;
+      for (const { slot, card: c } of burnedCards) {
         if (c.health === 1) {
           d.roundStats.tripleCardsCleared += 1;
-          enqueue(d, 'cardBroken');
-          // Fix Piñata + Flint Spark burn bug: pay c.bounty (scaled by burnMult) when a primed Piñata burns out!
+          brokenCount += 1;
           if (c.bounty && !paidPinatas.has(c.id)) {
             const bMult = d.burnMults?.[c.id] ?? baseBurnMult;
-            emit(d, 'pinata_break', dealDamage(d, c.bounty * bMult * foeMultiplier(d)), undefined, { slots: [i] });
+            d.fightMetrics.pinatasBroken += 1;
+            emit(d, 'pinata_break', dealDamage(d, c.bounty * bMult * foeMultiplier(d)), undefined, { slots: [slot] });
           }
         }
       }
       if (d.burnMults && Object.keys(d.burnMults).length > 0) {
-        const burnedIds = new Set(burned.map(i => d.board[i].id));
+        const burnedIds = new Set(burnedCards.map(x => x.card.id));
         const nextMults: Record<string, number> = {};
         for (const [k, v] of Object.entries(d.burnMults)) {
           if (!burnedIds.has(k)) nextMults[k] = v;
         }
         d.burnMults = nextMults;
       }
+      // Recycle burned cards BEFORE Synergy/evolution notifications can mutate d.board via openingEffects
       recycle(d, burned);
-      if (hadCatalyst) placeCatalyst(d, burned);
+      addCoins(d, burnedCount);
+      d.fightMetrics.burns += 1;
+      d.fightMetrics.cardsBurned += burnedCount;
+      bumpSynergy(d, 'burn', burnedCount);
+      bumpSynergy(d, 'destruction', burnedCount);
+      if (linked.length > 0) {
+        d.fightMetrics.linksDestroyed += linked.length;
+        bumpSynergy(d, 'links', linked.length);
+      }
+      for (let k = 0; k < brokenCount; k++) enqueue(d, 'cardBroken');
+      for (let k = 0; k < burnedCount; k++) {
+        for (const bw of rollBridges(d, 'onDestruction')) {
+          if (bw.bridgeEffect?.effect === 'heal') {
+            if (heal(d, bw.bridgeEffect.amount ?? 1)) enqueue(d, 'weapon', 'heal');
+          }
+        }
+      }
       enqueue(d, 'cardBurned');
       linked.forEach(() => enqueue(d, 'linkDestroyed'));
       drain(d);
@@ -1794,7 +2095,6 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       if (d.status !== 'playing') return state;
       if (d.devClockFrozen) return state;
       d._clock = true;
-      // While frozen: do NOT advance elapsedMs or tickGear (Glass Sword, Thorns, Fuse, Curse, Fog, Potato truly freeze!)
       const frozenUsed = d.frozenMs > 0 ? Math.min(d.frozenMs, action.ms) : 0;
       if (frozenUsed > 0) d.frozenMs = Math.max(0, d.frozenMs - frozenUsed);
       const activeMs = action.ms - frozenUsed;
@@ -1814,11 +2114,12 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 
     case 'USE_HINT': {
       if (d.status !== 'playing') return state;
-      // Block spamming USE_HINT without finding a Set (closes Safe Bet infinite zero-Set exploit)
       if (d.hintUsedThisSet) return state;
       d.hintUsedThisSet = true;
       d.stats = { ...d.stats, hints: Math.max(0, d.stats.hints - 1) };
       d.roundStats.hintsUsed += 1;
+      d.fightMetrics.hintsUsed += 1;
+      bumpSynergy(d, 'hints', 1);
       enqueue(d, 'hintUsed');
       drain(d);
       break;
@@ -1834,37 +2135,13 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       break;
     }
 
-    case 'PICK_EVOLUTION': {
-      if (d.status !== 'pick_evolution') return state;
-      const options = d.evolutionPickOptions ?? [];
-      const chosenId = options.includes(action.recipeId) ? action.recipeId : options[0];
-      const ctx = d.evolutionPickContext;
-      d.evolutionPickOptions = [];
-      d.evolutionPickContext = undefined;
-      d.status = 'playing';
-      if (chosenId && d.evolutionsTriggered < d.evolutionCap) {
-        const before = d.totalDamage;
-        d._setMultiplier = ctx?.setMultiplier ?? 1;
-        // Told first, so what grows on a matched Catalyst (Catalyst Prism) already counts for this evolution
-        signalGrowth(d, { on: 'catalyst' });
-        const slot = ctx?.slot !== undefined && ctx.slot >= 0 && ctx.slot < d.board.length ? ctx.slot : undefined;
-        startEvolution(d, chosenId, slot);
-        drain(d);
-        d._setMultiplier = 1;
-        d.biggestHit = Math.max(d.biggestHit, d.totalDamage - before);
-        if (d.lastSetIgnition && d.foeHp <= 0) {
-          d.lastSetIgnition = { ...d.lastSetIgnition, lethal: true };
-        }
-      }
-      break;
-    }
-
     case 'BUY': {
       if (d.status !== 'intermission') return state;
       const w = d.shopOptions[action.index];
       if (!w || d.coins < shopPrice(w)) return state;
       d.coins -= shopPrice(w);
       d.shopBuys += 1;
+      d.fightMetrics.shopBuys += 1;
       acquireWeapon(d, w);
       d.shopOptions = d.shopOptions.filter((_, i) => i !== action.index);
       break;
@@ -1899,7 +2176,6 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.sacrificeUsedThisWave = false;
       d.paidPinataIds = [];
       d.burnMults = {};
-      // Links are for the wave, unless the Link Stone has grown (then they stay where they are)
       if (!(mods(d).keepLinks ?? 0)) d.connections = [];
       d.setsThisWave = 0;
       d.parry = initParryState(d.level, def, d.relief?.parryWindupScale ?? 1);
@@ -1910,7 +2186,6 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       resetFoeBelowRules(d);
       emit(d, 'wave', d.wave + 1);
       startFoe(d);
-      // Overkill Harvest: spill banked overkill damage cleanly into the fresh wave foe (already Power-scaled on kill)
       if ((d.pendingOverkillCarry ?? 0) > 0) {
         const carry = Math.round(d.pendingOverkillCarry!);
         d.pendingOverkillCarry = 0;
@@ -1921,6 +2196,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
           if (hpBeforeCarry > 0 && carry > hpBeforeCarry) {
             const spill = carry - hpBeforeCarry;
             d.overkillDamage = Math.max(d.overkillDamage, spill);
+            d.fightMetrics.maxOverkill = Math.max(d.fightMetrics.maxOverkill, spill);
             const pct = arcana(d).overkillCarryPct;
             if (pct && pct > 0) d.pendingOverkillCarry = Math.round(spill * pct);
           }
@@ -1947,18 +2223,25 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       break;
     }
 
-    case 'DEV_SPAWN_CATALYST': {
+    case 'DEV_TRIGGER_EVO': {
       const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
       if (!allow || d.status !== 'playing') return state;
-      if (d.board.some(c => c.hasEvolutionItem)) break;
-      if (d.armedRecipes.length > 0) {
-        if (d.evolutionsTriggered >= d.evolutionCap) d.evolutionCap = d.evolutionsTriggered + 1;
-        if (d.armedRecipes.every(id => d.activeEvolutions.some(a => a.id === id))) {
-          d.activeEvolutions = [];
-          refreshSources(d);
-        }
+      const idx = action.weaponId
+        ? d.weaponEvolutions.findIndex(e => e.weaponId === action.weaponId)
+        : d.weaponEvolutions.findIndex(e => e.phase !== 'active');
+      if (idx >= 0) {
+        igniteWeaponEvolution(d, idx);
+        drain(d);
       }
-      placeCatalyst(d, []);
+      break;
+    }
+
+    case 'DEV_ADVANCE_EVO': {
+      const allow = d.level.rules.sandbox || typeof __DEV__ === 'undefined' || Boolean(__DEV__);
+      if (!allow || d.status !== 'playing') return state;
+      const amount = Math.max(1, Math.round(action.amount ?? 1));
+      chargeWeaponEvolutions(d, action.weaponId ? 'self' : 'all', amount, action.weaponId);
+      drain(d);
       break;
     }
 
@@ -2055,7 +2338,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
         d.weapons = nextWeapons;
         d.stats = stats;
         d.baseChances = chanceStatsOf(stats);
-        refreshArmedRecipes(d);
+        syncWeaponEvolutions(d);
       };
       if (action.weaponId) {
         const lv = Math.max(1, Math.min(5, Math.round(action.weaponLevel ?? 1)));
@@ -2095,18 +2378,31 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       d.biggestHit = 0;
       d.matches = 0;
       d.mistakes = 0;
+      d.cleanStreak = 0;
+      d.maxCleanStreak = 0;
       d.combo = 0;
       d.maxCombo = 0;
       d.bonusCombo = 0;
-      d.power = 0;
+      d.fightBaseDamageBonus = 0;
       d.purityChain = 0;
       d.lastDiffCount = 0;
       d.elapsedMs = 0;
       d.lastMatchAtMs = 0;
       d.foeHp = d.foeMaxHp;
       d.lastSetIgnition = null;
-      d.activeEvolutions = [];
+      const freshSyn = createInitialSynergyCounters(d.board.length);
+      d.synergy = freshSyn;
+      d.synergyPeak = { ...freshSyn };
+      d.fightMetrics = createInitialFightMetrics(d.board.length);
+      d.weaponEvolutions = initWeaponEvolutions(
+        d.weapons,
+        d.equippedEvolutions,
+        d.unlockedWeaponEvolutions,
+        d.synergy,
+        d.features.has('evolutions')
+      );
       d.evolutionsTriggered = 0;
+      d.forgedEvolutions = [];
       if (d.hearts !== null && d.maxHearts !== null) d.hearts = d.maxHearts;
       refreshSources(d);
       recordFightStart(d);
@@ -2115,7 +2411,6 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
     }
   }
 
-  keepCatalystMatchable(d);
   syncTraps(d);
   syncGear(d);
   resolve(d);
@@ -2126,7 +2421,6 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 /** Everything that runs on the fight clock (paused while frozen). */
 const tickClock = (d: Draft, ms: number) => {
   const speed = (d.foe.getUIModifiers().timerSpeedMultiplier || 1) * (arcana(d).timerSpeedScale ?? 1);
-  // Chrono Shard's growth slows the player's clock only: the foe, fuses and evolutions keep their pace
   const slow = 1 - Math.min(CLOCK_SLOW_CAP_PCT, mods(d).clockSlowPct ?? 0) / 100;
   if (d.timeLeft !== null) d.timeLeft = Math.max(0, d.timeLeft - (ms / 1000) * speed * slow);
   tickSurge(d, ms * speed);
@@ -2139,7 +2433,6 @@ const tickClock = (d: Draft, ms: number) => {
   tickTimeBombs(d, ms);
   tickParry(d, ms * speed);
 
-  // A Staggered foe is rattled and cannot tick its own hostile abilities or regen
   if (d.parry?.phase === 'staggered') return;
 
   const tick = d.foe.onTick(ms * speed, d.board, d._foeRng.next);
@@ -2158,6 +2451,7 @@ const tickClock = (d: Draft, ms: number) => {
     const rm = new Set(tick.cardsToRemove);
     d.board = d.board.filter(c => !rm.has(c.id));
     pruneConnections(d);
+    syncLiveSynergy(d);
     if (!tick.events.some(e => e.type === 'card_removed')) emit(d, 'card_removed');
   }
   for (const mod of tick.cardModifications) {
@@ -2168,15 +2462,12 @@ const tickClock = (d: Draft, ms: number) => {
     d.board = d.board.map(c => (flip.has(c.id) ? { ...c, isFaceDown: false } : c));
   }
   if (tick.events.some(e => e.type === 'positions_shuffled')) d.board = d._rng.shuffle(d.board);
-  // A shrinking or shifting board must never deadlock. Dud and face-down cards
-  // go first: when foes have hidden every card, they are the only way out.
   if (!hasAnySet(d.board, d.attributes) && d.board.length >= 3) {
     const recyclable = d.board
       .map((_, i) => i)
       .filter(i => (d.board[i].health ?? 1) <= 1 && !d.replacing.includes(d.board[i].id));
     const stuck = d._rng.shuffle(recyclable.filter(i => !isSelectable(d.board[i])));
     const open = d._rng.shuffle(recyclable.filter(i => isSelectable(d.board[i])));
-    // With hardly anything open, three new cards rarely make a Set: replace every stuck card
     const count = open.length < 6 ? Math.max(3, stuck.length) : 3;
     recycle(d, [...stuck, ...open].slice(0, count));
   }
@@ -2203,5 +2494,3 @@ export const computeStars = (s: RunState): number => {
           : 2;
   return s.relief?.starCap !== undefined ? Math.min(s.relief.starCap, raw) : raw;
 };
-
-

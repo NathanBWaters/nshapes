@@ -134,8 +134,8 @@ export default {
   },
   'camp-slots-full': {
     id: 'camp-slots-full',
-    about: 'Tapping a 4th weapon when belt slots are full triggers horizontal geometric refusal shake',
-    path: mapPath('before:2-5', '&weapons=clarity-lens,blast-powder,echo-stone'),
+    about: 'Tapping a 5th weapon when all 4 World-2 belt slots are full triggers horizontal geometric refusal shake',
+    path: mapPath('before:2-5', '&weapons=clarity-lens,blast-powder,echo-stone,flint-spark'),
     ready: (page, h) => h.until('map-dock-camp'),
     prepare: async (page, h) => {
       await h.advance(400);
@@ -151,6 +151,7 @@ export default {
         'camp-armory-clarity-lens',
         'camp-armory-blast-powder',
         'camp-armory-echo-stone',
+        'camp-armory-flint-spark',
       ]);
       const tiles = page.locator('[data-testid^="camp-armory-"]');
       const count = await tiles.count();
@@ -173,6 +174,43 @@ export default {
       }
     },
     frames: 36,
+  },
+  'armory-evo-picker': {
+    id: 'armory-evo-picker',
+    about: '1-tap switching across the 3 timed evolutions inside WeaponExplainer in Camp Armory (SPRING.snappy pop + Synergy chips)',
+    path: mapPath('maxed'),
+    ready: (page, h) => h.until('map-dock-camp'),
+    prepare: async (page, h) => {
+      await h.advance(400);
+      await h.go('map-dock-camp');
+      await h.go('camp-tab-armory');
+      await h.until('camp-armory-blast-powder');
+      await h.go('camp-armory-blast-powder');
+      await h.until('weapon-explainer-evo-selector-blast-powder');
+      await h.reveal('[data-testid="evo-option-blast-powder:napalm-payload"]');
+      await h.advance(450);
+    },
+    clip: 'camp-armory-guide',
+    ambient: 0,
+    trigger: (page, h) => h.tap('[data-testid="evo-option-blast-powder:napalm-payload"]'),
+    frames: 36,
+  },
+  'bounty-board-200': {
+    id: 'bounty-board-200',
+    about: '200 weapon-linked BountyBoard filter switching (Open -> Evos -> By Weapon) with virtualized FlatList responsiveness',
+    path: mapPath('before:2-5'),
+    ready: (page, h) => h.until('map-dock-camp'),
+    prepare: async (page, h) => {
+      await h.advance(400);
+      await h.go('map-dock-camp');
+      await h.go('camp-tab-bounties');
+      await h.until('bounty-list');
+      await h.advance(500);
+    },
+    ambient: 0,
+    trigger: (page, h) => h.tap('bounty-filter-evos'),
+    actions: [{ at: 24, do: (page, h) => h.tap('bounty-filter-by_weapon') }],
+    frames: 52,
   },
   'skill-tree-open': {
     id: 'skill-tree-open',

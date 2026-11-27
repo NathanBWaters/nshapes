@@ -1,16 +1,19 @@
 /**
  * How far each Armory weapon has grown (see data/weaponStats.ts for the model).
  *
- * - LEVEL is found in the world: every earned reward (star or bounty) that
- *   names a weapon is one copy found; the first unlocks it at level 1 and each
- *   later one is +1 level. An old save's stronger copies set a floor
- *   (`save.legacyWeaponTiers`). Derived from stars and bounties, so re-granting
- *   rewards when a save loads can never count one twice.
+ * - LEVEL is derived purely from save progress so re-granting rewards on load
+ *   can never count one twice:
+ *     - Campaign weapons (48): every earned reward (star or bounty) naming the
+ *       weapon is one copy found; the first unlocks Lv 1 and each extra is +1.
+ *     - Bounty-Exclusive weapons (16): unlock at Lv 1, gain +1 per completed
+ *       own weapon bounty (T1/T2/T3 -> Lv 2/3/4), and +1 on clearing 5-5 (Lv 5).
+ *     - Legacy rare/epic copies (`save.legacyWeaponTiers`) act as a level floor.
  * - TUNING is bought at the Workshop per number (`save.weaponTuning`).
  *
  * Pure: no storage I/O.
  */
 import type { AdventureSave } from './types';
+import { getWeaponBounties, isBountyExclusiveWeapon } from './data/bounties';
 import { unlockSources } from './data/rewards';
 import { getArmoryWeapon } from './data/armory';
 import {
@@ -22,6 +25,9 @@ import {
   type WeaponBuilds,
 } from './data/weaponStats';
 
+/** Campaign finale stage that grants the final Lv 5 step for Bounty-Exclusive weapons. */
+export const BOUNTY_EXCLUSIVE_CAPSTONE_LEVEL = '5-5';
+
 /** How many earned rewards (stars and completed bounties) name this weapon. */
 const rewardsEarned = (save: AdventureSave, id: string): number =>
   unlockSources({ kind: 'weapon', id }).filter(s =>
@@ -30,13 +36,27 @@ const rewardsEarned = (save: AdventureSave, id: string): number =>
       : s.via === 'bounty' && save.completedBounties.includes(s.bounty.id)
   ).length;
 
-/** The weapon's level (1-5): one per copy found after the first, and never below an old save's floor. */
-export const weaponLevel = (save: AdventureSave, id: string): number =>
-  Math.min(MAX_WEAPON_LEVEL, 1 + Math.max(0, rewardsEarned(save, id) - 1, save.legacyWeaponTiers?.[id] ?? 0));
+/** Level-ups above Lv 1 earned for one of the 16 Bounty-Exclusive weapons. */
+const bountyExclusiveLevelSteps = (save: AdventureSave, id: string): number => {
+  const ownCompleted = getWeaponBounties(id).filter(b => save.completedBounties.includes(b.id)).length;
+  const capstone = (save.stars[BOUNTY_EXCLUSIVE_CAPSTONE_LEVEL] ?? 0) >= 1 ? 1 : 0;
+  const extraCopies = Math.max(0, rewardsEarned(save, id) - 1);
+  return ownCompleted + capstone + extraCopies;
+};
 
-/** How many level-ups for this weapon exist in the world at all (stars and bounties). */
+/** The weapon's level (1-5): derived from copies / own bounties + 5-5, never below an old save's floor. */
+export const weaponLevel = (save: AdventureSave, id: string): number => {
+  const steps = isBountyExclusiveWeapon(id)
+    ? bountyExclusiveLevelSteps(save, id)
+    : Math.max(0, rewardsEarned(save, id) - 1);
+  return Math.min(MAX_WEAPON_LEVEL, 1 + Math.max(steps, save.legacyWeaponTiers?.[id] ?? 0));
+};
+
+/** How many levels for this weapon exist in the world (5 for Bounty-Exclusive weapons; star/bounty count otherwise). */
 export const weaponLevelsInWorld = (id: string): number =>
-  Math.min(MAX_WEAPON_LEVEL, Math.max(1, unlockSources({ kind: 'weapon', id }).length));
+  isBountyExclusiveWeapon(id)
+    ? MAX_WEAPON_LEVEL
+    : Math.min(MAX_WEAPON_LEVEL, Math.max(1, unlockSources({ kind: 'weapon', id }).length));
 
 /** Workshop tuning tiers of one weapon, by number key. */
 export const weaponTuning = (save: AdventureSave, id: string): Record<string, number> => save.weaponTuning?.[id] ?? {};

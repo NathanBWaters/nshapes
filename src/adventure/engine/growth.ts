@@ -12,11 +12,10 @@ import type { AttributeName, Card, PlayerStats, Weapon } from '@/types';
 import { getArmoryWeapon } from '../data/armory';
 import { HINTED_SET_MS, WEAPON_GROWTH, growthKey, growthStatBonus, type GrowthDef, type SetTest } from '../data/weaponGrowth';
 import { UNDERSTUDY_ID } from '../data/adventureWeapons';
-import { POWER_YIELD, powerGainAtLevel, type PowerWatch } from '../data/weaponPower';
 import type { TrickKind, WeaponTriggerKind } from '../rules/types';
 import { applyEffect } from '../rules/engine';
 import type { RunState } from '../types';
-import { GRID_COLS, addPower, emit, heal, mods, refreshSources, setGrowthHook, type Draft, type FightEventKind } from './fight';
+import { GRID_COLS, emit, heal, mods, refreshSources, setGrowthHook, type Draft, type FightEventKind } from './fight';
 
 /** Something a weapon may be watching for. */
 export type GrowthEvent =
@@ -26,7 +25,7 @@ export type GrowthEvent =
   | { on: 'trick'; kind: TrickKind }
   | { on: 'own'; weaponId: string }
   | { on: 'feat'; name: string }
-  | { on: 'doubled' | 'catalyst' | 'healed' | 'hurt' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed' | 'cardBroken' | 'evolutionEnd' };
+  | { on: 'doubled' | 'healed' | 'hurt' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed' | 'cardBroken' | 'evolutionEnd' };
 
 const valueOf = (c: Card, a: AttributeName) => (a === 'background' ? c.background ?? 'white' : c[a]);
 
@@ -118,109 +117,12 @@ export const setGrowthEnabled = (on: boolean) => {
   enabled = on;
 };
 
-/** Evaluate one weapon Power watch ([GP-01]), updating per-slot streak counters when needed. */
-const evalPowerWatch = (
-  d: Draft,
-  watch: PowerWatch,
-  effectiveId: string,
-  ownedId: string,
-  slot: number,
-  ev: GrowthEvent
-): boolean => {
-  switch (watch.on) {
-    case 'copyLeft':
-      return false;
-    case 'empoweredMatch':
-      return ev.on === 'set' && ev.cards.some(c => (c.bonusPoints ?? 0) > 0 || (c.charge ?? 0) > 0);
-    case 'quickSet':
-      return ev.on === 'set' && (ev.sinceLastMs ?? Infinity) <= watch.withinMs;
-    case 'unbrokenSets': {
-      const key = `p:${slot}:unbroken`;
-      if (ev.on === 'mistake') {
-        if (d.powerProgress?.[key]) d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
-        return false;
-      }
-      if (ev.on !== 'set') return false;
-      const next = (d.powerProgress?.[key] ?? 0) + 1;
-      if (next >= watch.every) {
-        d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
-        return true;
-      }
-      d.powerProgress = { ...(d.powerProgress ?? {}), [key]: next };
-      return false;
-    }
-    case 'lowHeartsSet':
-      return ev.on === 'set' && d.hearts !== null && d.hearts <= watch.maxHearts;
-    case 'fullHeartsStreak': {
-      if (ev.on !== 'set') return false;
-      const key = `p:${slot}:fullHp`;
-      const full = d.hearts !== null && d.maxHearts !== null && d.hearts >= d.maxHearts;
-      if (!full) {
-        if (d.powerProgress?.[key]) d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
-        return false;
-      }
-      const next = (d.powerProgress?.[key] ?? 0) + 1;
-      if (next >= watch.every) {
-        d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
-        return true;
-      }
-      d.powerProgress = { ...(d.powerProgress ?? {}), [key]: next };
-      return false;
-    }
-    case 'rainbowStreak': {
-      if (ev.on !== 'set') return false;
-      const key = `p:${slot}:rainbow`;
-      if (!ev.rainbow) {
-        if (d.powerProgress?.[key]) d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
-        return false;
-      }
-      const next = (d.powerProgress?.[key] ?? 0) + 1;
-      if (next >= watch.every) {
-        d.powerProgress = { ...(d.powerProgress ?? {}), [key]: 0 };
-        return true;
-      }
-      d.powerProgress = { ...(d.powerProgress ?? {}), [key]: next };
-      return false;
-    }
-    case 'own':
-      // Each slot (including an Understudy copying a rule weapon) emits its own `own` signal on firing
-      return ev.on === 'own' && ev.weaponId === ownedId;
-    default:
-      return counts(d, { watch } as GrowthDef, effectiveId, ev) === true;
-  }
-};
-
 /** Tell every held weapon that something happened. */
 export const noteGrowth = (d: Draft, ev: GrowthEvent) => {
   if (!enabled) return;
-  if (d.status !== 'playing' && d.status !== 'pick' && d.status !== 'pick_evolution' && d.status !== 'intermission') return;
+  if (d.status !== 'playing' && d.status !== 'pick' && d.status !== 'intermission') return;
 
-  // 1. Transparent weapon-authored Power yield ([GP-01]): no hidden belt dilution, Understudy copies left charm
-  if ((d.powerScaling ?? 1) > 0) {
-    const seenPower = new Set<string>();
-    d.weapons.forEach((w, slot) => {
-      let effectiveId = w.id;
-      let effectiveLevel = d.weaponBuilds[w.id]?.level ?? w.level ?? 1;
-      if (w.id === UNDERSTUDY_ID) {
-        const left = slot > 0 ? d.weapons[slot - 1] : undefined;
-        if (!left || left.id === UNDERSTUDY_ID) return;
-        effectiveId = left.id;
-        effectiveLevel = Math.max(effectiveLevel, d.weaponBuilds[left.id]?.level ?? left.level ?? 1);
-      } else {
-        if (seenPower.has(w.id)) return;
-        seenPower.add(w.id);
-      }
-      const def = POWER_YIELD[effectiveId];
-      if (!def) return;
-      let triggered = false;
-      for (const watch of def.watches) {
-        if (evalPowerWatch(d, watch, effectiveId, w.id, slot, ev)) triggered = true;
-      }
-      if (triggered) addPower(d, powerGainAtLevel(effectiveId, effectiveLevel));
-    });
-  }
-
-  // 2. Per-weapon in-fight growth tracks (data/weaponGrowth.ts)
+  // Per-weapon in-fight growth tracks (data/weaponGrowth.ts)
   const seen = new Set<string>();
   d.weapons.forEach((w, slot) => {
     if (w.id === UNDERSTUDY_ID || seen.has(w.id)) return;
@@ -304,7 +206,7 @@ const SIMPLE: Partial<Record<FightEventKind, GrowthEvent['on']>> = {
 // Every queued fight event passes through here (fight.ts `enqueue`); Sets and mistakes are told with their cards by run.ts
 setGrowthHook((d, ev) => {
   if (ev.on === 'own' || ev.on === 'feat') noteGrowth(d, ev);
-  else if (ev.on === 'doubled' || ev.on === 'catalyst') noteGrowth(d, { on: ev.on });
+  else if (ev.on === 'doubled') noteGrowth(d, { on: 'doubled' });
   else if (ev.on === 'weapon' && ev.kind) noteGrowth(d, { on: 'weapon', kind: ev.kind });
   else if (ev.on === 'trick' && ev.trick) noteGrowth(d, { on: 'trick', kind: ev.trick });
   else if (SIMPLE[ev.on]) noteGrowth(d, { on: SIMPLE[ev.on] } as GrowthEvent);
@@ -328,7 +230,6 @@ export const setWouldGrow = (s: RunState, cards: readonly Card[], attributes: re
       switch (def.watch.test) {
         case 'corners': return slots.filter(x => corners.includes(x)).length >= 2;
         case 'oneTwoThree': return new Set(cards.map(c => c.number)).size === 3;
-        // Either half of the pair: a one-color Set sets up the next one
         case 'sameColorAgain': return oneColor && (s.growthMemo.lastSetColor === null || s.growthMemo.lastSetColor === color);
         case 'rainbow': return attributes.every(a => new Set(cards.map(c => valueOf(c, a))).size === 3);
         default: return false;

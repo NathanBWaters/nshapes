@@ -309,7 +309,7 @@ export const WEAPON_DEMO_ARCHETYPE: Record<string, WeaponDemoArchetype> = {
   'chrono-shard': 'insight',
   'time-drop': 'insight',
   'temporal-rift': 'echo',
-  'catalyst-prism': 'rainbow',
+  'catalyst-prism': 'insight',
   'encore-mask': 'insight',
   // Echoes & links (7)
   'echo-stone': 'echo',
@@ -325,22 +325,47 @@ const WEAPON_CUSTOM_BADGE: Partial<Record<string, string>> = {
   'greedy-chest': '+3 → +6 → +9',
   'ice-block': '7 SETS → THAW',
   'fog-lantern': '8s → POWER',
-  'cursed-idol': '10s → ×2',
+  'cursed-idol': '10s → ×1.35',
   'long-fuse': 'LAST 5s!',
   'odd-one-out': '1 DIFF!',
   'rally-horn': 'EVERY 4th!',
   'war-drum': '3 FAST!',
   understudy: '← COPIES LEFT',
   'amplifier-coil': '×2 NEXT PROC',
+  'catalyst-prism': 'HOLO + EVO',
   'encore-mask': 'EVO FINALE',
+  'field-stone': 'HOLO + FIELD',
   'wild-card': 'WILD JOKER',
+};
+
+const WEAPON_CUSTOM_COPY: Partial<Record<string, { caption: string; schematicNote: string; icon?: IconName }>> = {
+  'catalyst-prism': {
+    caption: 'Forges Holo cards (+4 & ×1.2) and feeds +1 Evolution charge to your belt.',
+    schematicNote: 'Creates Holo cards & accelerates every equipped weapon evolution',
+    icon: 'delapouite/sparkles',
+  },
+  'encore-mask': {
+    caption: 'Extends active Evolutions, replays their finale, and gives a head-start tick.',
+    schematicNote: 'Longer Evolutions + finale replay + +1 recharge head-start',
+    icon: 'lorc/crystal-shine',
+  },
+  'field-stone': {
+    caption: 'Expands the board and stamps Holo cards that scale with Field Size.',
+    schematicNote: 'Bigger board + Holo cards feeding Field & Holo synergies',
+    icon: 'lorc/field',
+  },
 };
 
 export const getWeaponDemoSpec = (weaponId: string): WeaponDemoSpec => {
   const archetype = WEAPON_DEMO_ARCHETYPE[weaponId] ?? 'blast';
   const base = ARCHETYPE_DEFAULTS[archetype];
   const customBadge = WEAPON_CUSTOM_BADGE[weaponId];
-  return customBadge ? { ...base, badge: customBadge } : base;
+  const customCopy = WEAPON_CUSTOM_COPY[weaponId];
+  return {
+    ...base,
+    ...(customBadge ? { badge: customBadge } : {}),
+    ...(customCopy ? customCopy : {}),
+  };
 };
 
 /** Renders 1–3 crisp v0.1.173 shapes (Circle / Triangle / Bolt × Orange / Blue / Pink). */

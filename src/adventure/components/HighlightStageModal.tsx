@@ -107,12 +107,37 @@ const HighlightStageModal: React.FC<Props> = ({
   /** Lightweight RunState stub so MultiplierIgnition's initial mount frame never reads null primed state. */
   const previewRun = useMemo(() => {
     if (!snapshot) return undefined;
+    const zeroSynergy = {
+      field_size: 0,
+      destruction: 0,
+      marks: 0,
+      coins: 0,
+      burn: 0,
+      links: 0,
+      holo: 0,
+      graces: 0,
+      hints: 0,
+      vitality: 0,
+      streaks: 0,
+      hazards: 0,
+      parries: 0,
+      prism: 0,
+      echoes: 0,
+    };
     return {
       board: snapshot.boardBefore,
       connections: [],
       weapons: snapshot.weapons,
       skillNodes: [],
-      activeEvolutions: [],
+      weaponEvolutions: [],
+      equippedEvolutions: {},
+      unlockedWeaponEvolutions: [],
+      forgedEvolutions: [],
+      synergy: zeroSynergy,
+      synergyPeak: zeroSynergy,
+      fightBaseDamageBonus: 0,
+      cleanStreak: 0,
+      maxCleanStreak: 0,
       growth: {},
       stats: { ...DEFAULT_PLAYER_STATS },
       passives: [],
@@ -148,7 +173,6 @@ const HighlightStageModal: React.FC<Props> = ({
       bonusDamagePerMatch: 0,
       nextSetMultiplier: 1,
       frozenMs: 0,
-      power: snapshot.entry.set?.powerPoints ?? 0,
       combo: snapshot.entry.set?.combo ?? 0,
       matches: 0,
       mistakes: 0,
@@ -248,7 +272,7 @@ const HighlightStageModal: React.FC<Props> = ({
                 </View>
 
                 {activeSnapshot.weapons.length > 0 && (
-                  <GearBelt weapons={activeSnapshot.weapons} width={stage.w} onInspect={() => {}} />
+                  <GearBelt weapons={activeSnapshot.weapons} evolutions={[]} width={stage.w} onInspect={() => {}} />
                 )}
 
                 {activeIgnition && (

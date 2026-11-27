@@ -15,8 +15,8 @@
  *     + Kish effective sample size `effectiveN`).
  *  4. Leave-one-out Simpson's-Paradox stratification across `(level_id, era)` in Adventure
  *     or `(spire_act, spire_node_kind, ascension)` in Starfall Summit.
- *  5. Evolution survivorship control (forged evolutions are benchmarked strictly against
- *     the `evolutions > 0` cohort of fights that lasted long enough to forge a Catalyst).
+ *  5. Evolution survivorship control (per-weapon triggered evolutions are benchmarked strictly
+ *     against the `evolutions > 0` cohort of fights that ignited at least one evolution).
  *  6. L2-regularized Ridge regression co-occurrence de-biasing (Cholesky solver) when
  *     valid decided sample size supports it (`N >= 80`).
  *  7. Credibility gates (`sim_only`, `exploratory`, `emerging`, `credible`) and
@@ -129,6 +129,9 @@ export interface ValidatedFightRecord {
   weaponsPicked: string[];
   weaponsBought: string[];
   evolutionsForged: string[];
+  equippedEvolutions?: Record<string, string>;
+  peakBaseDamage?: number | null;
+  synergyScoreTotal?: number | null;
   arcana: string[];
   funRating: 'up' | 'down' | null;
   funTags: string[];
@@ -151,6 +154,8 @@ export interface LiveItemSignal {
   liveLogLift: number;
   liveLogLiftSE: number | null;
   pickRate: number | null;
+  /** Per-weapon evolution trigger rate (fights ignited / fights equipped) when `equipped_evolutions` is tracked. */
+  triggerRate?: number | null;
   funRate: number | null;
   funCount: number;
   credibility: CredibilityTier;
@@ -222,6 +227,35 @@ const asStringArray = (val: unknown): string[] => {
     }
   }
   return [];
+};
+
+const asStringRecord = (val: unknown): Record<string, string> => {
+  const out: Record<string, string> = {};
+  let obj: unknown = val;
+  if (typeof val === 'string' && (val.trim().startsWith('{') || val.trim().startsWith('['))) {
+    try {
+      obj = JSON.parse(val);
+    } catch {
+      return out;
+    }
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (typeof item === 'string' && item.includes(':')) {
+        const wId = item.slice(0, item.indexOf(':'));
+        if (wId) out[wId] = item;
+      }
+    }
+    return out;
+  }
+  if (obj && typeof obj === 'object') {
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof k === 'string' && k.length > 0 && typeof v === 'string' && v.length > 0) {
+        out[k] = v;
+      }
+    }
+  }
+  return out;
 };
 
 const normalizeWeaponIds = (ids: readonly string[]): string[] => {
@@ -423,6 +457,10 @@ export const filterFightEvents = (
           ? Number(p.evolutions)
           : evolutionsForged.length;
 
+    const equippedEvolutions = asStringRecord(p.equipped_evolutions ?? p.equippedEvolutions);
+    const peakBaseDamage = asOptNum(p.peak_base_damage ?? p.peakBaseDamage);
+    const synergyScoreTotal = asOptNum(p.synergy_score_total ?? p.synergyScoreTotal);
+
     const record: ValidatedFightRecord = {
       fightId,
       distinctId:
@@ -470,6 +508,9 @@ export const filterFightEvents = (
       weaponsPicked: normalizeWeaponBag(asStringArray(p.weapons_picked ?? p.weaponsPicked)),
       weaponsBought: normalizeWeaponBag(asStringArray(p.weapons_bought ?? p.weaponsBought)),
       evolutionsForged: Array.from(new Set(evolutionsForged)),
+      ...(Object.keys(equippedEvolutions).length > 0 ? { equippedEvolutions } : {}),
+      ...(peakBaseDamage !== null ? { peakBaseDamage } : {}),
+      ...(synergyScoreTotal !== null ? { synergyScoreTotal } : {}),
       arcana: Array.from(new Set(asStringArray(p.arcana))),
       funRating,
       funTags,
@@ -946,9 +987,11 @@ export const analyzePostHogForBalance = (
     return isVersionAtLeast(appVersion, floor) ? `${category}:${id}` : `${category}:${id}@pre`;
   };
 
-  // Offer-vs-pick counts for weapons (respecting per-item minValidVersion)
+  // Offer-vs-pick counts for weapons & equipped counts for per-weapon evolutions (respecting per-item minValidVersion)
   const weaponOffered = new Map<string, number>();
   const weaponChosen = new Map<string, number>();
+  const evoEquipped = new Map<string, number>();
+  const evoTriggeredWhenEquipped = new Map<string, number>();
   for (const r of fights) {
     for (const wid of r.weaponsOffered) {
       const floor = resolveItemFloor('weapons', wid);
@@ -959,6 +1002,17 @@ export const analyzePostHogForBalance = (
       const floor = resolveItemFloor('weapons', wid);
       if (!isVersionAtLeast(r.appVersion, floor)) continue;
       weaponChosen.set(wid, (weaponChosen.get(wid) ?? 0) + 1);
+    }
+    if (r.equippedEvolutions) {
+      const forgedSet = new Set(r.evolutionsForged);
+      for (const evoId of Object.values(r.equippedEvolutions)) {
+        const floor = resolveItemFloor('evolutions', evoId);
+        if (!isVersionAtLeast(r.appVersion, floor)) continue;
+        evoEquipped.set(evoId, (evoEquipped.get(evoId) ?? 0) + 1);
+        if (forgedSet.has(evoId)) {
+          evoTriggeredWhenEquipped.set(evoId, (evoTriggeredWhenEquipped.get(evoId) ?? 0) + 1);
+        }
+      }
     }
   }
 
@@ -992,7 +1046,7 @@ export const analyzePostHogForBalance = (
     8
   );
 
-  // Within-Catalyst-cohort Ridge for Evolutions (controls survivorship bias!)
+  // Within-evolution-triggered-cohort Ridge for per-weapon Evolutions (controls survivorship bias!)
   const extractEvoRidgeFeatures = (r: ValidatedFightRecord): string[] =>
     r.evolutionsForged.map(id => ridgeFeatureTag('evolutions', id, r.appVersion));
 
@@ -1151,6 +1205,9 @@ export const analyzePostHogForBalance = (
       const offered = category === 'weapons' ? (weaponOffered.get(id) ?? 0) : 0;
       const chosen = category === 'weapons' ? (weaponChosen.get(id) ?? 0) : 0;
       const pickRate = offered > 0 ? round4(chosen / offered) : null;
+      const equippedCount = category === 'evolutions' ? (evoEquipped.get(id) ?? 0) : 0;
+      const triggeredCount = category === 'evolutions' ? (evoTriggeredWhenEquipped.get(id) ?? 0) : 0;
+      const triggerRate = equippedCount > 0 ? round4(triggeredCount / equippedCount) : null;
       const funRate = funCount > 0 ? round4(funUp / funCount) : null;
 
       result[id] = {
@@ -1169,6 +1226,7 @@ export const analyzePostHogForBalance = (
         liveLogLift: round4(liveLogLift),
         liveLogLiftSE,
         pickRate,
+        ...(triggerRate !== null ? { triggerRate } : {}),
         funRate,
         funCount,
         credibility: classifyCredibility(effectiveN, uniquePlayers, soloTester),

@@ -202,15 +202,19 @@ export const EVENT_FX: Record<RunEventType, FxRow | null> = {
   link: { color: C.link, board: 'zap', label: () => 'LINKED' },
   purity: { color: C.purity, orb: 'spark', from: 'set', to: 'foe', label: e => `PURITY ×${n(e)}!` },
   purity_max: { color: C.rainbow, orb: 'rainbow', from: 'set', to: 'foe', sweep: 'rainbow', fighter: 'ecstatic', enemy: 'criticalHit', label: e => `MAX PURITY ×${n(e)}!` },
-  catalyst_spawn: { color: C.buff, board: 'sparkle', label: () => 'CATALYST!' },
-  // The Catalyst card erupts; then the cut-in takes the screen (fx/EvolutionCutIn.tsx)
+  holo_spawn: { color: C.evo, board: 'sparkle', label: () => 'HOLO!' },
+  marked: { color: C.hit, board: 'sparkle', label: () => 'MARKED!' },
+  // Per-weapon timed evolutions: progress ticks are lightweight & ambient, awakening fires from the weapon's belt slot
+  evo_progress: { color: C.evo, ambient: true, label: e => (e.text ? `EVO ${e.text}` : 'EVO +1') },
+  evo_almost: { color: C.buff, ambient: true, label: () => 'ALMOST READY!' },
+  evo_charge: { color: C.evo, board: 'sparkle', label: e => `EVO +${fmt(n(e) || 1)}` },
   evolution_start: { color: C.evo, board: 'burst', sweep: 'rainbow', fighter: 'ecstatic', enemy: 'criticalHit' },
   evolution_end: { color: C.evo, sweep: 'dark', label: e => `${e.text ?? 'Evolution'} ends` },
 
   // ── Set-Parrying ──────────────────────────────────────────────────────────
   parry_warn: { color: C.buff, from: 'foe', bump: ['foe'], ambient: true, label: () => 'PARRY NOW!' },
   parry: { color: C.shield, aura: true, orb: 'spark', from: 'fighter', to: 'foe', bump: ['fighter', 'foe'], shake: true, fighter: 'ecstatic', enemy: 'hit', label: e => `PARRY! ×${fmt(n(e) || 1.25)}` },
-  perfect_parry: { color: C.coin, sweep: 'gold', aura: true, orb: 'spark', from: 'fighter', to: 'foe', bump: ['fighter', 'foe'], shake: true, fighter: 'ecstatic', enemy: 'criticalHit', label: () => 'PERFECT PARRY! STAGGER ×2' },
+  perfect_parry: { color: C.coin, sweep: 'gold', aura: true, orb: 'spark', from: 'fighter', to: 'foe', bump: ['fighter', 'foe'], shake: true, fighter: 'ecstatic', enemy: 'criticalHit', label: () => 'PERFECT PARRY! STAGGER ×1.35' },
   // [FX-03]: Attacking foe lunges cleanly (`enemy: 'attack'`) without self-shake or `foe` anchor jump
   foe_strike: { color: C.sour, orb: 'dark', from: 'foe', to: 'hearts', bump: ['hearts'], fighter: 'pain', enemy: 'attack', labelColor: C.sour, label: e => `${(e.text ?? 'STRIKE').toUpperCase()}!` },
 };

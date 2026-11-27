@@ -75,11 +75,15 @@ export const EVENT_CUE: Record<RunEventType, CueName | null> = {
   pinata: 'pinata',
   pinata_break: 'pinataBreak',
   link: 'link',
+  holo_spawn: 'twinkle',
+  marked: 'armed',
   purity: 'purity',
   purity_max: 'rainbow',
-  catalyst_spawn: 'catalyst',
-  evolution_start: null, // the band hears the evolution in the mood and plays its theme
-  evolution_end: null,
+  evo_progress: 'evoProgress',
+  evo_almost: 'evoAlmost',
+  evo_charge: 'evoCharge',
+  evolution_start: null, // the band hears the evolution via playCutInEvolve(evoId)
+  evolution_end: null, // the band hears expiry via setMood -> devolve() -> evoEnd
   trap_placed: 'trapSet',
   trap_defused: 'trapDefused',
   trap_sprung: 'trapSprung',
@@ -139,6 +143,14 @@ export const isSetHit = (e: RunEvent): boolean => (e.type === 'hit' && !e.text) 
 export const weaponOfEvent = (e: RunEvent, held: readonly string[]): string | null =>
   (e.source ? weaponIdOf(e.source) : null) ?? ownerOfEvent(e.type, e.text, held);
 
+/** Evolution events handled by dedicated cues/fanfares that must never emit a stray weapon sting. */
+const EVO_SILENT_STING: ReadonlySet<RunEventType> = new Set<RunEventType>([
+  'evo_progress',
+  'evo_almost',
+  'evolution_start',
+  'evolution_end',
+]);
+
 /**
  * Does this event take a step of the chain? The effects on screen
  * (src/adventure/fx/script.ts) ask the same question, so sound and picture
@@ -146,7 +158,9 @@ export const weaponOfEvent = (e: RunEvent, held: readonly string[]): string | nu
  */
 export const takesChainSlot = (e: RunEvent, held: readonly string[], setHit: boolean): boolean => {
   if (isSetHit(e) || (e.type === 'rainbow' && setHit)) return false;
+  if (e.type === 'evolution_start' || e.type === 'evolution_end' || e.type === 'evo_progress') return false;
   if (isSour(e)) return true;
+  if (EVO_SILENT_STING.has(e.type)) return EVENT_CUE[e.type] !== null;
   return (e.type === 'hit' ? 'ding' : EVENT_CUE[e.type]) !== null || weaponOfEvent(e, held) !== null;
 };
 
@@ -170,16 +184,41 @@ export const soundsFor = (events: readonly TimedEvent[], ctx: { weapons: readonl
   let slot = setHit ? CHAIN_LEAD : 0;
   let chain = 0;
   const stung = new Set<string>();
+  // Sakurai Ep. #032: rate-limit Tier C evo_progress to max 1 per Set (and mute it if evo_almost / evolution_start fired)
+  const hasEvoMilestone = events.some(e => e.type === 'evo_almost' || e.type === 'evolution_start');
+  const maxEvoProgressAmount = events.reduce(
+    (best, e) => (e.type === 'evo_progress' ? Math.max(best, e.amount ?? 1) : best),
+    0
+  );
+  let evoProgressEmitted = false;
+  let evoAlmostEmitted = false;
+
   for (const e of events) {
     if (out.length >= MAX_CHAIN) break;
     if (isSetHit(e) || (e.type === 'rainbow' && setHit)) continue;
+    if (e.type === 'evolution_start' || e.type === 'evolution_end') continue;
+    if (e.type === 'evo_progress') {
+      if (hasEvoMilestone || evoProgressEmitted) continue;
+      evoProgressEmitted = true;
+      const after = e.heardAfterMs ? { after: e.heardAfterMs } : {};
+      out.push({ kind: 'cue', name: 'evoProgress', amount: maxEvoProgressAmount, slot, ...after });
+      continue;
+    }
+    if (e.type === 'evo_almost') {
+      if (evoAlmostEmitted) continue;
+      evoAlmostEmitted = true;
+      const after = e.heardAfterMs ? { after: e.heardAfterMs } : {};
+      out.push({ kind: 'cue', name: 'evoAlmost', amount: e.amount ?? 0, slot, ...after });
+      slot += 1;
+      continue;
+    }
     // Bad news from your own gear (a shattered sword, a thorn that bit) never sounds like a win
     if (isSour(e)) {
       out.push({ kind: 'cue', name: 'sour', amount: 0, slot, ...(e.heardAfterMs ? { after: e.heardAfterMs } : {}) });
       slot += 1;
       continue;
     }
-    const weapon = weaponOfEvent(e, ctx.weapons);
+    const weapon = EVO_SILENT_STING.has(e.type) ? null : weaponOfEvent(e, ctx.weapons);
     const cue = e.type === 'hit' ? 'ding' : EVENT_CUE[e.type];
     // A weapon speaks for itself: its sting replaces the plain "ding" of a rule or a bonus hit
     const plain = cue === 'ding' && weapon !== null;
@@ -252,6 +291,7 @@ export const moodOf = (
     !run.level.isBoss && run.level.biome === 'summit' && o.arrangement === 'boss'
       ? 'summit'
       : o.arrangement;
+  const activeEvos = run.weaponEvolutions.filter(e => e.phase === 'active');
   return {
     arrangement,
     boss: Boolean(run.level.isBoss),
@@ -266,8 +306,8 @@ export const moodOf = (
     waves: run.level.foes.length,
     combo: run.combo,
     hotStreak: run.passive.hotStreak,
-    evolutions: run.activeEvolutions.map(e => e.id),
-    evolutionEndsMs: run.activeEvolutions.reduce((min, e) => Math.min(min, e.remainingMs), Infinity),
+    evolutions: activeEvos.map(e => e.evoId),
+    evolutionEndsMs: activeEvos.reduce((min, e) => Math.min(min, e.activeRemainingMs), Infinity),
     // A harder board takes longer to read: the band's patience grows with every trait beyond three
     idleMs: Math.max(0, run.elapsedMs - run.lastMatchAtMs) / (1 + IDLE_PATIENCE_PER_TRAIT * Math.max(0, run.attributes.length - 3)),
     frozen: run.frozenMs > 0,

@@ -2,9 +2,10 @@
  * Effects studio (/dev/fx): watch everything the fight can show ([FX-26]).
  *
  * A live stand-in fight screen (fighter on the left, foe on the right, HUD
- * chips, weapon belt, twelve cards, live HP drop, creature reactions, combat
- * shake, chiaroscuro flash, and evolution cut-in / banner) wired through the
- * exact `onLand` + `fxClock.slow` pipeline used in live fights.
+ * chips, weapon belt with 5-state evolution HUD, twelve cards, live HP drop,
+ * creature reactions, combat shake, chiaroscuro flash, and single-weapon
+ * evolution cut-in / banner) wired through the exact `onLand` + `fxClock.slow`
+ * pipeline used in live fights.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -26,10 +27,18 @@ import {
   useScreenShakeEnabled,
 } from '@/utils/fxSettingsStorage';
 import { getArmoryWeapon } from '@/adventure/data/armory';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import {
+  WEAPON_EVOLUTIONS,
+  defaultEvolutionForWeapon,
+  evolutionConditionShort,
+  evolutionConditionText,
+  evolutionShortVerb,
+  getWeaponEvolution,
+} from '@/adventure/data/evolutions';
 import { PASSIVES } from '@/adventure/data/passives';
-import { ChiaroscuroFlash, EvolutionBanner } from '@/adventure/components/RunFx';
-import type { EvolutionRecipe, RunEvent, RunEventType } from '@/adventure/types';
+import { ChiaroscuroFlash, EvolutionBanner, type EvolutionBannerEntry } from '@/adventure/components/RunFx';
+import type { RunEvent, RunEventType, WeaponEvolutionDef } from '@/adventure/types';
+import type { EvolutionLiveStateVM } from '@/adventure/ui/evolutionViewModel';
 import {
   Anchor,
   AnchorsProvider,
@@ -42,13 +51,23 @@ import {
   useAnchors,
   useFightFx,
 } from '@/adventure/fx';
+import type { EvolutionCutInEntry } from '@/adventure/fx/EvolutionCutIn';
 import { combatShakeKindOf, hitKindOf } from '@/adventure/fx/catalog';
 import type { Beat } from '@/adventure/fx/types';
 
 const INK = COLORS.slateCharcoal;
-const WEAPON_IDS = ['blast-powder', 'prismatic-ray', 'chaos-shard', 'flint-spark', 'mending-charm', 'fortunes-favor', 'connector', 'echo-stone'];
+const WEAPON_IDS = ['blast-powder', 'prismatic-ray', 'chaos-shard', 'flint-spark', 'mending-charm', 'fortunes-favor'];
 const SPEEDS = [1, 4, 10];
 const STUDIO_MAX_HP = 180;
+
+type BeltEvoPreview = 'idle' | 'progress' | 'almost' | 'active' | 'cooldown';
+const BELT_EVO_MODES: readonly [BeltEvoPreview, string][] = [
+  ['idle', 'Idle'],
+  ['progress', 'Progress 2/3'],
+  ['almost', 'Almost-Ready'],
+  ['active', 'Evolved 18s'],
+  ['cooldown', 'Cooldown 3s'],
+];
 
 const SHAPES = ['diamond', 'oval', 'squiggle'] as const;
 const CARD_COLORS = ['red', 'green', 'purple'] as const;
@@ -68,7 +87,7 @@ const SAMPLE: Partial<Record<RunEventType, Partial<RunEvent>>> = {
   rainbow: { amount: 28, slots: [0, 4, 8] },
   surge_hit: { amount: 58, slots: [0, 4, 8] },
   surge_warn: { amount: 3 },
-  surge_start: { amount: 5 },
+  surge_start: { amount: 1.8 },
   blast: { amount: 18, text: '4', slots: [1, 3, 4, 7], source: 'w0:blast-powder#0' },
   laser: { amount: 12, text: '3', slots: [3, 4, 5], source: 'w1:prismatic-ray#0' },
   ricochet: { amount: 9, text: '3', slots: [1, 6, 11], source: 'w2:chaos-shard#0' },
@@ -79,10 +98,14 @@ const SAMPLE: Partial<Record<RunEventType, Partial<RunEvent>>> = {
   pinata_break: { amount: 26, slots: [7] },
   grow: { amount: 1, slots: [11] },
   link: { amount: 1, slots: [0, 10] },
+  holo_spawn: { slots: [4] },
+  marked: { slots: [2, 6] },
   fetch: { amount: 2, slots: [2, 6] },
   keen_eye: { slots: [4] },
-  catalyst_spawn: { slots: [4] },
-  evolution_start: { slots: [4] },
+  evo_progress: { amount: 0.66, text: '2/3', source: 'weapon:blast-powder' },
+  evo_almost: { text: '1 LEFT!', source: 'weapon:blast-powder' },
+  evo_charge: { amount: 1, source: 'w0:blast-powder#0' },
+  evolution_start: { slots: [4], source: 'weapon:blast-powder' },
   trap_placed: { text: 'snare', slots: [6] },
   trap_defused: { amount: 8, text: 'bomb', slots: [6] },
   trap_sprung: { amount: 1, text: 'bomb', slots: [6] },
@@ -100,20 +123,20 @@ const SAMPLE: Partial<Record<RunEventType, Partial<RunEvent>>> = {
   regen: { amount: 4 },
   wave: { amount: 2 },
   combo: { amount: 4 },
-  hot_streak_hit: { amount: 2 },
+  hot_streak_hit: { amount: 1.35 },
   grudge: { amount: 2 },
   grudge_release: { amount: 6 },
   patience: { amount: 3 },
   rule: { amount: 4, text: 'Mirror!' },
-  charged: { amount: 2 },
+  charged: { amount: 1.4 },
   empowered: { amount: 1 },
   simplified: { text: 'color' },
   purity: { amount: 2 },
   purity_max: { amount: 3 },
   overkill: { amount: 9 },
-  evolution_end: { text: 'Phoenix Pyre' },
-  parry: { amount: 1.5, slots: [0, 4, 8] },
-  perfect_parry: { amount: 2, slots: [0, 4, 8] },
+  evolution_end: { text: 'Cluster Charge', source: 'weapon:blast-powder' },
+  parry: { amount: 1.25, slots: [0, 4, 8] },
+  perfect_parry: { amount: 1.35, slots: [0, 4, 8] },
   foe_strike: { text: 'Strike' },
 };
 
@@ -141,13 +164,36 @@ const sampleEvent = (type: RunEventType, overrides?: Partial<RunEvent>): RunEven
   };
 };
 
-const CASCADE: RunEventType[] = ['hit', 'blast', 'coins', 'laser', 'heal', 'ricochet', 'fire', 'time_gain'];
+const CASCADE: RunEventType[] = ['hit', 'blast', 'coins', 'laser', 'heal', 'ricochet', 'evo_almost', 'time_gain'];
 
 const Chip: React.FC<{ label: string; on?: boolean; onPress: () => void; testID?: string }> = ({ label, on, onPress, testID }) => (
   <TouchableOpacity testID={testID} onPress={onPress} style={[st.chip, on && st.chipOn]} activeOpacity={0.7}>
     <Text style={[st.chipText, on && st.chipTextOn]}>{label}</Text>
   </TouchableOpacity>
 );
+
+const previewEvoState = (evo: WeaponEvolutionDef, mode: BeltEvoPreview): EvolutionLiveStateVM => {
+  const durationMs = evo.durationMs;
+  const phase = mode === 'active' ? 'active' : mode === 'cooldown' ? 'cooldown' : 'charging';
+  return {
+    weaponId: evo.weaponId,
+    evolutionId: evo.id,
+    evolutionName: evo.name,
+    icon: evo.icon,
+    accent: evo.accent,
+    phase,
+    conditionShort: evolutionConditionShort(evo),
+    conditionFull: evolutionConditionText(evo),
+    effectText: evolutionShortVerb(evo),
+    progress: mode === 'progress' ? 2 : mode === 'almost' ? 2 : 0,
+    target: 3,
+    almostReady: mode === 'almost',
+    activeRemainingMs: mode === 'active' ? durationMs : 0,
+    activeDurationMs: durationMs,
+    cooldownRemainingMs: mode === 'cooldown' ? 3000 : 0,
+    triggersThisFight: mode === 'active' || mode === 'cooldown' ? 1 : 0,
+  };
+};
 
 export default function FxStudio() {
   const appActive = useAppActive();
@@ -157,6 +203,7 @@ export default function FxStudio() {
   const [reduced, setReduced] = useState(false);
   const [hp, setHp] = useState(STUDIO_MAX_HP);
   const [flashTrigger, setFlashTrigger] = useState(0);
+  const [beltEvoMode, setBeltEvoMode] = useState<BeltEvoPreview>('progress');
   const shakePref = useScreenShakeEnabled();
   const flashPref = useScreenFlashEnabled();
 
@@ -217,12 +264,34 @@ export default function FxStudio() {
 
   const fx = useFightFx({ anchors, reduced, onLand: handleLand });
   const weapons = useMemo(() => WEAPON_IDS.map(id => getArmoryWeapon(id)).filter((w): w is NonNullable<typeof w> => !!w), []);
-  const recipes = EVOLUTION_RECIPES.slice(0, 2);
+  const studioEvos = useMemo<WeaponEvolutionDef[]>(() => {
+    const first = defaultEvolutionForWeapon('blast-powder') ?? WEAPON_EVOLUTIONS[0];
+    const second = defaultEvolutionForWeapon('prismatic-ray') ?? WEAPON_EVOLUTIONS[1];
+    return [first, second].filter((e): e is WeaponEvolutionDef => Boolean(e));
+  }, []);
+
+  const beltEvolutions = useMemo<EvolutionLiveStateVM[]>(
+    () =>
+      weapons
+        .map(w => defaultEvolutionForWeapon(w.id))
+        .filter((e): e is WeaponEvolutionDef => Boolean(e))
+        .map((evo, i) => previewEvoState(evo, i === 0 ? beltEvoMode : i === 1 ? 'almost' : 'idle')),
+    [weapons, beltEvoMode]
+  );
 
   const playEvents = (events: RunEvent[]) => fx.play(scriptFor(events, { weapons, reduced }));
   const play = (types: RunEventType[]) => playEvents(types.map(t => sampleEvent(t)));
-  const evolve = (list: EvolutionRecipe[]) =>
-    fx.play(scriptFor(list.map(r => ({ ...sampleEvent('evolution_start'), text: r.name })), { weapons, reduced }));
+  const evolve = (list: WeaponEvolutionDef[], forceBanner = false) =>
+    fx.play(
+      scriptFor(
+        list.map(evo => ({
+          ...sampleEvent('evolution_start'),
+          text: evo.id,
+          source: `weapon:${evo.weaponId}`,
+        })),
+        { weapons, reduced, forceBanner }
+      )
+    );
   const changeSpeed = (s: number) => {
     fxClock.slow = s;
     setSpeed(s);
@@ -230,7 +299,33 @@ export default function FxStudio() {
 
   const shownHp = Math.max(0, Math.min(STUDIO_MAX_HP, hp));
   const hpPct = STUDIO_MAX_HP > 0 ? shownHp / STUDIO_MAX_HP : 1;
-  const bannerRecipe = fx.banner ? EVOLUTION_RECIPES.find(r => r.id === fx.banner?.recipes[0]) : null;
+
+  const cutInEntries = useMemo<EvolutionCutInEntry[]>(() => {
+    if (!fx.cutIn) return [];
+    return fx.cutIn.recipes
+      .map(id => getWeaponEvolution(id))
+      .filter((e): e is WeaponEvolutionDef => Boolean(e))
+      .map(evo => ({
+        evolution: evo,
+        weapon: weapons.find(w => w.id === evo.weaponId) ?? getArmoryWeapon(evo.weaponId),
+        durationSec: Math.max(1, Math.round(evo.durationMs / 1000)),
+      }));
+  }, [fx.cutIn, weapons]);
+
+  const bannerEntries = useMemo<EvolutionBannerEntry[]>(() => {
+    if (!fx.banner) return [];
+    return fx.banner.recipes
+      .map(id => getWeaponEvolution(id))
+      .filter((e): e is WeaponEvolutionDef => Boolean(e))
+      .map(evo => ({
+        id: evo.id,
+        name: evo.name,
+        icon: evo.icon,
+        text: evolutionShortVerb(evo),
+        seconds: Math.max(1, Math.round(evo.durationMs / 1000)),
+        weapon: weapons.find(w => w.id === evo.weaponId) ?? getArmoryWeapon(evo.weaponId),
+      }));
+  }, [fx.banner, weapons]);
 
   return (
     <AnchorsProvider value={anchors} quiet={reduced}>
@@ -300,10 +395,24 @@ export default function FxStudio() {
               {Object.values(PASSIVES).map(p => (
                 <Anchor key={p.id} name={`passive:${p.id}`}><View style={st.passive}><Icon name={p.icon} size={13} color={INK} /></View></Anchor>
               ))}
-              <Anchor name={`evo:${recipes[0].id}`}><View style={[st.passive, { backgroundColor: '#E9D5FF' }]}><Icon name={recipes[0].icon} size={13} color={INK} /></View></Anchor>
+              {studioEvos[0] && (
+                <Anchor name={`evo:${studioEvos[0].id}`}>
+                  <View style={[st.passive, { backgroundColor: '#E9D5FF' }]}>
+                    <Icon name={studioEvos[0].icon} size={13} color={INK} />
+                  </View>
+                </Anchor>
+              )}
             </View>
             <Anchor name="xp"><View style={st.xp} /></Anchor>
-            <GearBelt weapons={weapons} width={stage.w} onInspect={() => {}} />
+            <GearBelt
+              weapons={weapons}
+              evolutions={beltEvolutions}
+              active={!fx.busy}
+              effects={!reduced}
+              reduced={reduced}
+              width={stage.w}
+              onInspect={() => {}}
+            />
           </View>
 
           <View ref={anchors.ref('board')} collapsable={false} style={st.board}>
@@ -323,26 +432,18 @@ export default function FxStudio() {
 
           <FxStage fx={fx} anchors={anchors} size={stage} effects={!reduced} />
           <ChiaroscuroFlash trigger={flashTrigger} enabled={!reduced} stageW={stage.w || 375} testID="studio-chiaroscuro-flash" />
-          {fx.cutIn && (
+          {fx.cutIn && cutInEntries.length > 0 && (
             <EvolutionCutIn
               key={fx.cutIn.key}
-              recipes={fx.cutIn.recipes.map(id => EVOLUTION_RECIPES.find(r => r.id === id)).filter((r): r is EvolutionRecipe => !!r)}
+              evolutions={cutInEntries}
               weapons={weapons}
-              seconds={30}
               size={stage}
               onDone={fx.dismissCutIn}
             />
           )}
-          {fx.banner && bannerRecipe && (
+          {fx.banner && bannerEntries.length > 0 && (
             <View style={st.bannerWrap} pointerEvents="none">
-              <EvolutionBanner
-                recipeId={bannerRecipe.id}
-                name={bannerRecipe.name}
-                icon={bannerRecipe.icon}
-                text={bannerRecipe.activeText}
-                seconds={30}
-                seq={fx.banner.key}
-              />
+              <EvolutionBanner entries={bannerEntries} seq={fx.banner.key} />
             </View>
           )}
         </Animated.View>
@@ -355,6 +456,18 @@ export default function FxStudio() {
             <Chip label={shakePref ? 'Shake on' : 'Shake off'} on={shakePref} onPress={() => ScreenShakeStorage.set(!shakePref)} testID="fx-toggle-shake" />
             <Chip label={flashPref ? 'Flash on' : 'Flash off'} on={flashPref} onPress={() => ScreenFlashStorage.set(!flashPref)} testID="fx-toggle-flash" />
             <Chip label="Reset HP" onPress={() => setHp(STUDIO_MAX_HP)} testID="fx-reset-hp" />
+          </View>
+          <View style={st.wrap}>
+            <Text style={st.heading}>Belt Evolution HUD State</Text>
+            {BELT_EVO_MODES.map(([mode, label]) => (
+              <Chip
+                key={mode}
+                label={label}
+                on={beltEvoMode === mode}
+                onPress={() => setBeltEvoMode(mode)}
+                testID={`fx-belt-evo-${mode}`}
+              />
+            ))}
           </View>
           <View style={st.wrap}>
             <Text style={st.heading}>Wave 4 VFX Showcase</Text>
@@ -378,6 +491,24 @@ export default function FxStudio() {
               onPress={() => playEvents([sampleEvent('foe_strike')])}
               testID="fx-showcase-foe-strike"
             />
+            <Chip
+              label="Evo Almost-Ready Pulse"
+              onPress={() => {
+                setBeltEvoMode('almost');
+                playEvents([sampleEvent('evo_almost')]);
+              }}
+              testID="fx-showcase-evo-almost"
+            />
+            <Chip
+              label="Evo Charge Bolt"
+              onPress={() => playEvents([sampleEvent('evo_charge')])}
+              testID="fx-showcase-evo-charge"
+            />
+            <Chip
+              label="Holo Card Spawn"
+              onPress={() => playEvents([sampleEvent('holo_spawn')])}
+              testID="fx-showcase-holo"
+            />
             <Chip label="Shake: Small (Y)" onPress={() => triggerCombatShake('small', stage.w || 375)} testID="fx-shake-small" />
             <Chip label="Shake: Medium (XY)" onPress={() => triggerCombatShake('medium', stage.w || 375)} testID="fx-shake-medium" />
             <Chip label="Shake: Large (XY+Roll)" onPress={() => triggerCombatShake('large', stage.w || 375)} testID="fx-shake-large" />
@@ -386,8 +517,9 @@ export default function FxStudio() {
           <View style={st.wrap}>
             <Text style={st.heading}>Play</Text>
             <Chip label="A Set and what it sets off" onPress={() => play(CASCADE)} testID="fx-cascade" />
-            <Chip label="Evolution" onPress={() => evolve(recipes.slice(0, 1))} testID="fx-evolution" />
-            <Chip label="Two evolutions at once" onPress={() => evolve(recipes)} testID="fx-evolution-2" />
+            <Chip label="Evolution (Cut-In)" onPress={() => evolve(studioEvos.slice(0, 1))} testID="fx-evolution" />
+            <Chip label="Two evolutions at once" onPress={() => evolve(studioEvos)} testID="fx-evolution-2" />
+            <Chip label="Repeat Evolution Banner" onPress={() => evolve(studioEvos, true)} testID="fx-evolution-banner" />
           </View>
           <View style={st.wrap}>
             <Text style={st.heading}>Every event</Text>

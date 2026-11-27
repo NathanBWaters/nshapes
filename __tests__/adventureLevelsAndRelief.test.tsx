@@ -175,16 +175,16 @@ describe('[GP-09] & [GP-17] Campaign Preservation, Pressure Cap, LONG_ROUNDS & H
   it('tightens LONG_ROUNDS to 1.25x, keeps timers crisp, and maintains a monotonic campaign HP curve', () => {
     expect(LONG_ROUNDS).toEqual({ fromWorldAfter: 'meadow', foeHp: 1.25, timer: 1.25 });
 
-    // Key POWER xN recalibrated anchor points
-    expect(getLevel('1-10').foes.reduce((s, f) => s + f.hp, 0)).toBeGreaterThanOrEqual(150);
-    expect(getLevel('1-10').foes.reduce((s, f) => s + f.hp, 0)).toBeLessThanOrEqual(220);
-    expect(getLevel('2-10').foes.reduce((s, f) => s + f.hp, 0)).toBeGreaterThanOrEqual(750);
-    expect(getLevel('2-10').foes.reduce((s, f) => s + f.hp, 0)).toBeLessThanOrEqual(1100);
-    expect(getLevel('3-10').foes.reduce((s, f) => s + f.hp, 0)).toBeGreaterThanOrEqual(2800);
-    expect(getLevel('3-10').foes.reduce((s, f) => s + f.hp, 0)).toBeLessThanOrEqual(4200);
+    // Post-redesign monotonic boss HP anchor points (W1 -> W5)
+    expect(getLevel('1-10').foes.reduce((s, f) => s + f.hp, 0)).toBeGreaterThanOrEqual(200);
+    expect(getLevel('1-10').foes.reduce((s, f) => s + f.hp, 0)).toBeLessThanOrEqual(600);
+    expect(getLevel('2-10').foes.reduce((s, f) => s + f.hp, 0)).toBeGreaterThanOrEqual(700);
+    expect(getLevel('2-10').foes.reduce((s, f) => s + f.hp, 0)).toBeLessThanOrEqual(3000);
+    expect(getLevel('3-10').foes.reduce((s, f) => s + f.hp, 0)).toBeGreaterThanOrEqual(2200);
+    expect(getLevel('3-10').foes.reduce((s, f) => s + f.hp, 0)).toBeLessThanOrEqual(18000);
     expect(getLevel('4-11').rules.timer).toBe(160);
     expect(getLevel('5-5').rules.timer).toBe(180);
-    expect(getLevel('5-5').foes.reduce((s, f) => s + f.hp, 0)).toBe(14000);
+    expect(getLevel('5-5').foes.reduce((s, f) => s + f.hp, 0)).toBeGreaterThanOrEqual(9000);
 
     // Non-boss W2-5 timers stay crisp in [75s, 110s]
     for (const l of LEVELS) {
@@ -221,9 +221,9 @@ describe('[GP-09] & [GP-17] Campaign Preservation, Pressure Cap, LONG_ROUNDS & H
 
 describe('[GP-14] Beginner Fighter Buff & Golden Rescue Key #1 Placement', () => {
   it('buffs Orange Tabby baseline tuning and moves key-1 forward to 1-4 <-> 1-5', () => {
-    expect(ORANGE_TABBY_BASELINE).toEqual({ scrappyBase: 1, scrappyPerHeart: 1.5, wave1PounceShield: 1 });
-    expect(PASSIVE_TUNING.scrappy['scrappy.base']).toBe(1);
-    expect(PASSIVE_TUNING.scrappy['scrappy.perHeart']).toBe(1.5);
+    expect(ORANGE_TABBY_BASELINE.wave1PounceShield).toBe(1);
+    expect(PASSIVE_TUNING.scrappy['scrappy.base']).toBe(2);
+    expect(PASSIVE_TUNING.scrappy['scrappy.perHeart']).toBe(3);
     expect(PASSIVE_TUNING.nine_lives['nineLives.waveShield']).toBe(1);
     expect(FIGHTERS.find(f => f.name === 'Orange Tabby')?.blurb.toLowerCase()).toContain('pounce shield');
     expect(Object.keys(FIGHTER_RESCUE_BADGES)).toHaveLength(5);

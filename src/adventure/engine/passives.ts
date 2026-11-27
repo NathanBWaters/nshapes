@@ -2,13 +2,16 @@
  * Fighter passives (spec §2). Each is a small hand-coded behaviour hooked into
  * the fight at a fixed point; every number comes from `tuning`, so skill nodes
  * can reshape them. The combo counter itself runs for every fighter (it feeds
- * the HUD and `comboReach` challenges); Sly Fox turns it into damage.
+ * the HUD, Synergy Streaks, and `comboReach` challenges); Sly Fox turns it into damage.
  */
 import { comboWindowFor } from '../data/passives';
 import type { Card } from '@/types';
 import type { FightLogMathItem, PassiveId, PassiveState } from '../types';
 import { BASE_RULES } from '../data/rules';
-import { emit, enqueue, hasPassive, powerCardBonusFor, redeal, touchable, tuning, updateCards, type Draft } from './fight';
+import {
+  bumpSynergy, emit, enqueue, hasPassive, powerCardBonusFor, redeal, syncLiveSynergy,
+  touchable, tuning, updateCards, type Draft,
+} from './fight';
 import { allSets } from './sets';
 
 export const restingPassiveState = (): PassiveState => ({
@@ -45,6 +48,8 @@ const comboSteps = (d: Draft) => Math.max(0, d.combo - 1);
 
 const noteCombo = (d: Draft) => {
   d.maxCombo = Math.max(d.maxCombo, d.combo);
+  d.fightMetrics.maxCombo = Math.max(d.fightMetrics.maxCombo, d.combo);
+  syncLiveSynergy(d);
   if (d.combo > 1) emit(d, 'combo', d.combo);
   if (hasPassive(d, 'hot_streak') && !d.passive.hotStreak && comboSteps(d) >= tuning(d, 'combo.max')) {
     d.passive.hotStreak = true;
@@ -71,25 +76,29 @@ export const decayCombo = (d: Draft) => {
   if (d.combo > 0 && d.elapsedMs - d.lastMatchAtMs > comboWindowMs(d)) {
     d.combo = 0;
     d.bonusCombo = 0;
+    syncLiveSynergy(d);
   }
 };
 
-/** Hot Streak: returns the multiplier for this Set (1 when not armed) and disarms it. */
-export const consumeHotStreak = (d: Draft): number => {
-  if (!d.passive.hotStreak) return 1;
+/** Hot Streak: returns the flat base bonus (+10/+16) AND multiplier (×1.35) for this Set, and disarms it. */
+export const consumeHotStreak = (d: Draft): { mult: number; flat: number } => {
+  if (!d.passive.hotStreak) return { mult: 1, flat: 0 };
   d.passive.hotStreak = false;
-  return Math.max(1, tuning(d, 'hotStreak.multiplier'));
+  return {
+    mult: Math.max(1, tuning(d, 'hotStreak.multiplier') || 1.35),
+    flat: Math.max(0, tuning(d, 'hotStreak.damage') || 0),
+  };
 };
 
 // ─── Set scoring ────────────────────────────────────────────────────────────
 
-/** Flat damage the passives add to the Set being scored (Scrappy, Combo, Grudge, Patience). */
 /**
  * Emperor Penguin's Patience window: a fixed time per active trait, so about
  * the same share of Sets count as "patient" at 2 traits as at 5.
  */
 export const patienceMs = (d: Draft): number => tuning(d, 'patience.msPerTrait') * d.attributes.length;
 
+/** Flat damage the passives add to the Set being scored (Scrappy, Combo, Grudge, Patience). */
 export const passiveSetDamageBreakdown = (d: Draft, sinceLastMs: number): { bonus: number; items: FightLogMathItem[] } => {
   let bonus = 0;
   const items: FightLogMathItem[] = [];
@@ -118,7 +127,6 @@ export const passiveSetDamageBreakdown = (d: Draft, sinceLastMs: number): { bonu
       items.push({ label: 'Combo', amount: add, note: `${steps}-Set speed streak` });
     }
   } else if ((d.bonusCombo ?? 0) > 0) {
-    // Universal Combo damage for non-Sly-Fox fighters when bumped by E.combo / evolutions (Dawn Chorus, Spring Festival, Torchbearer)
     const steps = Math.min(d.bonusCombo!, tuning(d, 'combo.max'));
     if (steps > 0) {
       bonus += steps;
@@ -152,27 +160,34 @@ export const passiveSetDamage = (d: Draft, sinceLastMs: number): number => passi
 
 const isPower = (c: Card) => (c.bonusPoints ?? 0) > 0;
 const isGold = (c: Card) => (c.bonusMoney ?? 0) > 0;
+const isHolo = (c: Card) => !!c.holo;
 
-/** Turn up to `n` ordinary cards (not in `skip`) into power or gold cards. Returns the slots that changed. */
-const grantBonusCards = (d: Draft, n: number, kind: 'power' | 'gold', skip: Set<string>): number[] => {
+/** Turn up to `n` ordinary cards (not in `skip`) into Power, Gold, or Holo cards. Returns the slots that changed. */
+const grantBonusCards = (d: Draft, n: number, kind: 'power' | 'gold' | 'holo', skip: Set<string>): number[] => {
   if (n <= 0) return [];
-  const has = kind === 'power' ? isPower : isGold;
+  const has = kind === 'power' ? isPower : kind === 'gold' ? isGold : isHolo;
   const slots = d.board.map((c, i) => (touchable(d, i) && !skip.has(c.id) && !has(c) ? i : -1)).filter(i => i >= 0);
   const chosen = d._rng.shuffle(slots).slice(0, n);
   const powerBonus = powerCardBonusFor(d);
   updateCards(d, chosen, c =>
-    kind === 'power' ? { ...c, bonusPoints: (c.bonusPoints ?? 0) + powerBonus } : { ...c, bonusMoney: BASE_RULES.coinCardValue }
+    kind === 'power'
+      ? { ...c, bonusPoints: (c.bonusPoints ?? 0) + powerBonus }
+      : kind === 'gold'
+        ? { ...c, bonusMoney: BASE_RULES.coinCardValue }
+        : { ...c, holo: true }
   );
+  if (kind === 'holo' && chosen.length > 0) bumpSynergy(d, 'holo', chosen.length);
   return chosen;
 };
 
-/** Fetch: each kind of bonus card in the Set brings a new one onto the board. */
+/** Fetch: each kind of bonus card (Power, Gold, Holo) in the Set brings a new one onto the board. */
 const fetchBonusCards = (d: Draft, matched: Card[]) => {
   const n = Math.max(0, tuning(d, 'fetch.count'));
   const ids = new Set(matched.map(c => c.id));
   const fetched: number[] = [];
   if (matched.some(isPower)) fetched.push(...grantBonusCards(d, n, 'power', ids));
   if (d.features.has('coins') && matched.some(isGold)) fetched.push(...grantBonusCards(d, n, 'gold', ids));
+  if (matched.some(isHolo)) fetched.push(...grantBonusCards(d, n, 'holo', ids));
   if (fetched.length > 0) emit(d, 'fetch', fetched.length, undefined, { slots: fetched });
 };
 
@@ -185,6 +200,7 @@ export const afterSetPassives = (d: Draft, matched: Card[], rainbow: boolean, au
   if (rainbow && hasPassive(d, 'deep_freeze')) {
     const ms = tuning(d, 'deepFreeze.ms');
     d.frozenMs = Math.max(d.frozenMs, ms);
+    d.fightMetrics.freezes += 1;
     emit(d, 'freeze', ms);
   }
   if (hasPassive(d, 'fetch')) fetchBonusCards(d, matched);
@@ -201,6 +217,8 @@ export const afterSetPassives = (d: Draft, matched: Card[], rainbow: boolean, au
     if (d.passive.scoopIn <= 0) {
       d.passive.scoopIn = Math.max(1, tuning(d, 'scoop.every'));
       emit(d, 'scoop');
+      d.fightMetrics.echoes += 1;
+      bumpSynergy(d, 'echoes', 1);
       d._hooks.autoSet(d, 'scoop');
     }
   }
@@ -213,6 +231,7 @@ export const onMistakePassives = (d: Draft): boolean => {
   d.combo = 0;
   d.bonusCombo = 0;
   d.passive.hotStreak = false;
+  syncLiveSynergy(d);
   if (hasPassive(d, 'grudge') && d.passive.grudge < tuning(d, 'grudge.max')) {
     d.passive.grudge += 1;
     emit(d, 'grudge', d.passive.grudge);

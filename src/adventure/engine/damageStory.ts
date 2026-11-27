@@ -2,25 +2,30 @@
  * Brotato-style cumulative damage attribution & over-time Battle Story engine.
  *
  * Pure, deterministic data transforms that attribute every point of damage in
- * `RunState.log` across individual Weapons, Fighter Passives, Skill Tree Nodes,
- * Evolutions, Modifiers (Rainbow / Parry / Surge / Power), and Matched Sets,
- * then produce:
- *   1. Ranked cumulative damage leaderboard (`sources`, MVP at index 0)
- *   2. Cumulative over-time curves (`points` + `source.cumulative[]`) for SVG graphing
- *   3. 4–7 musical & particle crescendo peaks (`crescendoBeats`) across the 3-second story
- *   4. Multi-floor cumulative Summit climb summaries (`buildSpireRunDamageStory`)
+ * `RunState.log` across individual Weapons (including their Synergy Graph hooks),
+ * Fighter Passives, Skill Tree Nodes, Per-Weapon Timed Evolutions, Modifiers
+ * (Rainbow / Parry / Surge / Holo), and Matched Sets.
  */
 import type { IconName } from '@/components/Icon';
 import { ARCANA } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { WEAPON_EVOLUTIONS } from '../data/evolutions';
 import { PASSIVES } from '../data/passives';
 import { UPGRADES, getUpgrade } from '../data/upgrades';
 import { ownerOfEvent } from '../data/weaponGuide';
-import { getRecipe, getSkillNode } from './sources';
-import type { ArcanaDef, EvolutionRecipe, FightLogEntry, FightLogLine, PassiveId, RunEventType, RunState, UpgradeDef } from '../types';
+import { getSkillNode, getWeaponEvolution } from './sources';
+import type {
+  ArcanaDef,
+  FightLogEntry,
+  FightLogLine,
+  PassiveId,
+  RunEventType,
+  RunState,
+  UpgradeDef,
+  WeaponEvolutionDef,
+} from '../types';
 
-export type DamageSourceKind = 'weapon' | 'passive' | 'skill' | 'evolution' | 'set' | 'power' | 'bonus';
+export type DamageSourceKind = 'weapon' | 'passive' | 'skill' | 'evolution' | 'set' | 'bonus';
 
 export interface DamageSourceMeta {
   id: string;
@@ -129,9 +134,9 @@ for (const [id, def] of Object.entries(PASSIVES) as [PassiveId, (typeof PASSIVES
   PASSIVE_BY_NAME[def.name.toLowerCase()] = id;
 }
 
-const EVOLUTION_BY_NAME: Record<string, EvolutionRecipe> = {};
-for (const rec of EVOLUTION_RECIPES) {
-  EVOLUTION_BY_NAME[rec.name.toLowerCase()] = rec;
+const EVOLUTION_BY_NAME: Record<string, WeaponEvolutionDef> = {};
+for (const evo of WEAPON_EVOLUTIONS) {
+  EVOLUTION_BY_NAME[evo.name.toLowerCase()] = evo;
 }
 
 const ARCANA_BY_ID: Record<string, ArcanaDef> = {};
@@ -166,7 +171,6 @@ export const resolveDamageSourceMeta = (
   const held = opts.held ?? [];
   const rawRef = opts.sourceRef ?? opts.line?.sourceRef;
 
-  // 1. Explicit weapon ref
   if (rawRef?.startsWith('weapon:')) {
     const wid = rawRef.slice(7);
     const w = getArmoryWeapon(wid);
@@ -179,19 +183,18 @@ export const resolveDamageSourceMeta = (
     };
   }
 
-  // 2. Explicit evolution ref
   if (rawRef?.startsWith('evo:')) {
     const eid = rawRef.slice(4);
-    const rec = getRecipe(eid);
+    const evo = getWeaponEvolution(eid);
     return {
       id: `evo:${eid}`,
-      name: rec?.name ?? opts.label ?? eid,
+      name: evo?.name ?? opts.label ?? eid,
       kind: 'evolution',
-      icon: (rec?.icon as IconName | undefined) ?? 'lorc/crystal-shine',
+      ...(evo?.weaponId ? { weaponId: evo.weaponId } : {}),
+      icon: (evo?.icon as IconName | undefined) ?? 'lorc/crystal-shine',
     };
   }
 
-  // 3. Explicit skill node ref
   if (rawRef?.startsWith('node:')) {
     const nid = rawRef.slice(5);
     const node = getSkillNode(nid);
@@ -203,7 +206,6 @@ export const resolveDamageSourceMeta = (
     };
   }
 
-  // 4. Explicit passive ref
   if (rawRef?.startsWith('passive:')) {
     const pid = rawRef.slice(8) as PassiveId;
     const p = PASSIVES[pid];
@@ -215,7 +217,6 @@ export const resolveDamageSourceMeta = (
     };
   }
 
-  // 4b. Explicit Arcana ref
   if (rawRef?.startsWith('arcana:')) {
     const aid = rawRef.slice(7);
     const arc = ARCANA_BY_ID[aid];
@@ -227,7 +228,6 @@ export const resolveDamageSourceMeta = (
     };
   }
 
-  // 4d. Explicit Workshop / Run Upgrade ref
   if (rawRef?.startsWith('upgrade:')) {
     const uid = rawRef.slice(8);
     const u = UPGRADE_BY_ID[uid];
@@ -239,7 +239,6 @@ export const resolveDamageSourceMeta = (
     };
   }
 
-  // 5. Event-owned weapon (e.g. blast/laser/fire/pinata_break owned by a held weapon)
   if (opts.line) {
     const owner = ownerOfEvent(opts.line.type, opts.line.text, held);
     if (owner) {
@@ -272,7 +271,6 @@ export const resolveDamageSourceMeta = (
     }
   }
 
-  // 6. Label matching (passives, Workshop upgrades, Rainbow, Parry, Surge, Purity, Power)
   const cleanLabel = (opts.label ?? opts.line?.source ?? opts.line?.text ?? '').replace(/!$/, '').trim();
   const low = cleanLabel.toLowerCase();
 
@@ -282,8 +280,8 @@ export const resolveDamageSourceMeta = (
     return { id: `passive:${pid}`, name: p.name, kind: 'passive', icon: p.icon };
   }
   if (EVOLUTION_BY_NAME[low]) {
-    const rec = EVOLUTION_BY_NAME[low];
-    return { id: `evo:${rec.id}`, name: rec.name, kind: 'evolution', icon: rec.icon };
+    const evo = EVOLUTION_BY_NAME[low];
+    return { id: `evo:${evo.id}`, name: evo.name, kind: 'evolution', weaponId: evo.weaponId, icon: evo.icon };
   }
   if (ARCANA_BY_NAME[low]) {
     const arc = ARCANA_BY_NAME[low];
@@ -311,9 +309,8 @@ export const resolveDamageSourceMeta = (
   if (low === 'rainbow' || low === 'rainbow strike') return { id: 'bonus:rainbow', name: 'Rainbow Strike', kind: 'bonus', icon: 'lorc/rainbow-star' };
   if (low.includes('parry') || low.includes('stagger')) return { id: 'bonus:parry', name: 'Set-Parry Counter', kind: 'bonus', icon: 'lorc/sword-clash' };
   if (low.includes('surge')) return { id: 'bonus:surge', name: 'Shading Surge', kind: 'bonus', icon: 'lorc/power-lightning' };
-  if (low.includes('power')) return { id: 'power:scale', name: 'Power Scaling', kind: 'power', icon: 'lorc/power-lightning' };
+  if (low.includes('holo')) return { id: 'bonus:holo', name: 'Holo Shine', kind: 'bonus', icon: 'delapouite/sparkles' };
 
-  // Match weapon by display name if held
   for (const wid of held) {
     const w = getArmoryWeapon(wid);
     if (w && low && (w.name.toLowerCase() === low || low.startsWith(w.name.toLowerCase()))) {
@@ -343,8 +340,7 @@ const attributeEntry = (
   };
 
   const setCardsMeta: DamageSourceMeta = { id: 'set:cards', name: 'Matched Sets', kind: 'set', icon: 'lorc/crossed-swords' };
-  const cardBonusMeta: DamageSourceMeta = { id: 'set:card_bonus', name: 'Power Cards', kind: 'bonus', icon: 'lorc/flat-star' };
-  const powerMeta: DamageSourceMeta = { id: 'power:scale', name: 'Power Scaling', kind: 'power', icon: 'lorc/power-lightning' };
+  const cardBonusMeta: DamageSourceMeta = { id: 'set:card_bonus', name: 'Card Bonuses', kind: 'bonus', icon: 'lorc/flat-star' };
 
   // ── 1. Set hit damage (`e.setDamage`) ──────────────────────────────────────
   if (e.kind === 'set' && e.set && e.setDamage > 0) {
@@ -356,12 +352,11 @@ const attributeEntry = (
       setPart[meta.id] = (setPart[meta.id] ?? 0) + amt;
     };
 
-    const baseCards = m.baseCards ?? Math.min(m.cards, m.cardCount ?? 3);
+    const baseCards = m.baseCards ?? Math.min(m.cards, (m.cardCount ?? 3) * 2);
     const cardBonus = m.cardBonus ?? Math.max(0, m.cards - baseCards);
     addSet(setCardsMeta, baseCards);
     if (cardBonus > 0) addSet(cardBonusMeta, cardBonus);
 
-    // Collateral cards destroyed by weapon procs inside the Set
     let collateralSum = 0;
     for (const [kind, pts] of Object.entries(m.collateral)) {
       if (!pts || pts <= 0) continue;
@@ -377,8 +372,6 @@ const attributeEntry = (
       }
     }
 
-    // Shading Surge: unified logs include Shading Surge inside `multItems` & `multiplier` (post-addition);
-    // legacy saved logs applied `surgeMultiplier` to cards+collateral before `flatBonus`.
     const surgeInMult = (m.multItems ?? []).some(it => it.label.toLowerCase().includes('surge'));
     const surgeMult = m.surgeMultiplier ?? 1;
     const preSurge = !surgeInMult && surgeMult > 1 ? surgeMult : 1;
@@ -387,7 +380,6 @@ const attributeEntry = (
       addSet({ id: 'bonus:surge', name: 'Shading Surge', kind: 'bonus', icon: 'lorc/power-lightning' }, surgeLift);
     }
 
-    // Flat per-Set bonuses (weapons, passives, Workshop Heavy Hitter, skill nodes, evolutions, Piñata, Purity, Traps)
     let flatSum = 0;
     if (m.flatItems && m.flatItems.length > 0) {
       for (const item of m.flatItems) {
@@ -401,10 +393,8 @@ const attributeEntry = (
       addSet({ id: 'bonus:flat', name: 'Set Bonuses', kind: 'bonus', icon: 'lorc/spark-spirit' }, flatRem);
     }
 
-    // Pre-multiplier subtotal
     const preMult = Math.max(0, (m.cards + collateralSum) * preSurge + Math.max(0, m.flatBonus));
 
-    // Multiplier uplift (Rainbow ×2, Hot Streak ×2, Parry ×1.75, Staggered ×2, weapon multipliers)
     const mult = Math.max(1, m.multiplier);
     const multLift = preMult * (mult - 1);
     if (multLift > 0.05) {
@@ -425,7 +415,6 @@ const attributeEntry = (
       }
     }
 
-    // Post-multiplier extras (Purity, traps)
     let extraSum = 0;
     if (m.extraItems && m.extraItems.length > 0) {
       for (const it of m.extraItems) {
@@ -438,14 +427,6 @@ const attributeEntry = (
       addSet({ id: 'bonus:purity', name: 'Purity & Traps', kind: 'bonus', icon: 'lorc/crystal-shine' }, m.extra - extraSum);
     }
 
-    // Power scaling uplift (fight-wide ×N multiplier)
-    const pMult = m.powerMultiplier ?? 1;
-    const beforePower = preMult * mult + Math.max(0, m.extra);
-    if (pMult > 1 && e.setDamage > beforePower + 0.05) {
-      addSet(powerMeta, e.setDamage - beforePower);
-    }
-
-    // Normalize setPart to match `e.setDamage` exactly (accounts for enemy armor / integer rounding)
     const rawSetSum = Object.values(setPart).reduce((s, v) => s + v, 0);
     if (rawSetSum > 0) {
       const scale = e.setDamage / rawSetSum;
@@ -468,9 +449,7 @@ const attributeEntry = (
     for (const l of e.lines) {
       const amt = l.amount ?? 0;
       if (amt <= 0 || !Number.isFinite(amt)) continue;
-      // Skip the Set's own lead hit line (already accounted for in e.setDamage)
       if ((l.type === 'hit' && !l.text) || l.type === 'rainbow' || l.type === 'surge_hit') continue;
-      // On Set entries with itemized Set math, Set-math callout lines (`rule` + passive/trap tags) are already in `e.setDamage`
       if (hasSetMath && (l.type === 'rule' || l.type === 'hot_streak_hit' || l.type === 'grudge_release' || l.type === 'patience' || l.type === 'trap_defused')) {
         continue;
       }
@@ -488,7 +467,6 @@ const attributeEntry = (
         credit(meta, v * scale);
       }
     } else {
-      // Burn or unlabelled triggered damage fallback
       const fb: DamageSourceMeta =
         e.kind === 'burn'
           ? { id: 'fx:burn', name: 'Burn Damage', kind: 'bonus', icon: 'lorc/candle-flame' }
@@ -508,13 +486,11 @@ const pickCrescendoBeats = (
 ): CrescendoBeat[] => {
   if (points.length <= 1) return [];
   const totalSpan = Math.max(1, points.length - 1);
-  // Candidate indices (exclude t=0 origin at index 0)
   const candidates: { idx: number; damage: number; sourceId: string; callout?: string }[] = [];
   for (let i = 1; i < points.length; i++) {
     const pt = points[i];
     if (pt.stepDamage <= 0) continue;
     const deltas = stepDeltas[i] ?? {};
-    // Prefer a weapon or passive over bare matched sets when close in contribution so players hear their build!
     let bestId = pt.peakSourceId ?? '';
     let bestScore = -1;
     for (const [id, amt] of Object.entries(deltas)) {
@@ -533,12 +509,10 @@ const pickCrescendoBeats = (
   const chosen: typeof candidates = [];
   const used = new Set<number>();
 
-  // Always include the final damage beat as the crescendo climax
   const last = candidates[candidates.length - 1];
   chosen.push(last);
   used.add(last.idx);
 
-  // Pick remaining highest-impact beats preferring distinct sources and clean spacing
   const remaining = candidates
     .slice(0, -1)
     .sort((a, b) => (b.damage + (b.callout ? 8 : 0)) - (a.damage + (a.callout ? 8 : 0)));
@@ -562,10 +536,9 @@ const pickCrescendoBeats = (
   tryPick(false);
 
   chosen.sort((a, b) => a.idx - b.idx);
-  return chosen.map((c, i) => {
+  return chosen.map(c => {
     const src = sourcesById.get(c.sourceId);
     const rawProgress = c.idx / totalSpan;
-    // Match the exact dot x-position along the timeline (0.06..0.985) so playhead & sparks land together
     const progress = chosen.length === 1 ? 0.88 : Math.max(0.06, Math.min(0.985, rawProgress));
     const label = c.callout ?? (src ? `${src.name} +${Math.round(c.damage)}` : `+${Math.round(c.damage)}`);
     return {
@@ -586,7 +559,6 @@ export const buildDamageStory = (run: RunState): DamageStory => {
   const metaMap = new Map<string, DamageSourceMeta>();
   const totals = new Map<string, { damage: number; hits: number; biggestHit: number }>();
 
-  // Pre-seed origin point at t = 0
   const points: DamageTimelinePoint[] = [
     { tMs: 0, label: '0:00', totalCumulative: 0, stepDamage: 0, peakSourceId: null },
   ];
@@ -636,7 +608,6 @@ export const buildDamageStory = (run: RunState): DamageStory => {
     snapshots.push(new Map(runningBySource));
   }
 
-  // Fallback for synthetic runs without log entries (e.g. legacy unit tests)
   if (points.length === 1 && run.totalDamage > 0) {
     const fallbackMeta: DamageSourceMeta = { id: 'set:cards', name: 'Matched Sets', kind: 'set', icon: 'lorc/crossed-swords' };
     metaMap.set(fallbackMeta.id, fallbackMeta);
@@ -680,7 +651,6 @@ export const buildDamageStory = (run: RunState): DamageStory => {
   const chartSources = sources.slice(0, 5);
   const crescendoBeats = pickCrescendoBeats(points, sourcesById, stepDeltas);
 
-  // Build plain-English 1-line summary headline
   const mvp = sources[0];
   let peakPt: DamageTimelinePoint | null = null;
   for (let i = 1; i < points.length; i++) {
@@ -707,7 +677,7 @@ export const buildDamageStory = (run: RunState): DamageStory => {
 
 /**
  * Merge one finished Starfall Summit battle's damage breakdown into the cumulative run-wide ledger
- * stored on `SpireRunStats` (so `SpireEndScreen` shows your entire roguelike climb!).
+ * stored on `SpireRunStats`.
  */
 export const mergeSpireDamageLedger = (
   prevSources: Record<string, SpireSourceDamageEntry> | undefined,
@@ -749,7 +719,7 @@ export const mergeSpireDamageLedger = (
   return { sourceDamage: nextSources, floorLedger: nextFloors };
 };
 
-/** Build a cumulative full-climb Brotato Damage Story across every floor of a Starfall Summit run! */
+/** Build a cumulative full-climb Brotato Damage Story across every floor of a Starfall Summit run. */
 export const buildSpireRunDamageStory = (
   sourceDamage: Record<string, SpireSourceDamageEntry> | undefined,
   floorLedger: readonly SpireFloorDamageSnapshot[] | undefined
@@ -806,20 +776,22 @@ export const buildSpireRunDamageStory = (
   }));
 
   const sourcesById = new Map(sources.map(s => [s.id, s]));
+  const chartSources = sources.slice(0, 5);
+  const crescendoBeats = pickCrescendoBeats(points, sourcesById, stepDeltas);
   const mvp = sources[0];
   const pct = mvp && finalTotal > 0 ? Math.max(1, Math.round(mvp.share * 100)) : 0;
   const headline = mvp
-    ? `${mvp.name} carried the climb with ${Math.round(mvp.totalDamage).toLocaleString()} dmg (${pct}%) across ${floors.length} ${floors.length === 1 ? 'battle' : 'battles'}`
-    : `Dealt ${Math.round(finalTotal).toLocaleString()} total damage across the Summit`;
+    ? `${mvp.name} carried the climb with ${Math.round(mvp.totalDamage)} dmg (${pct}%) across ${floors.length} floors`
+    : 'Climb complete.';
 
   return {
     totalDamage: finalTotal,
     durationMs: floors.length,
     xAxisMode: 'floors',
     sources,
-    chartSources: sources.slice(0, 5),
+    chartSources,
     points,
     headline,
-    crescendoBeats: pickCrescendoBeats(points, sourcesById, stepDeltas),
+    crescendoBeats,
   };
 };

@@ -14,7 +14,7 @@ import React from 'react';
 import { act, fireEvent, render, renderHook } from '@testing-library/react-native';
 import { EVENT_CUE, soundsFor, takesChainSlot } from '@/audio/fightAudio';
 import { PASSIVES } from '@/adventure/data/passives';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
 import { runReducer } from '@/adventure/engine/run';
 import {
   Anchor,
@@ -118,8 +118,14 @@ const firstBeats = (events: RunEvent[]): Extract<Segment, { kind: 'beats' }> => 
 };
 
 describe('the catalog: what every event looks like', () => {
-  it('has a row for every event type the band has a cue for, and the other way round', () => {
+  it('has a row for every event type the band has a cue for, and covers new per-weapon evo & card modifier events without catalyst_spawn', () => {
     expect(TYPES.sort()).toEqual((Object.keys(EVENT_CUE) as RunEventType[]).sort());
+    expect(TYPES).toContain('evo_progress');
+    expect(TYPES).toContain('evo_almost');
+    expect(TYPES).toContain('evo_charge');
+    expect(TYPES).toContain('holo_spawn');
+    expect(TYPES).toContain('marked');
+    expect(TYPES as string[]).not.toContain('catalyst_spawn');
   });
 
   it('every row shows something', () => {
@@ -244,12 +250,31 @@ describe('the script: one move as a cascade', () => {
     expect(scriptDamage(scriptFor(events, { weapons: WEAPONS }))).toBe(25);
   });
 
-  it('says who did it: the rule behind the event, or the held weapon that owns that kind of event', () => {
+  it('says who did it: the rule behind the event, or the held weapon that owns that kind of event (retargeting evo anchors to weapon:<id>)', () => {
     const ctx = { weapons: WEAPONS };
     expect(sourceOfEvent(ev('heal', { source: 'w1:mending-charm#0' }), ctx)).toEqual({ ref: 'weapon:mending-charm', name: 'Mending Charm', anchor: 'weapon:mending-charm' });
+    expect(sourceOfEvent(ev('evo_progress', { source: 'weapon:blast-powder', text: '1/3' }), ctx)).toEqual({
+      ref: 'weapon:blast-powder',
+      name: 'Blast Powder',
+      anchor: 'weapon:blast-powder',
+    });
     expect(sourceOfEvent(ev('blast'), ctx)?.anchor).toBe('weapon:blast-powder');
-    const recipe = EVOLUTION_RECIPES[0];
-    expect(sourceOfEvent(ev('laser', { source: `evo:${recipe.id}#1` }), ctx)).toEqual({ ref: `evo:${recipe.id}`, name: recipe.name, anchor: `evo:${recipe.id}` });
+    const evo = WEAPON_EVOLUTIONS[0];
+    expect(sourceOfEvent(ev('laser', { source: `evo:${evo.id}#1` }), ctx)).toEqual({
+      ref: `evo:${evo.id}`,
+      name: evo.name,
+      anchor: `weapon:${evo.weaponId}`,
+    });
+    expect(sourceOfEvent(ev('evolution_start', { text: evo.name }), ctx)).toEqual({
+      ref: `evo:${evo.id}`,
+      name: evo.name,
+      anchor: `weapon:${evo.weaponId}`,
+    });
+    expect(sourceOfEvent(ev('evolution_end', { text: evo.name }), ctx)).toEqual({
+      ref: `evo:${evo.id}`,
+      name: evo.name,
+      anchor: `weapon:${evo.weaponId}`,
+    });
     expect(sourceOfEvent(ev('hit', { source: 'node:some-node#0' }), ctx)?.anchor).toBe('fighter');
     expect(sourceOfEvent(ev('laser'), ctx)).toBeNull();
   });
@@ -282,11 +307,18 @@ describe('the script: one move as a cascade', () => {
     expect(beat.flies).toBe(false);
   });
 
-  it('things that repeat on the clock play but never hold it', () => {
+  it('things that repeat on the clock or tick evolution progress play ambiently and never hold the clock', () => {
     for (const type of TYPES.filter(t => EVENT_FX[t]?.ambient)) {
       expect({ type, hold: scriptHoldMs(scriptFor([ev(type, { amount: 1, slots: [0] })], { weapons: WEAPONS })) }).toEqual({ type, hold: 0 });
     }
-    expect(TYPES.filter(t => EVENT_FX[t]?.ambient).sort()).toEqual(['countdown', 'keen_eye', 'parry_warn', 'regen']);
+    expect(TYPES.filter(t => EVENT_FX[t]?.ambient).sort()).toEqual([
+      'countdown',
+      'evo_almost',
+      'evo_progress',
+      'keen_eye',
+      'parry_warn',
+      'regen',
+    ]);
   });
 
   it('only the player\'s own moves hold the clock: what the clock causes plays while it runs', () => {
@@ -298,30 +330,29 @@ describe('the script: one move as a cascade', () => {
   });
 
   it('an evolution splits the script: what led to it, the cut-in, then the rest', () => {
-    const recipe = EVOLUTION_RECIPES[0];
+    const evo = WEAPON_EVOLUTIONS[0];
     const script = scriptFor(
-      [ev('hit', { amount: 5, slots: [0, 1, 2] }), ev('evolution_start', { text: recipe.name, slots: [1] }), ev('hit', { amount: 10, text: recipe.name })],
+      [ev('hit', { amount: 5, slots: [0, 1, 2] }), ev('evolution_start', { text: evo.name, source: `evo:${evo.id}`, slots: [1] }), ev('hit', { amount: 10, text: evo.name })],
       { weapons: WEAPONS }
     );
     expect(script.segments.map(s => s.kind)).toEqual(['beats', 'cutIn', 'beats']);
-    expect(script.segments[1]).toEqual({ kind: 'cutIn', recipes: [recipe.id] });
-    // the Catalyst card erupts before the cut
+    expect(script.segments[1]).toEqual({ kind: 'cutIn', recipes: [evo.id] });
     expect((script.segments[0] as Extract<Segment, { kind: 'beats' }>).beats.map(b => b.event.type)).toEqual(['hit', 'evolution_start']);
   });
 
   it('two evolutions at once share one cut-in', () => {
-    const [a, b] = EVOLUTION_RECIPES;
+    const [a, b] = WEAPON_EVOLUTIONS;
     const script = scriptFor([ev('evolution_start', { text: a.name }), ev('evolution_start', { text: b.name })], { weapons: WEAPONS });
     expect(script.segments.filter(s => s.kind === 'cutIn')).toEqual([{ kind: 'cutIn', recipes: [a.id, b.id] }]);
   });
 
   it('skipCutIn omits the blocking Evolution cut-in when the fight already ended while keeping lethal beats intact', () => {
-    const recipe = EVOLUTION_RECIPES[0];
+    const evo = WEAPON_EVOLUTIONS[0];
     const script = scriptFor(
       [
         ev('hit', { amount: 5, slots: [0, 1, 2] }),
-        ev('evolution_start', { text: recipe.name, slots: [1] }),
-        ev('hit', { amount: 10, text: recipe.name }),
+        ev('evolution_start', { text: evo.name, slots: [1] }),
+        ev('hit', { amount: 10, text: evo.name }),
         ev('foe_defeated'),
       ],
       { weapons: WEAPONS, skipCutIn: true }
@@ -492,16 +523,16 @@ describe('the stage', () => {
   });
 
   it('an evolution holds the clock until its cut-in is dismissed', () => {
-    const recipe = EVOLUTION_RECIPES[0];
+    const evo = WEAPON_EVOLUTIONS[0];
     const { result } = renderHook(() => {
       const anchors = useAnchors();
       return useFightFx({ anchors });
     });
-    act(() => result.current.play(scriptFor([ev('evolution_start', { text: recipe.name })], { weapons: WEAPONS })));
+    act(() => result.current.play(scriptFor([ev('evolution_start', { text: evo.name })], { weapons: WEAPONS })));
     act(() => {
       jest.advanceTimersByTime(5000);
     });
-    expect(result.current.cutIn?.recipes).toEqual([recipe.id]);
+    expect(result.current.cutIn?.recipes).toEqual([evo.id]);
     expect(result.current.busy).toBe(true);
     act(() => result.current.dismissCutIn());
     act(() => {
@@ -511,20 +542,27 @@ describe('the stage', () => {
     expect(result.current.busy).toBe(false);
   });
 
-  it('the cut-in names the evolution, what it does and what fused, and closes on a tap (not on the tap that made the Set)', () => {
-    const recipe = EVOLUTION_RECIPES[0];
+  it('the cut-in names the single-weapon evolution, what it does and closes on a tap after the 220ms guard', () => {
+    const evo = WEAPON_EVOLUTIONS[0];
     const onDone = jest.fn();
-    const view = render(<EvolutionCutIn recipes={[recipe]} weapons={[]} seconds={30} size={{ w: 375, h: 700 }} onDone={onDone} />);
-    expect(view.getByText(recipe.name)).toBeTruthy();
-    expect(view.getByText(recipe.activeText)).toBeTruthy();
-    expect(view.getByText('30 seconds')).toBeTruthy();
+    const view = render(
+      <EvolutionCutIn
+        evolutions={[{ evolution: evo, durationSec: 20 }]}
+        weapons={[]}
+        size={{ w: 375, h: 700 }}
+        onDone={onDone}
+      />
+    );
+    expect(view.getByText(evo.name)).toBeTruthy();
+    expect(view.getByText(evo.tagline)).toBeTruthy();
+    expect(view.getByText('20s ACTIVE')).toBeTruthy();
     fireEvent.press(view.getByTestId('evolution-cutin'));
     act(() => {
-      jest.advanceTimersByTime(400);
+      jest.advanceTimersByTime(200);
     });
     expect(onDone).not.toHaveBeenCalled();
     act(() => {
-      jest.advanceTimersByTime(300);
+      jest.advanceTimersByTime(100);
     });
     fireEvent.press(view.getByTestId('evolution-cutin'));
     act(() => {
@@ -792,9 +830,14 @@ describe('Wave 4 Lane B VFX, Explosions, Flashes, Shakes & Beams ([FX-03,11,15,1
       expect(disabledDirect.queryByTestId('chiaroscuro-flash')).toBeNull();
 
       // EvolutionCutIn respects ScreenFlashStorage
-      const recipe = EVOLUTION_RECIPES[0];
+      const evo = WEAPON_EVOLUTIONS[0];
       const cutOff = render(
-        <EvolutionCutIn recipes={[recipe]} weapons={[]} seconds={30} size={{ w: 375, h: 700 }} onDone={jest.fn()} />
+        <EvolutionCutIn
+          evolutions={[{ evolution: evo, durationSec: 18 }]}
+          weapons={[]}
+          size={{ w: 375, h: 700 }}
+          onDone={jest.fn()}
+        />
       );
       expect(cutOff.queryByTestId('evolution-cutin-flash')).toBeNull();
 

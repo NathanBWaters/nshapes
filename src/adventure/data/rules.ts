@@ -1,17 +1,24 @@
 /** Standard fight rules that Arcana, card text and the engine all refer to. */
 export const BASE_RULES = {
+  /** Base damage per matched card in Adventure Mode (plain 3-card Set = 6 base dmg) */
+  cardBasePoints: 2,
   rainbowMultiplier: 1,
   coinCardChance: 0.1,
   coinCardValue: 3,
   powerCardChance: 0.12,
-  powerCardBonus: 2,
+  powerCardBonus: 5,
+  /** Holographic card: +4 flat base damage & +0.20× additive multiplier per Holo card in Set */
+  holoCardBonus: 4,
+  holoCardMult: 0.2,
+  /** Baseline probability (4%) that a dealt card arrives Holo once power/holo cards are enabled */
+  holoCardChance: 0.04,
   pickOptions: 3,
   /**
-   * "Your next Set deals ×N" effects add up rather than multiply (×2 and ×2
-   * make ×3), and the combined single-Set multiplier (with Hot Streak) tops out
-   * at ×16 so player-engineered burst setups pay out in full without overflow.
+   * "Your next Set deals ×N" effects add up rather than multiply (×1.3 and ×1.3
+   * make ×1.6), and the combined single-Set multiplier (with Hot Streak) tops out
+   * at ×2.5 so base damage and Synergy hooks stay decisive without multiplier blowouts.
    */
-  maxNextSetMultiplier: 16,
+  maxNextSetMultiplier: 2.5,
   /**
    * Time gains (weapons, rules, evolutions) can add at most this share of the
    * fight's starting clock in total. Without it, link-and-time loops ran
@@ -24,12 +31,13 @@ export const BASE_RULES = {
  * Shading Surge (Worlds 3-5). Four traits all the time was too much to hold in
  * your head, so the board plays on three traits with every card solid, and
  * shading only switches on for a short, high-stakes window: for 15 seconds,
- * shading joins the rule and every Set gets ×5 in the multiplier chain.
+ * shading joins the rule and every Set gains +12 flat base damage and ×1.8 in
+ * the multiplier chain.
  *
  * Damage equation (every Set, Surge or not):
- *   TOTAL = (card points + sum of all flat bonuses) × (product of all multipliers)
- * During a Shading Surge, ×5 multiplies the entire additive base cleanly
- * alongside Rainbow, Parry, Stagger, Evolutions, Next-Set boosts, and Power.
+ *   TOTAL = (card points + sum of all flat bonuses + Synergy hooks) × (product of all multipliers)
+ * During a Shading Surge, +12 joins the additive base and ×1.8 multiplies cleanly
+ * alongside Rainbow, Holo, Parry, Stagger, Active Evolutions, and Next-Set boosts.
  */
 export const SURGE_RULES = {
   /** Shading off (every card solid) */
@@ -37,7 +45,9 @@ export const SURGE_RULES = {
   /** Shading on */
   surgeMs: 15000,
   /** Set multiplier applied during the surge (joins all other multipliers in BASE × MULT) */
-  multiplier: 5,
+  multiplier: 1.8,
+  /** Flat base damage added to every Set scored during a Shading Surge */
+  flatBonus: 12,
   /** Heads-up before a surge starts */
   warnMs: 5000,
 } as const;
@@ -50,7 +60,7 @@ export const TRICK_RULES = {
   bountyCards: 3,
   /** Cursed Idol: how long a curse holds a card, and what a card that survives it multiplies a Set by */
   curseMs: 10000,
-  curseMultiplier: 2,
+  curseMultiplier: 1.35,
   /** Thorn Bush: how long before a thorn card costs a heart */
   thornMs: 15000,
   /** Thorn Bush: extra time per trait beyond 3 (a Set takes longer to find with more traits) */
@@ -59,7 +69,7 @@ export const TRICK_RULES = {
   thornCards: 1,
   /** Rust: Sets a card sits through before it turns golden, and the coins a golden card pays */
   rustSets: 7,
-  rustCoins: 5,
+  rustCoins: 8,
   /** Long Fuse: fuse length, the window at the end that pays, and how many burnt-out duds may sit on the board */
   fuseMs: 20000,
   fuseHotMs: 5000,
@@ -67,7 +77,7 @@ export const TRICK_RULES = {
   /** Ice Block: Sets it takes to thaw */
   iceSets: 7,
   /** Tightrope: what a Set away from your last one is multiplied by */
-  offRopeMultiplier: 0.5,
+  offRopeMultiplier: 0.7,
   /** Hot Potato: how often it jumps, and the extra hearts a mistake costs while you hold it */
   potatoMs: 10000,
   /** Hot Potato: however much it has grown, it never jumps faster than this */

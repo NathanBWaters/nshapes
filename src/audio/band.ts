@@ -92,7 +92,8 @@ export type CueName =
   | 'fire' | 'hint' | 'toll' | 'timeGain' | 'nineLives' | 'hotStreak' | 'bigHit' | 'grudge' | 'shield' | 'patience'
   | 'freeze' | 'redeal' | 'scoop' | 'twinkle' | 'fetch' | 'phew' | 'ding' | 'blast' | 'laser' | 'ricochet'
   | 'doubled' | 'armed' | 'charged' | 'warDrum' | 'clarity' | 'clarityEnd' | 'pinata' | 'pinataBreak' | 'link'
-  | 'purity' | 'rainbow' | 'catalyst' | 'trapSet' | 'trapDefused' | 'trapSprung' | 'burn' | 'overkill'
+  | 'purity' | 'rainbow' | 'arcanaGain' | 'catalyst' | 'evoAlmost' | 'evoProgress' | 'evoCharge' | 'evoEnd'
+  | 'trapSet' | 'trapDefused' | 'trapSprung' | 'burn' | 'overkill'
   | 'streakLost' | 'sour' | 'reelStop' | 'register' | 'reelSpin' | 'star' | 'starSwoosh' | 'rankSeal' | 'coinRoll' | 'weaponGet' | 'tap' | 'back'
   | 'parryWarn' | 'parry' | 'perfectParry' | 'foeStrike' | 'multStep' | 'multSlam' | 'killCamRiser' | 'killCamShatter' | 'slowMoDefeat' | 'storyClimax'
   | 'keyFound' | 'friendRescued';
@@ -123,6 +124,7 @@ export const CUE_TIER: Record<CueName, SfxTier> = {
 
   // Tier A (-1 dB, ducks Tier B/C -4 dB & music -3 to -7 dB)
   parry: 'A',
+  evoAlmost: 'A',
   blast: 'A',
   mistake: 'A',
   levelUp: 'A',
@@ -173,7 +175,9 @@ export const CUE_TIER: Record<CueName, SfxTier> = {
   link: 'B',
   purity: 'B',
   rainbow: 'B',
+  arcanaGain: 'B',
   catalyst: 'B',
+  evoCharge: 'B',
   trapSet: 'B',
   trapDefused: 'B',
   burn: 'B',
@@ -193,6 +197,8 @@ export const CUE_TIER: Record<CueName, SfxTier> = {
   back: 'C',
   armed: 'C',
   twinkle: 'C',
+  evoProgress: 'C',
+  evoEnd: 'C',
   reelSpin: 'C',
   reelStop: 'C',
 };
@@ -750,11 +756,23 @@ class Band {
     // Your build: weapon riffs taking turns
     for (const id of this.spot) this.playRiff(weaponVoice(id), s16, t, sd, root, mode, key, RIFF_VOL + RIFF_HEAT * (this.heat.get(id) ?? 0), 0);
 
-    // An evolution: its two weapons in duet an octave up, and a ring of bells
+    // An evolution: the weapon's own riff an octave up with its variant harmonic companion & groove shimmer
     if (evo && !flicker) {
-      evo.weapons.forEach((id, i) => this.playRiff(weaponVoice(id), s16, t, sd, root, mode, key, RIFF_VOL + RIFF_HEAT, 1, i === 0 ? 'saw' : undefined));
-      if (s16 % 2 === 0) note('glock', f(root + [0, 2, 4, 7, 9, 7, 4, 2][(s16 / 2) % 8], 6), t, sd, { vol: 0.4, pan: s16 % 4 ? 0.5 : -0.5, soft: true });
-      if (s16 % 4 === 2) for (const d of [0, 2, 4]) note('saw', f(root + d, 4), t, sd * 0.9, { vol: 0.5, soft: true });
+      const leadVoice = weaponVoice(evo.weaponId);
+      this.playRiff(leadVoice, s16, t, sd, root, mode, key, RIFF_VOL + RIFF_HEAT, 1, evo.insts[1]);
+      if (evo.variantIndex === 0) {
+        // Variant 0 (Core / Kinetic): bright octave glockenspiel shimmer + heroic brass backbeat
+        if (s16 % 2 === 0) note('glock', f(root + [0, 2, 4, 7, 9, 7, 4, 2][(s16 / 2) % 8], 6), t, sd, { vol: 0.38, pan: s16 % 4 ? 0.5 : -0.5, soft: true });
+        if (s16 % 4 === 2) for (const d of [0, 4, 7]) note('brass', f(root + d, 4), t, sd * 0.9, { vol: 0.42, soft: true });
+      } else if (evo.variantIndex === 1) {
+        // Variant 1 (Tactical / Tempo): off-beat perfect-fifth counter-melody weaving against the lead
+        if (s16 % 2 === 1) note(evo.insts[1], f(root + [4, 7, 9, 11, 9, 7, 4, 2][Math.floor(s16 / 2) % 8], 5), t, sd * 1.4, { vol: 0.4, pan: -leadVoice.pan, soft: true });
+        if (s16 % 4 === 0) note('harp', f(root + (s16 % 8 === 0 ? 4 : 7), 4), t, sd * 1.8, { vol: 0.36, pan: leadVoice.pan, soft: true });
+      } else {
+        // Variant 2 (Wild / Escalation): rapid triad arpeggio climb + driving synth chord stab
+        if (s16 % 2 === 0) note(evo.insts[1], f(root + [0, 4, 7, 11, 7, 4, 9, 14][(s16 / 2) % 8], 5), t, sd * 0.95, { vol: 0.42, pan: s16 % 4 ? -0.55 : 0.55, soft: true });
+        if (s16 % 4 === 2) for (const d of [0, 2, 4]) note('saw', f(root + d, 4), t, sd * 0.9, { vol: 0.45, soft: true });
+      }
     }
   }
 
@@ -984,9 +1002,10 @@ class Band {
     const tier = CUE_TIER[name];
     const c = this.cueCtx(o.slot ?? 0, immediate, o.afterMs, tier);
     if (!c) return;
-    // [AU-11]: Key multStep dedupe by step amount with 10 ms floor so rapid Balatro tallies never drop
+    // [AU-11]: Key multStep dedupe by step amount with 10 ms floor so rapid Balatro tallies never drop;
+    // rate-limit Tier C evoProgress to at most one crisp pip per Set burst (80 ms window)
     const dedupeKey = name === 'multStep' ? `${name}:${Math.round(o.amount ?? 0)}` : name;
-    const dedupeWindow = name === 'multStep' ? 0.01 : 0.02;
+    const dedupeWindow = name === 'multStep' ? 0.01 : name === 'evoProgress' ? 0.08 : 0.02;
     const last = this.lastCueAt[dedupeKey];
     if (last !== undefined && Math.abs(c.t - last) < dedupeWindow && name !== 'reelStop' && name !== 'starSwoosh') return;
     this.lastCueAt[dedupeKey] = c.t;
@@ -1003,18 +1022,18 @@ class Band {
   }
 
   /**
-   * An evolution begins (Tier S): a riser into the recipe's own fanfare.
+   * An evolution begins (Tier S): a riser into the weapon evolution's own fanfare.
    * Pass `{ immediate: true, leadMs: 90 }` from EvolutionCutIn mount so the riser fills
-   * 0-90 ms and crash + subDrop + duet fanfare hit the exact 90 ms slash-flash frame ([AU-13]).
+   * 0-90 ms and crash + subDrop + weapon-anchored fanfare hit the exact 90 ms slash-flash frame ([AU-13]).
    */
-  evolve(recipeId: string, opts: { immediate?: boolean; leadMs?: number } = {}) {
+  evolve(evoId: string, opts: { immediate?: boolean; leadMs?: number } = {}) {
     if (this.useNative) {
       if (audioFlags.sfx) nativeBridge.evolve();
       return;
     }
     const c = this.cueCtx(0, Boolean(opts.immediate), 0, 'S');
     if (!c) return;
-    const theme = themeOf(recipeId);
+    const theme = themeOf(evoId);
     const lead = opts.leadMs !== undefined ? Math.max(0, opts.leadMs) / 1000 : c.g * 4;
     if (lead > 0.015) {
       riser(c.t, lead, 0.8, SFX, 'S');
@@ -1056,12 +1075,12 @@ class Band {
   }
 
   /** Mount-synced EvolutionCutIn fanfare: 90 ms riser into slash-flash (0 ms when reducedMotion) ([AU-13]). */
-  playCutInEvolve(recipeId: string, opts: { reducedMotion?: boolean; leadMs?: number } = {}) {
+  playCutInEvolve(evoId: string, opts: { reducedMotion?: boolean; leadMs?: number } = {}) {
     const leadMs = opts.leadMs ?? (opts.reducedMotion ? 0 : 90);
-    this.evolve(recipeId, { immediate: true, leadMs });
+    this.evolve(evoId, { immediate: true, leadMs });
   }
 
-  /** Mount-synced WeaponPick / EvolutionPick slot-reel stops at 0 / 75 / 150 ms ([AU-13]). */
+  /** Mount-synced WeaponPick slot-reel stops at 0 / 75 / 150 ms ([AU-13]). */
   playWeaponPickReelStop(count = 3, staggerMs = 75) {
     const n = Math.max(1, Math.min(6, Math.round(count)));
     for (let i = 0; i < n; i++) {
@@ -1079,23 +1098,9 @@ class Band {
     this.cue('killCamShatter', { afterMs });
   }
 
-  /** The evolution ends: the power drains away. */
+  /** The evolution ends: a gentle Tier C descending 2-note sigh so expiry stays clean and unobtrusive. */
   devolve() {
-    if (this.useNative) {
-      if (audioFlags.sfx) nativeBridge.cue('clarityEnd');
-      return;
-    }
-    const c = this.cueCtx(0, false, 0, 'B');
-    if (!c) return;
-    downlifter(c.t, c.g * 12, 0.65, SFX, 'B');
-    [7, 4, 2, 0].forEach((s, i) =>
-      note('vibes', foldFreq(degreeToFreq(c.mode, c.key, c.root + s, 5), 2600), c.t + i * c.g * 2, 0.45, {
-        vol: 0.62,
-        bus: SFX,
-        tier: 'B',
-        space: 'sfxRoom',
-      })
-    );
+    this.cue('evoEnd');
   }
 
   /** Audition a weapon outside a fight (Armory, unlock screen): its riff for one bar. */
@@ -1123,9 +1128,9 @@ class Band {
     });
   }
 
-  /** Audition an evolution's fanfare (Recipe Guide, unlock screen). */
-  auditionEvolution(recipeId: string) {
-    this.evolve(recipeId, { immediate: true });
+  /** Audition a weapon evolution's fanfare (WeaponExplainer, Field Guide, unlock screen). */
+  auditionEvolution(evoId: string) {
+    this.evolve(evoId, { immediate: true });
   }
 
   /**
@@ -1626,11 +1631,48 @@ const CUES: Record<CueName, (c: CueCtx) => void> = {
     chip.noise({ at: c.t, dur: 0.42, vol: 0.22, short: true, filter: 5000, sweepTo: 10000, bus: SFX, tier: c.tier, space: 'sfxRoom' });
     for (const d of [0, 2, 4, 7]) N(c, 'strings', d, 4, c.g * 5, c.g * 8, 0.7);
   },
-  // Something special appeared: one note from outside the scale, then it resolves
-  catalyst: c => {
+  // Starfall Summit Arcana pickup / bold discovery: sparkling tritone resolution + celesta glint
+  arcanaGain: c => {
     note('bell', foldFreq(fq(c, 0, 6) * Math.pow(2, 6 / 12), 2600), c.t, 0.42, { vol: 0.75, bus: SFX, tier: c.tier, space: 'sfxRoom' });
     note('bell', fq(c, 4, 6), c.t + c.g * 3, 0.65, { vol: 0.82, bus: SFX, tier: c.tier, space: 'sfxRoom' });
+    note('celesta', fq(c, 7, 6), c.t + c.g * 4, 0.34, { vol: 0.56, bus: SFX, tier: c.tier, space: 'sfxRoom' });
     note('sub', fq(c, 0, 2), c.t, 0.36, { vol: 0.68, bus: SFX, tier: c.tier, space: 'dry' });
+  },
+  /** Temporary alias kept until Starfall Summit call sites migrate from `'catalyst'` to `'arcanaGain'`. */
+  catalyst: c => CUES.arcanaGain(c),
+
+  // Per-weapon evolution telemetry cues (Sakurai Ep. #032 / #165 priority hierarchy)
+  // Tier A: ascending 2-note crystalline shimmer when a weapon hits 1 step away from evolving (distinct from Parry & Set match)
+  evoAlmost: c => {
+    N(c, 'celesta', 4, 5, 0, 0.16, 0.84, -0.35, 'sfxRoom');
+    N(c, 'glass', 7, 5, 0, 0.14, 0.46, 0.25, 'sfxRoom');
+    N(c, 'celesta', 9, 5, c.g * 1.5, 0.26, 0.92, 0.35, 'sfxRoom');
+    N(c, 'bell', 7, 6, c.g * 1.5, 0.3, 0.64, -0.2, 'sfxRoom');
+    chip.duck(0.22, c.t, 0.24);
+    chip.duckSfx(0.28, c.t, 0.22);
+  },
+  // Tier C: subtle rate-limited wooden/crystal pip climbing semitones by progress/target ratio (or step count)
+  evoProgress: c => {
+    const semis =
+      c.amount > 0 && c.amount <= 1
+        ? Math.round(c.amount * 10)
+        : Math.max(0, Math.min(10, Math.round(c.amount)));
+    const mult = Math.pow(2, semis / 12);
+    const baseHz = foldFreq(fq(c, c.root + 2, 5) * mult, 2600);
+    const highHz = foldFreq(fq(c, c.root + 6, 5) * mult, 2600);
+    D(c, 'woodblock', 0, 0.24, undefined, 'dry');
+    note('kalimba', baseHz, c.t, 0.09, { vol: 0.44, bus: SFX, tier: 'C', space: 'dry' });
+    note('celesta', highHz, c.t + 0.012, 0.11, { vol: 0.34, bus: SFX, tier: 'C', space: 'dry' });
+  },
+  // Tier B: violet shimmer bolt when Catalyst Prism or Encore Mask charges an allied weapon's evolution
+  evoCharge: c => {
+    runUp(c, 'celesta', [2, 4, 7], 5, 0.8, 0.22, 0.68, 'sfxRoom');
+    N(c, 'harp', 7, 5, c.g * 1.5, 0.28, 0.52, undefined, 'sfxRoom');
+  },
+  // Tier C: gentle descending 2-note sigh when a timed weapon evolution expires
+  evoEnd: c => {
+    note('vibes', fq(c, c.root + 4, 5), c.t, 0.22, { vol: 0.48, bus: SFX, tier: 'C', space: 'dry' });
+    note('vibes', fq(c, c.root, 5), c.t + c.g * 2.5, 0.36, { vol: 0.4, bus: SFX, tier: 'C', space: 'dry' });
   },
   trapSet: c => {
     X(c, 'pizz', 0, 3, 1, 0, 0.14, 0.8);

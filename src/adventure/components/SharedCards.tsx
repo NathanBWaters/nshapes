@@ -12,13 +12,15 @@ import { EnemyAvatar } from '@/components/enemies';
 import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
 import type { CharacterName, Weapon } from '@/types';
-import type { ArcanaId, EvolutionRecipe, LevelHazards } from '../types';
+import type { ArcanaId, LevelHazards, WeaponEvolutionDef } from '../types';
 import { getArcana } from '../data/arcana';
-import { weaponLevelSuffix } from '../data/armory';
+import { armoryBaseWeapon, weaponLevelSuffix } from '../data/armory';
+import { evolutionConditionShort } from '../data/evolutions';
 import { getFighter } from '../data/fighters';
 import type { FoeDisplay } from '../data/foes';
 import { getPassive } from '../data/passives';
 import { getSkillNode } from '../data/skillTrees';
+import type { SynergyBeltLink } from '../ui/synergyMeta';
 import { INK, TONE } from './ui';
 
 /** Displays a fighter's two signature passives in the shared paper-beige inset card. */
@@ -202,26 +204,112 @@ export const SkillNodeRow: React.FC<{
   );
 };
 
-/** Displays an armed Evolution recipe row (used in LevelPreview & SpireBuildModal). */
-export const ArmedEvolutionRow: React.FC<{
-  recipe: EvolutionRecipe;
-  known?: boolean;
-  /** Show the ingredient family text instead of "ARMED" suffix (e.g. build inspector). */
-  showFamily?: boolean;
+/** Compact pill for one equipped per-weapon Evolution (used in LevelPreview & SpireBuildModal). */
+export const WeaponEvolutionChip: React.FC<{
+  evolution: WeaponEvolutionDef;
+  weapon?: Weapon;
+  labTier?: number;
+  colorblind?: boolean;
+  onPress?: () => void;
   testID?: string;
-}> = ({ recipe, known = true, showFamily = false, testID }) => (
-  <View testID={testID} style={st.evoRow}>
-    <Icon name={recipe.icon} size={16} color={TONE.evoReady} />
-    <View style={{ flex: 1, minWidth: 0 }}>
-      <Text style={st.evoName}>
-        {known ? recipe.name : '??? Evolution'} · {showFamily && known ? recipe.familyText : 'ARMED'}
-      </Text>
-      <Text style={st.cardDesc}>
-        {known ? recipe.activeText : `${recipe.familyText}: forge it to find out what it does.`}
-      </Text>
+}> = ({ evolution, weapon, labTier = 0, colorblind = false, onPress, testID }) => {
+  const owner = weapon ?? armoryBaseWeapon(evolution.weaponId);
+  const secs = Math.round((evolution.durationMs + Math.max(0, labTier) * 2000) / 1000);
+  const cond = evolutionConditionShort(evolution, colorblind);
+  const inner = (
+    <>
+      {owner ? (
+        <WeaponAvatar weapon={owner} size={20} />
+      ) : (
+        <Icon name={evolution.icon} size={14} color={TONE.evoReady} noShadow />
+      )}
+      <View style={{ flexShrink: 1, minWidth: 0 }}>
+        <Text style={st.evoChipName} numberOfLines={1}>{evolution.name}</Text>
+        <Text style={st.evoChipSub} numberOfLines={1}>{cond} · {secs}s</Text>
+      </View>
+    </>
+  );
+  if (onPress) {
+    return (
+      <TouchableOpacity
+        testID={testID}
+        onPress={onPress}
+        activeOpacity={0.85}
+        style={st.evoChip}
+        accessibilityRole="button"
+        accessibilityLabel={`${owner?.name ?? evolution.weaponId} evolution: ${evolution.name}, ${cond}`}
+      >
+        {inner}
+      </TouchableOpacity>
+    );
+  }
+  return <View testID={testID} style={st.evoChip}>{inner}</View>;
+};
+
+/** Displays a full per-weapon Evolution row (used in LevelPreview, SpireBuildModal & FieldGuide). */
+export const WeaponEvolutionRow: React.FC<{
+  evolution: WeaponEvolutionDef;
+  weapon?: Weapon;
+  labTier?: number;
+  colorblind?: boolean;
+  onPress?: () => void;
+  testID?: string;
+}> = ({ evolution, weapon, labTier = 0, colorblind = false, onPress, testID }) => {
+  const owner = weapon ?? armoryBaseWeapon(evolution.weaponId);
+  const secs = Math.round((evolution.durationMs + Math.max(0, labTier) * 2000) / 1000);
+  const cond = evolutionConditionShort(evolution, colorblind);
+  const body = (
+    <>
+      <Icon name={evolution.icon} size={18} color={TONE.evoReady} />
+      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+        <Text style={st.evoName} numberOfLines={1}>
+          {evolution.name}{owner ? ` · ${owner.name}` : ''}
+        </Text>
+        <Text style={st.evoCondSub} numberOfLines={1}>
+          Trigger: {cond} · {secs}s
+        </Text>
+        <Text style={st.cardDesc}>{evolution.tagline}</Text>
+      </View>
+    </>
+  );
+  if (onPress) {
+    return (
+      <TouchableOpacity testID={testID} onPress={onPress} activeOpacity={0.85} style={st.evoRow}>
+        {body}
+      </TouchableOpacity>
+    );
+  }
+  return <View testID={testID} style={st.evoRow}>{body}</View>;
+};
+
+/** Displays active shared Synergy Graph links across a weapon belt (e.g., Burn ×2, Blast ×3). */
+export const SynergySummaryChips: React.FC<{
+  links: readonly SynergyBeltLink[];
+  emptyText?: string;
+  testID?: string;
+  style?: StyleProp<ViewStyle>;
+}> = ({ links, emptyText, testID, style }) => {
+  if (links.length === 0) {
+    return emptyText ? (
+      <Text style={st.cardDesc} testID={testID}>{emptyText}</Text>
+    ) : null;
+  }
+  return (
+    <View testID={testID} style={[st.synergyRow, style]}>
+      {links.map(link => (
+        <View
+          key={link.attr}
+          style={[st.synergyBadge, { backgroundColor: link.meta.paleBg, borderColor: link.meta.color }]}
+        >
+          <Icon name={link.meta.icon} size={12} color={link.meta.color} noShadow />
+          <Text style={st.synergyBadgeText} numberOfLines={1}>
+            {link.meta.label} ×{link.count}
+          </Text>
+        </View>
+      ))}
     </View>
-  </View>
-);
+  );
+};
 
 /** Displays a foe's passive/active combat ability banner (shared by LevelPreview & SpireEncounterPreview). */
 export const FoeAbilityCard: React.FC<{
@@ -264,7 +352,7 @@ export const HazardNotices: React.FC<{ hazards: LevelHazards; testID?: string }>
           <Icon name="lorc/wolf-trap" size={20} color={INK} />
           <Text style={st.abilityText}>
             <Text style={st.bold}>Snares: </Text>
-            matching a snared card costs a heart. Match the card its arrow points at to defuse it for +4 damage.
+            matching a snared card costs a heart. Match the card its arrow points at to defuse it for +8 base damage.
           </Text>
         </View>
       )}
@@ -278,7 +366,7 @@ export const ShadingSurgeNotice: React.FC = () => (
     <Icon name="lorc/stone-block" size={16} color={TONE.surge} />
     <Text style={st.abilityText}>
       <Text style={[st.bold, { color: TONE.surge }]}>Shading Surge Active: </Text>
-      Every 45s, shading turns on for 15s and every Set’s base damage is ×5!
+      Every 45s, shading turns on for 15s and every Set gains +12 base damage and ×1.8!
     </Text>
   </View>
 );
@@ -469,7 +557,33 @@ const st = StyleSheet.create({
   skillIconBox: { backgroundColor: '#CCFBF1', borderColor: TONE.upside },
 
   evoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: TONE.evoReady, padding: 8 },
-  evoName: { fontSize: 12, fontWeight: '900', color: INK },
+  evoName: { flexShrink: 1, fontSize: 12.5, fontWeight: '900', color: INK },
+  evoCondSub: { flexShrink: 1, fontSize: 11, fontWeight: '800', color: '#5B21B6' },
+  evoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FAF5FF',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#7C3AED',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    maxWidth: '100%',
+  },
+  evoChipName: { flexShrink: 1, fontSize: 11.5, fontWeight: '900', color: INK },
+  evoChipSub: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: '#5B21B6' },
+  synergyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  synergyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  synergyBadgeText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: INK },
 
   abilityBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF3F2', borderWidth: 1.5, borderColor: '#F5C2BE', borderRadius: 8, padding: 8 },
   abilityText: { flex: 1, fontSize: 12, color: INK, lineHeight: 17 },

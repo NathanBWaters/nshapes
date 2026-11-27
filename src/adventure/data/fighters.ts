@@ -9,12 +9,12 @@ import type { FighterDef } from '../types';
 
 /**
  * [GP-14] Orange Tabby baseline buff constants — keeps starter punchy at full HP
- * (+1 claw dmg on every Set + free 1-hit Wave-1 Pounce Shield) while sharpening
- * the iconic low-HP comeback (+1.5 dmg per missing heart).
+ * (+2 claw dmg on every Set + free 1-hit Wave-1 Pounce Shield) while sharpening
+ * the iconic low-HP comeback (+3 dmg per missing heart).
  */
 export const ORANGE_TABBY_BASELINE = {
-  scrappyBase: 1,
-  scrappyPerHeart: 1.5,
+  scrappyBase: 2,
+  scrappyPerHeart: 3,
   wave1PounceShield: 1,
 } as const;
 
@@ -32,14 +32,14 @@ export const FIGHTERS: FighterDef[] = [
     name: 'Orange Tabby',
     icon: 'lorc/cat',
     signature: 'fighter_healing',
-    blurb: 'Scrappy brawler: +1 claw damage on every Set, +1.5 per missing heart, a Wave-1 pounce shield, and Nine Lives.',
+    blurb: 'Scrappy brawler: +2 claw damage on every Set, +3 per missing heart, a Wave-1 pounce shield, and Nine Lives.',
     passives: ['nine_lives', 'scrappy'],
   },
   {
     name: 'Sly Fox',
     icon: 'caro-asercion/fox',
     signature: 'fighter_fire',
-    blurb: 'Speed demon: chain Sets inside 5 seconds, then cash a max Combo in for double damage.',
+    blurb: 'Speed demon: chain Sets inside 5 seconds, then cash a max Combo in for a blazing +10 base & ×1.35 burst.',
     passives: ['combo', 'hot_streak'],
   },
   {

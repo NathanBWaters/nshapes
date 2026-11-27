@@ -37,7 +37,7 @@ import { getArmoryWeapon, weaponLevelSuffix } from '../data/armory';
 import { WEAPON_KINDS, weaponGuide } from '../data/weaponGuide';
 import { WEAPON_ROLES, type WeaponRole } from '../data/weaponRoles';
 import WeaponExplainer from './WeaponExplainer';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { getWeaponEvolution } from '../data/evolutions';
 import { getLevel } from '../data/levels';
 import { resolveParrySpec } from '../data/parry';
 import {
@@ -54,17 +54,25 @@ import {
 } from '../data/relief';
 import { isFighterTrial, starRewards } from '../data/rewards';
 import ParryPreviewCard from './ParryPreviewCard';
-import { ArcanaCard, ArmedEvolutionRow, FighterPassivesList, FoeAbilityCard, HazardNotices } from './SharedCards';
+import {
+  ArcanaCard,
+  FighterPassivesList,
+  FoeAbilityCard,
+  HazardNotices,
+  SynergySummaryChips,
+  WeaponEvolutionChip,
+} from './SharedCards';
 import { starGoals } from '../engine/challenges';
 import {
   arcanaSlots,
-  armableRecipesFromArmory,
-  charmSynergyWithEquipped,
+  equipWeaponEvolution,
   fighterStarsSpent,
   charmSlots,
   equippedArcanaOf,
   equippedCharms,
+  equippedEvolutionOf,
   getLockReason,
+  unlockedEvolutionsForWeapon,
   weaponLevel,
   weaponBuilds,
 } from '../progress';
@@ -80,6 +88,14 @@ import {
   type LoadoutPreset,
 } from '../loadoutPresets';
 import { startingLoadout } from '../loadout';
+import { useColorblind } from '@/utils/cardColors';
+import {
+  beltSynergyAttrSet,
+  beltSynergyOverlap,
+  getSynergyAttrMeta,
+  summarizeBeltSynergies,
+} from '../ui/synergyMeta';
+import { buildBeltSlotDescriptors, type BeltSlotDescriptor } from '../ui/evolutionViewModel';
 import { companionVoice, shouldShowPassiveHud } from '../coach';
 import CompanionBubble from './CompanionBubble';
 import { DemoView } from './MechanicIntro';
@@ -92,13 +108,14 @@ type PreviewTab = 'briefing' | 'loadout';
 
 const QUICK_FILTERS: { id: ArmoryQuickFilter; label: string; icon?: IconName }[] = [
   { id: 'all', label: 'All' },
-  { id: 'fuses', label: 'Fuses', icon: 'lorc/crystal-shine' },
+  { id: 'synergy', label: 'Synergy', icon: 'lorc/linked-rings' },
+  { id: 'hasEvo', label: 'Has Evo', icon: 'lorc/crystal-shine' },
   { id: 'equipped', label: 'Equipped' },
   { id: 'lv2plus', label: 'Lv 2+' },
 ];
 
 const SORT_MODES: { id: ArmorySortMode; label: string }[] = [
-  { id: 'fuses', label: 'Fuses First' },
+  { id: 'synergy', label: 'Synergy First' },
   { id: 'level', label: 'Highest Lv' },
   { id: 'az', label: 'A–Z' },
 ];
@@ -111,13 +128,15 @@ interface Props {
   onSelectFighter: (f: CharacterName) => void;
   /** Equip the charm if a slot is free, take it off if worn */
   onSelectCharm: (id: string) => void;
+  /** Equip 1 of 3 unlocked evolutions for a weapon */
+  onSelectEvolution?: (weaponId: string, evolutionId: string) => void;
+  /** Jump directly to a locked evolution's Bounty on Camp's Bounty Board */
+  onJumpToBounty?: (bountyId: string) => void;
   /** Equip the Arcana (swapping out the oldest when full), take it off if worn */
   onSelectArcana?: (id: ArcanaId) => void;
   onShowMechanic: (id: string) => void;
   /** Leave for Camp (a lesson that is used there, like skill trees, offers it) */
   onOpenCamp?: (tab: NonNullable<MechanicDef['camp']>['tab']) => void;
-  /** Equip the top armable recipe pair from Armory in one tap */
-  onArmRecipe?: (recipeId: string) => void;
   /** [GP-18] Toggle Friendly Tailwind loss-streak relief on/off */
   onToggleTailwind?: (active: boolean) => void;
   /** [GP-18] Choose a Starfall Cauldron upward coin wager tier (0 | 1 | 2) */
@@ -251,10 +270,11 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
   onPlay,
   onSelectFighter,
   onSelectCharm,
+  onSelectEvolution,
+  onJumpToBounty,
   onSelectArcana,
   onShowMechanic,
   onOpenCamp,
-  onArmRecipe,
   onToggleTailwind,
   onSelectWager,
   onApplyLoadout,
@@ -264,17 +284,19 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
   foeCue,
 }) => {
   const textScale = useTextScale();
+  const colorblind = useColorblind();
   const [activeTab, setActiveTab] = useState<PreviewTab>(initialTab);
   const [charmTapCounts, setCharmTapCounts] = useState<Record<string, number>>({});
   /** Single focused weapon explained below the shelf (never stacks 6 open explainers) */
   const [focusCharm, setFocusCharm] = useState<string | null>(null);
+  const [lockedSlotTip, setLockedSlotTip] = useState<BeltSlotDescriptor | null>(null);
   const [localTailwind, setLocalTailwind] = useState<boolean>(Boolean(save.tailwindActive));
   const [localWager, setLocalWager] = useState<CauldronWagerTier>(save.cauldronWager ?? 0);
-  /** [GP-21] Filter, sort (`fuses` default on LevelPreview), search, slot reorder & Auto-Equip undo */
+  /** [GP-21] Filter, sort (`synergy` default on LevelPreview), search, slot reorder & Auto-Equip undo */
   const [quickFilter, setQuickFilter] = useState<ArmoryQuickFilter>('all');
   const [roleFilter, setRoleFilter] = useState<WeaponRole | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortMode, setSortMode] = useState<ArmorySortMode>('fuses');
+  const [sortMode, setSortMode] = useState<ArmorySortMode>('synergy');
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [autoUndo, setAutoUndo] = useState<{ prevSave: AdventureSave; summary: string } | null>(null);
   const [presets] = useState<(LoadoutPreset | null)[]>(() => loadLoadoutPresets());
@@ -283,6 +305,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
     setActiveTab(initialTab);
     setSelectedSlot(null);
     setAutoUndo(null);
+    setLockedSlotTip(null);
   }, [level.id, initialTab]);
 
   useEffect(() => {
@@ -347,8 +370,28 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
   const slots = charmSlots(save);
   const arcana = equippedArcanaOf(save);
   const builds = weaponBuilds(save);
-  const armed = EVOLUTION_RECIPES.filter(r => loadout.armedRecipes.includes(r.id));
+  const beltSlots = useMemo(() => buildBeltSlotDescriptors(save), [save]);
+  const beltSynergyLinks = useMemo(() => summarizeBeltSynergies(charms), [charms]);
   const evolutionsOn = gearOn && loadout.features.has('evolutions');
+  const armedWeaponEvos = useMemo(
+    () =>
+      charms
+        .map(wId => {
+          const evoId = loadout.equippedEvolutions[wId] ?? equippedEvolutionOf(save, wId);
+          const def = evoId ? getWeaponEvolution(evoId) : undefined;
+          const weapon = getArmoryWeapon(wId, builds);
+          return def && weapon ? { weapon, evolution: def } : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => Boolean(x)),
+    [charms, loadout.equippedEvolutions, save, builds]
+  );
+  const handleSelectEvolution = (weaponId: string, evoId: string) => {
+    if (onSelectEvolution) {
+      onSelectEvolution(weaponId, evoId);
+    } else if (onApplyLoadout) {
+      onApplyLoadout(equipWeaponEvolution(save, weaponId, evoId));
+    }
+  };
   const fighter = getFighter(save.selectedFighter);
   const charmsFull = charms.length >= slots;
   const practice = !!level.rules.sandbox;
@@ -748,7 +791,23 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
 
                 {save.armory.length > 0 && charmsTaught && (
                   <View style={st.slotRow} testID="preview-charm-slots">
-                    {Array.from({ length: slots }).map((_, i) => {
+                    {beltSlots.map(desc => {
+                      if (!desc.unlocked) {
+                        return (
+                          <TouchableOpacity
+                            key={`locked-${desc.slotNumber}`}
+                            testID={`preview-slot-locked-${desc.slotNumber}`}
+                            onPress={() => setActiveTab('loadout')}
+                            hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+                            style={[st.slot, st.slotSmall, st.slotLockedGhost]}
+                            accessibilityLabel={`Locked weapon slot ${desc.slotNumber}: ${desc.tooltip}`}
+                          >
+                            <Icon name="lorc/padlock" size={10} color="#78716C" noShadow />
+                            <Text style={st.slotLockedLabelSmall}>{desc.badgeLabel}</Text>
+                          </TouchableOpacity>
+                        );
+                      }
+                      const i = desc.index;
                       const id = charms[i];
                       const w = id ? getArmoryWeapon(id, builds) : undefined;
                       return w ? (
@@ -778,28 +837,18 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                   </View>
                 )}
 
-                {evolutionsOn && save.unlockedEvolutions.length > 0 && (() => {
-                  const armable = armed.length === 0 ? armableRecipesFromArmory(save) : [];
-                  const top = armable[0];
-                  return (
-                    <View style={{ gap: 6 }}>
+                {(beltSynergyLinks.length > 0 || (evolutionsOn && armedWeaponEvos.length > 0)) && (
+                  <View style={{ gap: 5 }}>
+                    {beltSynergyLinks.length > 0 && <SynergySummaryChips links={beltSynergyLinks} />}
+                    {evolutionsOn && (
                       <Text style={st.summaryEvo}>
-                        {armed.length > 0
-                          ? `${armed.length} evolution${armed.length === 1 ? '' : 's'} armed`
-                          : 'No evolution armed'}
+                        {armedWeaponEvos.length > 0
+                          ? `${armedWeaponEvos.length} weapon evolution${armedWeaponEvos.length === 1 ? '' : 's'} armed`
+                          : 'No evolution armed yet'}
                       </Text>
-                      {armed.length === 0 && top && onArmRecipe && (
-                        <Btn
-                          small
-                          testID="preview-arm-recipe"
-                          icon="lorc/fireball"
-                          label={`Arm ${top.known ? top.recipe.name : '??? Evolution'}`}
-                          onPress={() => onArmRecipe(top.recipe.id)}
-                        />
-                      )}
-                    </View>
-                  );
-                })()}
+                    )}
+                  </View>
+                )}
               </View>
             )}
           </>
@@ -862,11 +911,33 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                   </Text>
                 </View>
 
-                {/* Reorderable Weapon Belt */}
+                {/* Reorderable Weapon Belt + W1 / W2 / SHOP milestone ghost slots */}
                 <View style={st.slotRow} testID="preview-charm-slots">
-                  {Array.from({ length: slots }).map((_, i) => {
+                  {beltSlots.map(desc => {
+                    if (!desc.unlocked) {
+                      return (
+                        <TouchableOpacity
+                          key={`locked-${desc.slotNumber}`}
+                          testID={`preview-slot-locked-${desc.slotNumber}`}
+                          onPress={() => setLockedSlotTip(prev => (prev?.slotNumber === desc.slotNumber ? null : desc))}
+                          activeOpacity={0.85}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Locked weapon slot ${desc.slotNumber}: ${desc.tooltip}`}
+                          style={[
+                            st.slot,
+                            st.slotLockedGhost,
+                            lockedSlotTip?.slotNumber === desc.slotNumber && st.slotLockedGhostActive,
+                          ]}
+                        >
+                          <Icon name="lorc/padlock" size={12} color="#78716C" noShadow />
+                          <Text style={st.slotLockedLabel}>{desc.badgeLabel}</Text>
+                        </TouchableOpacity>
+                      );
+                    }
+                    const i = desc.index;
                     const id = charms[i];
                     const w = id ? getArmoryWeapon(id, builds) : undefined;
+                    const hasEvo = Boolean(id && (loadout.equippedEvolutions[id] ?? equippedEvolutionOf(save, id)));
                     const isSel = selectedSlot === i;
                     return w ? (
                       <View key={i} style={{ alignItems: 'center', gap: 2 }}>
@@ -874,6 +945,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                           testID={`preview-slot-${i}`}
                           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                           onPress={() => {
+                            setLockedSlotTip(null);
                             setFocusCharm(id);
                             if (selectedSlot === i) {
                               setSelectedSlot(null);
@@ -892,6 +964,11 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                           accessibilityLabel={`${w.name} in slot ${i + 1}`}
                         >
                           <WeaponAvatar weapon={w} size={26} />
+                          {hasEvo && (
+                            <View style={st.slotEvoDot}>
+                              <Icon name="lorc/crystal-shine" size={9} color="#7C3AED" noShadow />
+                            </View>
+                          )}
                         </TouchableOpacity>
                         {isSel && (
                           <View style={st.nudgeRow}>
@@ -923,6 +1000,27 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                     );
                   })}
                 </View>
+
+                {lockedSlotTip && (
+                  <View style={st.slotMilestoneTip} testID="preview-slot-milestone-tip">
+                    <Icon
+                      name={lockedSlotTip.lockKind === 'shop' ? 'lorc/gear-hammer' : 'lorc/belt-buckles'}
+                      size={14}
+                      color={INK}
+                      noShadow
+                    />
+                    <Text style={st.slotMilestoneText}>{lockedSlotTip.tooltip}</Text>
+                    {lockedSlotTip.lockKind === 'shop' && save.workshopUnlocked && onOpenCamp && (
+                      <TouchableOpacity
+                        testID="preview-slot-open-workshop"
+                        onPress={() => onOpenCamp('workshop')}
+                        style={st.slotMilestoneBtn}
+                      >
+                        <Text style={st.slotMilestoneBtnText}>Workshop ›</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
 
                 {understudyIdx === 0 && (
                   <View style={st.understudyWarn} testID="preview-understudy-warning">
@@ -1056,7 +1154,9 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                     const selected = charms.includes(id);
                     const blocked = !selected && charmsFull;
                     const wLevel = weaponLevel(save, id);
-                    const synergy = !selected ? charmSynergyWithEquipped(save, id) : null;
+                    const overlap = !selected && charms.length > 0 ? beltSynergyOverlap(id, charms) : [];
+                    const topMeta = overlap.length > 0 ? getSynergyAttrMeta(overlap[0]) : null;
+                    const evoUnlockedCount = unlockedEvolutionsForWeapon(save, id).length;
                     return (
                       <TouchableOpacity
                         key={id}
@@ -1076,10 +1176,22 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                         <View style={[st.kindDot, { backgroundColor: WEAPON_KINDS[weaponGuide(id).kind].color }]}>
                           <Text style={st.kindDotText}>{WEAPON_KINDS[weaponGuide(id).kind].label.toUpperCase()}</Text>
                         </View>
-                        {synergy && (
-                          <View style={st.fusesTag} testID={`preview-fuses-${id}`}>
-                            <Icon name="lorc/crystal-shine" size={11} color={COLORS.canvasWhite} />
-                            <Text style={st.fusesText}>FUSES</Text>
+                        {evoUnlockedCount > 0 && (
+                          <View style={st.evoPips}>
+                            {[0, 1, 2].map(pip => (
+                              <View key={pip} style={[st.evoPipDot, pip < evoUnlockedCount && st.evoPipDotOn]} />
+                            ))}
+                          </View>
+                        )}
+                        {topMeta && (
+                          <View
+                            style={[st.synergyTag, { backgroundColor: topMeta.paleBg, borderColor: topMeta.color }]}
+                            testID={`preview-synergy-${id}`}
+                          >
+                            <Icon name={topMeta.icon} size={10} color={topMeta.color} noShadow />
+                            <Text style={st.synergyTagText} numberOfLines={1}>
+                              {overlap.length > 1 ? `${topMeta.label} +${overlap.length - 1}` : topMeta.label}
+                            </Text>
                           </View>
                         )}
                       </TouchableOpacity>
@@ -1090,7 +1202,7 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                   <Text style={st.note}>Slots full. Tap an equipped weapon to swap it out.</Text>
                 )}
 
-                {/* [UI-20] Single focused WeaponExplainer (never stacks 6 explainers simultaneously) */}
+                {/* [UI-20] Single focused WeaponExplainer (with inline 1-of-3 Evolution selector) */}
                 {singleFocusedWeapon && (
                   <View style={{ gap: 6 }} testID="preview-charm-guide">
                     <WeaponExplainer
@@ -1098,6 +1210,15 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
                       weapon={singleFocusedWeapon}
                       build={builds[singleFocusedWeapon.id]}
                       badge={charms.includes(singleFocusedWeapon.id) ? 'Equipped' : charmsFull ? 'Slots full' : 'Not equipped'}
+                      evolutionMode={evolutionsOn || (save.unlockedWeaponEvolutions?.length ?? 0) > 0 ? 'select' : 'none'}
+                      showEvolutionsWhenClosed
+                      equippedEvolutionId={equippedEvolutionOf(save, singleFocusedWeapon.id)}
+                      unlockedEvolutionIds={unlockedEvolutionsForWeapon(save, singleFocusedWeapon.id)}
+                      beltSynergyIds={beltSynergyAttrSet(charms, singleFocusedWeapon.id)}
+                      evolutionLabTier={save.upgrades.evolution_lab ?? 0}
+                      saveContext={save}
+                      onSelectEvolution={handleSelectEvolution}
+                      onJumpToBounty={save.bountiesUnlocked ? onJumpToBounty : undefined}
                       defaultOpen={focusCharm === singleFocusedWeapon.id}
                     />
                   </View>
@@ -1105,44 +1226,49 @@ const SheetContent: React.FC<Props & { level: LevelDef; foeCue: number }> = ({
               </>
             )}
 
-            {/* Evolutions: which unlocked recipes the current weapons arm */}
-            {evolutionsOn && save.unlockedEvolutions.length > 0 && (
+            {/* Belt Synergy & Equipped Per-Weapon Evolutions summary strip */}
+            {(beltSynergyLinks.length > 0 || (evolutionsOn && (save.unlockedWeaponEvolutions?.length ?? 0) > 0)) && (
               <View style={st.evoBox} testID="preview-evolutions">
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Icon name="lorc/crystal-shine" size={16} color={TONE.combo} />
-                  <Text style={st.evoHintTitle}>
-                    {armed.length > 0 ? `${armed.length} evolution${armed.length === 1 ? '' : 's'} armed` : 'No evolution armed'}
-                  </Text>
-                </View>
-                {armed.map(r => {
-                  const known = save.unlockedEvolutions.includes(r.id) || save.discoveredEvolutions.includes(r.id);
-                  return <ArmedEvolutionRow key={r.id} recipe={r} known={known} testID={`preview-recipe-${r.id}`} />;
-                })}
-                {armed.length > 0 ? (
-                  <Text style={[st.evoHintSub, { fontSize: scaleText(11, textScale) }]} testID="preview-evo-likelihood">
-                    {Math.round(loadout.evolutionLikelihood)}% chance for a Catalyst on new cards · {Number.isFinite(loadout.evolutionCap) ? `up to ${loadout.evolutionCap} evolutions this fight` : 'as many evolutions as you like'}. Match the Catalyst to evolve for 30 s.
-                  </Text>
-                ) : (() => {
-                  const armable = armableRecipesFromArmory(save);
-                  if (armable.length === 0 || !onArmRecipe) return null;
-                  const top = armable[0];
-                  const w0 = getArmoryWeapon(top.pair[0]);
-                  const w1 = getArmoryWeapon(top.pair[1]);
-                  return (
-                    <View style={{ gap: 6 }}>
-                      <Text style={st.evoHintSub}>
-                        Equip {w0?.name ?? top.pair[0]} + {w1?.name ?? top.pair[1]} to arm {top.known ? top.recipe.name : '??? Evolution'}.
-                      </Text>
-                      <Btn
-                        small
-                        testID="preview-arm-recipe"
-                        icon="lorc/fireball"
-                        label={`Arm ${top.known ? top.recipe.name : '??? Evolution'}`}
-                        onPress={() => onArmRecipe(top.recipe.id)}
-                      />
+                {beltSynergyLinks.length > 0 && (
+                  <View style={{ gap: 5 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Icon name="lorc/linked-rings" size={14} color="#0F766E" noShadow />
+                      <Text style={st.evoHintTitle}>BELT SYNERGY LINKS</Text>
                     </View>
-                  );
-                })()}
+                    <SynergySummaryChips links={beltSynergyLinks} />
+                  </View>
+                )}
+                {evolutionsOn && (save.unlockedWeaponEvolutions?.length ?? 0) > 0 && (
+                  <View style={{ gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Icon name="lorc/crystal-shine" size={15} color={TONE.combo} noShadow />
+                      <Text style={st.evoHintTitle}>
+                        {armedWeaponEvos.length > 0
+                          ? `${armedWeaponEvos.length} armed evolution${armedWeaponEvos.length === 1 ? '' : 's'} (tap to switch)`
+                          : 'No evolution armed on current belt'}
+                      </Text>
+                    </View>
+                    {armedWeaponEvos.length > 0 ? (
+                      <View style={st.armedEvoStrip}>
+                        {armedWeaponEvos.map(({ weapon, evolution }) => (
+                          <WeaponEvolutionChip
+                            key={evolution.id}
+                            weapon={weapon}
+                            evolution={evolution}
+                            labTier={loadout.evolutionLabTier}
+                            colorblind={colorblind}
+                            onPress={() => setFocusCharm(weapon.id)}
+                            testID={`preview-evo-${evolution.id}`}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={[st.evoHintSub, { fontSize: scaleText(11, textScale) }]}>
+                        Equip a weapon with an unlocked Evolution, or complete Weapon Bounties at Camp.
+                      </Text>
+                    )}
+                  </View>
+                )}
               </View>
             )}
 
@@ -1363,7 +1489,22 @@ const st = StyleSheet.create({
   evoName: { fontSize: 12, fontWeight: '900', color: INK },
   passiveIcons: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   slotRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: TONE.spentEdge, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
+  slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: TONE.spentEdge, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige, position: 'relative' },
+  slotLockedGhost: { backgroundColor: '#EFEAE2', borderColor: '#B8B0A4', gap: 1 },
+  slotLockedGhostActive: { borderColor: '#D97706', backgroundColor: '#FFFBEB' },
+  slotLockedLabel: { fontSize: 8.5, fontWeight: '900', color: '#78716C', letterSpacing: 0.3 },
+  slotLockedLabelSmall: { fontSize: 7.5, fontWeight: '900', color: '#78716C' },
+  slotEvoDot: { position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: 7, backgroundColor: '#F3E8FF', borderWidth: 1.5, borderColor: INK, alignItems: 'center', justifyContent: 'center' },
+  slotMilestoneTip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 9, paddingVertical: 6 },
+  slotMilestoneText: { flex: 1, flexShrink: 1, fontSize: 11, fontWeight: '800', color: INK },
+  slotMilestoneBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 7, paddingVertical: 4 },
+  slotMilestoneBtnText: { fontSize: 11, fontWeight: '900', color: INK },
+  evoPips: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  evoPipDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#DDD6CA', borderWidth: 1, borderColor: '#A8A29E' },
+  evoPipDotOn: { backgroundColor: '#7C3AED', borderColor: INK },
+  synergyTag: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, borderWidth: 1, paddingHorizontal: 5, paddingVertical: 1, maxWidth: '100%' },
+  synergyTagText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: INK },
+  armedEvoStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   slotEmpty: { color: TONE.spent, fontWeight: '900', fontSize: 18 },
   evoHintTitle: { flexShrink: 1, fontSize: 12, fontWeight: '900', color: INK },
   evoHintSub: { fontSize: 11, color: INK, opacity: 0.85 },

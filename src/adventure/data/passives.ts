@@ -7,12 +7,12 @@ import type { PassiveDef, PassiveId } from '../types';
 
 export const PASSIVE_TUNING = {
   nine_lives: { 'nineLives.charges': 1, 'nineLives.waveShield': 1 },
-  scrappy: { 'scrappy.base': 1, 'scrappy.perHeart': 1.5 },
-  combo: { 'combo.windowMs': 4800, 'combo.max': 4, 'combo.perStep': 1 },
-  hot_streak: { 'hotStreak.multiplier': 2 },
-  grudge: { 'grudge.max': 4, 'grudge.damage': 3 },
+  scrappy: { 'scrappy.base': 2, 'scrappy.perHeart': 3 },
+  combo: { 'combo.windowMs': 4800, 'combo.max': 4, 'combo.perStep': 2 },
+  hot_streak: { 'hotStreak.multiplier': 1.35, 'hotStreak.damage': 10 },
+  grudge: { 'grudge.max': 4, 'grudge.damage': 6 },
   thick_hide: { 'thickHide.perWave': 1 },
-  patience: { 'patience.msPerTrait': 2500, 'patience.damage': 2 },
+  patience: { 'patience.msPerTrait': 2500, 'patience.damage': 5 },
   deep_freeze: { 'deepFreeze.ms': 4000 },
   zoomies: { 'zoomies.every': 5, 'zoomies.powerCards': 0 },
   fetch: { 'fetch.count': 1 },
@@ -54,7 +54,13 @@ const TEXT: Record<PassiveId, (t: Tuning) => string> = {
   },
   combo: t =>
     `Sets within ${secs(t['combo.windowMs'])} chain (a little longer with 4 or 5 traits): +${t['combo.perStep']} damage per step (max +${t['combo.max'] * t['combo.perStep']}). A mistake breaks it.`,
-  hot_streak: t => `At max Combo, your next Set deals ×${t['hotStreak.multiplier']}.`,
+  hot_streak: t => {
+    const dmg = t['hotStreak.damage'] ?? 0;
+    const mult = Math.round((t['hotStreak.multiplier'] ?? 1.35) * 100) / 100;
+    return dmg > 0
+      ? `At max Combo, your next Set deals +${dmg} base damage and ×${mult}.`
+      : `At max Combo, your next Set deals ×${mult}.`;
+  },
   grudge: t =>
     `Each mistake stores a grudge (max ${t['grudge.max']}). Your next Set releases +${t['grudge.damage']} damage per grudge.`,
   thick_hide: t => {

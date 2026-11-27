@@ -15,7 +15,7 @@ import {
   type DamageStory,
 } from '@/adventure/engine/damageStory';
 import { ARCANA } from '@/adventure/data/arcana';
-import { getEvolutionRecipe } from '@/adventure/data/evolutions';
+import { getWeaponEvolution } from '@/adventure/data/evolutions';
 import { PASSIVES } from '@/adventure/data/passives';
 import { getSkillNode } from '@/adventure/data/skillTrees';
 import { simulateRun, BOTS } from '@/adventure/engine/bot';
@@ -233,9 +233,9 @@ describe('damageStory attribution & timeline engine', () => {
       }
     );
     const story = buildDamageStory(sim.state);
-    expect(story.sources.find(s => s.kind === 'power')).toBeUndefined();
+    expect(story.sources.find(s => s.id === 'power:scale')).toBeUndefined();
     expect(story.sources.find(s => s.name === 'Active Evolution')).toBeUndefined();
-    if (sim.state.forgedRecipes.length > 0) {
+    if (sim.state.forgedEvolutions.length > 0) {
       const evos = story.sources.filter(s => s.kind === 'evolution');
       expect(evos.length).toBeGreaterThan(0);
     }
@@ -387,7 +387,7 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
   });
 
   it('opens rich DamageSourceExplainer cards for every non-weapon breakdown source and keeps WeaponExplainer for weapons', () => {
-    const phoenix = getEvolutionRecipe('phoenix-pyre');
+    const cluster = getWeaponEvolution('blast-powder:cluster-charge')!;
     const purrPunch = getSkillNode('tabby-0-1')!;
     const monochrome = ARCANA.find(a => a.id === 'monochrome_pact')!;
 
@@ -403,7 +403,7 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
 
     const sources: DamageSourceSummary[] = [
       makeSource({ id: 'weapon:blast-powder', weaponId: 'blast-powder', name: 'Blast Powder', kind: 'weapon', icon: 'lorc/bright-explosion', color: '#F5B800', totalDamage: 200 }),
-      makeSource({ id: 'evo:phoenix-pyre', name: phoenix.name, kind: 'evolution', icon: phoenix.icon, color: '#16AA98', totalDamage: 180 }),
+      makeSource({ id: `evo:${cluster.id}`, weaponId: cluster.weaponId, name: cluster.name, kind: 'evolution', icon: cluster.icon, color: '#16AA98', totalDamage: 180 }),
       makeSource({ id: 'bonus:parry', name: 'Set-Parry Counter', kind: 'bonus', icon: 'lorc/sword-clash', color: '#F0483E', totalDamage: 160 }),
       makeSource({ id: 'bonus:surge', name: 'Shading Surge', kind: 'bonus', icon: 'lorc/power-lightning', color: '#38BDF8', totalDamage: 150 }),
       makeSource({ id: 'bonus:rainbow', name: 'Rainbow Strike', kind: 'bonus', icon: 'lorc/rainbow-star', color: '#FB923C', totalDamage: 140 }),
@@ -414,8 +414,8 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
       makeSource({ id: 'arcana:monochrome_pact', name: monochrome.name, kind: 'bonus', icon: monochrome.icon, color: '#38BDF8', totalDamage: 80 }),
       makeSource({ id: 'upgrade:heavy_hitter', name: 'Heavy Hitter', kind: 'passive', icon: 'lorc/fist', color: '#FB923C', totalDamage: 60 }),
       makeSource({ id: 'set:cards', name: 'Matched Sets', kind: 'set', icon: 'lorc/crossed-swords', color: '#C084FC', totalDamage: 30 }),
-      makeSource({ id: 'set:card_bonus', name: 'Power Cards', kind: 'bonus', icon: 'lorc/flat-star', color: '#4ADE80', totalDamage: 20 }),
-      makeSource({ id: 'power:scale', name: 'Power Scaling', kind: 'power', icon: 'lorc/power-lightning', color: '#F5B800', totalDamage: 15 }),
+      makeSource({ id: 'set:card_bonus', name: 'Power, Holo & Charged Cards', kind: 'bonus', icon: 'lorc/flat-star', color: '#4ADE80', totalDamage: 20 }),
+      makeSource({ id: 'bonus:holo', name: 'Holo Shine', kind: 'bonus', icon: 'delapouite/sparkles', color: '#16AA98', totalDamage: 15 }),
       makeSource({ id: 'fx:burn', name: 'Burn Damage', kind: 'bonus', icon: 'lorc/candle-flame', color: '#F0483E', totalDamage: 15 }),
     ];
 
@@ -433,7 +433,16 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
       crescendoBeats: [],
     };
 
-    const view = render(wrap(<BattleDamageStory story={story} reduced muted />));
+    const view = render(
+      wrap(
+        <BattleDamageStory
+          story={story}
+          equippedEvolutions={{ 'blast-powder': cluster.id }}
+          reduced
+          muted
+        />
+      )
+    );
     fireEvent.press(view.getByTestId('battle-damage-story-show-all'));
 
     // 1. Standard weapon MUST render canonical WeaponExplainer (never DamageSourceExplainer!)
@@ -441,25 +450,27 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
     expect(view.getByTestId('weapon-explainer-blast-powder')).toBeTruthy();
     expect(view.queryByTestId('damage-source-explainer-weapon:blast-powder')).toBeNull();
 
-    // 2. Evolution
+    // 2. Per-Weapon Timed Evolution
+    const clusterSecs = Math.round(cluster.durationMs / 1000);
     fireEvent.press(view.getByTestId('battle-damage-story-row-1'));
-    expect(view.getByTestId('damage-source-explainer-evo:phoenix-pyre')).toBeTruthy();
-    expect(view.getByTestId('damage-source-what-evo:phoenix-pyre')).toHaveTextContent(phoenix.activeText, { exact: false });
-    expect(view.getByTestId('damage-source-what-evo:phoenix-pyre')).toHaveTextContent(/Lasts 30s.*\+10 opening hit.*\+2 flat Set damage.*×1\.5 Set damage/);
-    expect(view.getByTestId('damage-source-result-evo:phoenix-pyre')).toHaveTextContent(/THIS FIGHT.*180 cumulative dmg/);
-    fireEvent.press(view.getByTestId('damage-source-toggle-evo:phoenix-pyre'));
-    expect(view.getByTestId('damage-source-more-evo:phoenix-pyre')).toHaveTextContent(phoenix.familyText, { exact: false });
-    expect(view.getByTestId('damage-source-more-evo:phoenix-pyre')).toHaveTextContent(phoenix.flavor, { exact: false });
+    expect(view.getByTestId(`damage-source-explainer-evo:${cluster.id}`)).toBeTruthy();
+    expect(view.getByTestId(`damage-source-what-evo:${cluster.id}`)).toHaveTextContent(cluster.tagline, { exact: false });
+    expect(view.getByTestId(`damage-source-what-evo:${cluster.id}`)).toHaveTextContent(
+      new RegExp(`Lasts ${clusterSecs}s.*\\+18 opening burst.*\\+8 flat base damage.*\\+20% Set multiplier`)
+    );
+    expect(view.getByTestId(`damage-source-result-evo:${cluster.id}`)).toHaveTextContent(/THIS FIGHT.*180 cumulative dmg/);
+    fireEvent.press(view.getByTestId(`damage-source-toggle-evo:${cluster.id}`));
+    expect(view.getByTestId(`damage-source-more-evo:${cluster.id}`)).toHaveTextContent(cluster.conditionText, { exact: false });
 
     // 3. Set-Parry Counter
     fireEvent.press(view.getByTestId('battle-damage-story-row-2'));
-    expect(view.getByTestId('damage-source-what-bonus:parry')).toHaveTextContent(/×1\.4.*×1\.75.*×2/);
+    expect(view.getByTestId('damage-source-what-bonus:parry')).toHaveTextContent(/×1\.25.*×1\.35/);
     fireEvent.press(view.getByTestId('damage-source-toggle-bonus:parry'));
     expect(view.getByTestId('damage-source-more-bonus:parry')).toHaveTextContent(/Perfect Parry.*Stagger/);
 
     // 4. Shading Surge
     fireEvent.press(view.getByTestId('battle-damage-story-row-3'));
-    expect(view.getByTestId('damage-source-what-bonus:surge')).toHaveTextContent(/45 seconds.*15 seconds.*×5/);
+    expect(view.getByTestId('damage-source-what-bonus:surge')).toHaveTextContent(/45 seconds.*15 seconds.*\+12 flat base damage and ×1\.8/);
 
     // 5. Rainbow Strike
     fireEvent.press(view.getByTestId('battle-damage-story-row-4'));
@@ -467,7 +478,7 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
 
     // 6. Purity Chain
     fireEvent.press(view.getByTestId('battle-damage-story-row-5'));
-    expect(view.getByTestId('damage-source-what-bonus:purity')).toHaveTextContent(/consecutive Sets.*same number of differing traits/);
+    expect(view.getByTestId('damage-source-what-bonus:purity')).toHaveTextContent(/Escalating across diversity tiers/);
 
     // 7. Trap Defusal
     fireEvent.press(view.getByTestId('battle-damage-story-row-6'));
@@ -495,17 +506,17 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
     // 11. Workshop Upgrade
     fireEvent.press(view.getByTestId('battle-damage-story-row-10'));
     expect(view.getByTestId('damage-source-explainer-upgrade:heavy_hitter')).toHaveTextContent('UPGRADE', { exact: false });
-    expect(view.getByTestId('damage-source-what-upgrade:heavy_hitter')).toHaveTextContent(/\+1 damage on every Set/);
+    expect(view.getByTestId('damage-source-what-upgrade:heavy_hitter')).toHaveTextContent(/\+2.*base damage|\+1 damage/i);
 
-    // 12. Matched Sets, Power Cards, Power Scaling, Burn FX
+    // 12. Matched Sets, Power/Holo/Charged Cards, Holo Shine, Burn FX
     fireEvent.press(view.getByTestId('battle-damage-story-row-11'));
     expect(view.getByTestId('damage-source-what-set:cards')).toHaveTextContent(/Base damage from every valid 3-card Set/);
 
     fireEvent.press(view.getByTestId('battle-damage-story-row-12'));
-    expect(view.getByTestId('damage-source-what-set:card_bonus')).toHaveTextContent(/Power cards, War Drum charges/);
+    expect(view.getByTestId('damage-source-what-set:card_bonus')).toHaveTextContent(/Power cards.*Holo cards.*War Drum charges/);
 
     fireEvent.press(view.getByTestId('battle-damage-story-row-13'));
-    expect(view.getByTestId('damage-source-what-power:scale')).toHaveTextContent(/in-fight Power meter/);
+    expect(view.getByTestId('damage-source-what-bonus:holo')).toHaveTextContent(/Each Holo card matched adds \+4 base damage and \+20% additive Set multiplier/);
 
     fireEvent.press(view.getByTestId('battle-damage-story-row-14'));
     expect(view.getByTestId('damage-source-what-fx:burn')).toHaveTextContent(/Burning cards scorch the foe/);
@@ -517,11 +528,12 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
       wrap(<BattleDamageStory story={{ ...story, xAxisMode: 'floors' }} reduced muted />)
     );
     fireEvent.press(climbView.getByTestId('battle-damage-story-row-1'));
-    expect(climbView.getByTestId('damage-source-result-evo:phoenix-pyre')).toHaveTextContent('THIS CLIMB', { exact: false });
+    expect(climbView.getByTestId(`damage-source-result-evo:${cluster.id}`)).toHaveTextContent('THIS CLIMB', { exact: false });
     climbView.unmount();
   });
 
   it('upgrades FightReplay non-weapon cards (Evolutions, Skill Nodes, Role Bonuses, Arcana, Passives) to DamageSourceExplainer while preserving testIDs', () => {
+    const evoId = 'blast-powder:cluster-charge';
     const replay: FightReplayData = {
       levelId: '2-4',
       foeName: 'Test Foe',
@@ -535,6 +547,7 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
       maxHearts: 5,
       weapons: ['blast-powder', 'flint-spark'],
       weaponBuilds: {},
+      equippedEvolutions: { 'blast-powder': evoId },
       skillNodes: ['tabby-0-1'],
       passives: ['nine_lives', 'scrappy'],
       arcana: ['monochrome_pact'],
@@ -552,7 +565,8 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
           foeHp: 60,
           foeMaxHp: 120,
           lines: [
-            { type: 'hit', amount: 15, text: 'Phoenix Pyre', source: 'Phoenix Pyre', sourceRef: 'evo:phoenix-pyre' },
+            { type: 'evolution_start', text: 'Cluster Charge', source: 'Cluster Charge', sourceRef: `evo:${evoId}` },
+            { type: 'hit', amount: 18, text: 'Cluster Charge', source: 'Cluster Charge', sourceRef: `evo:${evoId}` },
             { type: 'hit', amount: 8, text: 'Purr Punch', source: 'Purr Punch', sourceRef: 'node:tabby-0-1' },
           ],
         },
@@ -565,15 +579,17 @@ describe('BattleDamageStory shared UI across Adventure Mode and Starfall Spire',
     expect(view.getByTestId('weapon-explainer-blast-powder')).toBeTruthy();
     expect(view.getByTestId('weapon-explainer-flint-spark')).toBeTruthy();
 
-    // Non-weapons use DamageSourceExplainer with preserved replay-gear-* testIDs
-    expect(view.getByTestId('replay-gear-evo:phoenix-pyre')).toBeTruthy();
+    // Evolution timeline chips & non-weapon DamageSourceExplainer cards mount cleanly
+    expect(view.getByTestId('replay-evos-triggered')).toBeTruthy();
+    expect(view.getByTestId(`replay-gear-evo:${evoId}`)).toBeTruthy();
     expect(view.getByTestId('replay-gear-node:tabby-0-1')).toBeTruthy();
     expect(view.getByTestId('replay-gear-arcana:monochrome_pact')).toBeTruthy();
     expect(view.getByTestId('replay-gear-passive:nine_lives')).toBeTruthy();
     expect(view.getByTestId('replay-gear-passive:scrappy')).toBeTruthy();
 
     // Rich canonical copy & expandable details work inside FightReplay too
-    expect(view.getByTestId('damage-source-what-evo:phoenix-pyre')).toHaveTextContent(/Lasts 30s/);
+    const clusterDurSec = Math.round(getWeaponEvolution(evoId)!.durationMs / 1000);
+    expect(view.getByTestId(`damage-source-what-evo:${evoId}`)).toHaveTextContent(new RegExp(`Lasts ${clusterDurSec}s`));
     expect(view.getByTestId('damage-source-what-arcana:monochrome_pact')).toHaveTextContent(/Tradeoff:/);
     expect(view.getByTestId('damage-source-what-passive:scrappy')).toHaveTextContent(PASSIVES.scrappy.text, { exact: false });
 

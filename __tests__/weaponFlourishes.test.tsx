@@ -1,15 +1,17 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import StageBackdrop, { BIOME_BACKDROP_ASSETS } from '@/adventure/components/StageBackdrop';
 import { EvolutionRing } from '@/adventure/components/RunFx';
-import PowerMeter from '@/adventure/components/PowerMeter';
 import StageBubble from '@/adventure/components/StageBubble';
 import TraitChecks from '@/adventure/components/TraitChecks';
+import { AnchorsProvider, GearBelt, useAnchors } from '@/adventure/fx';
+import { defaultEvolutionForWeapon, evolutionConditionShort, evolutionConditionText, evolutionShortVerb } from '@/adventure/data/evolutions';
 import { CARD_MOTION } from '@/components/CardMotion';
 import { WeaponAvatar, WEAPON_FLOURISH_CATEGORIES } from '@/components/weapons/WeaponAvatar';
 import { getWeaponTapStyle } from '@/components/weapons/WeaponArtwork';
 import type { BiomeId } from '@/adventure/types';
+import type { EvolutionLiveStateVM } from '@/adventure/ui/evolutionViewModel';
 import { ALL_ARMORY_WEAPON_IDS, armoryBaseWeapon } from '@/adventure/data/armory';
 import { SHAKE, geometricShakeKeyframes } from '@/utils/motion';
 
@@ -19,6 +21,16 @@ jest.mock('@/components/Icon', () => {
     return <RNText>{name}</RNText>;
   };
 });
+
+const BeltHarness: React.FC<{ evolutions: EvolutionLiveStateVM[] }> = ({ evolutions }) => {
+  const anchors = useAnchors();
+  const weapons = ['blast-powder', 'flint-spark', 'war-drum'].map(id => armoryBaseWeapon(id)!);
+  return (
+    <AnchorsProvider value={anchors}>
+      <GearBelt weapons={weapons} evolutions={evolutions} width={375} active effects onInspect={() => {}} />
+    </AnchorsProvider>
+  );
+};
 
 describe('Lane 3: Bespoke 8-Category Weapon Flourishes, Diorama Backdrops & HUD Motion', () => {
   const SAMPLE_BY_STYLE: Record<(typeof WEAPON_FLOURISH_CATEGORIES)[number], string> = {
@@ -83,7 +95,7 @@ describe('Lane 3: Bespoke 8-Category Weapon Flourishes, Diorama Backdrops & HUD 
     const compact = render(
       <EvolutionRing
         icon="lorc/crystal-shine"
-        name="Inferno Prism"
+        name="Cluster Charge"
         remainingMs={12000}
         durationMs={20000}
         active
@@ -101,7 +113,7 @@ describe('Lane 3: Bespoke 8-Category Weapon Flourishes, Diorama Backdrops & HUD 
     compact.rerender(
       <EvolutionRing
         icon="lorc/crystal-shine"
-        name="Inferno Prism"
+        name="Cluster Charge"
         remainingMs={4200}
         durationMs={20000}
         active
@@ -115,7 +127,7 @@ describe('Lane 3: Bespoke 8-Category Weapon Flourishes, Diorama Backdrops & HUD 
     const full = render(
       <EvolutionRing
         icon="lorc/crystal-shine"
-        name="Inferno Prism"
+        name="Cluster Charge"
         remainingMs={8000}
         durationMs={20000}
         active
@@ -127,7 +139,7 @@ describe('Lane 3: Bespoke 8-Category Weapon Flourishes, Diorama Backdrops & HUD 
     full.unmount();
   });
 
-  it('renders staggered TraitChecks cells, StageBubble, and PowerMeter cleanly', () => {
+  it('renders staggered TraitChecks cells, StageBubble, and GearBelt active/cooldown evolution HUD cleanly', () => {
     const traitView = render(
       <TraitChecks
         attributes={['color', 'shape', 'number']}
@@ -152,13 +164,56 @@ describe('Lane 3: Bespoke 8-Category Weapon Flourishes, Diorama Backdrops & HUD 
     expect(bubble.getByText('Pick 3 matching cards.')).toBeTruthy();
     bubble.unmount();
 
-    const power = render(<PowerMeter points={1.5} />);
-    expect(power.getByTestId('run-power')).toBeTruthy();
-    act(() => {
-      power.rerender(<PowerMeter points={3.0} />);
-    });
-    expect(power.getByTestId('run-power')).toBeTruthy();
-    power.unmount();
+    const evoBlast = defaultEvolutionForWeapon('blast-powder')!;
+    const evoFlint = defaultEvolutionForWeapon('flint-spark')!;
+    const belt = render(
+      <BeltHarness
+        evolutions={[
+          {
+            weaponId: 'blast-powder',
+            evolutionId: evoBlast.id,
+            evolutionName: evoBlast.name,
+            icon: evoBlast.icon,
+            accent: evoBlast.accent,
+            phase: 'active',
+            conditionShort: evolutionConditionShort(evoBlast),
+            conditionFull: evolutionConditionText(evoBlast),
+            effectText: evolutionShortVerb(evoBlast),
+            progress: 0,
+            target: 3,
+            almostReady: false,
+            activeRemainingMs: 14000,
+            activeDurationMs: evoBlast.durationMs,
+            cooldownRemainingMs: 0,
+            triggersThisFight: 1,
+          },
+          {
+            weaponId: 'flint-spark',
+            evolutionId: evoFlint.id,
+            evolutionName: evoFlint.name,
+            icon: evoFlint.icon,
+            accent: evoFlint.accent,
+            phase: 'cooldown',
+            conditionShort: evolutionConditionShort(evoFlint),
+            conditionFull: evolutionConditionText(evoFlint),
+            effectText: evolutionShortVerb(evoFlint),
+            progress: 0,
+            target: 3,
+            almostReady: false,
+            activeRemainingMs: 0,
+            activeDurationMs: evoFlint.durationMs,
+            cooldownRemainingMs: 2500,
+            triggersThisFight: 1,
+          },
+        ]}
+      />
+    );
+    expect(belt.getByTestId('belt-blast-powder')).toBeTruthy();
+    expect(belt.getByTestId('belt-evo-active-blast-powder')).toBeTruthy();
+    expect(belt.getByTestId('belt-evo-rail-blast-powder')).toBeTruthy();
+    expect(belt.getByTestId('belt-flint-spark')).toBeTruthy();
+    expect(belt.getByTestId('belt-evo-rail-flint-spark')).toBeTruthy();
+    belt.unmount();
   });
 
   it('derives CardMotion wrong-pick shake deterministically from geometricShakeKeyframes', () => {

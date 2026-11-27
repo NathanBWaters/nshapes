@@ -50,6 +50,7 @@ test.describe('Performance & Battery Budgets', () => {
     await page.getByTestId('preview-play').click();
 
     await expect(page.getByTestId('run-foe-hp')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('gear-belt')).toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(1600);
 
     const fgSnap = await page.evaluate(() => (window as any).__NSHAPES_PERF__.getSnapshot());

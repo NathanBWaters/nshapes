@@ -318,7 +318,7 @@ ORDER BY world ASC`
   {
     id: 'nshapes-meta-balance',
     name: 'NShapes · 3. Weapon, Fighter & Evolution Balance',
-    description: `Simpson’s-Paradox-adjusted weapon, fighter, evolution (within-Catalyst cohort), and Arcana balance strictly gated to ${CURRENT_BALANCE_ERA_ID} (v${ADVENTURE_MIN_VERSION}+, prod, clean hygiene).`,
+    description: `Simpson’s-Paradox-adjusted weapon, fighter, per-weapon evolution (within evolution-triggered cohort), and Arcana balance strictly gated to ${CURRENT_BALANCE_ERA_ID} (v${ADVENTURE_MIN_VERSION}+, prod, clean hygiene).`,
     tags: ['nshapes', 'game-analytics', 'balance', 'meta', CURRENT_BALANCE_ERA_ID],
     tiles: [
       hogqlTile(
@@ -344,6 +344,8 @@ SELECT
   round(avg(if(properties.outcome IN ('won', 'survived'), 1.0, 0.0) - lb.lvl_win_rate) * 100, 1) AS adj_win_delta_pct,
   round(avgIf(${SAFE_LOG_DPM} - lb.lvl_log_dpm, toFloat64OrZero(toString(properties.dpm)) > 0), 3) AS adj_log_dpm_delta,
   round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,
+  round(avg(toFloat64OrZero(toString(properties.peak_base_damage))), 1) AS avg_peak_base,
+  round(avg(toFloat64OrZero(toString(properties.synergy_score_total))), 1) AS avg_synergy,
   round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct
 FROM events
 LEFT JOIN level_baselines lb ON toString(properties.level_id) = lb.lvl
@@ -420,9 +422,9 @@ ORDER BY adj_win_delta_pct DESC`
       ),
       hogqlTile(
         'balance-evolutions',
-        `Evolutions · Within-Catalyst Level-Adjusted Impact (v${EVOLUTIONS_MIN_VERSION}+)`,
+        `Evolutions · Per-Weapon Timed Evolution Impact (v${EVOLUTIONS_MIN_VERSION}+)`,
         'balance',
-        `Survivorship-controlled evolution impact (benchmarked ONLY against fights that forged >=1 evolution) in ${CURRENT_BALANCE_ERA_ID} (v${EVOLUTIONS_MIN_VERSION}+).`,
+        `Survivorship-controlled per-weapon evolution impact (Evo A / B / C benchmarked strictly against fights that triggered >=1 evolution) in ${CURRENT_BALANCE_ERA_ID} (v${EVOLUTIONS_MIN_VERSION}+).`,
         `
 WITH evo_level_baselines AS (
   SELECT
@@ -435,21 +437,23 @@ WITH evo_level_baselines AS (
   GROUP BY lvl
 )
 SELECT
+  arrayElement(splitByChar(':', trim(BOTH '"' FROM raw_evo_id)), 1) AS weapon_id,
   trim(BOTH '"' FROM raw_evo_id) AS evolution_id,
-  count() AS times_forged,
+  count() AS times_triggered,
   uniqExact(distinct_id) AS players,
   round(countIf(properties.outcome IN ('won', 'survived')) / nullIf(count(), 0) * 100, 1) AS raw_win_pct,
   round(avg(if(properties.outcome IN ('won', 'survived'), 1.0, 0.0) - lb.lvl_win_rate) * 100, 1) AS adj_win_delta_pct,
   round(avgIf(${SAFE_LOG_DPM} - lb.lvl_log_dpm, toFloat64OrZero(toString(properties.dpm)) > 0), 3) AS adj_log_dpm_delta,
   round(avg(toFloat64OrZero(toString(properties.dpm))), 0) AS avg_dpm,
+  round(avg(toFloat64OrZero(toString(properties.peak_base_damage))), 1) AS avg_peak_base,
   round(countIf(properties.fun_rating = 'up') / nullIf(countIf(properties.fun_rating IN ('up', 'down')), 0) * 100, 1) AS fun_pct
 FROM events
 LEFT JOIN evo_level_baselines lb ON toString(properties.level_id) = lb.lvl
 ARRAY JOIN JSONExtractArrayRaw(coalesce(toString(properties.evolutions_forged), '[]')) AS raw_evo_id
 WHERE ${ADV_EVO_BALANCE_WHERE}
   AND toIntOrZero(toString(properties.evolutions)) > 0
-GROUP BY evolution_id
-ORDER BY adj_win_delta_pct DESC`
+GROUP BY weapon_id, evolution_id
+ORDER BY weapon_id ASC, adj_win_delta_pct DESC`
       ),
       hogqlTile(
         'balance-arcana',

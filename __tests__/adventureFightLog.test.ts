@@ -8,8 +8,7 @@ import { BOTS, simulateRun } from '@/adventure/engine/bot';
 import { barePlan, investedPlan } from '@/adventure/engine/botBuilds';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { LEVELS } from '@/adventure/data/levels';
-import { SURGE_RULES } from '@/adventure/data/rules';
-import { damageMultiplier } from '@/adventure/data/weaponPower';
+import { BASE_RULES, SURGE_RULES } from '@/adventure/data/rules';
 import { createNewSave } from '@/adventure/progress';
 import { describeLines, entrySummary, entryTitle, loggedCardPoints, setMathRows } from '@/adventure/components/fightReplayText';
 import type { FightLogCard, FightLogLine, FightLogSetMath, RunState } from '@/adventure/types';
@@ -95,8 +94,9 @@ describe('fight log', () => {
     expect(findSet(s)).toBeDefined();
   });
 
-  it('tracks Shading Surge and Power multipliers in Set math and replay text', () => {
+  it('tracks Shading Surge (+12 & ×1.8) and Holo (+4 & ×1.2) multipliers in Set math and replay text (zero Power)', () => {
     let surged = startFight({
+      save: { selectedFighter: 'Pelican' },
       level: testLevel({ foes: [{ name: 'Dummy', hp: 999 }], rules: { shadingSurge: true, timer: 300, boardSize: 15 } }),
       features: ['hearts'],
     });
@@ -106,47 +106,51 @@ describe('fight log', () => {
     const surgeEntry = surged.log[surged.log.length - 1];
     expect(surgeEntry.set?.surgeMultiplier).toBe(SURGE_RULES.multiplier);
     expect(surgeEntry.set?.hit).toBe(surgeEntry.setDamage);
+    expect(surgeEntry.set?.hit).toBe(Math.round((6 + SURGE_RULES.flatBonus) * SURGE_RULES.multiplier));
     const surgeRows = setMathRows(surgeEntry.set!);
-    const surgeMatches = surgeRows.filter(r => r.label === 'Shading Surge');
-    expect(surgeMatches).toHaveLength(1);
-    expect(surgeMatches[0].value).toBe(`×${SURGE_RULES.multiplier}`);
+    const surgeMultMatches = surgeRows.filter(r => r.label === 'Shading Surge' && r.value.startsWith('×'));
+    expect(surgeMultMatches).toHaveLength(1);
+    expect(surgeMultMatches[0].value).toBe(`×${SURGE_RULES.multiplier}`);
     expect(entrySummary(surgeEntry)).toContain(`Surge ×${SURGE_RULES.multiplier}`);
     for (const l of describeLines(surgeEntry.lines)) expect(l.label).toBeTruthy();
 
-    // Unified add-first math: flat bonuses sum with cards BEFORE Shading Surge ×5 (never duplicated!)
+    // Unified add-first math: flat bonuses (+4 Heavy Hitter + +12 Surge flat) sum with 6 base cards BEFORE ×1.8 Surge!
     let surgedFlat = startFight({
+      save: { selectedFighter: 'Pelican', upgrades: { heavy_hitter: 2 } },
       level: testLevel({ foes: [{ name: 'Dummy', hp: 999 }], rules: { shadingSurge: true, timer: 300, boardSize: 15 } }),
-      save: { upgrades: { heavy_hitter: 2 } },
       features: ['hearts'],
     });
     surgedFlat = tick(surgedFlat, SURGE_RULES.calmMs);
     surgedFlat = playSet(surgedFlat);
     const flatSurgeEntry = surgedFlat.log[surgedFlat.log.length - 1];
     const flatSurgeRows = setMathRows(flatSurgeEntry.set!);
-    expect(flatSurgeRows.filter(r => r.label === 'Shading Surge')).toHaveLength(1);
     const subtotalRow = flatSurgeRows.find(r => r.subtotal);
-    const surgeRowIdx = flatSurgeRows.findIndex(r => r.label === 'Shading Surge');
+    const surgeRowIdx = flatSurgeRows.findIndex(r => r.label === 'Shading Surge' && r.value.startsWith('×'));
     const subtotalIdx = flatSurgeRows.findIndex(r => r.subtotal);
-    expect(subtotalRow?.value).toBe('5'); // 3 base cards + 2 Heavy Hitter BEFORE ×5 Surge
+    expect(subtotalRow?.value).toBe(String(6 + 4 + SURGE_RULES.flatBonus)); // 6 base + 4 Heavy Hitter + 12 Surge = 22
     expect(surgeRowIdx).toBeGreaterThan(subtotalIdx);
-    expect(flatSurgeEntry.set?.hit).toBe(25); // 5 × 5 = 25
+    expect(flatSurgeEntry.set?.hit).toBe(Math.round(22 * SURGE_RULES.multiplier)); // 22 × 1.8 = 39.6 → 40
 
-    let powered = { ...startFight({ features: ALL_FEATURES }), power: 100 };
-    const expectedMult = damageMultiplier(100);
-    expect(expectedMult).toBeGreaterThan(1);
-    powered = playSet(powered);
-    const powerEntry = powered.log[powered.log.length - 1];
-    expect(powerEntry.set?.powerMultiplier).toBe(expectedMult);
-    expect(setMathRows(powerEntry.set!)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ label: 'Power', value: `×${Number.isInteger(expectedMult) ? expectedMult : expectedMult.toFixed(1)}`, isPower: true })])
-    );
+    // Holo card adds +4 base & ×1.2 multiplier (and zero global Power scaling)
+    let holoRun = startFight({ save: { selectedFighter: 'Pelican' }, features: ALL_FEATURES });
+    const set = findSet(holoRun)!;
+    holoRun = {
+      ...holoRun,
+      board: holoRun.board.map(c => (c.id === set[0].id ? { ...c, holo: true } : c)),
+    };
+    const matchCards = holoRun.board.filter(c => set.some(t => t.id === c.id));
+    holoRun = runReducer(holoRun, { type: 'MATCH', cards: matchCards, rewards: matchCards.map(baseCardReward) });
+    const holoEntry = holoRun.log[holoRun.log.length - 1];
+    expect(holoEntry.set?.holoMultiplier).toBe(1 + BASE_RULES.holoCardMult);
+    expect(entrySummary(holoEntry)).toContain('Holo ×1.2');
+    expect(holoEntry.set?.hit).toBe(Math.round((6 + BASE_RULES.holoCardBonus) * 1.2));
   });
 
   it('splits 3 matched cards from card bonuses and itemizes Greedy Chest, Magnet & Workshop bonuses', () => {
     const chest = getArmoryWeapon('greedy-chest')!;
     const magnet = getArmoryWeapon('magnet')!;
     let s = startFight({
-      save: { upgrades: { heavy_hitter: 2 } },
+      save: { selectedFighter: 'Pelican', upgrades: { heavy_hitter: 2 } },
       features: ALL_FEATURES,
     });
     s = withWeapons(s, chest, magnet);
@@ -168,20 +172,20 @@ describe('fight log', () => {
     const entry = s.log[s.log.length - 1];
 
     expect(entry.kind).toBe('set');
-    expect(entry.cards?.map(loggedCardPoints)).toEqual([3, 3, 1]);
+    expect(entry.cards?.map(loggedCardPoints)).toEqual([4, 4, 2]);
     expect(entry.cards?.[0].tags).toContain('Power +2');
     expect(entry.cards?.[2].tags).toContain('Magnet');
     expect(entry.set?.cardCount).toBe(3);
-    expect(entry.set?.baseCards).toBe(3);
+    expect(entry.set?.baseCards).toBe(6);
     expect(entry.set?.cardBonus).toBe(4);
     expect(entry.set?.cardBonusNote).toContain('2 Power cards (+4)');
 
     const rows = setMathRows(entry.set!, { lines: entry.lines, cards: entry.cards, held: ['greedy-chest', 'magnet'] });
     expect(rows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: '3 matched cards (1 dmg each)', value: '3' }),
+        expect.objectContaining({ label: '3 matched cards (2 dmg each)', value: '6' }),
         expect.objectContaining({ label: 'Bonus on those cards', value: '+4' }),
-        expect.objectContaining({ label: 'Heavy Hitter', value: '+2' }),
+        expect.objectContaining({ label: 'Heavy Hitter', value: '+4' }),
         expect.objectContaining({ label: 'Magnet', sourceRef: 'weapon:magnet' }),
       ])
     );
@@ -190,21 +194,20 @@ describe('fight log', () => {
     expect(postLines.some(l => l.label === 'Magnet!')).toBe(false);
   });
 
-  it('reconstructs itemized card bonus, Greedy Chest, and Magnet for v0.1.118 saved logs', () => {
+  it('reconstructs itemized card bonus, Greedy Chest, and Magnet for compact saved logs', () => {
     const legacyCards: FightLogCard[] = [
       { shape: 'oval', color: 'red', number: 1, shading: 'solid', tags: ['+2 dmg'] },
       { shape: 'oval', color: 'green', number: 2, shading: 'solid', tags: ['+2 dmg'] },
       { shape: 'oval', color: 'purple', number: 3, shading: 'solid', tags: [] },
     ];
     const legacyMath: FightLogSetMath = {
-      cards: 7,
+      cards: 10,
       collateral: {},
       flatBonus: 16,
-      multiplier: 1,
+      multiplier: 1.5,
       rainbow: false,
       extra: 0,
-      powerMultiplier: 1.8,
-      hit: 41,
+      hit: 39,
       diffTraits: 2,
       graceUsed: false,
       sinceLastMs: 5800,
@@ -213,25 +216,25 @@ describe('fight log', () => {
     const legacyLines: FightLogLine[] = [
       { type: 'rule', amount: 10, text: 'Greedy Chest!', source: 'Greedy Chest', sourceRef: 'weapon:greedy-chest' },
       { type: 'rule', amount: 6, text: 'Magnet!', source: 'Magnet', sourceRef: 'weapon:magnet' },
-      { type: 'power_up', text: 'its floor rises by 1', source: 'Greedy Chest', sourceRef: 'weapon:greedy-chest' },
+      { type: 'power_up', text: 'its floor rises by 2', source: 'Greedy Chest', sourceRef: 'weapon:greedy-chest' },
     ];
 
     const rows = setMathRows(legacyMath, { lines: legacyLines, cards: legacyCards, held: ['greedy-chest', 'magnet'] });
     expect(rows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ label: '3 matched cards (1 dmg each)', value: '3' }),
+        expect.objectContaining({ label: '3 matched cards (2 dmg each)', value: '6' }),
         expect.objectContaining({ label: 'Bonus on those cards', value: '+4' }),
         expect.objectContaining({ label: 'Greedy Chest', value: '+10', sourceRef: 'weapon:greedy-chest' }),
         expect.objectContaining({ label: 'Magnet', value: '+6', sourceRef: 'weapon:magnet' }),
-        expect.objectContaining({ label: 'Subtotal before multipliers', value: '23', subtotal: true }),
-        expect.objectContaining({ label: 'Power', value: '×1.8', isPower: true }),
-        { label: 'Set hit', value: '41', total: true },
+        expect.objectContaining({ label: 'Base damage subtotal', value: '26', subtotal: true }),
+        expect.objectContaining({ label: 'Multiplier', value: '×1.5' }),
+        { label: 'Set hit', value: '39', total: true },
       ])
     );
 
     const postLines = describeLines(legacyLines, ['greedy-chest', 'magnet'], { excludeSetMathRules: true });
     expect(postLines.map(l => l.label)).toEqual([
-      'Weapon scaled up: its floor rises by 1',
+      'Weapon scaled up: its floor rises by 2',
     ]);
   });
 });

@@ -63,7 +63,7 @@ describe('balanceEras manifest & semver helpers', () => {
     expect(expectedAdvFloor).toBe(getMinValidVersion('all', undefined, 'adventure'));
     expect(isVersionAtLeast(currentMin, expectedAdvFloor)).toBe(true);
     expect(getMinValidVersion('weapons', 'blast-powder', 'adventure')).toBe(expectedAdvFloor);
-    expect(getMinValidVersion('evolutions', 'stockpile', 'adventure')).toBe(expectedAdvFloor);
+    expect(getMinValidVersion('evolutions', 'blast-powder:cluster-charge', 'adventure')).toBe(expectedAdvFloor);
 
     // Historical E8 was a global hard reset at 0.1.164
     const erasThroughE8 = BALANCE_ERAS.slice(0, 9); // E0..E8
@@ -155,7 +155,7 @@ describe('balanceEras manifest & semver helpers', () => {
   it('passes deterministic repo integrity check now and across future non-balance version bumps', () => {
     const fp = computeBalanceFingerprints(REPO_ROOT);
     expect(Object.keys(fp.items.weapons).length).toBe(64);
-    expect(Object.keys(fp.items.evolutions).length).toBe(208);
+    expect(Object.keys(fp.items.evolutions).length).toBe(192);
     expect(Object.keys(fp.items.fighters).length).toBe(6);
     expect(Object.keys(fp.items.arcana).length).toBe(8);
     expect(Object.keys(fp.items.levels).length).toBeGreaterThanOrEqual(55);

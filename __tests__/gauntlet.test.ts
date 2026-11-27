@@ -50,12 +50,12 @@ describe('gauntlet (6-Tier Multi-Difficulty Enemy Gauntlet)', () => {
     expect(lossMetrics.clearScore).toBeCloseTo(0.47, 4);
   });
 
-  it('runs a fast deterministic subset across all 6 canonical tiers (including partner weapons & Encore Mask fix)', () => {
+  it('runs a fast deterministic subset across all 6 canonical tiers (including partner weapons & per-weapon evolutions)', () => {
     const report = runGauntlet({
       humanBot: DEFAULT_CALIBRATED_HUMAN_BOT,
       weaponIds: ['blast-powder', 'mending-charm', 'understudy', 'encore-mask'],
       fighterNames: ['Orange Tabby', 'Sly Fox'],
-      evolutionIds: ['phoenix-pyre', 'standing-ovation'],
+      evolutionIds: ['blast-powder:cluster-charge', 'encore-mask:second-act'],
       weaponSeedsOverride: { T1: 1, T2: 1, T3: 1, T4: 1, T5: 1, T6: 1 },
       fighterSeedsOverride: { T1: 1, T2: 1, T3: 1, T4: 1, T5: 1, T6: 1 },
       evoSeedsOverride: { T3: 1, T4: 1, T5: 1 },
@@ -85,11 +85,18 @@ describe('gauntlet (6-Tier Multi-Difficulty Enemy Gauntlet)', () => {
     expect(Math.min(...report.fighters.map(f => f.humanMult))).toBeCloseTo(1.0, 4);
     expect(report.tiers[5].fighterStars).toBe(160);
 
-    // Evolutions: Encore Mask chassis-lift adjustment applied cleanly
+    // Evolutions: per-weapon timed evolutions evaluated cleanly (including partner-safe Encore Mask anchor)
     expect(report.evolutions).toHaveLength(2);
-    const ovation = report.evolutions.find(e => e.id === 'standing-ovation')!;
-    expect(ovation.hasEncoreFix).toBe(true);
-    expect(ovation.humanBotLift).toBeGreaterThan(0.5);
+    const cluster = report.evolutions.find(e => e.id === 'blast-powder:cluster-charge')!;
+    const secondAct = report.evolutions.find(e => e.id === 'encore-mask:second-act')!;
+    expect(cluster.weaponId).toBe('blast-powder');
+    expect(cluster.variantIndex).toBe(0);
+    expect(secondAct.weaponId).toBe('encore-mask');
+    expect(secondAct.variantIndex).toBe(0);
+    expect(Math.min(...report.evolutions.map(e => e.humanMult))).toBeCloseTo(1.0, 4);
+    expect(Math.min(...report.evolutions.map(e => e.avgMult))).toBeCloseTo(1.0, 4);
+    expect(secondAct.humanBotLift).toBeGreaterThan(0.5);
+    expect(cluster.avgTriggersPerFight).toBeGreaterThanOrEqual(0);
 
     // Markdown renders cleanly
     const md = renderGauntletMarkdown(report, { top: 4, bottom: 2 });

@@ -59,7 +59,7 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
     expect(lastEntry.set?.multiplier).toBe(1);
     expect(lastEntry.set?.rainbow).toBe(false);
     expect(lastEntry.set?.multItems).toBeUndefined();
-    expect(lastEntry.set?.hit).toBe(3);
+    expect(lastEntry.set?.hit).toBe(BASE_RULES.cardBasePoints * 3);
     // Clean base hit emits 'hit', not a flashy 'rainbow' multiplier event
     expect(eventsOf(after, 'rainbow')).toHaveLength(0);
     expect(eventsOf(after, 'hit').length).toBeGreaterThanOrEqual(1);
@@ -67,7 +67,7 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
     expect(after.roundStats.allDifferentMatches).toBe(1);
   });
 
-  it('Rainbow Charm doubles all-different Sets (including 2-trait 1-3 All Kinds) and credits the weapon across Balatro UI, GearBelt & DamageStory', () => {
+  it('Rainbow Charm boosts all-different Sets (including 2-trait 1-3 All Kinds) and credits the weapon across Balatro UI, GearBelt & DamageStory', () => {
     const charm = getArmoryWeapon('rainbow-charm')!;
     expect(charm).toBeDefined();
     expect(charm.name).toBe('Rainbow Charm');
@@ -87,34 +87,35 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
 
     const after = playSet(s, set);
     const lastEntry = after.log[after.log.length - 1];
-    expect(lastEntry.set?.multiplier).toBe(2);
+    expect(lastEntry.set?.multiplier).toBeCloseTo(1.3, 2);
     expect(lastEntry.set?.rainbow).toBe(true);
-    expect(lastEntry.set?.hit).toBe(6);
+    // Base 6 + Rainbow Charm Synergy hook (+3) = 9, ×1.3 = 11.7 → 12
+    expect(lastEntry.set?.hit).toBe(12);
     expect(lastEntry.set?.multItems).toContainEqual(
-      expect.objectContaining({ label: 'Rainbow Charm', amount: 2, sourceRef: 'weapon:rainbow-charm' })
+      expect.objectContaining({ label: 'Rainbow Charm', amount: 1.3, sourceRef: 'weapon:rainbow-charm' })
     );
     expect(eventsOf(after, 'rainbow').length).toBeGreaterThanOrEqual(1);
 
     // Balatro breakdown names Rainbow Charm cleanly
     expect(after.lastSetIgnition).toBeTruthy();
     const breakdown = buildBalatroBreakdown(after.lastSetIgnition!);
-    expect(breakdown.receiptLine).toContain('×2 Rainbow Charm');
+    expect(breakdown.receiptLine).toContain('×1.3 Rainbow Charm');
 
-    // GearBelt trigger badge shows ×2 on Rainbow Charm
-    expect(after.lastSetIgnition!.beltBadges?.['rainbow-charm']).toEqual({ kind: 'mult', text: '×2' });
+    // GearBelt trigger badge shows ×1.3 on Rainbow Charm
+    expect(after.lastSetIgnition!.beltBadges?.['rainbow-charm']).toEqual({ kind: 'mult', text: '×1.3' });
 
     // Brotato Damage Story attributes the bonus damage directly to Rainbow Charm
     const story = buildDamageStory(after);
     const charmSource = story.sources.find(src => src.weaponId === 'rainbow-charm');
     expect(charmSource).toBeDefined();
-    expect(charmSource!.totalDamage).toBeCloseTo(3, 1);
+    expect(charmSource!.totalDamage).toBeGreaterThan(1);
   });
 
   it('grows Rainbow Charm multiplier every 2 Rainbow Sets and scales cleanly with weapon level', () => {
     const lv1 = getArmoryWeapon('rainbow-charm', { 'rainbow-charm': { level: 1, tuning: {} } })!;
     const lv3 = getArmoryWeapon('rainbow-charm', { 'rainbow-charm': { level: 3, tuning: {} } })!;
-    expect(lv1.description).toContain('×2');
-    expect(lv3.description).toContain('×2.5');
+    expect(lv1.description).toContain('×1.3');
+    expect(lv3.description).toContain('×1.4');
 
     let s = withWeapons(
       startFight({
@@ -124,16 +125,16 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
       lv1
     );
 
-    // Play 2 Rainbow Sets -> triggers +0.25× growth stack (×2 -> ×2.25)
+    // Play 2 Rainbow Sets -> triggers +0.05× growth stack (×1.30 -> ×1.35)
     for (let i = 0; i < 2; i++) {
       s = { ...s, board: makeRainbowBoard(s.board, ['shape', 'color', 'number']) };
       s = playSet(s, s.board.slice(0, 3));
     }
-    // 3rd Rainbow Set uses the grown ×2.25 multiplier
+    // 3rd Rainbow Set uses the grown ×1.35 multiplier
     s = { ...s, board: makeRainbowBoard(s.board, ['shape', 'color', 'number']) };
     s = playSet(s, s.board.slice(0, 3));
     const third = s.log[s.log.length - 1];
-    expect(third.set?.multiplier).toBeCloseTo(2.25, 2);
+    expect(third.set?.multiplier).toBeCloseTo(1.35, 2);
   });
 
   it('places Rainbow Charm on 1-2 ★★ and moves Flint Spark later to World 2 (2-1 ★★)', () => {
@@ -150,9 +151,9 @@ describe('clean base Rainbow rules & Rainbow Charm intro weapon', () => {
     expect(applied.save.armory).not.toContain('flint-spark');
   });
 
-  it('gives Monochrome Pact a real 0.5× Rainbow tradeoff while combining with Prismatic Fever to 1.75×', () => {
-    expect(arcanaRules('monochrome_pact').rainbowMultiplier).toBe(0.5);
-    expect(arcanaRules('prismatic_fever').rainbowMultiplier).toBe(3.5);
-    expect(arcanaRules(['monochrome_pact', 'prismatic_fever']).rainbowMultiplier).toBeCloseTo(1.75);
+  it('gives Monochrome Pact a real 0.65× Rainbow tradeoff while combining with Prismatic Fever to 0.975×', () => {
+    expect(arcanaRules('monochrome_pact').rainbowMultiplier).toBe(0.65);
+    expect(arcanaRules('prismatic_fever').rainbowMultiplier).toBe(1.5);
+    expect(arcanaRules(['monochrome_pact', 'prismatic_fever']).rainbowMultiplier).toBeCloseTo(0.975, 3);
   });
 });

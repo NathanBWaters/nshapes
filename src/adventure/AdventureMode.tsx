@@ -29,10 +29,10 @@ import { MECHANICS } from './data/mechanics';
 import {
   applyLevelResult,
   applyRetreatResult,
-  armRecipePair,
   claimMapKey,
   equipArcana,
   equipCharm,
+  equipWeaponEvolution,
   getFrontierLevel,
   hasUnspentStars,
   isLevelUnlocked,
@@ -100,7 +100,7 @@ type Screen =
       funRating: FunRating | null;
       funTags: FunTag[];
     }
-  | { kind: 'camp'; tab?: CampTab; returnLevelId?: string }
+  | { kind: 'camp'; tab?: CampTab; returnLevelId?: string; highlightBountyId?: string }
   | { kind: 'guide' };
 
 /** Lessons still to play before a fight starts; the first one is on screen. */
@@ -478,16 +478,12 @@ const AdventureMode: React.FC<Props> = ({
   }, [setSave, remember]);
 
   /** [OB-13] Commit staged defeat telemetry and return fresh save/relief for `<250ms` in-place retry. */
-  const handleDefeatRetryStart = useCallback((level: LevelDef, opts?: { armRecipeId?: string }) => {
+  const handleDefeatRetryStart = useCallback((level: LevelDef) => {
     commitAdventureFight('defeat_retry');
-    let nextSave = saveRef.current;
-    if (opts?.armRecipeId) {
-      nextSave = armRecipePair(nextSave, opts.armRecipeId);
-      setSave(nextSave);
-    }
+    const nextSave = saveRef.current;
     const nextRelief = resolveRunReliefOptions(level, nextSave);
     return { save: nextSave, relief: nextRelief };
-  }, [setSave]);
+  }, []);
 
   // Dev: the results of a canned fight, through the same path as a real one (the save is not written)
   useEffect(() => {
@@ -713,7 +709,7 @@ const AdventureMode: React.FC<Props> = ({
         onShowDefeatBreakdown={(run, recorded) => {
           showResults(level, run, 0, recorded.result, recorded.bestDpm, recorded.fightId, recorded.recordAt);
         }}
-        onDefeatRetryStart={opts => handleDefeatRetryStart(level, opts)}
+        onDefeatRetryStart={() => handleDefeatRetryStart(level)}
         onDefeatCamp={tab => {
           commitAdventureFight('results_camp');
           setScreen({ kind: 'camp', tab, returnLevelId: level.id });
@@ -746,11 +742,6 @@ const AdventureMode: React.FC<Props> = ({
         onRateFun={handleResultsRateFun}
         onReplayOpened={() => markReplayOpened(screen.fightId)}
         onRetry={() => { commitAdventureFight('results_retry'); startRun(level, { isRetry: true }); }}
-        onArmRecipeAndRetry={recipeId => {
-          commitAdventureFight('results_retry');
-          setSave(s => armRecipePair(s, recipeId));
-          startRun(level, { isRetry: true });
-        }}
         onWatchEnding={level.id === '5-5' ? () => setOverlay({ kind: 'ending' }) : undefined}
         onNext={() => {
           commitAdventureFight('results_next');
@@ -794,6 +785,7 @@ const AdventureMode: React.FC<Props> = ({
         save={save}
         history={history}
         initialTab={screen.tab}
+        initialBountyId={screen.highlightBountyId}
         returnLevel={returnLevel}
         onReturnToLevel={lvl => {
           sfx('confirm');
@@ -851,7 +843,12 @@ const AdventureMode: React.FC<Props> = ({
           onPlay={handlePlay}
           onSelectFighter={f => { sfx('click'); setSave(s => ({ ...s, selectedFighter: f })); }}
           onSelectCharm={id => { sfx('click'); setSave(s => toggleCharm(s, id)); }}
-          onArmRecipe={recipeId => { sfx('confirm'); setSave(s => armRecipePair(s, recipeId)); }}
+          onSelectEvolution={(weaponId, evoId) => { setSave(s => equipWeaponEvolution(s, weaponId, evoId)); }}
+          onJumpToBounty={bountyId => {
+            const returnLevelId = previewLevel?.id;
+            setPreviewExit('cut');
+            setScreen({ kind: 'camp', tab: 'bounties', returnLevelId, highlightBountyId: bountyId });
+          }}
           onSelectArcana={id => { sfx('click'); setSave(s => toggleArcana(s, id)); }}
           onToggleTailwind={active => { sfx('click'); setSave(s => setTailwindActive(s, active)); }}
           onSelectWager={tier => { sfx('click'); setSave(s => setCauldronWager(s, tier)); }}
@@ -913,35 +910,53 @@ const AdventureMode: React.FC<Props> = ({
           }
         />
       )}
-      {activeUnlocks.length > 0 && (
-        <UnlockReveal
-          unlocks={activeUnlocks}
-          save={save}
-          onUseFighter={name => setSave(s => ({ ...s, selectedFighter: name }))}
-          onEquipCharm={id => setSave(s => equipCharm(s, id))}
-          onSwapCharm={(replaceId, withId) => { sfx('confirm'); setSave(s => swapCharm(s, replaceId, withId)); }}
-          onEquipArcana={id => setSave(s => equipArcana(s, id))}
-          onOpenFeature={feature => {
-            const open = CAMPAIGN_FEATURES[feature].open;
-            if (open) {
-              let returnLevelId: string | undefined;
-              if (screen.kind === 'results') {
-                const lvl = getLevel(screen.levelId);
-                const nxt = MAIN_LEVELS[mainIndexOf(lvl) + 1] ?? null;
-                returnLevelId = nxt && isLevelUnlocked(save, nxt) ? nxt.id : screen.levelId;
-              }
-              setScreen(screenFor(open.destination, returnLevelId));
+      {activeUnlocks.length > 0 && (() => {
+        const unlockExtraProps = {
+          onEquipEvolution: (weaponId: string, evoId: string) => {
+            sfx('confirm');
+            setSave(s => equipWeaponEvolution(s, weaponId, evoId));
+          },
+          onOpenArmory: () => {
+            let returnLevelId: string | undefined;
+            if (screen.kind === 'results') {
+              const lvl = getLevel(screen.levelId);
+              const nxt = MAIN_LEVELS[mainIndexOf(lvl) + 1] ?? null;
+              returnLevelId = nxt && isLevelUnlocked(save, nxt) ? nxt.id : screen.levelId;
             }
-          }}
-          onShowPath={id => setScreen({ kind: 'map', highlight: id })}
-          onOpenSummit={onOpenSummit ? () => { clearPendingTimers(); music.stop(); onOpenSummit(); } : undefined}
-          onDone={() => {
-            const openEndingNext = overlay.kind === 'unlocks' && Boolean(overlay.pendingEnding);
-            setUnlocksRevealed(true);
-            setOverlay(openEndingNext ? { kind: 'ending' } : { kind: 'none' });
-          }}
-        />
-      )}
+            setScreen({ kind: 'camp', tab: 'armory', returnLevelId });
+          },
+        } as Record<string, unknown>;
+        return (
+          <UnlockReveal
+            unlocks={activeUnlocks}
+            save={save}
+            onUseFighter={name => setSave(s => ({ ...s, selectedFighter: name }))}
+            onEquipCharm={id => setSave(s => equipCharm(s, id))}
+            onSwapCharm={(replaceId, withId) => { sfx('confirm'); setSave(s => swapCharm(s, replaceId, withId)); }}
+            onEquipArcana={id => setSave(s => equipArcana(s, id))}
+            onOpenFeature={feature => {
+              const open = CAMPAIGN_FEATURES[feature].open;
+              if (open) {
+                let returnLevelId: string | undefined;
+                if (screen.kind === 'results') {
+                  const lvl = getLevel(screen.levelId);
+                  const nxt = MAIN_LEVELS[mainIndexOf(lvl) + 1] ?? null;
+                  returnLevelId = nxt && isLevelUnlocked(save, nxt) ? nxt.id : screen.levelId;
+                }
+                setScreen(screenFor(open.destination, returnLevelId));
+              }
+            }}
+            onShowPath={id => setScreen({ kind: 'map', highlight: id })}
+            onOpenSummit={onOpenSummit ? () => { clearPendingTimers(); music.stop(); onOpenSummit(); } : undefined}
+            onDone={() => {
+              const openEndingNext = overlay.kind === 'unlocks' && Boolean(overlay.pendingEnding);
+              setUnlocksRevealed(true);
+              setOverlay(openEndingNext ? { kind: 'ending' } : { kind: 'none' });
+            }}
+            {...unlockExtraProps}
+          />
+        );
+      })()}
       <FriendRescueModal
         keyDef={activeRescueKeyId ? getMapKey(activeRescueKeyId) ?? null : null}
         save={save}

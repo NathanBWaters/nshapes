@@ -9,10 +9,9 @@ import type { ArcanaId, FightLogEntry, LevelDef, PassiveId, RunState, RunStatus 
 import { getArmoryWeapon, resolveLegacyWeapon, understudyOf } from './data/armory';
 import { UNDERSTUDY_ID } from './data/adventureWeapons';
 import { growthStatBonus, type GrowthState } from './data/weaponGrowth';
-import { powerMultiplier } from './data/weaponPower';
 import type { WeaponBuilds } from './data/weaponStats';
 
-/** Snapshot of a finished fight used to render FightReplay after the RunState is gone (e.g. from Camp → History). */
+/** Snapshot of a finished fight used to render FightReplay after the RunState is gone (e.g. from Camp -> History). */
 export interface FightReplayData {
   levelId: string;
   foeName: string;
@@ -31,6 +30,13 @@ export interface FightReplayData {
   skillNodes: string[];
   passives?: PassiveId[];
   arcana?: ArcanaId[];
+  /** Equipped per-weapon evolution IDs active on the held weapons during this fight */
+  equippedEvolutions?: Record<string, string>;
+  /** Total per-weapon evolutions ignited during this fight */
+  evosTriggered?: number;
+  /** Peak pre-multiplier additive base damage hit in this fight */
+  peakBaseDamage?: number;
+  /** @deprecated Legacy Power snapshot retained read-only for older stored replays */
   power?: number;
   log: FightLogEntry[];
 }
@@ -62,7 +68,13 @@ export interface BattleRecord {
   evolutions: number;
   /** Ids of the weapons held when it ended */
   weapons: string[];
-  /** The Power multiplier reached (data/weaponPower.ts); missing on battles from before Power */
+  /** Equipped per-weapon evolution IDs on held weapons during this fight */
+  equippedEvolutions?: Record<string, string>;
+  /** Total per-weapon evolutions triggered during this fight (mirrors `evolutions`) */
+  evosTriggered?: number;
+  /** Peak pre-multiplier additive base damage hit in this fight */
+  peakBaseDamage?: number;
+  /** @deprecated Legacy Power multiplier; read-compatible with older stored battles, never written on new ones */
   power?: number;
   /** Stable id pairing this record with its single PostHog fight_ended event */
   fightId?: string;
@@ -92,28 +104,46 @@ const outcomeOf = (level: LevelDef, run: RunState, left: boolean): BattleOutcome
   return run.endReason === 'defeated' ? 'won' : 'survived';
 };
 
+const heldEquippedEvolutions = (run: RunState): Record<string, string> => {
+  const out: Record<string, string> = {};
+  const map = run.equippedEvolutions;
+  if (!map) return out;
+  for (const w of run.weapons) {
+    const evoId = map[w.id];
+    if (typeof evoId === 'string' && evoId.length > 0) out[w.id] = evoId;
+  }
+  return out;
+};
+
 /** Pack the parts of RunState that FightReplay needs into a JSON-safe snapshot. */
-export const fightReplayOf = (run: RunState): FightReplayData => ({
-  levelId: run.level.id,
-  foeName: run.foeName,
-  fighter: run.fighter,
-  status: run.status,
-  endReason: run.endReason,
-  ...(run.level.rules.sandbox ? { sandbox: true } : {}),
-  maxHearts: run.maxHearts,
-  totalDamage: run.totalDamage,
-  elapsedMs: run.elapsedMs,
-  matches: run.matches,
-  mistakes: run.mistakes,
-  weapons: run.weapons.map(w => w.id),
-  weaponBuilds: run.weaponBuilds,
-  ...(Object.keys(run.growth ?? {}).length > 0 ? { growth: run.growth } : {}),
-  skillNodes: run.skillNodes,
-  ...(run.passives.length > 0 ? { passives: run.passives } : {}),
-  ...(run.arcana.length > 0 ? { arcana: run.arcana } : {}),
-  ...(run.power ? { power: run.power } : {}),
-  log: run.log,
-});
+export const fightReplayOf = (run: RunState): FightReplayData => {
+  const equippedEvos = heldEquippedEvolutions(run);
+  const peakBaseDamage = run.fightMetrics?.maxBaseDamage ?? 0;
+  const evosTriggered = run.evolutionsTriggered ?? 0;
+  return {
+    levelId: run.level.id,
+    foeName: run.foeName,
+    fighter: run.fighter,
+    status: run.status,
+    endReason: run.endReason,
+    ...(run.level.rules.sandbox ? { sandbox: true } : {}),
+    maxHearts: run.maxHearts,
+    totalDamage: run.totalDamage,
+    elapsedMs: run.elapsedMs,
+    matches: run.matches,
+    mistakes: run.mistakes,
+    weapons: run.weapons.map(w => w.id),
+    weaponBuilds: run.weaponBuilds,
+    ...(Object.keys(run.growth ?? {}).length > 0 ? { growth: run.growth } : {}),
+    skillNodes: run.skillNodes,
+    ...(run.passives.length > 0 ? { passives: run.passives } : {}),
+    ...(run.arcana.length > 0 ? { arcana: run.arcana } : {}),
+    ...(Object.keys(equippedEvos).length > 0 ? { equippedEvolutions: equippedEvos } : {}),
+    ...(evosTriggered > 0 ? { evosTriggered } : {}),
+    ...(peakBaseDamage > 0 ? { peakBaseDamage } : {}),
+    log: run.log,
+  };
+};
 
 /** Reconstruct held Weapon objects from saved ids, Workshop builds, and in-fight growth. */
 export const buildReplayWeapons = (
@@ -141,27 +171,34 @@ export const battleRecord = (
   level: LevelDef,
   run: RunState,
   o: { at: number; stars?: number; coins?: number; left?: boolean; fightId?: string }
-): BattleRecord => ({
-  at: o.at,
-  levelId: level.id,
-  levelName: level.name,
-  foe: run.foeName,
-  fighter: run.fighter,
-  outcome: outcomeOf(level, run, !!o.left),
-  stars: o.stars ?? 0,
-  damage: run.totalDamage,
-  dpm: damagePerMinute(run),
-  biggestHit: run.biggestHit,
-  sets: run.matches,
-  mistakes: run.mistakes,
-  durationMs: run.elapsedMs,
-  coins: o.coins ?? 0,
-  evolutions: run.evolutionsTriggered,
-  weapons: run.weapons.map(w => w.id),
-  power: Math.round(powerMultiplier(run.power ?? 0) * 10) / 10,
-  ...(o.fightId ? { fightId: o.fightId } : {}),
-  ...(run.log.length > 1 ? { replay: fightReplayOf(run) } : {}),
-});
+): BattleRecord => {
+  const equippedEvos = heldEquippedEvolutions(run);
+  const peakBaseDamage = run.fightMetrics?.maxBaseDamage ?? 0;
+  const evosTriggered = run.evolutionsTriggered ?? 0;
+  return {
+    at: o.at,
+    levelId: level.id,
+    levelName: level.name,
+    foe: run.foeName,
+    fighter: run.fighter,
+    outcome: outcomeOf(level, run, !!o.left),
+    stars: o.stars ?? 0,
+    damage: run.totalDamage,
+    dpm: damagePerMinute(run),
+    biggestHit: run.biggestHit,
+    sets: run.matches,
+    mistakes: run.mistakes,
+    durationMs: run.elapsedMs,
+    coins: o.coins ?? 0,
+    evolutions: evosTriggered,
+    evosTriggered,
+    peakBaseDamage,
+    weapons: run.weapons.map(w => w.id),
+    ...(Object.keys(equippedEvos).length > 0 ? { equippedEvolutions: equippedEvos } : {}),
+    ...(o.fightId ? { fightId: o.fightId } : {}),
+    ...(run.log.length > 1 ? { replay: fightReplayOf(run) } : {}),
+  };
+};
 
 /** Strip full replay logs from battles older than the newest `keep` replays so storage stays small. */
 export const trimReplays = (records: readonly BattleRecord[], keep = REPLAY_LIMIT): BattleRecord[] => {
@@ -286,6 +323,19 @@ const isCoreRecord = (v: unknown): v is BattleRecord => {
 export const isBattleRecord = (v: unknown): v is BattleRecord =>
   isCoreRecord(v) && (v.replay === undefined || isFightReplayData(v.replay));
 
+const sanitizeStringMap = (raw: unknown): Record<string, string> | undefined => {
+  if (!isObj(raw)) return undefined;
+  const out: Record<string, string> = {};
+  let count = 0;
+  for (const [k, val] of Object.entries(raw)) {
+    if (typeof k === 'string' && k.length > 0 && typeof val === 'string' && val.length > 0) {
+      out[k] = val;
+      count++;
+    }
+  }
+  return count > 0 ? out : undefined;
+};
+
 /** Validate a stored record, stripping any corrupted `replay` snapshot without losing the summary entry. */
 export const sanitizeBattleRecord = (v: unknown): BattleRecord | null => {
   if (!isCoreRecord(v)) return null;
@@ -295,19 +345,30 @@ export const sanitizeBattleRecord = (v: unknown): BattleRecord | null => {
     const { replay: _drop, ...rest } = rec;
     clean = rest;
   }
-  const rawFun = (clean as unknown as Record<string, unknown>).funRating;
-  const rawTags = (clean as unknown as Record<string, unknown>).funTags;
-  const rawFightId = (clean as unknown as Record<string, unknown>).fightId;
-  if (rawFun !== undefined && rawFun !== 'up' && rawFun !== 'down') {
+  const raw = clean as unknown as Record<string, unknown>;
+  if (raw.funRating !== undefined && raw.funRating !== 'up' && raw.funRating !== 'down') {
     const { funRating: _dropFun, ...rest } = clean;
     clean = rest;
   }
-  if (rawTags !== undefined && (!Array.isArray(rawTags) || !rawTags.every(t => typeof t === 'string'))) {
+  if (raw.funTags !== undefined && (!Array.isArray(raw.funTags) || !raw.funTags.every(t => typeof t === 'string'))) {
     const { funTags: _dropTags, ...rest } = clean;
     clean = rest;
   }
-  if (rawFightId !== undefined && typeof rawFightId !== 'string') {
+  if (raw.fightId !== undefined && typeof raw.fightId !== 'string') {
     const { fightId: _dropId, ...rest } = clean;
+    clean = rest;
+  }
+  if (raw.equippedEvolutions !== undefined) {
+    const cleanedEvos = sanitizeStringMap(raw.equippedEvolutions);
+    const { equippedEvolutions: _dropEvos, ...rest } = clean;
+    clean = cleanedEvos ? { ...rest, equippedEvolutions: cleanedEvos } : rest;
+  }
+  if (raw.evosTriggered !== undefined && (typeof raw.evosTriggered !== 'number' || !Number.isFinite(raw.evosTriggered))) {
+    const { evosTriggered: _dropCount, ...rest } = clean;
+    clean = rest;
+  }
+  if (raw.peakBaseDamage !== undefined && (typeof raw.peakBaseDamage !== 'number' || !Number.isFinite(raw.peakBaseDamage))) {
+    const { peakBaseDamage: _dropBase, ...rest } = clean;
     clean = rest;
   }
   return clean;

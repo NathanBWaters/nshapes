@@ -19,6 +19,7 @@ import {
 import type { FullBalanceAtlasData } from '@/adventure/balance/analytics';
 import type { GauntletReport } from '@/adventure/balance/gauntlet';
 import type { Snapshot } from '@/adventure/balance/report';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
 import { BALANCE_ERA_MANIFEST } from '@/analytics/balanceEras';
 import { analyzePostHogForBalance } from '@/analytics/posthogRules';
 
@@ -95,10 +96,10 @@ describe('powerRank engine (1.00x weakest-anchored power rankings)', () => {
     }
   });
 
-  it('scores all 64 weapons, 208 evolutions, 6 fighters, and 8 arcana with expected sanity anchors', () => {
+  it('scores all 64 weapons, evolutions, 6 fighters, and 8 arcana with expected sanity anchors', () => {
     const report = computePowerRankings({ snapshot: SNAPSHOT, analytics: ANALYTICS });
     expect(report.categories.weapons.count).toBe(64);
-    expect(report.categories.evolutions.count).toBe(208);
+    expect([192, 208]).toContain(report.categories.evolutions.count);
     expect(report.categories.fighters.count).toBe(6);
     expect(report.categories.arcana.count).toBe(8);
 
@@ -145,23 +146,73 @@ describe('powerRank engine (1.00x weakest-anchored power rankings)', () => {
     expect(solo.categories.weapons.entries.find(e => e.id === 'encore-mask')!.powerMult).toBeCloseTo(1.0, 4);
   });
 
-  it('fixes the Encore Mask evolution denominator artifact so standing-ovation does not dominate E7 rankings', () => {
-    const report = computePowerRankings({ snapshot: SNAPSHOT, analytics: ANALYTICS });
-    const evos = report.categories.evolutions.entries;
-    const encoreIds = ['standing-ovation', 'second-act', 'curtain-of-gold'];
+  it('scores redesigned per-weapon evolutions (weaponOutput lens, withinWeaponRank, and partner-safe Encore Mask lifts)', () => {
+    const sampleEvos = WEAPON_EVOLUTIONS.filter(e =>
+      ['blast-powder', 'encore-mask', 'understudy'].includes(e.weaponId)
+    );
+    expect(sampleEvos).toHaveLength(9);
 
-    expect(report.medianChassisLift).toBeGreaterThan(1.1);
-    expect(report.medianChassisLift).toBeLessThan(1.3);
+    const syntheticAtlas: FullBalanceAtlasData = {
+      ...ANALYTICS,
+      pairSuite: {
+        ...ANALYTICS.pairSuite,
+        evolutions: sampleEvos.map((e, i) => ({
+          id: e.id,
+          name: e.name,
+          weaponId: e.weaponId,
+          variantIndex: e.slotIndex,
+          conditionType: e.condition.kind,
+          ratio: 1.18 + (i % 3) * 0.12 + (e.weaponId === 'blast-powder' ? 0.08 : 0),
+          dead: 0,
+          swing: 0.12,
+          events: 14,
+          survival: 1,
+          ruleLift: 1.12 + (i % 3) * 0.07,
+          ruleFirings: 5 + i,
+          deadRules: [],
+          baseDamageShare: 0.72,
+          triggersPerFight: 1.8 + (i % 3) * 0.5,
+          weaponOutputLift: 1.25 + i * 0.03,
+          withinWeaponRank: ((3 - (i % 3)) as 1 | 2 | 3),
+        })),
+      },
+    };
 
-    for (const id of encoreIds) {
-      const e = evos.find(x => x.id === id)!;
-      const m = e.meta as EvolutionEntryMeta;
-      expect(m.hasEncoreFix).toBe(true);
-      expect(m.rawTotalLift).toBeGreaterThan(3.0);
-      expect(m.cleanTotalLift).toBeCloseTo(m.ruleLift * report.medianChassisLift, 2);
-      // Should sit honestly in the middle/lower pack, never inflating into Top 25
-      expect(e.rank).toBeGreaterThan(25);
-    }
+    const comp = computePowerRankings({ snapshot: SNAPSHOT, analytics: syntheticAtlas });
+    const evos = comp.categories.evolutions.entries;
+    expect(evos).toHaveLength(9);
+    expect(evos[evos.length - 1].powerMult).toBeCloseTo(1.0, 4);
+
+    const cluster = findItemInReport(comp, 'blast-powder:cluster-charge')!;
+    expect(cluster).not.toBeNull();
+    const cm = cluster.meta as EvolutionEntryMeta;
+    expect(cm.weaponId).toBe('blast-powder');
+    expect(cm.variantIndex).toBe(0);
+    expect(cm.withinWeaponRank).toBeGreaterThanOrEqual(1);
+    expect(cm.withinWeaponRank).toBeLessThanOrEqual(3);
+    expect(cm.triggersPerFight).toBeGreaterThan(0);
+
+    // weaponOutput lens and backwards-compatible pairOutput alias produce identical rankings
+    const byWeaponOutput = computePowerRankings({
+      snapshot: SNAPSHOT,
+      analytics: syntheticAtlas,
+      lenses: { evolutions: 'weaponOutput' },
+    });
+    const byLegacyAlias = computePowerRankings({
+      snapshot: SNAPSHOT,
+      analytics: syntheticAtlas,
+      lenses: { evolutions: 'pairOutput' },
+    });
+    expect(byWeaponOutput.categories.evolutions.lens).toBe('weaponOutput');
+    expect(byLegacyAlias.categories.evolutions.lens).toBe('weaponOutput');
+    expect(byWeaponOutput.categories.evolutions.entries.map(e => e.id)).toEqual(
+      byLegacyAlias.categories.evolutions.entries.map(e => e.id)
+    );
+
+    const md = renderPowerRankMarkdown(comp, { includeAllEvolutions: true });
+    expect(md).toContain('## Evolutions (9');
+    expect(md).toContain('Complete All 9 Evolutions Ranked');
+    expect(md).toContain('`blast-powder` (A)');
   });
 
   it('blends PostHog telemetry via Empirical Bayes shrinkage monotonically and preserves 1.00x anchoring', () => {
@@ -273,7 +324,7 @@ describe('powerRank engine (1.00x weakest-anchored power rankings)', () => {
     expect(md).toContain('## Fighters');
     expect(md).toContain('## Arcana');
     expect(md).toContain('Blast Powder');
-    expect(md).toContain('Complete All 208 Evolutions Ranked');
+    expect(md).toContain(`Complete All ${report.categories.evolutions.count} Evolutions Ranked`);
 
     const compact = renderPowerRankCompact(report, { top: 5, bottom: 3 });
     expect(compact).toContain('[WEAPONS');

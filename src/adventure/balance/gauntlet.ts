@@ -1,9 +1,9 @@
 /**
  * 6-Encounter Multi-Difficulty Enemy Gauntlet Balance Bench.
  *
- * Tests all 64 Armory weapons, 6 Fighters, and 208 Evolutions against REAL
- * finite-HP enemies across 6 escalating combat tiers (reusing canonical
- * `getLevel`, `generateSpireEncounter`, `spireEncounterToLevel`, and
+ * Tests all 64 Armory weapons, 6 Fighters, and 192 Per-Weapon Timed Evolutions
+ * against REAL finite-HP enemies across 6 escalating combat tiers (reusing
+ * canonical `getLevel`, `generateSpireEncounter`, `spireEncounterToLevel`, and
  * `spireRunOverrides` — ZERO duplicated foe specs!) under BOTH:
  *  - `BOTS.average` (Uniform pace `[0.6, 1.4]`, zero droughts)
  *  - `calibrated_human` (PostHog-calibrated Lognormal droughts + cognitive load)
@@ -22,25 +22,24 @@ import {
   generateSpireEncounter,
 } from '@/spire/data/encounters';
 import {
+  ALL_EVOLUTION_IDS,
   SPIRE_FIGHT_FEATURES,
   spireEncounterToLevel,
   spireRunOverrides,
   spireRunToVirtualSave,
 } from '@/spire/engine/bridge';
 import { createSpireRun } from '@/spire/engine/runState';
-import type { AdventureSave, LevelDef, RunState } from '../types';
+import type { AdventureSave, EvolutionCondition, LevelDef, RunState } from '../types';
 import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '../data/armory';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { WEAPON_EVOLUTIONS, defaultEvolutionForWeapon } from '../data/evolutions';
 import { FIGHTERS } from '../data/fighters';
 import { getLevel } from '../data/levels';
-import { isPowerEnabled, setPowerEnabled } from '../data/weaponPower';
 import { weaponRole, type WeaponRole } from '../data/weaponRoles';
 import { MAX_TUNING_TIER, weaponStatLines } from '../data/weaponStats';
 import { BOTS, simulateRun, type BotProfile, type SimOptions } from '../engine/bot';
-import { armableRecipes, buyTree } from '../engine/botBuilds';
+import { buyTree } from '../engine/botBuilds';
 import { createRng } from '../engine/rng';
 import { createMaxedSave } from '../progress';
-import { normalizeRecipePair } from './lab';
 import { PARTNER_WEAPONS } from './targets';
 
 // ─── Public Types ────────────────────────────────────────────────────────────
@@ -50,6 +49,10 @@ export type GauntletTierId = 'T1' | 'T2' | 'T3' | 'T4' | 'T5' | 'T6';
 export const GAUNTLET_TIER_IDS: readonly GauntletTierId[] = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
 export const GAUNTLET_SPIRE_TIERS: readonly GauntletTierId[] = ['T3', 'T5'];
 export const GAUNTLET_EVO_TIERS: readonly GauntletTierId[] = ['T3', 'T4', 'T5'];
+
+const PARTNER_ANCHOR_WEAPON = 'blast-powder';
+const PARTNER_ANCHOR_EVO = 'blast-powder:cluster-charge';
+const SLOT_LABELS = ['A', 'B', 'C'] as const;
 
 export interface EncounterRunMetrics {
   clearScore: number;
@@ -77,7 +80,7 @@ export interface GauntletTierSpecSummary {
   encounters: { id: string; enemy: string; hp: number; ascension?: number }[];
   weaponLevel: number;
   tuned: boolean;
-  powerEnabled: boolean;
+  beltSlots: number;
   fighterStars: number;
   baseBeltSize: number;
   weaponSeedsPerSub: number;
@@ -118,8 +121,9 @@ export interface GauntletWeaponRow {
 export interface GauntletEvolutionRow {
   id: string;
   name: string;
-  pair: [string, string];
-  hasEncoreFix: boolean;
+  weaponId: string;
+  variantIndex: 0 | 1 | 2;
+  conditionType: EvolutionCondition['kind'];
   avgBotLift: number;
   humanBotLift: number;
   spireAvgLift: number;
@@ -129,8 +133,8 @@ export interface GauntletEvolutionRow {
   humanMult: number;
   spireMult: number;
   humanVsAvgRatio: number;
-  avgStartsPerFight: number;
-  humanStartsPerFight: number;
+  avgTriggersPerFight: number;
+  humanTriggersPerFight: number;
   avgWinDelta: number;
   humanWinDelta: number;
   byTier: Partial<Record<GauntletTierId, TierCounterfactualResult>>;
@@ -190,8 +194,6 @@ export interface GauntletReport {
     average: BotProfile;
     human: BotProfile;
   };
-  encoreChassisLiftAvg: number;
-  encoreChassisLiftHuman: number;
   tiers: GauntletTierSpecSummary[];
   weapons: GauntletWeaponRow[];
   evolutions: GauntletEvolutionRow[];
@@ -249,22 +251,10 @@ const geoMean = (xs: readonly number[]): number => {
   for (const x of xs) sum += Math.log(Math.max(1e-4, x));
   return Math.exp(sum / xs.length);
 };
-const median = (xs: readonly number[]): number => {
-  if (!xs.length) return 1;
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
-const withPower = <T,>(on: boolean, fn: () => T): T => {
-  const prev = isPowerEnabled();
-  setPowerEnabled(on);
-  try {
-    return fn();
-  } finally {
-    setPowerEnabled(prev);
-  }
-};
+const DEFAULT_EQUIPPED_EVOS: Readonly<Record<string, string>> = Object.fromEntries(
+  ALL_ARMORY_WEAPON_IDS.map(id => [id, defaultEvolutionForWeapon(id)?.id ?? '']).filter(([, evo]) => evo.length > 0)
+);
 
 /**
  * Smooth Encounter Clear Score for a single completed fight:
@@ -310,13 +300,13 @@ interface SubEncounterContext {
   enemyName: string;
   ascension?: number;
   level: LevelDef;
-  powerEnabled: boolean;
-  /** Build save + SimOptions for a given fighter, weapon belt, unlocked evolutions, and overrides. */
+  /** Build save + SimOptions for a given fighter, weapon belt, evolutions, and overrides. */
   buildRun: (params: {
     fighter: CharacterName;
     weapons: readonly string[];
     skillNodes: readonly string[];
-    unlockedEvolutions: readonly string[];
+    unlockedWeaponEvolutions: readonly string[];
+    equippedEvolutions: Readonly<Record<string, string>>;
     blankEvolutionRules?: boolean;
     extraEvoBonus?: boolean;
   }) => { level: LevelDef; save: AdventureSave; opts: SimOptions };
@@ -328,9 +318,9 @@ interface TierSpec {
   mode: 'adventure' | 'spire';
   weaponLevel: number;
   tuned: boolean;
-  powerEnabled: boolean;
+  beltSlots: number;
   fighterStars: number;
-  /** Default base belt without candidate weapon (slot 0 is always a real non-partner weapon; T2-T6 arm an evolution). */
+  /** Default base belt without candidate weapon (slot 0 is always a real non-partner weapon). */
   baseBelt: readonly string[];
   /** Fallback non-partner replacements used when the candidate weapon is already inside `baseBelt`. */
   backupWeapons: readonly string[];
@@ -342,16 +332,22 @@ interface TierSpec {
   subEncounters: SubEncounterContext[];
 }
 
-const gearCache = new Map<string, Pick<AdventureSave, 'armory' | 'stars' | 'completedBounties' | 'legacyWeaponTiers' | 'weaponTuning'>>();
+const gearCache = new Map<
+  string,
+  Pick<AdventureSave, 'armory' | 'stars' | 'completedBounties' | 'legacyWeaponTiers' | 'weaponTuning'>
+>();
 
-const getGearFields = (lv: number, tuned: boolean) => {
-  const key = `${lv}:${tuned ? 1 : 0}`;
+const getGearFields = (lv: number, tuned: boolean, beltSlots: number) => {
+  const key = `${lv}:${tuned ? 1 : 0}:${beltSlots}`;
   const hit = gearCache.get(key);
   if (hit) return hit;
   const armory = [...ALL_ARMORY_WEAPON_IDS];
+  const stars: Record<string, number> = {};
+  if (beltSlots >= 4) stars['1-10'] = 1;
+  if (beltSlots >= 5) stars['2-10'] = 1;
   const fields: Pick<AdventureSave, 'armory' | 'stars' | 'completedBounties' | 'legacyWeaponTiers' | 'weaponTuning'> = {
     armory,
-    stars: {},
+    stars,
     completedBounties: [],
     legacyWeaponTiers: Object.fromEntries(armory.map(id => [id, Math.max(0, lv - 1)])),
     weaponTuning: tuned
@@ -389,13 +385,13 @@ const makeAdvSubEncounter = (
   levelId: string,
   weaponLevel: number,
   tuned: boolean,
-  powerEnabled: boolean,
+  beltSlots: number,
   upgrades: Record<string, number>
 ): SubEncounterContext => {
   const level = getLevel(levelId);
   const foe = level.foes[0];
   const enemyName = foe.enemy ?? foe.name ?? level.name;
-  const gear = getGearFields(weaponLevel, tuned);
+  const gear = getGearFields(weaponLevel, tuned, beltSlots);
   const template = getBaseMaxed();
 
   return {
@@ -404,11 +400,12 @@ const makeAdvSubEncounter = (
     mode: 'adventure',
     enemyName,
     level,
-    powerEnabled,
-    buildRun: ({ fighter, weapons, skillNodes, unlockedEvolutions, blankEvolutionRules, extraEvoBonus }) => {
+    buildRun: ({ fighter, weapons, skillNodes, unlockedWeaponEvolutions, equippedEvolutions, blankEvolutionRules, extraEvoBonus }) => {
+      const baseUpgrades: Record<string, number> =
+        beltSlots >= 6 ? { charm_belt: 1, ...upgrades } : { ...upgrades };
       const effUpgrades = extraEvoBonus
-        ? { charm_belt: 3, ...upgrades, evolution_lab: Math.max(upgrades.evolution_lab ?? 0, 3) }
-        : { charm_belt: 3, ...upgrades };
+        ? { ...baseUpgrades, evolution_lab: Math.max(baseUpgrades.evolution_lab ?? 0, 2) }
+        : baseUpgrades;
       const save: AdventureSave = {
         ...template,
         ...gear,
@@ -417,14 +414,25 @@ const makeAdvSubEncounter = (
         upgrades: effUpgrades,
         skillNodes: skillNodes.length > 0 ? { [fighter]: [...skillNodes] } : {},
         charms: [...weapons],
-        unlockedEvolutions: [...unlockedEvolutions],
+        unlockedWeaponEvolutions: [...unlockedWeaponEvolutions],
+        equippedEvolutions: { ...equippedEvolutions },
         equippedArcana: [],
       };
+      const effLevel: LevelDef = extraEvoBonus
+        ? {
+            ...level,
+            rules: {
+              ...level.rules,
+              extraEvolutionDurationMs: (level.rules.extraEvolutionDurationMs ?? 0) + 4000,
+              extraEvolutionChargeBonus: (level.rules.extraEvolutionChargeBonus ?? 0) + 1,
+            },
+          }
+        : level;
       const opts: SimOptions = {
         skipPicks: true,
         ...(blankEvolutionRules ? { overrides: { blankEvolutionRules: true } } : {}),
       };
-      return { level, save, opts };
+      return { level: effLevel, save, opts };
     },
   };
 };
@@ -448,7 +456,6 @@ const makeSpireSubEncounter = (params: {
     id,
     excludeEnemies: new Set(excludeLevelIds.map(canonicalLevelEnemyName)),
   });
-  // Sample level for metadata display
   const refRun = createSpireRun('Orange Tabby', ascension, 101);
   const sampleLevel = spireEncounterToLevel({ ...refRun, act, floor: act * 7 }, enc);
 
@@ -459,8 +466,7 @@ const makeSpireSubEncounter = (params: {
     enemyName: enc.name,
     ascension,
     level: sampleLevel,
-    powerEnabled: false,
-    buildRun: ({ fighter, weapons, skillNodes, unlockedEvolutions, blankEvolutionRules, extraEvoBonus }) => {
+    buildRun: ({ fighter, weapons, skillNodes, unlockedWeaponEvolutions, equippedEvolutions, blankEvolutionRules, extraEvoBonus }) => {
       const baseRun = createSpireRun(fighter, ascension, 101 + act * 7);
       const run = {
         ...baseRun,
@@ -468,16 +474,23 @@ const makeSpireSubEncounter = (params: {
         floor: act * 7,
         weapons: [...weapons],
         weaponLevels: Object.fromEntries(weapons.map(w => [w, weaponLevel])),
+        equippedEvolutions: { ...equippedEvolutions },
         skillNodes: [...skillNodes],
         upgrades: extraEvoBonus
           ? { ...upgrades, evolution_lab: Math.max(upgrades.evolution_lab ?? 1, 2) }
           : { ...upgrades },
-        extraEvolutionLikelihood: extraEvoBonus ? 12 : baseRun.extraEvolutionLikelihood,
+        extraEvolutionDurationMs: extraEvoBonus
+          ? Math.max(baseRun.extraEvolutionDurationMs ?? 0, 4000)
+          : (baseRun.extraEvolutionDurationMs ?? 0),
+        extraEvolutionChargeBonus: extraEvoBonus
+          ? Math.max(baseRun.extraEvolutionChargeBonus ?? 0, 1)
+          : (baseRun.extraEvolutionChargeBonus ?? 0),
       };
       const level = spireEncounterToLevel(run, enc);
       const save: AdventureSave = {
         ...spireRunToVirtualSave(run),
-        unlockedEvolutions: [...unlockedEvolutions],
+        unlockedWeaponEvolutions: [...unlockedWeaponEvolutions],
+        equippedEvolutions: { ...equippedEvolutions },
       };
       const overrides = {
         ...spireRunOverrides(run),
@@ -507,11 +520,11 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
   return [
     {
       id: 'T1',
-      name: 'Warmup (Adv 1-10 Iron Shell)',
+      name: 'Warmup (Adv 1-10 Iron Shell · 3 slots)',
       mode: 'adventure',
       weaponLevel: 2,
       tuned: false,
-      powerEnabled: false,
+      beltSlots: 3,
       fighterStars: 15,
       baseBelt: ['flint-spark', 'mending-charm'],
       backupWeapons: ['war-drum', 'echo-stone'],
@@ -520,16 +533,16 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
       fighterSeedsPerSub: scaleSeeds(5, s, fOv.T1),
       evoSeedsPerSub: scaleSeeds(0, s, eOv.T1),
       subEncounters: [
-        makeAdvSubEncounter('T1', '1-10', 2, false, false, { heavy_hitter: 1, evolution_lab: 1 }),
+        makeAdvSubEncounter('T1', '1-10', 2, false, 3, { heavy_hitter: 1 }),
       ],
     },
     {
       id: 'T2',
-      name: 'Board Disruption (Adv 2-5 Greedy Squirrel & 2-6 Junk Rat)',
+      name: 'Board Disruption (Adv 2-5 Greedy Squirrel & 2-6 Junk Rat · 4 slots)',
       mode: 'adventure',
       weaponLevel: 2,
       tuned: false,
-      powerEnabled: false,
+      beltSlots: 4,
       fighterStars: 32,
       baseBelt: ['blast-powder', 'mending-charm'],
       backupWeapons: ['flint-spark', 'echo-stone'],
@@ -538,8 +551,8 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
       fighterSeedsPerSub: scaleSeeds(4, s, fOv.T2),
       evoSeedsPerSub: scaleSeeds(0, s, eOv.T2),
       subEncounters: [
-        makeAdvSubEncounter('T2', '2-5', 2, false, false, { heavy_hitter: 2, evolution_lab: 1 }),
-        makeAdvSubEncounter('T2', '2-6', 3, false, false, { heavy_hitter: 2, evolution_lab: 1 }),
+        makeAdvSubEncounter('T2', '2-5', 2, false, 4, { heavy_hitter: 1, evolution_lab: 1 }),
+        makeAdvSubEncounter('T2', '2-6', 3, false, 4, { heavy_hitter: 2, evolution_lab: 1 }),
       ],
     },
     {
@@ -548,7 +561,7 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
       mode: 'spire',
       weaponLevel: 3,
       tuned: false,
-      powerEnabled: false,
+      beltSlots: 4,
       fighterStars: 55,
       baseBelt: ['flint-spark', 'mending-charm', 'echo-stone'],
       backupWeapons: ['blast-powder', 'war-drum', 'rally-horn'],
@@ -570,11 +583,11 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
     },
     {
       id: 'T4',
-      name: 'Attrition & Hazard Barrage (Adv 4-6 Ticking Viper & 4-10 Feral Fangs)',
+      name: 'Attrition & Hazard Barrage (Adv 4-6 Ticking Viper & 4-10 Feral Fangs · 5 slots)',
       mode: 'adventure',
       weaponLevel: 4,
       tuned: false,
-      powerEnabled: true,
+      beltSlots: 5,
       fighterStars: 95,
       baseBelt: ['blast-powder', 'mending-charm', 'flint-spark', 'echo-stone'],
       backupWeapons: ['war-drum', 'rally-horn', 'time-drop', 'catalyst-prism'],
@@ -583,8 +596,8 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
       fighterSeedsPerSub: scaleSeeds(3, s, fOv.T4),
       evoSeedsPerSub: scaleSeeds(1, s, eOv.T4),
       subEncounters: [
-        makeAdvSubEncounter('T4', '4-6', 4, false, true, { heavy_hitter: 3, evolution_lab: 2, hourglass: 2, tough_hide: 2 }),
-        makeAdvSubEncounter('T4', '4-10', 4, false, true, { heavy_hitter: 3, evolution_lab: 2, hourglass: 2, tough_hide: 2 }),
+        makeAdvSubEncounter('T4', '4-6', 4, false, 5, { heavy_hitter: 2, evolution_lab: 2, hourglass: 2, tough_hide: 2 }),
+        makeAdvSubEncounter('T4', '4-10', 4, false, 5, { heavy_hitter: 2, evolution_lab: 2, hourglass: 2, tough_hide: 2 }),
       ],
     },
     {
@@ -593,7 +606,7 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
       mode: 'spire',
       weaponLevel: 4,
       tuned: false,
-      powerEnabled: false,
+      beltSlots: 6,
       fighterStars: 120,
       baseBelt: ['blast-powder', 'mending-charm', 'flint-spark', 'echo-stone'],
       backupWeapons: ['war-drum', 'rally-horn', 'catalyst-prism', 'time-drop'],
@@ -624,11 +637,11 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
     },
     {
       id: 'T6',
-      name: 'Campaign Finale (Adv 5-5 The Hydra)',
+      name: 'Campaign Finale (Adv 5-5 The Hydra · 6 slots)',
       mode: 'adventure',
       weaponLevel: 5,
       tuned: true,
-      powerEnabled: true,
+      beltSlots: 6,
       fighterStars: 160,
       baseBelt: ['blast-powder', 'mending-charm', 'flint-spark', 'echo-stone'],
       backupWeapons: ['war-drum', 'rally-horn', 'catalyst-prism', 'time-drop'],
@@ -637,11 +650,11 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
       fighterSeedsPerSub: scaleSeeds(3, s, fOv.T6),
       evoSeedsPerSub: scaleSeeds(0, s, eOv.T6),
       subEncounters: [
-        makeAdvSubEncounter('T6', '5-5', 5, true, true, {
-          heavy_hitter: 5,
-          evolution_lab: 3,
-          hourglass: 4,
-          tough_hide: 4,
+        makeAdvSubEncounter('T6', '5-5', 5, true, 6, {
+          heavy_hitter: 3,
+          evolution_lab: 2,
+          hourglass: 3,
+          tough_hide: 3,
           sharp_eyes: 3,
           second_wind: 3,
         }),
@@ -652,10 +665,9 @@ const buildGauntletTiers = (opts: GauntletOptions): TierSpec[] => {
 
 // ─── Batch Simulation Runner ─────────────────────────────────────────────────
 
-const ALL_EVO_IDS: readonly string[] = EVOLUTION_RECIPES.map(r => r.id);
-
 interface BatchAggregate extends EncounterRunMetrics {
   evolutions: number;
+  weaponEvos: Record<string, number>;
 }
 
 const runSubEncounterBatch = (
@@ -673,22 +685,27 @@ const runSubEncounterBatch = (
   let timeSum = 0;
   let heartSum = 0;
   let evoSum = 0;
+  const weaponEvosSum: Record<string, number> = {};
 
-  withPower(sub.powerEnabled, () => {
-    for (let i = 0; i < runs; i++) {
-      const { state } = simulateRun(level, save, bot, seedOf(i, salt), undefined, opts);
-      const m = computeClearScore(state, level);
-      clearSum += m.clearScore;
-      winSum += m.winRate;
-      survSum += m.survivalRate;
-      dmgSum += m.damageRatio;
-      timeSum += m.timeLeftShare;
-      heartSum += m.heartsLeftShare;
-      evoSum += state.evolutionsTriggered;
+  for (let i = 0; i < runs; i++) {
+    const { state } = simulateRun(level, save, bot, seedOf(i, salt), undefined, opts);
+    const m = computeClearScore(state, level);
+    clearSum += m.clearScore;
+    winSum += m.winRate;
+    survSum += m.survivalRate;
+    dmgSum += m.damageRatio;
+    timeSum += m.timeLeftShare;
+    heartSum += m.heartsLeftShare;
+    evoSum += state.evolutionsTriggered;
+    for (const [wId, cnt] of Object.entries(state.fightMetrics?.weaponEvos ?? {})) {
+      weaponEvosSum[wId] = (weaponEvosSum[wId] ?? 0) + cnt;
     }
-  });
+  }
 
   const denom = Math.max(1, runs);
+  const weaponEvos: Record<string, number> = {};
+  for (const [wId, total] of Object.entries(weaponEvosSum)) weaponEvos[wId] = total / denom;
+
   return {
     clearScore: clearSum / denom,
     winRate: winSum / denom,
@@ -697,6 +714,7 @@ const runSubEncounterBatch = (
     timeLeftShare: timeSum / denom,
     heartsLeftShare: heartSum / denom,
     evolutions: evoSum / denom,
+    weaponEvos,
   };
 };
 
@@ -704,7 +722,7 @@ const runSubEncounterBatch = (
  * Constructs a partner-safe `(withoutBelt, withBelt)` pair for weapon `candidateId`:
  * - `withoutBelt` never contains `candidateId` (swaps in a non-partner backup if needed).
  * - `withBelt` places `candidateId` in slot 1 (right after a real non-partner slot 0),
- *   so `understudy` always copies slot 0 and `encore-mask` benefits from the armed pair!
+ *   so `understudy` always copies slot 0 and `encore-mask` amplifies slot 0's evolutions!
  */
 const buildWeaponBelts = (
   baseBelt: readonly string[],
@@ -735,13 +753,9 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
 
   const weaponIds = opts.weaponIds ?? ALL_ARMORY_WEAPON_IDS;
   const fighterNames = opts.fighterNames ?? FIGHTERS.map(f => f.name);
-
-  // Build canonical recipe list from armableRecipes (same as lab.ts)
-  const allArmable = armableRecipes({ ...getBaseMaxed(), armory: [...ALL_ARMORY_WEAPON_IDS], unlockedEvolutions: [...ALL_EVO_IDS] });
-  const evoNameById = new Map(EVOLUTION_RECIPES.map(r => [r.id, r.name]));
-  const targetRecipes = opts.evolutionIds
-    ? allArmable.filter(r => opts.evolutionIds!.includes(r.id))
-    : allArmable;
+  const targetEvos = opts.evolutionIds
+    ? WEAPON_EVOLUTIONS.filter(e => opts.evolutionIds!.includes(e.id))
+    : WEAPON_EVOLUTIONS;
 
   // ── 1. WEAPONS (All 64 across T1..T6, both bots) ──────────────────────────
   log(`[gauntlet] Running ${weaponIds.length} weapons across 6 tiers (BOTS.average vs ${humanBot.name})...`);
@@ -757,11 +771,14 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
     const key = `${tier.id}|${sub.id}|${botKey}|${belt.join(',')}`;
     const hit = baselineCache.get(key);
     if (hit) return hit;
+    const evosUnlocked = tier.id === 'T1' ? [] : ALL_EVOLUTION_IDS;
+    const evosEquipped = tier.id === 'T1' ? {} : DEFAULT_EQUIPPED_EVOS;
     const res = runSubEncounterBatch(sub, bot, tier.weaponSeedsPerSub, salt, {
       fighter: 'Orange Tabby',
       weapons: belt,
       skillNodes: getFighterSkillNodes('Orange Tabby', tier.fighterStars),
-      unlockedEvolutions: ALL_EVO_IDS,
+      unlockedWeaponEvolutions: evosUnlocked,
+      equippedEvolutions: evosEquipped,
     });
     baselineCache.set(key, res);
     return res;
@@ -798,6 +815,8 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
       const tier = tiers[ti];
       const { withoutBelt, withBelt } = buildWeaponBelts(tier.baseBelt, tier.backupWeapons, id);
       const skillNodes = getFighterSkillNodes('Orange Tabby', tier.fighterStars);
+      const evosUnlocked = tier.id === 'T1' ? [] : ALL_EVOLUTION_IDS;
+      const evosEquipped = tier.id === 'T1' ? {} : DEFAULT_EQUIPPED_EVOS;
 
       const subAvgLifts: number[] = [];
       const subHumLifts: number[] = [];
@@ -814,14 +833,16 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
           fighter: 'Orange Tabby',
           weapons: withBelt,
           skillNodes,
-          unlockedEvolutions: ALL_EVO_IDS,
+          unlockedWeaponEvolutions: evosUnlocked,
+          equippedEvolutions: evosEquipped,
         });
         const baseHum = getCachedWeaponBaseline(tier, sub, 'human', humanBot, withoutBelt, salt);
         const withHum = runSubEncounterBatch(sub, humanBot, tier.weaponSeedsPerSub, salt, {
           fighter: 'Orange Tabby',
           weapons: withBelt,
           skillNodes,
-          unlockedEvolutions: ALL_EVO_IDS,
+          unlockedWeaponEvolutions: evosUnlocked,
+          equippedEvolutions: evosEquipped,
         });
 
         subAvgLifts.push(Math.max(SCORE_FLOOR, withAvg.clearScore) / Math.max(SCORE_FLOOR, baseAvg.clearScore));
@@ -913,6 +934,8 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
     for (let ti = 0; ti < tiers.length; ti++) {
       const tier = tiers[ti];
       const skillNodes = getFighterSkillNodes(fighter, tier.fighterStars);
+      const evosUnlocked = tier.id === 'T1' ? [] : ALL_EVOLUTION_IDS;
+      const evosEquipped = tier.id === 'T1' ? {} : DEFAULT_EQUIPPED_EVOS;
       const subAvg: BatchAggregate[] = [];
       const subHum: BatchAggregate[] = [];
 
@@ -924,7 +947,8 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
             fighter,
             weapons: tier.fighterBelt,
             skillNodes,
-            unlockedEvolutions: ALL_EVO_IDS,
+            unlockedWeaponEvolutions: evosUnlocked,
+            equippedEvolutions: evosEquipped,
           })
         );
         subHum.push(
@@ -932,7 +956,8 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
             fighter,
             weapons: tier.fighterBelt,
             skillNodes,
-            unlockedEvolutions: ALL_EVO_IDS,
+            unlockedWeaponEvolutions: evosUnlocked,
+            equippedEvolutions: evosEquipped,
           })
         );
       }
@@ -1001,268 +1026,129 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
     })
     .sort((a, b) => b.humanBotScore - a.humanBotScore || a.id.localeCompare(b.id));
 
-  // ── 3. EVOLUTIONS (All 208 across T3, T4, T5 with Encore Mask fix) ────────
+  // ── 3. PER-WEAPON EVOLUTIONS (All 192 across T3, T4, T5) ─────────────────
   const evoTiers: { tier: TierSpec; sub: SubEncounterContext; salt: number }[] = [
     { tier: tierById.get('T3')!, sub: tierById.get('T3')!.subEncounters[0], salt: 201 },
     { tier: tierById.get('T4')!, sub: tierById.get('T4')!.subEncounters[0], salt: 202 },
     { tier: tierById.get('T5')!, sub: tierById.get('T5')!.subEncounters[0], salt: 203 },
   ];
 
-  log(`[gauntlet] Running ${targetRecipes.length} evolutions across T3 (Boar A0), T4 (4-6 Viper), T5 (Spire A3 Boss A0)...`);
+  log(`[gauntlet] Running ${targetEvos.length} per-weapon evolutions across T3 (Boar A0), T4 (4-6 Viper), T5 (Spire A3 Boss A0)...`);
 
-  // Step 3a: Estimate median universal blank-shell chassis lift on a deterministic sample of non-Encore recipes
-  const nonEncoreSample = targetRecipes.filter(r => !normalizeRecipePair(r.options[0][0], r.options[1][0]).includes('encore-mask'));
-  const sampleStep = Math.max(1, Math.floor(nonEncoreSample.length / 18));
-  const chassisSampleAvg: number[] = [];
-  const chassisSampleHum: number[] = [];
-  const sampledChassisIndices = new Set<string>();
-  for (let i = 0; i < nonEncoreSample.length && sampledChassisIndices.size < 18; i += sampleStep) {
-    sampledChassisIndices.add(nonEncoreSample[i].id);
-  }
+  // Cache `off` baselines per (tier, weaponId, bot) since all 3 variants of a weapon share the exact same `off` run!
+  const evoOffCache = new Map<string, BatchAggregate>();
 
-  // First pass: evaluate non-Encore recipes (and collect chassis ratios on the 18-recipe sample)
-  interface EvoTemp {
-    id: string;
-    name: string;
-    pair: [string, string];
-    hasEncoreFix: boolean;
-    byTier: Partial<Record<GauntletTierId, TierCounterfactualResult>>;
-    avgStarts: number;
-    humanStarts: number;
-    avgWinDelta: number;
-    humanWinDelta: number;
-  }
+  const rawEvos = targetEvos.map(evo => {
+    const isPartner = PARTNER_SET.has(evo.weaponId);
+    const belt: string[] = isPartner
+      ? [PARTNER_ANCHOR_WEAPON, evo.weaponId, 'mending-charm']
+      : evo.weaponId === 'mending-charm'
+        ? ['mending-charm', 'blast-powder']
+        : [evo.weaponId, 'mending-charm'];
 
-  const evoTemps: EvoTemp[] = [];
-  const encoreTemps: {
-    id: string;
-    name: string;
-    pair: [string, string];
-    tierRules: {
-      tierId: GauntletTierId;
-      avgRuleLift: number;
-      humRuleLift: number;
-      avgWinDelta: number;
-      humWinDelta: number;
-      avgSurvDelta: number;
-      humSurvDelta: number;
-    }[];
-    avgStarts: number;
-    humanStarts: number;
-  }[] = [];
+    const onUnlocked = isPartner ? [PARTNER_ANCHOR_EVO, evo.id] : [evo.id];
+    const onEquipped: Record<string, string> = isPartner
+      ? { [PARTNER_ANCHOR_WEAPON]: PARTNER_ANCHOR_EVO, [evo.weaponId]: evo.id }
+      : { [evo.weaponId]: evo.id };
+    const offUnlocked = isPartner ? [PARTNER_ANCHOR_EVO] : [];
+    const offEquipped: Record<string, string> = isPartner ? { [PARTNER_ANCHOR_WEAPON]: PARTNER_ANCHOR_EVO } : {};
 
-  for (const r of targetRecipes) {
-    const pair = normalizeRecipePair(r.options[0][0], r.options[1][0]);
-    const hasEncore = pair.includes('encore-mask');
-    const name = evoNameById.get(r.id) ?? r.id;
-
-    if (!hasEncore) {
-      const byTier: Partial<Record<GauntletTierId, TierCounterfactualResult>> = {};
-      const avgStartsArr: number[] = [];
-      const humStartsArr: number[] = [];
-      const avgWinsArr: number[] = [];
-      const humWinsArr: number[] = [];
-      const sampleForChassis = sampledChassisIndices.has(r.id);
-
-      for (const { tier, sub, salt } of evoTiers) {
-        const runs = Math.max(1, tier.evoSeedsPerSub);
-        const skillNodes = getFighterSkillNodes('Orange Tabby', tier.fighterStars);
-
-        const onAvg = runSubEncounterBatch(sub, avgBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [r.id],
-          extraEvoBonus: true,
-        });
-        const offAvg = runSubEncounterBatch(sub, avgBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [],
-          extraEvoBonus: true,
-        });
-
-        const onHum = runSubEncounterBatch(sub, humanBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [r.id],
-          extraEvoBonus: true,
-        });
-        const offHum = runSubEncounterBatch(sub, humanBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [],
-          extraEvoBonus: true,
-        });
-
-        if (sampleForChassis) {
-          const shellAvg = runSubEncounterBatch(sub, avgBot, runs, salt, {
-            fighter: 'Orange Tabby',
-            weapons: pair,
-            skillNodes,
-            unlockedEvolutions: [r.id],
-            blankEvolutionRules: true,
-            extraEvoBonus: true,
-          });
-          const shellHum = runSubEncounterBatch(sub, humanBot, runs, salt, {
-            fighter: 'Orange Tabby',
-            weapons: pair,
-            skillNodes,
-            unlockedEvolutions: [r.id],
-            blankEvolutionRules: true,
-            extraEvoBonus: true,
-          });
-          const cAvg = Math.max(SCORE_FLOOR, shellAvg.clearScore) / Math.max(SCORE_FLOOR, offAvg.clearScore);
-          const cHum = Math.max(SCORE_FLOOR, shellHum.clearScore) / Math.max(SCORE_FLOOR, offHum.clearScore);
-          if (Number.isFinite(cAvg) && cAvg > 0.5 && cAvg < 3) chassisSampleAvg.push(cAvg);
-          if (Number.isFinite(cHum) && cHum > 0.5 && cHum < 3) chassisSampleHum.push(cHum);
-        }
-
-        const avgLift = Math.max(SCORE_FLOOR, onAvg.clearScore) / Math.max(SCORE_FLOOR, offAvg.clearScore);
-        const humanLift = Math.max(SCORE_FLOOR, onHum.clearScore) / Math.max(SCORE_FLOOR, offHum.clearScore);
-        byTier[tier.id] = {
-          tierId: tier.id,
-          avgLift: roundN(avgLift, 4),
-          humanLift: roundN(humanLift, 4),
-          avgWinDelta: roundN(onAvg.winRate - offAvg.winRate, 3),
-          humanWinDelta: roundN(onHum.winRate - offHum.winRate, 3),
-          avgSurvDelta: roundN(onAvg.survivalRate - offAvg.survivalRate, 3),
-          humanSurvDelta: roundN(onHum.survivalRate - offHum.survivalRate, 3),
-        };
-        avgStartsArr.push(onAvg.evolutions);
-        humStartsArr.push(onHum.evolutions);
-        avgWinsArr.push(onAvg.winRate - offAvg.winRate);
-        humWinsArr.push(onHum.winRate - offHum.winRate);
-      }
-
-      evoTemps.push({
-        id: r.id,
-        name,
-        pair,
-        hasEncoreFix: false,
-        byTier,
-        avgStarts: mean(avgStartsArr),
-        humanStarts: mean(humStartsArr),
-        avgWinDelta: mean(avgWinsArr),
-        humanWinDelta: mean(humWinsArr),
-      });
-    } else {
-      // Encore Mask recipe: compare against blank evolution shell so turning evolutions off never disables Encore Mask itself
-      const tierRules: (typeof encoreTemps)[number]['tierRules'] = [];
-      const avgStartsArr: number[] = [];
-      const humStartsArr: number[] = [];
-
-      for (const { tier, sub, salt } of evoTiers) {
-        const runs = Math.max(1, tier.evoSeedsPerSub);
-        const skillNodes = getFighterSkillNodes('Orange Tabby', tier.fighterStars);
-
-        const onAvg = runSubEncounterBatch(sub, avgBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [r.id],
-          extraEvoBonus: true,
-        });
-        const shellAvg = runSubEncounterBatch(sub, avgBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [r.id],
-          blankEvolutionRules: true,
-          extraEvoBonus: true,
-        });
-
-        const onHum = runSubEncounterBatch(sub, humanBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [r.id],
-          extraEvoBonus: true,
-        });
-        const shellHum = runSubEncounterBatch(sub, humanBot, runs, salt, {
-          fighter: 'Orange Tabby',
-          weapons: pair,
-          skillNodes,
-          unlockedEvolutions: [r.id],
-          blankEvolutionRules: true,
-          extraEvoBonus: true,
-        });
-
-        tierRules.push({
-          tierId: tier.id,
-          avgRuleLift: Math.max(SCORE_FLOOR, onAvg.clearScore) / Math.max(SCORE_FLOOR, shellAvg.clearScore),
-          humRuleLift: Math.max(SCORE_FLOOR, onHum.clearScore) / Math.max(SCORE_FLOOR, shellHum.clearScore),
-          avgWinDelta: onAvg.winRate - shellAvg.winRate,
-          humWinDelta: onHum.winRate - shellHum.winRate,
-          avgSurvDelta: onAvg.survivalRate - shellAvg.survivalRate,
-          humSurvDelta: onHum.survivalRate - shellHum.survivalRate,
-        });
-        avgStartsArr.push(onAvg.evolutions);
-        humStartsArr.push(onHum.evolutions);
-      }
-
-      encoreTemps.push({
-        id: r.id,
-        name,
-        pair,
-        tierRules,
-        avgStarts: mean(avgStartsArr),
-        humanStarts: mean(humStartsArr),
-      });
-    }
-  }
-
-  const encoreChassisLiftAvg = chassisSampleAvg.length > 0 ? clamp(median(chassisSampleAvg), 1.02, 1.8) : 1.19;
-  const encoreChassisLiftHuman = chassisSampleHum.length > 0 ? clamp(median(chassisSampleHum), 1.02, 1.8) : 1.19;
-
-  for (const e of encoreTemps) {
     const byTier: Partial<Record<GauntletTierId, TierCounterfactualResult>> = {};
-    for (const tr of e.tierRules) {
-      byTier[tr.tierId] = {
-        tierId: tr.tierId,
-        avgLift: roundN(tr.avgRuleLift * encoreChassisLiftAvg, 4),
-        humanLift: roundN(tr.humRuleLift * encoreChassisLiftHuman, 4),
-        avgWinDelta: roundN(tr.avgWinDelta, 3),
-        humanWinDelta: roundN(tr.humWinDelta, 3),
-        avgSurvDelta: roundN(tr.avgSurvDelta, 3),
-        humanSurvDelta: roundN(tr.humSurvDelta, 3),
-      };
-    }
-    evoTemps.push({
-      id: e.id,
-      name: e.name,
-      pair: e.pair,
-      hasEncoreFix: true,
-      byTier,
-      avgStarts: e.avgStarts,
-      humanStarts: e.humanStarts,
-      avgWinDelta: mean(e.tierRules.map(x => x.avgWinDelta)),
-      humanWinDelta: mean(e.tierRules.map(x => x.humWinDelta)),
-    });
-  }
+    const avgTrigsArr: number[] = [];
+    const humTrigsArr: number[] = [];
+    const avgWinsArr: number[] = [];
+    const humWinsArr: number[] = [];
 
-  const rawEvos = evoTemps.map(e => {
-    const tierEntries = GAUNTLET_EVO_TIERS.map(t => e.byTier[t]).filter((x): x is TierCounterfactualResult => !!x);
+    for (const { tier, sub, salt } of evoTiers) {
+      const runs = Math.max(1, tier.evoSeedsPerSub);
+      const skillNodes = getFighterSkillNodes('Orange Tabby', tier.fighterStars);
+
+      const offKeyAvg = `${tier.id}|${evo.weaponId}|avg`;
+      let offAvg = evoOffCache.get(offKeyAvg);
+      if (!offAvg) {
+        offAvg = runSubEncounterBatch(sub, avgBot, runs, salt, {
+          fighter: 'Orange Tabby',
+          weapons: belt,
+          skillNodes,
+          unlockedWeaponEvolutions: offUnlocked,
+          equippedEvolutions: offEquipped,
+          extraEvoBonus: true,
+        });
+        evoOffCache.set(offKeyAvg, offAvg);
+      }
+
+      const offKeyHum = `${tier.id}|${evo.weaponId}|hum`;
+      let offHum = evoOffCache.get(offKeyHum);
+      if (!offHum) {
+        offHum = runSubEncounterBatch(sub, humanBot, runs, salt, {
+          fighter: 'Orange Tabby',
+          weapons: belt,
+          skillNodes,
+          unlockedWeaponEvolutions: offUnlocked,
+          equippedEvolutions: offEquipped,
+          extraEvoBonus: true,
+        });
+        evoOffCache.set(offKeyHum, offHum);
+      }
+
+      const onAvg = runSubEncounterBatch(sub, avgBot, runs, salt, {
+        fighter: 'Orange Tabby',
+        weapons: belt,
+        skillNodes,
+        unlockedWeaponEvolutions: onUnlocked,
+        equippedEvolutions: onEquipped,
+        extraEvoBonus: true,
+      });
+      const onHum = runSubEncounterBatch(sub, humanBot, runs, salt, {
+        fighter: 'Orange Tabby',
+        weapons: belt,
+        skillNodes,
+        unlockedWeaponEvolutions: onUnlocked,
+        equippedEvolutions: onEquipped,
+        extraEvoBonus: true,
+      });
+
+      const avgLift = Math.max(SCORE_FLOOR, onAvg.clearScore) / Math.max(SCORE_FLOOR, offAvg.clearScore);
+      const humanLift = Math.max(SCORE_FLOOR, onHum.clearScore) / Math.max(SCORE_FLOOR, offHum.clearScore);
+      byTier[tier.id] = {
+        tierId: tier.id,
+        avgLift: roundN(avgLift, 4),
+        humanLift: roundN(humanLift, 4),
+        avgWinDelta: roundN(onAvg.winRate - offAvg.winRate, 3),
+        humanWinDelta: roundN(onHum.winRate - offHum.winRate, 3),
+        avgSurvDelta: roundN(onAvg.survivalRate - offAvg.survivalRate, 3),
+        humanSurvDelta: roundN(onHum.survivalRate - offHum.survivalRate, 3),
+      };
+      avgTrigsArr.push(onAvg.weaponEvos[evo.weaponId] ?? 0);
+      humTrigsArr.push(onHum.weaponEvos[evo.weaponId] ?? 0);
+      avgWinsArr.push(onAvg.winRate - offAvg.winRate);
+      humWinsArr.push(onHum.winRate - offHum.winRate);
+    }
+
+    const tierEntries = GAUNTLET_EVO_TIERS.map(t => byTier[t]).filter((x): x is TierCounterfactualResult => !!x);
     const avgBotLift = geoMean(tierEntries.map(x => x.avgLift));
     const humanBotLift = geoMean(tierEntries.map(x => x.humanLift));
-    const spireEntries = GAUNTLET_SPIRE_TIERS.map(t => e.byTier[t]).filter((x): x is TierCounterfactualResult => !!x);
+    const spireEntries = GAUNTLET_SPIRE_TIERS.map(t => byTier[t]).filter((x): x is TierCounterfactualResult => !!x);
     const spireAvgLift = spireEntries.length ? geoMean(spireEntries.map(x => x.avgLift)) : avgBotLift;
     const spireHumanLift = spireEntries.length ? geoMean(spireEntries.map(x => x.humanLift)) : humanBotLift;
     const spireLift = Math.sqrt(spireAvgLift * spireHumanLift);
+
     return {
-      ...e,
+      id: evo.id,
+      name: evo.name,
+      weaponId: evo.weaponId,
+      variantIndex: evo.slotIndex,
+      conditionType: evo.condition.kind,
       avgBotLift: roundN(avgBotLift, 4),
       humanBotLift: roundN(humanBotLift, 4),
       spireAvgLift: roundN(spireAvgLift, 4),
       spireHumanLift: roundN(spireHumanLift, 4),
       spireLift: roundN(spireLift, 4),
-      avgStartsPerFight: roundN(e.avgStarts, 2),
-      humanStartsPerFight: roundN(e.humanStarts, 2),
-      avgWinDelta: roundN(e.avgWinDelta, 3),
-      humanWinDelta: roundN(e.humanWinDelta, 3),
+      avgTriggersPerFight: roundN(mean(avgTrigsArr), 2),
+      humanTriggersPerFight: roundN(mean(humTrigsArr), 2),
+      avgWinDelta: roundN(mean(avgWinsArr), 3),
+      humanWinDelta: roundN(mean(humWinsArr), 3),
+      byTier,
     };
   });
 
@@ -1276,24 +1162,11 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
       const humanMult = e.humanBotLift / Math.max(1e-4, minEHum);
       const spireMult = e.spireLift / Math.max(1e-4, minESpire);
       return {
-        id: e.id,
-        name: e.name,
-        pair: e.pair,
-        hasEncoreFix: e.hasEncoreFix,
-        avgBotLift: e.avgBotLift,
-        humanBotLift: e.humanBotLift,
-        spireAvgLift: e.spireAvgLift,
-        spireHumanLift: e.spireHumanLift,
-        spireLift: e.spireLift,
+        ...e,
         avgMult: roundN(avgMult, 4),
         humanMult: roundN(humanMult, 4),
         spireMult: roundN(spireMult, 4),
         humanVsAvgRatio: roundN(humanMult / Math.max(1e-4, avgMult), 4),
-        avgStartsPerFight: e.avgStartsPerFight,
-        humanStartsPerFight: e.humanStartsPerFight,
-        avgWinDelta: e.avgWinDelta,
-        humanWinDelta: e.humanWinDelta,
-        byTier: e.byTier,
       };
     })
     .sort((a, b) => b.humanBotLift - a.humanBotLift || a.id.localeCompare(b.id));
@@ -1355,7 +1228,7 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
     })),
     weaponLevel: t.weaponLevel,
     tuned: t.tuned,
-    powerEnabled: t.powerEnabled,
+    beltSlots: t.beltSlots,
     fighterStars: t.fighterStars,
     baseBeltSize: t.baseBelt.length,
     weaponSeedsPerSub: t.weaponSeedsPerSub,
@@ -1373,8 +1246,6 @@ export const runGauntlet = (opts: GauntletOptions = {}): GauntletReport => {
       average: avgBot,
       human: humanBot,
     },
-    encoreChassisLiftAvg: roundN(encoreChassisLiftAvg, 4),
-    encoreChassisLiftHuman: roundN(encoreChassisLiftHuman, 4),
     tiers: tierSummaries,
     weapons,
     evolutions,
@@ -1400,16 +1271,15 @@ export const renderGauntletMarkdown = (report: GauntletReport, opts: { top?: num
   out.push(
     `- **Generated:** \`${report.generatedAt}\` (${(report.durationMs / 1000).toFixed(1)}s) | **Bots:** \`BOTS.average\` (Uniform) vs \`${report.bots.human.name}\` (Lognormal \`σ=${report.bots.human.findTimeSigma ?? 0}\`, \`${report.bots.human.baseReactionSec ?? 0}s + ${report.bots.human.secondsPerAttribute}s/attr\`)`,
     `- **Score Formula:** \`S_e = 0.50·min(1.5, dmg/hp) + 0.30·win + 0.20·(timeShare + heartsShare)/2\``,
-    `- **Encore Mask Chassis Lift:** avg=\`×${report.encoreChassisLiftAvg.toFixed(3)}\`, human=\`×${report.encoreChassisLiftHuman.toFixed(3)}\``,
     ''
   );
 
   out.push('## Gauntlet Encounters (Canonical Levels & Spire Overrides)', '');
-  row(['Tier', 'Encounter(s)', 'Mode', 'Gear', 'Power', 'Fighter ★']);
+  row(['Tier', 'Encounter(s)', 'Mode', 'Gear', 'Slots', 'Fighter ★']);
   row(['---', '---', '---', '---', '---', '---']);
   for (const t of report.tiers) {
     const encs = t.encounters.map(e => `${e.enemy} (${e.hp} HP${e.ascension !== undefined ? ` A${e.ascension}` : ''})`).join(', ');
-    row([`**${t.id}**`, encs, t.mode, `Lv${t.weaponLevel}${t.tuned ? ' tuned' : ''}`, t.powerEnabled ? 'ON' : 'OFF', `${t.fighterStars}★`]);
+    row([`**${t.id}**`, encs, t.mode, `Lv${t.weaponLevel}${t.tuned ? ' tuned' : ''}`, `${t.beltSlots}`, `${t.fighterStars}★`]);
   }
   out.push('');
 
@@ -1459,24 +1329,25 @@ export const renderGauntletMarkdown = (report: GauntletReport, opts: { top?: num
   }
 
   if (report.evolutions.length > 0) {
-    out.push(`## Evolutions (${report.evolutions.length} · Top ${top} & Bottom ${bottom} on Live Bosses T3/T4/T5)`, '');
-    row(['#', 'Evolution', 'Pair', 'Human 1.00×', 'Avg 1.00×', 'Spire 1.00×', 'Hum Lift', 'Avg Lift', 'Hum WinΔ', 'Starts']);
-    row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---']);
+    out.push(`## Per-Weapon Evolutions (${report.evolutions.length} · Top ${top} & Bottom ${bottom} on Live Bosses T3/T4/T5)`, '');
+    row(['#', 'Evolution', 'Weapon (Slot)', 'Trigger', 'Human 1.00×', 'Avg 1.00×', 'Spire 1.00×', 'Hum Lift', 'Avg Lift', 'Hum WinΔ', 'Trigs']);
+    row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---']);
     const head = report.evolutions.slice(0, top);
     const tail = report.evolutions.length > top ? report.evolutions.slice(-Math.min(bottom, report.evolutions.length - top)) : [];
     for (const e of [...head, ...tail]) {
       const rank = report.evolutions.indexOf(e) + 1;
       row([
         rank,
-        `${e.name}${e.hasEncoreFix ? ' †' : ''}`,
-        `\`${e.pair.join(' + ')}\``,
+        e.name,
+        `\`${e.weaponId}\` (${SLOT_LABELS[e.variantIndex]})`,
+        e.conditionType,
         `**${fx(e.humanMult)}**`,
         fx(e.avgMult),
         fx(e.spireMult),
         `×${e.humanBotLift.toFixed(2)}`,
         `×${e.avgBotLift.toFixed(2)}`,
         fdelta(e.humanWinDelta),
-        e.humanStartsPerFight.toFixed(1),
+        e.humanTriggersPerFight.toFixed(1),
       ]);
     }
     out.push('');

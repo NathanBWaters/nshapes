@@ -1,7 +1,8 @@
 /**
- * Unlock reveal — every new fighter or weapon gets its own full-screen moment:
- * a silhouette on a field of light, a tap to reveal, then a card explaining
- * exactly how the new thing works and a button to start using it.
+ * Unlock reveal — every new fighter, weapon, per-weapon evolution, or boss
+ * belt-slot expansion gets its own full-screen moment: a silhouette on a field
+ * of light, a tap to reveal, then a card explaining how it works and a 1-tap
+ * button to start using it immediately.
  *
  * Motion (review: docs/motion/reviews/unlock-reveal.md): the dark screen comes up,
  * then the medallion. The tap winds the medallion in (SCALE.windup), it turns edge-on
@@ -16,6 +17,7 @@ import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, withDelay, withSpring, Easing, cancelAnimation, runOnJS, ReduceMotion } from 'react-native-reanimated';
 import { EASE, exitMs, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useColorblind } from '@/utils/cardColors';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
@@ -26,12 +28,20 @@ import { COLORS } from '@/utils/colors';
 import { band, sfx } from '@/audio';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, ArcanaId, UnlockableFeature } from '../types';
-import { charmSlots, equippedArcanaOf, equippedCharms, weaponBuilds, type Unlock } from '../progress';
+import {
+  charmSlots,
+  equippedArcanaOf,
+  equippedCharms,
+  equippedEvolutionOf,
+  weaponBuilds,
+  type Unlock,
+} from '../progress';
 import { getFighter } from '../data/fighters';
 import { getPassive } from '../data/passives';
 import { getArcana } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { getWeaponBounties } from '../data/bounties';
+import { evolutionConditionShort, evolutionConditionText, getWeaponEvolution } from '../data/evolutions';
 import { CAMPAIGN_FEATURES } from '../data/features';
 import { LEVELS, getLevel } from '../data/levels';
 import { levelFoe } from '../data/foes';
@@ -68,32 +78,16 @@ const MUTED = DARK.muted;
 /** Weapon text was written for score-based modes. In Adventure a point is a point of damage. */
 const adventureText = (t: string) => t.replace(/\+(\d+) points?/g, '+$1 damage');
 
-/** The tap winds the medallion in for this long, then it turns */
 const WINDUP_MS = MS.feedback;
-/** Each half of the turn (to edge-on, and back round) */
 const TURN_MS = MS.feedback;
-/** Held edge-on for 2 frames: the face is swapped here, out of sight */
 const EDGE_HOLD_MS = 32;
-/** About when the face is swapped: by the turn itself, on the frame it is edge-on (inside the hold) */
 const SWAP_MS = WINDUP_MS + TURN_MS + 16;
-/** The reward has come round to full width (the spring takes ~7 frames from edge-on): its ring and its sound land here */
 const LAND_MS = WINDUP_MS + TURN_MS + EDGE_HOLD_MS + 144;
-/**
- * The words follow the medallion: name, companion, then the card with the buttons.
- * After the first unlock of a row the player knows the rhythm: the words come tighter.
- */
 const detailAt = (k: number, quick = false) => LAND_MS + (quick ? 60 : 100) + k * (quick ? STAGGER.card : STAGGER.item);
-/** The revealed creature starts acting once its name is up */
 const ACT_MS = detailAt(3) + MS.move;
-/** Next unlock: the words leave while the medallion turns back edge-on */
 const LEAVE_MS = exitMs(MS.quick);
-
-/** Opening: the dark screen, then the headline, then the medallion */
 const OPEN_TEXT_MS = MS.quick - 40;
 const OPEN_HERO_MS = OPEN_TEXT_MS + 80;
-
-/** Rises into place `delay` ms after it mounts (remount it with a key to play again). Reduced motion: fades. */
-/** Fades still play under reduced motion (Reanimated would otherwise jump them to the end): they carry the meaning */
 const KEEP = ReduceMotion.Never;
 
 const Rise: React.FC<{ delay: number; reduced: boolean; style?: object; children: React.ReactNode }> = ({ delay, reduced, style, children }) => {
@@ -102,6 +96,10 @@ const Rise: React.FC<{ delay: number; reduced: boolean; style?: object; children
   useEffect(() => {
     o.value = withDelay(reduced ? Math.round(delay / 3) : delay, withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP }), KEEP);
     if (!reduced) y.value = withDelay(delay, withTiming(0, { duration: MS.move, easing: EASE.enter }));
+    return () => {
+      cancelAnimation(o);
+      cancelAnimation(y);
+    };
   }, [delay, reduced, o, y]);
   const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: y.value }] }));
   return <Animated.View style={[a, style]}>{children}</Animated.View>;
@@ -129,13 +127,74 @@ const Rays: React.FC<{ color: string; still: boolean }> = ({ color, still }) => 
   );
 };
 
-interface Props {
+/** Animated 3->4 or 4->5 weapon belt expansion strip (one-shot GPU spring on the newly opened slot). */
+const SlotExpansionStrip: React.FC<{
+  slotNumber: 4 | 5;
+  save: AdventureSave;
+  reduced: boolean;
+}> = ({ slotNumber, save, reduced }) => {
+  const newSlotScale = useSharedValue(reduced ? 1 : 0.45);
+  useEffect(() => {
+    if (reduced) {
+      newSlotScale.value = 1;
+      return;
+    }
+    newSlotScale.value = withDelay(
+      MS.feedback,
+      withSequence(
+        withTiming(SCALE.reward, { duration: MS.feedback, easing: EASE.pop }),
+        withSpring(1, SPRING.lively)
+      )
+    );
+    return () => cancelAnimation(newSlotScale);
+  }, [slotNumber, reduced, newSlotScale]);
+
+  const newSlotStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: newSlotScale.value }],
+  }));
+
+  const charms = equippedCharms(save);
+  const builds = weaponBuilds(save);
+
+  return (
+    <View style={st.slotStrip} testID={`unlock-slot-strip-${slotNumber}`}>
+      {Array.from({ length: slotNumber }).map((_, idx) => {
+        const isNew = idx === slotNumber - 1;
+        const wId = charms[idx];
+        const w = wId ? getArmoryWeapon(wId, builds) : undefined;
+        if (isNew) {
+          return (
+            <Animated.View key={idx} style={[st.slotBox, st.slotBoxNew, newSlotStyle]}>
+              <Icon name="delapouite/party-popper" size={16} color={INK} />
+              <Text style={st.slotNewTag}>NEW!</Text>
+            </Animated.View>
+          );
+        }
+        return (
+          <View key={idx} style={st.slotBox}>
+            {w ? (
+              <WeaponAvatar weapon={w} size={28} />
+            ) : (
+              <Text style={st.slotIdxText}>{idx + 1}</Text>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+};
+
+export interface UnlockRevealProps {
   unlocks: Unlock[];
   save: AdventureSave;
   onUseFighter: (name: CharacterName) => void;
   onEquipCharm: (id: string) => void;
   onSwapCharm?: (replaceId: string, withId: string) => void;
   onEquipArcana?: (id: ArcanaId) => void;
+  /** 1-tap equip a newly unlocked per-weapon evolution onto its weapon */
+  onEquipEvolution?: (weaponId: string, evoId: string) => void;
+  /** Jump to Camp Armory (offered on the final reveal when a 4th/5th weapon slot opens) */
+  onOpenArmory?: () => void;
   /** Go to the screen a newly unlocked feature lives on (offered on the last reveal only) */
   onOpenFeature?: (feature: UnlockableFeature) => void;
   /** Go and look at a secret path on the map (offered on the last reveal only) */
@@ -145,25 +204,33 @@ interface Props {
   onDone: () => void;
 }
 
-const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCharm, onSwapCharm, onEquipArcana, onOpenFeature, onShowPath, onOpenSummit, onDone }) => {
-  // (read from the context, so the reveal also stands alone where there is no safe-area provider)
+const UnlockReveal: React.FC<UnlockRevealProps> = ({
+  unlocks,
+  save,
+  onUseFighter,
+  onEquipCharm,
+  onSwapCharm,
+  onEquipArcana,
+  onEquipEvolution,
+  onOpenArmory,
+  onOpenFeature,
+  onShowPath,
+  onOpenSummit,
+  onDone,
+}) => {
   const insets = useContext(SafeAreaInsetsContext) ?? NO_INSETS;
   const reduced = useReducedMotion();
+  const colorblind = useColorblind();
   const [i, setI] = useState(0);
   const [revealed, setRevealed] = useState(false);
-  /** The revealed creature acts only once its name is up (its leap must not compete with the turn) */
   const [acting, setActing] = useState(false);
   const backdrop = useSharedValue(0);
   const opened = useSharedValue(0);
   const press = useSharedValue(1);
   const turn = useSharedValue(1);
-  /** Reduced motion: the medallion's face cross-fades instead of turning */
   const face = useSharedValue(1);
-  /** The words on screen (headline, details, buttons) leaving for the next unlock */
   const leave = useSharedValue(1);
-  /** Closing: the medallion sinks (0→1) as the dark lifts */
   const sink = useSharedValue(0);
-  /** 1 while closing: the medallion then fades with the words (with or without reduced motion) */
   const closing = useSharedValue(0);
   const [exiting, setExiting] = useState(false);
   const ring = useSharedValue(0);
@@ -191,15 +258,12 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     leave.value = 1;
     revealing.current = false;
     soundPlayed.current = false;
-    // The dark screen first, then what is on it: no words over the results' words
     backdrop.value = 0;
     backdrop.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP });
     opened.value = reduced ? 1 : 0;
     if (!reduced) opened.value = withDelay(OPEN_HERO_MS, withSpring(1, SPRING.lively));
   }, [unlocks]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A weapon the player already owns growing a level is good news, not a mystery: it is shown at once.
-  // (After a boss a dozen of these can arrive together; a tap to unwrap each one made the win drag.)
   const current = unlocks[i];
   const isLevelUp = current?.kind === 'weapon' && current.level !== undefined;
   useEffect(() => {
@@ -210,7 +274,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
   }, [i, isLevelUp]);
 
   const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
-  // The medallion arrives from 0.7 on a lively spring; its fade is flat and quick (opacity never bounces)
   const openStyle = useAnimatedStyle(() => ({
     opacity: Math.min(1, opened.value * 2.5) * (closing.value > 0 ? leave.value : 1),
     transform: [{ translateY: sink.value * 48 }, { scale: 0.7 + 0.3 * opened.value }],
@@ -227,24 +290,25 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
 
   const display = describeUnlock(u);
   const { icon, accent } = display;
+  const builds = weaponBuilds(save);
   const fighter = u.kind === 'fighter' ? getFighter(u.name) : null;
-  const w = u.kind === 'weapon' ? getArmoryWeapon(u.id, weaponBuilds(save)) : null;
+  const w = u.kind === 'weapon' ? getArmoryWeapon(u.id, builds) : null;
+  const weaponBountyCount = w && u.kind === 'weapon' && u.level === undefined ? getWeaponBounties(w.id).length : 0;
   const arcana = u.kind === 'arcana' ? getArcana(u.id) : null;
-  const evo = u.kind === 'evolution' ? EVOLUTION_RECIPES.find(r => r.id === u.id) ?? null : null;
+  const evo = u.kind === 'evolution' ? getWeaponEvolution(u.id) ?? null : null;
+  const evoWeapon = evo ? getArmoryWeapon(evo.weaponId, builds) ?? null : null;
+  const slotUnlock = u.kind === 'weapon_slot' ? u : null;
   const feature = u.kind === 'feature' ? CAMPAIGN_FEATURES[u.feature] : null;
   const path = u.kind === 'path' ? getLevel(u.levelId) : null;
   const isSummit = u.kind === 'summit';
   const last = i + 1 >= unlocks.length;
-  // Offered only when it is the final reveal, so the remaining ones are not skipped
   const openFeature = feature?.open && last && onOpenFeature ? feature.open : null;
-  // A fighter with a trial still to play learns its passives there, so the reveal stays short
   const trial = fighter && !save.seenMechanics.includes(fighter.signature)
     ? LEVELS.find(l => l.branchOf && l.introduces === fighter.signature) ?? null
     : null;
   const evoId = evolutionsMechanicId();
   const evoMechanic = evo && evoId ? MECHANICS[evoId] : null;
 
-  // A weapon is introduced by its own voice, a recipe by its fanfare: on the frame the reward lands
   const playUnlockSound = () => {
     if (soundPlayed.current) return;
     soundPlayed.current = true;
@@ -253,13 +317,11 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     else sfx('unlock');
   };
 
-  /** Unlock CTA responsiveness the instant the face swaps (`SWAP_MS`), never locking until `ACT_MS` ([OB-06]). */
   const onSwapVisible = () => {
     setRevealed(true);
     revealing.current = false;
   };
 
-  /** Tapping again during the 0–256ms turn snaps immediately to revealed so zero taps are swallowed. */
   const snapReveal = () => {
     clearTimers();
     cancelAnimation(press);
@@ -283,7 +345,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     revealing.current = true;
     soundPlayed.current = false;
     if (reduced) {
-      // The faces cross-fade through the dark: no wind-up, no turn, no ring
       face.value = withSequence(
         KEEP,
         withTiming(0, { duration: MS.feedback, easing: EASE.ui, reduceMotion: KEEP }, finished => { if (finished) runOnJS(onSwapVisible)(); }),
@@ -293,7 +354,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
       later(MS.feedback + MS.quick, () => setActing(true));
       return;
     }
-    // Wind in, turn edge-on (EASE.impact: it speeds into the edge), hold, swap the face, come round on a spring
     press.value = withSequence(
       withTiming(SCALE.windup, { duration: WINDUP_MS, easing: EASE.ui }),
       withDelay(TURN_MS + EDGE_HOLD_MS, withSpring(1, SPRING.lively))
@@ -301,27 +361,23 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     turn.value = withDelay(
       WINDUP_MS,
       withSequence(
-        // Swapped by the turn itself once it is edge-on, so the old face is never seen to change
         withTiming(0, { duration: TURN_MS, easing: EASE.impact }, finished => { if (finished) runOnJS(onSwapVisible)(); }),
         withDelay(EDGE_HOLD_MS, withSpring(1, SPRING.lively))
       )
     );
     ring.value = 0;
     ring.value = withDelay(LAND_MS, withTiming(1, { duration: MS.move, easing: EASE.enter }));
-    // Unlock CTA right at SWAP_MS (256ms) so the footer CTA is 100% live the moment it rises into view!
     later(SWAP_MS, onSwapVisible);
     later(LAND_MS, playUnlockSound);
     later(ACT_MS, () => setActing(true));
   };
 
   const goNext = (next: number) => {
-    // Whatever the last reveal still had scheduled (its creature's act) belongs to it, not to the next one
     clearTimers();
     setRevealed(false);
     setActing(false);
     setI(next);
     leave.value = 1;
-    // The next silhouette comes round from edge-on, the way the last reward went
     if (!reduced) turn.value = withDelay(EDGE_HOLD_MS / 2, withSpring(1, SPRING.lively));
     face.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, reduceMotion: KEEP });
     revealing.current = false;
@@ -341,11 +397,8 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     onDone();
   };
   const advance = () => {
-    // Cancel pending reveal timers immediately so stale setActing/sound callbacks never fire after advancing
     clearTimers();
     if (i + 1 >= unlocks.length) {
-      // The way out: the words go first, the medallion sinks back into the results as the dark lifts,
-      // then the results take over (their rows turn over into what was just won)
       if (revealing.current) return;
       revealing.current = true;
       setExiting(true);
@@ -361,7 +414,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     if (revealing.current) return;
     revealing.current = true;
     const next = i + 1;
-    // The words leave (quick, flat) while the reward turns back edge-on; the next one is swapped in on the edge
     leave.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.exitSoft, reduceMotion: KEEP });
     if (reduced) {
       face.value = withTiming(0, { duration: LEAVE_MS, easing: EASE.ui, reduceMotion: KEEP }, finished => { if (finished) runOnJS(goNext)(next); });
@@ -370,10 +422,32 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
     turn.value = withTiming(0, { duration: TURN_MS, easing: EASE.impact }, finished => { if (finished) runOnJS(goNext)(next); });
   };
 
-  const charmEquipped = u.kind === 'weapon' && equippedCharms(save).includes(u.id);
-  const charmsFull = equippedCharms(save).length >= charmSlots(save);
+  const belt = equippedCharms(save);
+  const charmEquipped = u.kind === 'weapon' && belt.includes(u.id);
+  const charmsFull = belt.length >= charmSlots(save);
   const arcanaEquipped = u.kind === 'arcana' && equippedArcanaOf(save).includes(u.id);
-  const sourceLabel = path ? 'Secret' : isSummit ? 'New mode' : u.star === 0 ? 'Bounty reward' : `${'★'.repeat(u.star)} reward`;
+  const evoWeaponOwned = Boolean(evoWeapon && save.armory.includes(evoWeapon.id));
+  const evoWeaponOnBelt = Boolean(evoWeapon && belt.includes(evoWeapon.id));
+  const evoAlreadyEquipped = Boolean(evo && evoWeapon && equippedEvolutionOf(save, evoWeapon.id) === evo.id);
+  const sourceLabel = path
+    ? 'Secret'
+    : isSummit
+      ? 'New mode'
+      : slotUnlock
+        ? `Boss milestone · ${slotUnlock.levelId}`
+        : u.star === 0
+          ? 'Bounty reward'
+          : `${'★'.repeat(u.star)} reward`;
+
+  const handleEquipEvoAction = () => {
+    if (!evo || !evoWeapon) return;
+    if (evoWeaponOwned && !evoWeaponOnBelt && !charmsFull) {
+      onEquipCharm(evoWeapon.id);
+    }
+    if (evoWeaponOwned && !evoAlreadyEquipped) {
+      onEquipEvolution?.(evoWeapon.id, evo.id);
+    }
+  };
 
   const handlePrimaryConfirm = () => {
     if (!revealed) {
@@ -391,6 +465,16 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
         onEquipCharm(w.id);
       }
       advance();
+      return;
+    }
+    if (evo && evoWeapon && evoWeaponOwned && (!evoAlreadyEquipped || (!evoWeaponOnBelt && !charmsFull))) {
+      handleEquipEvoAction();
+      advance();
+      return;
+    }
+    if (slotUnlock && last && onOpenArmory) {
+      onDone();
+      onOpenArmory();
       return;
     }
     if (feature && openFeature) {
@@ -433,7 +517,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
         onConfirm={handlePrimaryConfirm}
         onCancel={handleCancelKey}
       />
-      {/* Closing, it no longer takes taps: the results' buttons are usable from the first frame of the way out */}
       <View testID="unlock-modal" pointerEvents={exiting ? 'none' : 'auto'} style={[st.overlay, { paddingTop: insets.top }]}>
         <Animated.View style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} pointerEvents="none" />
         {unlocks.length > 1 && !exiting && (
@@ -478,6 +561,13 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                   size={108}
                   interactive
                 />
+              ) : revealed && evo && evoWeapon ? (
+                <View style={st.evoHeroWrap} testID="unlock-revealed-evolution">
+                  <WeaponAvatar weapon={evoWeapon} size={86} interactive />
+                  <View style={[st.evoMedallion, { borderColor: accent }]}>
+                    <Icon name={evo.icon} size={24} color={COLORS.actionYellow} />
+                  </View>
+                </View>
               ) : revealed && path ? (
                 <EnemyAvatar testID="unlock-revealed-path" enemy={levelFoe(path)} size={108} mood="idle" reaction={acting ? { type: 'entrance', id: i + 1 } : null} interactive />
               ) : (
@@ -507,11 +597,17 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 text={
                   fighter
                     ? `${companionVoice(fighter.name).hello} I’m ${fighter.name}. Pick me whenever you like!`
-                    : isSummit
-                      ? `${companionVoice(save.selectedFighter).cheer} Starfall Summit is open — climb where the star fell!`
-                      : u.kind === 'weapon' && u.firstWeapon
-                        ? `${companionVoice(save.selectedFighter).cheer} Our first weapon! I clipped it on. It fires by itself.`
-                        : `${companionVoice(save.selectedFighter).cheer} Look what we won!`
+                    : slotUnlock
+                      ? slotUnlock.slotNumber === 4
+                        ? `${companionVoice(save.selectedFighter).cheer} 4th weapon slot unlocked — add a new Synergy partner!`
+                        : `${companionVoice(save.selectedFighter).cheer} 5th weapon slot unlocked — unleash a full-belt engine!`
+                      : evo && evoWeapon
+                        ? `${companionVoice(save.selectedFighter).cheer} ${evo.name} awakened for ${evoWeapon.name} — hit its goal mid-fight!`
+                        : isSummit
+                          ? `${companionVoice(save.selectedFighter).cheer} Starfall Summit is open — climb where the star fell!`
+                          : u.kind === 'weapon' && u.firstWeapon
+                            ? `${companionVoice(save.selectedFighter).cheer} Our first weapon! I clipped it on. It fires by itself.`
+                            : `${companionVoice(save.selectedFighter).cheer} Look what we won!`
                 }
                 style={{ alignSelf: 'stretch' }}
               />
@@ -519,7 +615,9 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
 
               <Rise delay={isLevelUp ? 2 * STAGGER.item : detailAt(2, i > 0) - SWAP_MS} reduced={reduced} style={{ alignSelf: 'stretch' }}>
               <View style={st.card}>
-                <Text style={st.cardTitle}>{path ? 'What is it?' : 'How it works'}</Text>
+                <Text style={st.cardTitle}>
+                  {path ? 'What is it?' : slotUnlock ? 'Belt expansion' : 'How it works'}
+                </Text>
                 {path && (
                   <>
                     <Text style={st.rowBody}>
@@ -531,6 +629,19 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                     </Text>
                     {path.rules.sandbox && <Text style={st.rowBody}>{getMechanic(path.introduces).body[2]}</Text>}
                     <Text style={st.note}>It was not on the map until now. Secret paths only show up once you earn them.</Text>
+                  </>
+                )}
+                {slotUnlock && (
+                  <>
+                    <SlotExpansionStrip slotNumber={slotUnlock.slotNumber} save={save} reduced={reduced} />
+                    <Text style={st.rowBody}>
+                      Carry {slotUnlock.slotNumber} weapons into every fight — chain more Synergy Graph hooks and ignite more Weapon Evolutions at once!
+                    </Text>
+                    <Text style={st.note}>
+                      {slotUnlock.slotNumber === 4
+                        ? 'Defeat the World 2 Boss (2-10) next to unlock your 5th weapon slot.'
+                        : 'An optional 6th weapon slot is also available in the Camp Workshop.'}
+                    </Text>
                   </>
                 )}
                 {fighter && (trial ? (
@@ -565,8 +676,15 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                       </Text>
                     )}
                     <Text style={st.rowBody}>{adventureText(w.description)}</Text>
-                    {/* The very first weapon: one plain sentence is enough */}
                     {w.flavorText && !(u.kind === 'weapon' && u.firstWeapon) ? <Text style={st.note}>{adventureText(w.flavorText)}</Text> : null}
+                    {weaponBountyCount > 0 && (
+                      <View style={st.bountyPill} testID="unlock-opens-bounties">
+                        <Icon name="lorc/trophy" size={14} color={INK} />
+                        <Text style={st.bountyPillText} numberOfLines={1}>
+                          Opens {weaponBountyCount} new Bounties at Camp!
+                        </Text>
+                      </View>
+                    )}
                     {u.kind === 'weapon' && u.firstWeapon && (
                       <View style={st.charmBox}>
                         <Text style={st.rowTitle}>Already on your belt</Text>
@@ -577,8 +695,8 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                       <View style={st.charmBox} testID="unlock-swap-box">
                         <Text style={st.rowTitle}>Swap onto your belt now:</Text>
                         <View style={st.swapRow}>
-                          {equippedCharms(save).map(equippedId => {
-                            const equippedWeapon = getArmoryWeapon(equippedId, weaponBuilds(save));
+                          {belt.map(equippedId => {
+                            const equippedWeapon = getArmoryWeapon(equippedId, builds);
                             if (!equippedWeapon) return null;
                             return (
                               <TouchableOpacity
@@ -605,12 +723,28 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                 )}
                 {evo && (
                   <>
-                    <Text style={[st.rowBody, { color: '#5EEAD4' }]}>Armed by: {evo.familyText}</Text>
-                    <Text style={st.rowBody}>For 30 seconds: {evo.activeText}</Text>
-                    <Text style={st.note}>{evo.flavor}</Text>
+                    <View style={st.evoMetaRow}>
+                      <View style={st.evoPill}>
+                        <Icon name="lorc/archery-target" size={12} color="#5EEAD4" />
+                        <Text style={st.evoPillText} numberOfLines={1}>{evolutionConditionShort(evo, colorblind)}</Text>
+                      </View>
+                      <View style={st.evoPillGold}>
+                        <Icon name="lorc/stopwatch" size={12} color={GOLD} />
+                        <Text style={st.evoPillGoldText}>{Math.round(evo.durationMs / 1000)}s active</Text>
+                      </View>
+                    </View>
+                    <Text style={[st.rowBody, { color: '#5EEAD4' }]}>
+                      Trigger: {evolutionConditionText(evo, colorblind)}
+                    </Text>
+                    <Text style={st.rowBody}>{evo.tagline}</Text>
+                    {!evoWeaponOwned && evoWeapon && (
+                      <Text style={st.note}>
+                        Ready as soon as you unlock {evoWeapon.name} in your Armory!
+                      </Text>
+                    )}
                     {u.kind === 'evolution' && u.firstEvolution && evoMechanic && (
                       <View style={st.charmBox}>
-                        <Text style={st.rowTitle}>How evolutions work</Text>
+                        <Text style={st.rowTitle}>How Weapon Evolutions work</Text>
                         {evoMechanic.body.map((p, k) => <Text key={k} style={st.rowBody}>{p}</Text>)}
                       </View>
                     )}
@@ -638,7 +772,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
                       Starfall Summit Unlocked — climb where the star fell!
                     </Text>
                     <Text style={st.rowBody}>
-                      Draft Armory weapons, forge Evolutions, parry bosses, and push into Endless across a 3-Act roguelike climb.
+                      Draft Armory weapons, awaken all 192 Weapon Evolutions, parry bosses, and push into Endless across a 3-Act roguelike climb.
                     </Text>
                     <Text style={st.note}>Now unlocked on the Main Menu whenever you want a fresh run.</Text>
                   </>
@@ -649,7 +783,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
           )}
         </ScrollView>
 
-        {/* What to do with it: always in reach, whatever the screen size */}
         <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 18) }]}>
           {!revealed ? (
             <Rise key={`reveal-${i}`} delay={i === 0 ? OPEN_HERO_MS + MS.feedback : MS.feedback} reduced={reduced} style={st.footerInner}>
@@ -673,7 +806,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
         {w && (
           charmEquipped || charmsFull ? (
             <>
-              {!charmEquipped && <Text style={st.note}>Your charm slots are full. Swap charms on the level preview or at Camp.</Text>}
+              {!charmEquipped && <Text style={st.note}>Your weapon belt is full. Swap weapons on the level preview or at Camp.</Text>}
               <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
                 <Text style={st.ctaText}>{charmEquipped ? 'Equipped ✓  Continue' : 'Continue'}</Text>
               </TouchableOpacity>
@@ -681,7 +814,7 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
           ) : (
             <>
               <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); onEquipCharm(w.id); advance(); }} style={st.cta} activeOpacity={0.85}>
-                <Text style={st.ctaText}>Equip as charm</Text>
+                <Text style={st.ctaText}>Equip on belt</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={advance} style={st.secondary}>
                 <Text style={st.secondaryText}>Leave it in the Armory</Text>
@@ -690,9 +823,76 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
           )
         )}
         {evo && (
-          <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
-            <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
-          </TouchableOpacity>
+          evoWeapon && evoWeaponOwned && !evoAlreadyEquipped && onEquipEvolution ? (
+            <>
+              <TouchableOpacity
+                testID="unlock-primary"
+                onPress={() => {
+                  sfx('confirm');
+                  handleEquipEvoAction();
+                  advance();
+                }}
+                style={st.cta}
+                activeOpacity={0.85}
+              >
+                <Text style={st.ctaText}>
+                  {!evoWeaponOnBelt && !charmsFull
+                    ? `Equip ${evoWeapon.name} + ${evo.name}`
+                    : `Equip ${evo.name} on ${evoWeapon.name}`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Keep current evolution</Text>
+              </TouchableOpacity>
+            </>
+          ) : evoWeapon && evoWeaponOwned && !evoWeaponOnBelt && !charmsFull ? (
+            <>
+              <TouchableOpacity
+                testID="unlock-primary"
+                onPress={() => {
+                  sfx('confirm');
+                  onEquipCharm(evoWeapon.id);
+                  advance();
+                }}
+                style={st.cta}
+                activeOpacity={0.85}
+              >
+                <Text style={st.ctaText}>Equip {evoWeapon.name} on belt</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Leave in Armory</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>{evoAlreadyEquipped ? 'Equipped ✓  Continue' : last ? 'Awesome!' : 'Continue'}</Text>
+            </TouchableOpacity>
+          )
+        )}
+        {slotUnlock && (
+          last && onOpenArmory ? (
+            <>
+              <TouchableOpacity
+                testID="unlock-primary"
+                onPress={() => {
+                  sfx('confirm');
+                  onDone();
+                  onOpenArmory();
+                }}
+                style={st.cta}
+                activeOpacity={0.85}
+              >
+                <Text style={st.ctaText}>Equip a {slotUnlock.slotNumber === 4 ? '4th' : '5th'} Weapon</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={advance} style={st.secondary}>
+                <Text style={st.secondaryText}>Continue</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity testID="unlock-primary" onPress={() => { sfx('confirm'); advance(); }} style={st.cta} activeOpacity={0.85}>
+              <Text style={st.ctaText}>{last ? 'Awesome!' : 'Continue'}</Text>
+            </TouchableOpacity>
+          )
         )}
         {feature && (
           openFeature ? (
@@ -792,7 +992,6 @@ const UnlockReveal: React.FC<Props> = ({ unlocks, save, onUseFighter, onEquipCha
 };
 
 const st = StyleSheet.create({
-  // Opaque: whatever is behind it (the results screen) would only be noise
   overlay: { flex: 1 },
   backdrop: { backgroundColor: '#0B0B0C' },
   topActions: { position: 'absolute', right: 14, zIndex: 20 },
@@ -807,7 +1006,6 @@ const st = StyleSheet.create({
     justifyContent: 'center',
   },
   claimAllText: { color: GOLD, fontWeight: '800', fontSize: 13, letterSpacing: 0.4 },
-  // Top-aligned, so the headline and the medallion stay put when the details arrive under them
   scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'flex-start', padding: 20, paddingTop: 54, paddingBottom: 12, gap: 12, maxWidth: 460, width: '100%', alignSelf: 'center' },
   footer: { alignSelf: 'center', width: '100%', maxWidth: 460, minHeight: 74, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
   footerInner: { alignSelf: 'stretch', gap: 4, alignItems: 'center' },
@@ -820,9 +1018,22 @@ const st = StyleSheet.create({
   ray: { position: 'absolute', width: 5, height: 240, opacity: 0.16, borderRadius: 3 },
   hero: { width: 150, height: 150, borderRadius: 75, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },
   heroQ: { position: 'absolute', color: GOLD, fontSize: 64, fontWeight: '900' },
+  evoHeroWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  evoMedallion: {
+    position: 'absolute',
+    right: -12,
+    bottom: -10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4C1D95',
+    borderWidth: 2.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tease: { color: MUTED, fontSize: 16, textAlign: 'center' },
   name: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 30, textAlign: 'center' },
-  rarity: { fontWeight: '900', letterSpacing: 2, fontSize: 12 },
+  rarity: { fontWeight: '900', letterSpacing: 2, fontSize: 12, textAlign: 'center' },
   card: { alignSelf: 'stretch', backgroundColor: DARK.panel, borderRadius: 12, borderWidth: 1, borderColor: DARK.goldEdge(0.3), padding: 14, gap: 12 },
   cardTitle: { color: GOLD, fontWeight: '800', letterSpacing: 2, fontSize: 11, textTransform: 'uppercase' },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
@@ -831,12 +1042,75 @@ const st = StyleSheet.create({
   rowTag: { color: MUTED, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   rowBody: { color: TEXT, fontSize: 15, lineHeight: 21, flexShrink: 1 },
   note: { color: MUTED, fontSize: 13, fontStyle: 'italic', flexShrink: 1 },
+  bountyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    maxWidth: '100%',
+  },
+  bountyPillText: { flexShrink: 1, color: INK, fontWeight: '900', fontSize: 12 },
+  evoMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  evoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(22, 170, 152, 0.18)',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#5EEAD4',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    maxWidth: '100%',
+  },
+  evoPillText: { flexShrink: 1, color: '#5EEAD4', fontSize: 12, fontWeight: '800' },
+  evoPillGold: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(245, 184, 0, 0.16)',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: GOLD,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  evoPillGoldText: { color: GOLD, fontSize: 12, fontWeight: '800' },
+  slotStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  slotBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotBoxNew: {
+    backgroundColor: COLORS.actionYellow,
+    borderColor: COLORS.canvasWhite,
+    borderWidth: 2.5,
+    gap: 1,
+  },
+  slotIdxText: { color: MUTED, fontSize: 14, fontWeight: '900' },
+  slotNewTag: { color: INK, fontSize: 8.5, fontWeight: '900', letterSpacing: 0.5 },
   charmBox: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.12)', paddingTop: 10, gap: 6 },
   swapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   swapBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1.5, borderColor: DARK.goldEdge(0.5), borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, maxWidth: '100%' },
   swapBtnText: { color: COLORS.canvasWhite, fontWeight: '800', fontSize: 13, flexShrink: 1 },
-  cta: { alignSelf: 'stretch', backgroundColor: GOLD, borderRadius: 8, paddingVertical: 15, alignItems: 'center' },
-  ctaText: { color: INK, fontWeight: '900', fontSize: 16, letterSpacing: 1.5, textTransform: 'uppercase' },
+  cta: { alignSelf: 'stretch', backgroundColor: GOLD, borderRadius: 8, paddingVertical: 15, paddingHorizontal: 12, alignItems: 'center' },
+  ctaText: { color: INK, fontWeight: '900', fontSize: 15, letterSpacing: 1.2, textTransform: 'uppercase', textAlign: 'center' },
   secondary: { paddingVertical: 8 },
   secondaryText: { color: MUTED, fontWeight: '700', textDecorationLine: 'underline' },
 });

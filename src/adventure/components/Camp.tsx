@@ -44,7 +44,7 @@ import type { CharacterName, Weapon } from '@/types';
 import { band, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { AdventureSave, LevelDef, UpgradeDef } from '../types';
-import { BOUNTIES } from '../data/bounties';
+import { BOUNTIES, isBountyUnlocked } from '../data/bounties';
 import { summarize, type BattleRecord } from '../history';
 import { analyticsOptedOut, setAnalyticsEnabled } from '@/analytics/posthog';
 import type { FunRating, FunTag } from '@/analytics/fightEvent';
@@ -66,17 +66,21 @@ import {
   canBuyUpgrade,
   canTune,
   charmSlots,
-  charmSynergyWithEquipped,
+  equipCharm,
+  equipWeaponEvolution,
   equippedArcanaOf,
   equippedCharms,
+  equippedEvolutionOf,
   getUnlockedUpgrades,
   hasUnspentStars,
   refundAllCamp,
   refundTuning,
   refundUpgrade,
   refundableCoins,
+  swapCharm,
   toggleArcana,
   toggleCharm,
+  unlockedEvolutionsForWeapon,
   upgradeCost,
   upgradeSpentCoins,
   upgradeTier,
@@ -99,12 +103,19 @@ import {
   type ArmorySortMode,
   type LoadoutPreset,
 } from '../loadoutPresets';
+import {
+  beltSynergyAttrSet,
+  beltSynergyOverlap,
+  getSynergyAttrMeta,
+  summarizeBeltSynergies,
+} from '../ui/synergyMeta';
+import { buildBeltSlotDescriptors, type BeltSlotDescriptor } from '../ui/evolutionViewModel';
 import SkillTree, { StarPool } from './SkillTree';
 import BattleHistory from './BattleHistory';
 import WeaponExplainer from './WeaponExplainer';
 import BountyBoard from './BountyBoard';
 import CompanionBubble from './CompanionBubble';
-import { ArcanaCard, FighterPassivesList } from './SharedCards';
+import { ArcanaCard, FighterPassivesList, SynergySummaryChips } from './SharedCards';
 import { companionVoice } from '../coach';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
 
@@ -142,6 +153,8 @@ interface Props {
   onClose: () => void;
   /** Open straight on this section (its back button still leads to the menu) */
   initialTab?: CampTab;
+  /** Optional bounty ID to scroll to & highlight when landing on the Bounties tab */
+  initialBountyId?: string | null;
   /** Level to jump back into from Camp when arriving from a preview/result */
   returnLevel?: LevelDef | null;
   onReturnToLevel?: (level: LevelDef) => void;
@@ -164,14 +177,15 @@ const LOADOUT_UPGRADES = ['charm_belt', 'tarot_deck', 'evolution_lab'];
 
 const QUICK_FILTERS: { id: ArmoryQuickFilter; label: string; icon?: IconName }[] = [
   { id: 'all', label: 'All' },
-  { id: 'fuses', label: 'Fuses', icon: 'lorc/crystal-shine' },
+  { id: 'synergy', label: 'Synergy', icon: 'lorc/linked-rings' },
+  { id: 'hasEvo', label: 'Has Evo', icon: 'lorc/crystal-shine' },
   { id: 'equipped', label: 'Equipped' },
   { id: 'lv2plus', label: 'Lv 2+' },
 ];
 
 const SORT_MODES: { id: ArmorySortMode; label: string }[] = [
   { id: 'shelves', label: 'Shelves' },
-  { id: 'fuses', label: 'Fuses First' },
+  { id: 'synergy', label: 'Synergy First' },
   { id: 'level', label: 'Highest Lv' },
   { id: 'az', label: 'A–Z' },
 ];
@@ -183,6 +197,7 @@ const Camp: React.FC<Props> = ({
   onRateBattle,
   onClose,
   initialTab,
+  initialBountyId,
   returnLevel,
   onReturnToLevel,
   onTestLoadout,
@@ -193,6 +208,10 @@ const Camp: React.FC<Props> = ({
   const reducedMotion = useReducedMotion();
   /** The open section; null is the menu */
   const [tab, setTab] = useState<CampTab | null>(initialTab ?? null);
+  /** Deep-linked bounty ID from WeaponExplainer's locked evolution card */
+  const [highlightBountyId, setHighlightBountyId] = useState<string | null>(initialBountyId ?? null);
+  /** Inline tooltip shown when tapping a dashed W1 / W2 / SHOP locked belt slot */
+  const [lockedSlotTip, setLockedSlotTip] = useState<BeltSlotDescriptor | null>(null);
   /** [UI-21] Global SettingsSheet (Music, SFX, Haptics, visuals, Text Size, keys, backup…) */
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(() => !analyticsOptedOut());
@@ -247,6 +266,10 @@ const Camp: React.FC<Props> = ({
     setTab(initialTab ?? null);
   }, [initialTab]);
 
+  useEffect(() => {
+    setHighlightBountyId(initialBountyId ?? null);
+  }, [initialBountyId]);
+
   // [AU-20]: Cozy campfire vibes + harp + pizz in Camp; stop cleanly on unmount if still on camp
   useEffect(() => {
     if (typeof band?.playScreenMusic === 'function') {
@@ -266,6 +289,7 @@ const Camp: React.FC<Props> = ({
       setTreeFighter(null);
       setSlotsFullNote(null);
       setSelectedSlot(null);
+      setLockedSlotTip(null);
     }, dir);
   };
 
@@ -306,6 +330,9 @@ const Camp: React.FC<Props> = ({
     [save, quickFilter, roleFilter, searchQuery, sortMode]
   );
 
+  const beltSlots = useMemo(() => buildBeltSlotDescriptors(save), [save]);
+  const beltSynergyLinks = useMemo(() => summarizeBeltSynergies(charms), [charms]);
+
   const understudyIdx = charms.indexOf(UNDERSTUDY_ID);
   const understudyTarget = understudyIdx > 0 ? getArmoryWeapon(charms[understudyIdx - 1], builds) : null;
 
@@ -327,7 +354,7 @@ const Camp: React.FC<Props> = ({
     if (returnLevel) {
       return `Next goal: Tune your build and jump back into ${returnLevel.id} ${returnLevel.name}.`;
     }
-    return 'Next goal: Experiment with weapon pairs to discover new Evolutions!';
+    return 'Next goal: Build Synergy belts and complete Weapon Bounties to unlock Evolutions!';
   }, [save, charms.length, slots, totalRefundable, returnLevel]);
 
   const handleSlotTap = (idx: number) => {
@@ -439,6 +466,9 @@ const Camp: React.FC<Props> = ({
     const equipped = slot >= 0;
     const wLevel = weaponLevel(save, w.id);
     const shown = equipped ? charmWeapons(charms, builds)[slot] : getArmoryWeapon(w.id, builds);
+    const overlap = !equipped && charms.length > 0 ? beltSynergyOverlap(w.id, charms) : [];
+    const topOverlapMeta = overlap.length > 0 ? getSynergyAttrMeta(overlap[0]) : null;
+    const unlockedEvoCount = unlockedEvolutionsForWeapon(save, w.id).length;
     return (
       <PopIn key={w.id} delay={staggerDelay(idx, Math.max(1, count), STAGGER.card)}>
         <TouchableOpacity
@@ -446,6 +476,7 @@ const Camp: React.FC<Props> = ({
           onPress={() => {
             setArmoryTapCounts(prev => ({ ...prev, [w.id]: (prev[w.id] ?? 0) + 1 }));
             setArmoryFocus(w.id);
+            setLockedSlotTip(null);
             if (!equipped && charms.length >= slots) {
               sfx('back');
               setSlotsFullNote('charms');
@@ -467,11 +498,22 @@ const Camp: React.FC<Props> = ({
         >
           <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
           <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
-          <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? `slot ${slot + 1}` : `level ${wLevel}`}</Text>
-          {!equipped && charmSynergyWithEquipped(save, w.id) && (
-            <View style={st.fusesBadge}>
-              <Icon name="lorc/crystal-shine" size={10} color={TONE.combo} noShadow />
-              <Text style={{ fontSize: 10, fontWeight: '900', color: TONE.combo }}>FUSES</Text>
+          <View style={st.tileMetaRow}>
+            <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? `slot ${slot + 1}` : `lv ${wLevel}`}</Text>
+            {(unlockedEvoCount > 0 || (save.unlockedWeaponEvolutions?.length ?? 0) > 0) && (
+              <View style={st.evoPips} accessibilityLabel={`${unlockedEvoCount} of 3 evolutions unlocked`}>
+                {[0, 1, 2].map(pip => (
+                  <View key={pip} style={[st.evoPipDot, pip < unlockedEvoCount && st.evoPipDotOn]} />
+                ))}
+              </View>
+            )}
+          </View>
+          {topOverlapMeta && (
+            <View style={[st.synergyMatchBadge, { backgroundColor: topOverlapMeta.paleBg, borderColor: topOverlapMeta.color }]}>
+              <Icon name={topOverlapMeta.icon} size={9} color={topOverlapMeta.color} noShadow />
+              <Text style={st.synergyMatchText} numberOfLines={1}>
+                {overlap.length > 1 ? `${topOverlapMeta.label} +${overlap.length - 1}` : topOverlapMeta.label}
+              </Text>
             </View>
           )}
           <Text style={st.armoryDesc} numberOfLines={3}>{shown?.shortDescription}</Text>
@@ -502,8 +544,13 @@ const Camp: React.FC<Props> = ({
       case 'bounties':
         return save.bountiesUnlocked
           ? {
-              sub: `${save.completedBounties.length}/${BOUNTIES.length} claimed`,
-              badge: BOUNTIES.some(b => !save.completedBounties.includes(b.id) && b.progress(save) / b.target >= 0.75),
+              sub: `${save.completedBounties.length}/${BOUNTIES.length} completed`,
+              badge: BOUNTIES.some(
+                b =>
+                  isBountyUnlocked(save, b) &&
+                  !save.completedBounties.includes(b.id) &&
+                  b.progress(save) / b.target >= 0.75
+              ),
             }
           : { sub: `${unlockHint({ kind: 'feature', id: 'bounties' }, save) ?? 'Keep playing'} to open`, locked: true };
       case 'history':
@@ -513,10 +560,28 @@ const Camp: React.FC<Props> = ({
 
   // Bounties bring their own screen; its back button returns to the menu
   if (tab === 'bounties') {
+    const bountyExtraProps = {
+      highlightBountyId: highlightBountyId ?? undefined,
+      onEquipWeapon: (wId: string) => onChange(equipCharm(save, wId)),
+      onSwapWeapon: (replaceId: string, withId: string) => onChange(swapCharm(save, replaceId, withId)),
+      onJumpToArmory: (wId: string) => {
+        setHighlightBountyId(null);
+        setArmoryFocus(wId);
+        open('armory');
+      },
+    } as Record<string, unknown>;
     return (
       <View style={st.root}>
         <Animated.View style={[{ flex: 1 }, viewTransition.style]} pointerEvents={viewTransition.leaving ? 'none' : 'auto'}>
-          <BountyBoard save={save} onClose={() => open(null)} backLabel="Back to camp" />
+          <BountyBoard
+            save={save}
+            onClose={() => {
+              setHighlightBountyId(null);
+              open(null);
+            }}
+            backLabel="Back to camp"
+            {...bountyExtraProps}
+          />
         </Animated.View>
       </View>
     );
@@ -536,9 +601,8 @@ const Camp: React.FC<Props> = ({
         >
           <Icon name="ui/back-arrow" size={20} color={INK} noShadow />
         </TouchableOpacity>
-        <Icon name={section?.icon ?? 'lorc/campfire'} size={24} color={section ? INK : COLORS.impactOrange} />
+        <Icon name={section?.icon ?? 'lorc/campfire'} size={22} color={section ? INK : COLORS.impactOrange} />
         <Text style={st.title} numberOfLines={1}>{(section?.title ?? 'Camp').toUpperCase()}</Text>
-        <View style={{ flex: 1 }} />
         {showTestLoadoutBtn && (
           <TouchableOpacity
             testID="camp-test-loadout"
@@ -548,7 +612,7 @@ const Camp: React.FC<Props> = ({
             accessibilityRole="button"
             accessibilityLabel="Test Loadout in Training Lab"
           >
-            <Icon name="lorc/target-dummy" size={16} color={INK} />
+            <Icon name="lorc/target-dummy" size={14} color={INK} />
             <Text style={st.testLoadoutText} numberOfLines={1}>TEST</Text>
           </TouchableOpacity>
         )}
@@ -777,7 +841,9 @@ const Camp: React.FC<Props> = ({
               {loadoutUpgrades.length > 0 && (
                 <>
                   <Text style={st.sectionLabel}>LOADOUT</Text>
-                  <Text style={st.slotLine}>Weapon slots {slots}/6 · Arcana slots {arcanaSlots(save)}/3</Text>
+                  <Text style={st.slotLine}>
+                    Weapon slots {slots}/6 (W1 &amp; W2 Bosses + 1 Workshop) · Arcana slots {arcanaSlots(save)}/3
+                  </Text>
                   {loadoutUpgrades.map((u, idx) => renderUpgrade(u, idx))}
                 </>
               )}
@@ -892,12 +958,39 @@ const Camp: React.FC<Props> = ({
               Tap a weapon to equip or inspect. Tap an equipped belt slot to reorder (◀ / ▶) so Understudy copies its left partner!
             </Text>
 
-            {/* Interactive reorderable Weapon Belt (shakes horizontally on slots-full refusal!) */}
+            {/* Interactive reorderable Weapon Belt + W1 / W2 / SHOP locked milestone ghost slots */}
             <View testID="camp-belt-zone" style={{ gap: 6 }}>
             <Animated.View style={[st.slotRow, slotsShakeStyle]} testID="camp-charm-slots">
-              {Array.from({ length: slots }).map((_, i) => {
+              {beltSlots.map(desc => {
+                const i = desc.index;
+                if (!desc.unlocked) {
+                  return (
+                    <View key={`locked-${desc.slotNumber}`} style={st.slotWrap}>
+                      <TouchableOpacity
+                        testID={`camp-slot-locked-${desc.slotNumber}`}
+                        onPress={() => {
+                          sfx('click');
+                          setLockedSlotTip(prev => (prev?.slotNumber === desc.slotNumber ? null : desc));
+                        }}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Locked weapon slot ${desc.slotNumber}: ${desc.tooltip}`}
+                        style={[
+                          st.slot,
+                          st.slotLockedGhost,
+                          lockedSlotTip?.slotNumber === desc.slotNumber && st.slotLockedGhostActive,
+                        ]}
+                      >
+                        <Icon name="lorc/padlock" size={13} color="#A8A29E" noShadow />
+                        <Text style={st.slotLockedLabel}>{desc.badgeLabel}</Text>
+                      </TouchableOpacity>
+                      <Text style={st.slotNo}>{desc.slotNumber}</Text>
+                    </View>
+                  );
+                }
                 const id = charms[i];
                 const w = id ? getArmoryWeapon(id, builds) : undefined;
+                const hasArmedEvo = Boolean(id && equippedEvolutionOf(save, id));
                 const isSel = selectedSlot === i;
                 return (
                   <View key={i} style={st.slotWrap}>
@@ -905,7 +998,10 @@ const Camp: React.FC<Props> = ({
                       <TouchableOpacity
                         testID={`camp-slot-${i}`}
                         disabled={!w}
-                        onPress={() => handleSlotTap(i)}
+                        onPress={() => {
+                          setLockedSlotTip(null);
+                          handleSlotTap(i);
+                        }}
                         activeOpacity={0.85}
                         accessibilityLabel={w ? `Slot ${i + 1}: ${w.name}. Tap to reorder` : `Empty slot ${i + 1}`}
                         style={[
@@ -915,6 +1011,11 @@ const Camp: React.FC<Props> = ({
                         ]}
                       >
                         {w ? <WeaponAvatar weapon={w} size={26} /> : <Text style={st.slotEmpty}>+</Text>}
+                        {hasArmedEvo && (
+                          <View style={st.slotEvoDot}>
+                            <Icon name="lorc/crystal-shine" size={9} color="#7C3AED" noShadow />
+                          </View>
+                        )}
                       </TouchableOpacity>
                     </AnimatedBeltSlot>
                     <Text style={st.slotNo}>{i + 1}</Text>
@@ -946,6 +1047,34 @@ const Camp: React.FC<Props> = ({
               <Text style={st.slotCount}>{charms.length}/{slots}</Text>
             </Animated.View>
 
+            {lockedSlotTip && (
+              <View style={st.slotMilestoneTip} testID="camp-slot-milestone-tip">
+                <Icon
+                  name={lockedSlotTip.lockKind === 'shop' ? 'lorc/gear-hammer' : 'lorc/belt-buckles'}
+                  size={15}
+                  color={INK}
+                  noShadow
+                />
+                <Text style={st.slotMilestoneText}>{lockedSlotTip.tooltip}</Text>
+                {lockedSlotTip.lockKind === 'shop' && save.workshopUnlocked && (
+                  <TouchableOpacity
+                    testID="camp-slot-open-workshop"
+                    onPress={() => { sfx('click'); open('workshop'); }}
+                    style={st.slotMilestoneBtn}
+                  >
+                    <Text style={st.slotMilestoneBtnText}>Workshop ›</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {beltSynergyLinks.length > 0 && (
+              <View style={st.beltSynergyBar} testID="camp-belt-synergy">
+                <Text style={st.beltSynergyEyebrow}>BELT SYNERGY</Text>
+                <SynergySummaryChips links={beltSynergyLinks} />
+              </View>
+            )}
+
             {understudyIdx === 0 && (
               <View style={st.understudyWarn} testID="camp-understudy-warning">
                 <Icon name="lorc/two-shadows" size={14} color="#92400E" />
@@ -961,7 +1090,15 @@ const Camp: React.FC<Props> = ({
 
             {slotsFullNote === 'charms' && (
               <Animated.View style={slotsShakeStyle}>
-                <Text testID="camp-charms-full" style={st.fullNote}>All {slots} weapon slots are full. Tap an equipped weapon to take it off{slots < 6 ? ', or add a slot with the Charm Belt in the Workshop' : ''}.</Text>
+                <Text testID="camp-charms-full" style={st.fullNote}>
+                  {slots === 3
+                    ? 'Belt full (3/3). Tap an equipped weapon to swap, or defeat World 1 Boss (1-10) for a 4th slot.'
+                    : slots === 4
+                      ? 'Belt full (4/4). Tap an equipped weapon to swap, or defeat World 2 Boss (2-10) for a 5th slot.'
+                      : slots === 5 && (save.upgrades.charm_belt ?? 0) === 0
+                        ? 'Belt full (5/5). Tap an equipped weapon to swap, or buy the optional 6th slot in the Workshop.'
+                        : `All ${slots} weapon slots are full. Tap an equipped weapon to take it off.`}
+                </Text>
               </Animated.View>
             )}
             </View>
@@ -1170,8 +1307,31 @@ const Camp: React.FC<Props> = ({
             <TouchableOpacity onPress={() => setArmoryFocus(null)} style={st.dockClose} accessibilityLabel="Hide weapon details">
               <Text style={st.dockCloseText}>✕</Text>
             </TouchableOpacity>
-            <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={st.dockBody}>
-              <WeaponExplainer key={armoryFocus} weapon={w} build={builds[armoryFocus]} badge={charms.includes(armoryFocus) ? 'Equipped' : 'Not equipped'} defaultOpen />
+            <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={st.dockBody}>
+              <WeaponExplainer
+                key={armoryFocus}
+                weapon={w}
+                build={builds[armoryFocus]}
+                badge={charms.includes(armoryFocus) ? 'Equipped' : 'Not equipped'}
+                evolutionMode="select"
+                showEvolutionsWhenClosed
+                equippedEvolutionId={equippedEvolutionOf(save, armoryFocus)}
+                unlockedEvolutionIds={unlockedEvolutionsForWeapon(save, armoryFocus)}
+                beltSynergyIds={beltSynergyAttrSet(charms, armoryFocus)}
+                evolutionLabTier={save.upgrades.evolution_lab ?? 0}
+                saveContext={save}
+                onSelectEvolution={(weaponId, evoId) => onChange(equipWeaponEvolution(save, weaponId, evoId))}
+                onJumpToBounty={
+                  save.bountiesUnlocked
+                    ? bountyId => {
+                        setArmoryFocus(null);
+                        setHighlightBountyId(bountyId);
+                        open('bounties');
+                      }
+                    : undefined
+                }
+                defaultOpen
+              />
             </ScrollView>
           </View>
         ) : null;
@@ -1348,11 +1508,11 @@ const AnimatedBeltSlot: React.FC<{ weaponId: string | null; reduced: boolean; ch
 
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.walnutFrame, overflow: 'hidden' },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.ivoryCard, borderBottomWidth: 2, borderBottomColor: INK },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 10, backgroundColor: COLORS.ivoryCard, borderBottomWidth: 2, borderBottomColor: INK },
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
-  title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 18, flexShrink: 1 },
-  testLoadoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 8, paddingVertical: 5, minHeight: 34 },
-  testLoadoutText: { flexShrink: 1, fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: INK },
+  title: { flex: 1, minWidth: 0, fontWeight: '900', letterSpacing: 1.2, color: INK, fontSize: 16, flexShrink: 1 },
+  testLoadoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 7, paddingVertical: 5, minHeight: 34 },
+  testLoadoutText: { flexShrink: 1, fontSize: 11, fontWeight: '900', letterSpacing: 0.5, color: INK },
   nextGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.walnutSurface, borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.walnutBorder, paddingHorizontal: 10, paddingVertical: 8 },
   nextGoalText: { flex: 1, flexShrink: 1, fontSize: 12, fontWeight: '700', color: COLORS.actionYellow, lineHeight: 16 },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.ivoryCard, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, paddingVertical: 10, paddingHorizontal: 12 },
@@ -1388,8 +1548,24 @@ const st = StyleSheet.create({
   nextTier: { fontSize: 11, color: TONE.upside, fontWeight: '700' },
   slotLine: { color: TONE.onDusk, fontSize: 12, fontWeight: '700' },
   slotRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 6, flexWrap: 'wrap' },
-  slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.walnutBorder, alignItems: 'center', justifyContent: 'center' },
+  slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.walnutBorder, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   slotSelected: { borderColor: COLORS.actionYellow, borderWidth: 3, backgroundColor: '#FFFBEB' },
+  slotLockedGhost: { backgroundColor: 'rgba(244, 240, 232, 0.14)', borderColor: '#8E877D', gap: 1 },
+  slotLockedGhostActive: { borderColor: COLORS.actionYellow, backgroundColor: 'rgba(255, 215, 0, 0.18)' },
+  slotLockedLabel: { fontSize: 8.5, fontWeight: '900', color: '#D6D0C4', letterSpacing: 0.4 },
+  slotEvoDot: { position: 'absolute', top: -4, right: -4, width: 15, height: 15, borderRadius: 7.5, backgroundColor: '#F3E8FF', borderWidth: 1.5, borderColor: INK, alignItems: 'center', justifyContent: 'center' },
+  slotMilestoneTip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 10, paddingVertical: 6 },
+  slotMilestoneText: { flex: 1, flexShrink: 1, fontSize: 11.5, fontWeight: '800', color: INK },
+  slotMilestoneBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },
+  slotMilestoneBtnText: { fontSize: 11, fontWeight: '900', color: INK },
+  beltSynergyBar: { backgroundColor: COLORS.walnutSurface, borderRadius: 8, borderWidth: 1, borderColor: COLORS.walnutBorder, paddingHorizontal: 8, paddingVertical: 6, gap: 4 },
+  beltSynergyEyebrow: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.2, color: COLORS.actionYellow },
+  tileMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  evoPips: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  evoPipDot: { width: 5.5, height: 5.5, borderRadius: 2.75, backgroundColor: '#DDD6CA', borderWidth: 1, borderColor: '#A8A29E' },
+  evoPipDotOn: { backgroundColor: '#7C3AED', borderColor: INK },
+  synergyMatchBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 1, maxWidth: '100%' },
+  synergyMatchText: { flexShrink: 1, fontSize: 9.5, fontWeight: '900', color: INK },
   slotEmpty: { color: COLORS.walnutBorder, fontWeight: '900', fontSize: 18 },
   slotCount: { color: TONE.onDusk, fontWeight: '900', marginLeft: 4, marginTop: 12, fontVariant: ['tabular-nums'] },
   nudgeRow: { flexDirection: 'row', gap: 3, marginTop: 2 },
@@ -1447,8 +1623,8 @@ const st = StyleSheet.create({
   shelfBlurb: { fontSize: 11, color: TONE.onDusk, opacity: 0.85, textAlign: 'center' },
   slotWrap: { alignItems: 'center', gap: 1 },
   slotNo: { fontSize: 9, fontWeight: '900', color: TONE.onDusk, opacity: 0.8 },
-  armoryItem: { width: 120, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2.5, padding: 8, alignItems: 'center', gap: 2 },
-  armoryName: { fontWeight: '900', fontSize: 12, color: INK },
+  armoryItem: { width: 148, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2.5, paddingHorizontal: 6, paddingVertical: 8, alignItems: 'center', gap: 2 },
+  armoryName: { fontWeight: '900', fontSize: 12.5, color: INK, textAlign: 'center', width: '100%' },
   tuneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: '#E2DBCF', paddingTop: 6, marginTop: 6 },
   tuneLabel: { fontSize: 11, fontWeight: '800', color: INK },
   tuneValue: { fontSize: 14, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },

@@ -71,7 +71,7 @@ export const DEV_STUDIOS: readonly StudioCard[] = [
     title: 'Audio & Mastering Studio',
     route: '/dev/sound',
     icon: 'delapouite/sound-on',
-    blurb: 'Audition all 64 weapon voices, 208 evolution motifs, phone-speaker EQ, and adaptive tracks.',
+    blurb: 'Audition all 64 weapon voices, 192 weapon evolution themes, phone-speaker EQ, and adaptive tracks.',
   },
   {
     id: 'fighters',

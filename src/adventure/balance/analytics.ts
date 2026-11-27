@@ -1,40 +1,40 @@
 /**
- * Extended balance analytics, combo discovery & fun/uniqueness telemetry.
+ * Extended balance analytics, Synergy Graph combo discovery & fun/uniqueness telemetry.
  *
  * Complements `lab.ts` (fast guardrails) with deep multi-factor measurements:
- *  - `pressureBench`: real World 4–5 combat conditions (Shading Surge + Bombs + Snares)
- *  - `measureWeaponsExtended`: 63 weapons across stages, Pressure lift, Snowball
- *    6-window DPM trajectories, Set-hit skewness (γ₁), pop-off multiples,
+ *  - `pressureBench`: real World 4–5 combat conditions (Shading Surge + Bombs + Snares + Set-Parry)
+ *  - `measureWeaponsExtended`: 64 weapons across stages, Pressure lift, 6-window
+ *    endgame DPM trajectories, Base-vs-Mult damage share (target >= 60% base),
+ *    Synergy Graph score, Set-hit skewness (γ₁), pop-off multiples,
  *    8D behavioral fingerprints, cosine nearest neighbors & MAP-Elites 6×6 niche grid
- *  - `measurePairSynergyMatrix`: all C(63,2) = 1,953 weapon pairs (204 recipes +
- *    1,749 emergent non-recipe combos) + full 204-evolution recipe audit
+ *  - `measurePairSynergyMatrix`: all C(64,2) = 2,016 Synergy Graph weapon pairs
+ *    + complete 192-evolution Per-Weapon 3-Evolution Suite (`withinWeaponRank` 1..3)
  *  - `measureFighterMatrix`: all 6 fighters across star budgets (0★ / 60★ / 160★)
- *    and the complete 6 × 63 fighter-weapon affinity & anti-synergy matrix
+ *    and the complete 6 × 64 fighter-weapon affinity & anti-synergy matrix
  *  - `measureArcanaMatrix`: all 8 kiss-curse Arcana solo, 6 × 8 fighter-Arcana,
  *    and all C(8,2) = 28 dual-Arcana loadouts (accounting for foeHpScale, XP & shop)
- *  - `measureCoveringArrayShapley`: stratified 5-charm + tree + dual-Arcana endgame
- *    builds with Power ON, Ridge-regression Shapley attribution & ×1→×10→×50→×300 fan curves
- *  - `measureCampaignSuspense`: 56-level Bare vs Invested knockout curves, timer/heart
+ *  - `measureCoveringArrayShapley`: stratified 5-weapon + tree + dual-Arcana endgame
+ *    builds (no Power scaling), Ridge-regression Shapley attribution & Base-vs-Mult fan curves
+ *  - `measureCampaignSuspense`: campaign-wide Bare vs Invested knockout curves, timer/heart
  *    margins & Bayesian outcome-entropy suspense
  */
 import type { AttributeName, CharacterName } from '@/types';
-import type { AdventureSave, ArcanaId, LevelDef } from '../types';
+import type { AdventureSave, ArcanaId, LevelDef, SynergyAttrId } from '../types';
 import { LEVELS, getLevel } from '../data/levels';
 import { FIGHTERS } from '../data/fighters';
 import { ARCANA, arcanaRules } from '../data/arcana';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { WEAPON_EVOLUTIONS } from '../data/evolutions';
 import { TREE_BUDGET } from '../data/skillTrees';
 import { WEAPON_ROLES, weaponRole, type WeaponRole } from '../data/weaponRoles';
 import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '../data/armory';
 import { PARRY_RULES } from '../data/parry';
+import { beltSynergyOverlap, getWeaponSynergyProfile } from '../data/synergy';
 import { SPIRE_CLASH_PAIRS } from '@/spire/engine/bridge';
 import { MAX_TUNING_TIER, MAX_WEAPON_LEVEL, weaponStatLines } from '../data/weaponStats';
-import { isPowerEnabled, PER, DEFAULT_PER, powerMultiplier, setPowerEnabled } from '../data/weaponPower';
 import { WEAPON_GROWTH } from '../data/weaponGrowth';
 import { createMaxedSave } from '../progress';
 import { BOTS, simulateRun } from '../engine/bot';
 import {
-  armableRecipes,
   barePlan,
   buyTree,
   campaignSave,
@@ -47,28 +47,35 @@ import {
   type BuildPlan,
 } from '../engine/botBuilds';
 import { createRng } from '../engine/rng';
-import { benches, inBuild, mean, median, normalizeRecipePair, play, recipeLifts, scaleBench, solo, type Bench, type RecipeLift } from './lab';
+import {
+  benches,
+  evolutionLifts,
+  inBuild,
+  mean,
+  median,
+  normalizeWeaponPair,
+  play,
+  scaleBench,
+  solo,
+  type Bench,
+  type EvolutionLift,
+} from './lab';
 import { BALANCE_TARGETS, PARTNER_WEAPONS, TIERS, type Tier } from './targets';
 import pkg from '../../../package.json';
 
 const seedOf = (i: number) => 1000 + i * 7919;
 
-const withPower = <T>(on: boolean, run: () => T): T => {
-  const was = isPowerEnabled();
-  setPowerEnabled(on);
-  try {
-    return run();
-  } finally {
-    setPowerEnabled(was);
-  }
-};
-
-const maxGearFields = (): Pick<AdventureSave, 'armory' | 'stars' | 'completedBounties' | 'legacyWeaponTiers' | 'weaponTuning'> => {
+const maxGearFields = (): Pick<
+  AdventureSave,
+  'armory' | 'stars' | 'completedBounties' | 'legacyWeaponTiers' | 'weaponTuning' | 'upgrades'
+> => {
   const armory = [...ALL_ARMORY_WEAPON_IDS];
   return {
     armory,
-    stars: {},
+    // World 1 & World 2 boss clears unlock 4th & 5th weapon slots; charm_belt: 1 adds optional 6th slot
+    stars: { '1-10': 1, '2-10': 1 },
     completedBounties: [],
+    upgrades: { charm_belt: 1 },
     legacyWeaponTiers: Object.fromEntries(armory.map(id => [id, MAX_WEAPON_LEVEL - 1])),
     weaponTuning: Object.fromEntries(
       armory.map(id => {
@@ -84,8 +91,8 @@ const BASE_TRAITS: AttributeName[] = ['shape', 'color', 'number'];
 let pressureCached: Bench | null = null;
 
 /**
- * Real World 4–5 pressure bench: 3 base traits + Shading Surge (45s calm → 15s 4-trait ×5 surge)
- * + active level hazards (time bombs & snares) + explicit representative Set-Parry + 5 hearts + 150s timer
+ * Real World 4–5 pressure bench: 3 base traits + Shading Surge (45s calm → 15s 4-trait ×1.8 +12 base surge)
+ * + active level hazards (time bombs & snares) + explicit representative Set-Parry + 8 hearts + 150s timer
  * on an unkillable foe. Captures survival, grace, heal, hazard-clearing, parry, and surge-window burst value
  * that a calm 5-trait dummy bench cannot see.
  */
@@ -125,7 +132,6 @@ export const pressureBench = (): Bench => {
   const base = {
     ...createMaxedSave(),
     armory: [...ALL_ARMORY_WEAPON_IDS],
-    upgrades: { charm_belt: 3 },
     skillNodes: {},
     charms: [],
     equippedArcana: [],
@@ -203,7 +209,7 @@ export const solveRidge = (X: readonly (readonly number[])[], y: readonly number
   return A.map(row => row[p]);
 };
 
-// ─── 1. Extended 63-Weapon Telemetry + 8D Fingerprints + MAP-Elites ─────────
+// ─── 1. Extended 64-Weapon Telemetry + 8D Fingerprints + MAP-Elites ─────────
 
 export const SNOWBALL_WINDOWS_MS = [30000, 60000, 90000, 120000, 150000, 180000] as const;
 
@@ -233,7 +239,8 @@ export interface WeaponExtendedRow {
   partner: boolean;
   growthWhat: string;
   growthGives: string;
-  powerPer: number;
+  synergyProduces: readonly SynergyAttrId[];
+  synergyConsumes: readonly SynergyAttrId[];
   /** Dummy solo lifts across stages & skill tiers */
   earlyAvg: number;
   earlyMin: number;
@@ -244,20 +251,24 @@ export interface WeaponExtendedRow {
   lateExpert: number;
   audienceLean: number;
   deadShare: number;
-  /** Restricted-play value inside 5-charm builds */
+  /** Restricted-play value inside 5-weapon builds */
   inBuildLift: number;
   /** Realistic World 4–5 Pressure + Shading Surge + Hazards lift & survival */
   pressureNovice: number;
   pressureAvg: number;
   pressureSurvivalGain: number;
-  /** Power-ON 3-minute Snowball trajectory (6 × 30s DPM buckets normalized to unarmed start DPM) */
+  /** 3-minute endgame DPM trajectory (6 × 30s buckets normalized to unarmed start DPM) */
   snowballCurve: number[];
-  /** Last-30s DPM ÷ Unarmed Last-30s DPM (target ×10) */
-  powerEndMultiple: number;
+  /** Last-30s DPM ÷ Unarmed Last-30s DPM (Synergy + Evolution scaling, no Power) */
+  endDpmMultiple: number;
   /** Weapon's own Last-30s DPM ÷ First-30s DPM */
   snowballAccel: number;
+  /** Share of Set damage coming from pre-multiplier additive base (target >= 0.60) */
+  baseDamageShare: number;
+  /** Mean total Synergy Graph score accumulated over a 3-minute fight */
+  meanSynergyScore: number;
   meanGrowthStacks: number;
-  endPowerMultiplier: number;
+  meanEvosTriggered: number;
   /** Fun & excitement distribution metrics */
   setSkewness: number;
   popOffMultiple: number;
@@ -288,6 +299,7 @@ export interface WeaponExtendedSuite {
   baselineStartDpm: number;
   baselineEndDpm: number;
   baselineSnowballCurve: number[];
+  meanBaseDamageShare: number;
   weapons: WeaponExtendedRow[];
   nicheGrid: NicheCellSummary[];
   nicheCoverage: number;
@@ -297,7 +309,9 @@ interface RawTraceStats {
   dpmBuckets: number[];
   startDpm: number;
   endDpm: number;
-  endPowerMult: number;
+  baseDamageShare: number;
+  synergyScore: number;
+  evosTriggered: number;
   growthStacks: number;
   elapsedMs: number;
   matches: number;
@@ -308,89 +322,107 @@ interface RawTraceStats {
   directShare: number;
 }
 
-const traceScaleFight = (charms: readonly string[], runs: number, tier: Tier = 'average', extraSave: Partial<AdventureSave> = {}): RawTraceStats =>
-  withPower(true, () => {
-    const sb = scaleBench();
-    const save: AdventureSave = { ...sb.save, ...extraSave, charms: [...charms] };
-    const bucketSums = Array(SNOWBALL_WINDOWS_MS.length).fill(0);
-    let startSum = 0;
-    let endSum = 0;
-    let powerMultSum = 0;
-    let growthSum = 0;
-    let elapsedSum = 0;
-    let matchSum = 0;
-    let bigSum = 0;
-    let totalSum = 0;
-    let collateralSum = 0;
-    let directDmgSum = 0;
-    let bonusDmgSum = 0;
-    const allSetHits: number[] = [];
+const traceScaleFight = (
+  charms: readonly string[],
+  runs: number,
+  tier: Tier = 'average',
+  extraSave: Partial<AdventureSave> = {}
+): RawTraceStats => {
+  const sb = scaleBench();
+  const save: AdventureSave = { ...sb.save, ...extraSave, charms: [...charms] };
+  const bucketSums = Array(SNOWBALL_WINDOWS_MS.length).fill(0);
+  let startSum = 0;
+  let endSum = 0;
+  let synergySum = 0;
+  let evoSum = 0;
+  let growthSum = 0;
+  let elapsedSum = 0;
+  let matchSum = 0;
+  let bigSum = 0;
+  let totalSum = 0;
+  let collateralSum = 0;
+  let directDmgSum = 0;
+  let bonusDmgSum = 0;
+  let baseDmgTotal = 0;
+  let setDmgTotal = 0;
+  const allSetHits: number[] = [];
 
-    for (let i = 0; i < runs; i++) {
-      const { state } = simulateRun(sb.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: true });
-      for (let b = 0; b < SNOWBALL_WINDOWS_MS.length; b++) {
-        const lo = b === 0 ? 0 : SNOWBALL_WINDOWS_MS[b - 1];
-        const hi = SNOWBALL_WINDOWS_MS[b];
-        const dmg = state.log.filter(e => e.t >= lo && e.t < hi).reduce((a, e) => a + e.damage, 0);
-        bucketSums[b] += dmg * 2; // 30s -> per minute
-      }
-      const endFrom = Math.max(0, state.elapsedMs - 30000);
-      startSum += state.log.filter(e => e.t < 30000).reduce((a, e) => a + e.damage, 0) * 2;
-      endSum += state.log.filter(e => e.t >= endFrom).reduce((a, e) => a + e.damage, 0) * 2;
-      powerMultSum += powerMultiplier(state.power);
-      growthSum += Object.values(state.growth).reduce((a, v) => a + v.stacks, 0);
-      elapsedSum += state.elapsedMs;
-      matchSum += state.matches;
-      bigSum += state.biggestHit;
-      totalSum += state.totalDamage;
+  for (let i = 0; i < runs; i++) {
+    const { state } = simulateRun(sb.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: true });
+    for (let b = 0; b < SNOWBALL_WINDOWS_MS.length; b++) {
+      const lo = b === 0 ? 0 : SNOWBALL_WINDOWS_MS[b - 1];
+      const hi = SNOWBALL_WINDOWS_MS[b];
+      const dmg = state.log.filter(e => e.t >= lo && e.t < hi).reduce((a, e) => a + e.damage, 0);
+      bucketSums[b] += dmg * 2; // 30s -> per minute
+    }
+    const endFrom = Math.max(0, state.elapsedMs - 30000);
+    const endWinMs = Math.max(1000, state.elapsedMs - endFrom);
+    const startWinMs = Math.max(1000, Math.min(30000, state.elapsedMs));
+    startSum += state.log.filter(e => e.t < 30000).reduce((a, e) => a + e.damage, 0) * (60000 / startWinMs);
+    endSum += state.log.filter(e => e.t >= endFrom).reduce((a, e) => a + e.damage, 0) * (60000 / endWinMs);
+    synergySum += Object.values(state.synergy ?? {}).reduce((a, b) => a + b, 0);
+    evoSum += state.evolutionsTriggered;
+    growthSum += Object.values(state.growth).reduce((a, v) => a + v.stacks, 0);
+    elapsedSum += state.elapsedMs;
+    matchSum += state.matches;
+    bigSum += state.biggestHit;
+    totalSum += state.totalDamage;
 
-      let runCollateral = 0;
-      for (const e of state.log) {
-        if (e.kind === 'set' && e.damage > 0) {
-          allSetHits.push(e.damage);
-          if (e.set) {
-            const col = Object.values(e.set.collateral).reduce((a, v) => a + (v ?? 0), 0);
-            runCollateral += col;
-            const triggered = Math.max(0, e.damage - e.setDamage) + Math.max(0, e.set.flatBonus);
-            directDmgSum += triggered;
-            bonusDmgSum += triggered + col;
+    let runCollateral = 0;
+    for (const e of state.log) {
+      if (e.kind === 'set' && e.damage > 0) {
+        allSetHits.push(e.damage);
+        if (e.set) {
+          const preMult = Math.max(0, e.set.baseDamageBeforeMult ?? e.set.cards + e.set.flatBonus);
+          if (e.setDamage > 0) {
+            baseDmgTotal += Math.min(e.setDamage, preMult);
+            setDmgTotal += e.setDamage;
           }
+          const col = Object.values(e.set.collateral).reduce((a, v) => a + (v ?? 0), 0);
+          runCollateral += col;
+          const triggered = Math.max(0, e.damage - e.setDamage) + Math.max(0, e.set.flatBonus);
+          directDmgSum += triggered;
+          bonusDmgSum += triggered + col;
         }
       }
-      collateralSum += runCollateral / Math.max(1, state.matches);
     }
+    collateralSum += runCollateral / Math.max(1, state.matches);
+  }
 
-    return {
-      dpmBuckets: bucketSums.map(v => v / runs),
-      startDpm: startSum / runs,
-      endDpm: endSum / runs,
-      endPowerMult: powerMultSum / runs,
-      growthStacks: growthSum / runs,
-      elapsedMs: elapsedSum / runs,
-      matches: matchSum / runs,
-      setDamages: allSetHits,
-      biggestHit: bigSum / runs,
-      totalDamage: totalSum / runs,
-      collateralPerSet: collateralSum / runs,
-      directShare: bonusDmgSum > 0 ? directDmgSum / bonusDmgSum : 0.5,
-    };
-  });
+  const denom = Math.max(1, runs);
+  return {
+    dpmBuckets: bucketSums.map(v => v / denom),
+    startDpm: startSum / denom,
+    endDpm: endSum / denom,
+    baseDamageShare: setDmgTotal > 0 ? baseDmgTotal / setDmgTotal : 1,
+    synergyScore: synergySum / denom,
+    evosTriggered: evoSum / denom,
+    growthStacks: growthSum / denom,
+    elapsedMs: elapsedSum / denom,
+    matches: matchSum / denom,
+    setDamages: allSetHits,
+    biggestHit: bigSum / denom,
+    totalDamage: totalSum / denom,
+    collateralPerSet: collateralSum / denom,
+    directShare: bonusDmgSum > 0 ? directDmgSum / bonusDmgSum : 0.5,
+  };
+};
 
-const pressureSample = (charms: readonly string[], tier: Tier, runs: number, over: Partial<AdventureSave> = {}) =>
-  withPower(false, () => {
-    const pb = pressureBench();
-    const save: AdventureSave = { ...pb.save, ...over, charms: [...charms] };
-    const damages: number[] = [];
-    let survived = 0;
-    let endHearts = 0;
-    for (let i = 0; i < runs; i++) {
-      const { state } = simulateRun(pb.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: true });
-      damages.push(state.totalDamage);
-      if (state.endReason !== 'hearts') survived++;
-      endHearts += state.hearts ?? 0;
-    }
-    return { meanDamage: mean(damages), survivalRate: survived / runs, meanHearts: endHearts / runs };
-  });
+const pressureSample = (charms: readonly string[], tier: Tier, runs: number, over: Partial<AdventureSave> = {}) => {
+  const pb = pressureBench();
+  const save: AdventureSave = { ...pb.save, ...over, charms: [...charms] };
+  const damages: number[] = [];
+  let survived = 0;
+  let endHearts = 0;
+  for (let i = 0; i < runs; i++) {
+    const { state } = simulateRun(pb.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: true });
+    damages.push(state.totalDamage);
+    if (state.endReason !== 'hearts') survived++;
+    endHearts += state.hearts ?? 0;
+  }
+  const denom = Math.max(1, runs);
+  return { meanDamage: mean(damages), survivalRate: survived / denom, meanHearts: endHearts / denom };
+};
 
 const STYLE_LABELS = ['Pure Tempo', 'Cadence', 'Balanced Control', 'Hybrid Payoff', 'Heavy Strike', 'Explosive Gamble'];
 const AGENCY_LABELS = ['Comfort / Auto', 'Safety Anchor', 'Steady Passive', 'Tactical Read', 'Active Hunt', 'High-Skill Mastery'];
@@ -415,6 +447,7 @@ export const measureWeaponsExtended = (runs = 10, buildCount = 10): WeaponExtend
   >[] = armory.map(id => {
     const w = getArmoryWeapon(id)!;
     const g = WEAPON_GROWTH[id];
+    const synProfile = getWeaponSynergyProfile(id);
     const earlyByTier = TIERS.map(t => solo(bs.early, id, t, runs, noneEarly[t]));
     const midLift = solo(bs.mid, id, 'average', runs, noneMid);
     const lateByTier = Object.fromEntries(TIERS.map(t => [t, solo(bs.late, id, t, runs, noneLate[t])])) as Record<Tier, ReturnType<typeof solo>>;
@@ -452,7 +485,8 @@ export const measureWeaponsExtended = (runs = 10, buildCount = 10): WeaponExtend
       partner: PARTNER_WEAPONS.includes(id),
       growthWhat: (g ?? []).map(d => d.look).join('; '),
       growthGives: (g ?? []).map(d => d.gives).join('; '),
-      powerPer: PER[id] ?? DEFAULT_PER,
+      synergyProduces: synProfile.produces,
+      synergyConsumes: synProfile.consumes,
       earlyAvg: earlyByTier[1].ratio,
       earlyMin: Math.min(...earlyByTier.map(x => x.ratio)),
       earlyMax: Math.max(...earlyByTier.map(x => x.ratio)),
@@ -467,10 +501,12 @@ export const measureWeaponsExtended = (runs = 10, buildCount = 10): WeaponExtend
       pressureAvg: pAvg.meanDamage / Math.max(1, pBaseAvg.meanDamage),
       pressureSurvivalGain: pNovice.survivalRate - pBaseNovice.survivalRate,
       snowballCurve: trace.dpmBuckets.map(v => v / normDpm),
-      powerEndMultiple: trace.endDpm / Math.max(1, baseTrace.endDpm),
+      endDpmMultiple: trace.endDpm / Math.max(1, baseTrace.endDpm),
       snowballAccel: accel,
+      baseDamageShare: trace.baseDamageShare,
+      meanSynergyScore: trace.synergyScore,
       meanGrowthStacks: trace.growthStacks,
-      endPowerMultiplier: trace.endPowerMult,
+      meanEvosTriggered: trace.evosTriggered,
       setSkewness: skew,
       popOffMultiple: popOff,
       p95ToMedianHit: p95Hit / medHit,
@@ -578,22 +614,25 @@ export const measureWeaponsExtended = (runs = 10, buildCount = 10): WeaponExtend
     }
   }
 
+  const nonPartnerWeapons = weapons.filter(w => !w.partner);
   return {
     baselineStartDpm: baseTrace.startDpm,
     baselineEndDpm: baseTrace.endDpm,
     baselineSnowballCurve: baseTrace.dpmBuckets.map(v => v / normDpm),
+    meanBaseDamageShare: mean(nonPartnerWeapons.map(w => w.baseDamageShare)),
     weapons,
     nicheGrid,
     nicheCoverage: occupied / 36,
   };
 };
 
-// ─── 2. Complete C(63,2) = 1,953 Pair Synergy & 204-Evolution Matrix ────────
+// ─── 2. Complete C(64,2) Synergy Graph Pair Matrix & 192-Evolution Suite ────
 
 export interface PairSynergyEntry {
   a: string;
   b: string;
-  recipeIds: string[];
+  /** Shared Synergy Graph nodes between weapon `a` and weapon `b` */
+  sharedSynergyAttrs: SynergyAttrId[];
   /** Mean damage(a,b) ÷ mean damage(none) */
   pairLift: number;
   /** (gainA + gainB) ÷ base + 1 */
@@ -605,26 +644,35 @@ export interface PairSynergyEntry {
   evoStarts: number;
 }
 
+export interface EvolutionExtendedRow extends EvolutionLift {
+  name: string;
+  /** 1 = strongest of this weapon's 3 evolutions, 2 = middle, 3 = weakest */
+  withinWeaponRank: 1 | 2 | 3;
+  /** Total combat lift of this weapon (with this evolution) vs unarmed baseline */
+  weaponOutputLift: number;
+}
+
 export interface PairSynergySuite {
   armoryIds: string[];
   soloLifts: Record<string, number>;
   totalPairs: number;
-  recipePairCount: number;
-  nonRecipePairCount: number;
+  synergyPairCount: number;
+  nonSynergyPairCount: number;
   pairs: PairSynergyEntry[];
-  topNonRecipeSynergies: PairSynergyEntry[];
-  topRecipeSynergies: PairSynergyEntry[];
+  topSynergyGraphPairs: PairSynergyEntry[];
+  topEmergentSynergies: PairSynergyEntry[];
   clashes: PairSynergyEntry[];
-  recipes: (RecipeLift & { name: string })[];
+  /** All 192 per-weapon timed evolutions (64 weapons × 3 variants: Evo A / B / C) */
+  evolutions: EvolutionExtendedRow[];
 }
 
-export const measurePairSynergyMatrix = (pairRuns = 3, recipeRuns = 8): PairSynergySuite => {
+export const measurePairSynergyMatrix = (pairRuns = 3, evoRuns = 8): PairSynergySuite => {
   const bench = benches().late;
   const armory = bench.save.armory;
   const none = play(bench, [], 'average', pairRuns);
   const baseDmg = Math.max(1, mean(none.damage));
 
-  // Precompute all 63 solo samples once on the exact same seeds
+  // Precompute all 64 solo samples once on the exact same seeds
   const soloDmg: Record<string, number> = {};
   const soloLifts: Record<string, number> = {};
   for (const id of armory) {
@@ -632,21 +680,6 @@ export const measurePairSynergyMatrix = (pairRuns = 3, recipeRuns = 8): PairSyne
     const m = mean(s.damage);
     soloDmg[id] = m;
     soloLifts[id] = m / baseDmg;
-  }
-
-  // Index recipes by unordered weapon pair key
-  const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
-  const recipesByPair = new Map<string, string[]>();
-  for (const r of EVOLUTION_RECIPES) {
-    for (const a of r.families[0]) {
-      for (const b of r.families[1]) {
-        if (a === b) continue;
-        const k = pairKey(a, b);
-        const list = recipesByPair.get(k) ?? [];
-        if (!list.includes(r.id)) list.push(r.id);
-        recipesByPair.set(k, list);
-      }
-    }
   }
 
   const pairs: PairSynergyEntry[] = [];
@@ -666,7 +699,7 @@ export const measurePairSynergyMatrix = (pairRuns = 3, recipeRuns = 8): PairSyne
     const a = armory[i];
     for (let j = i + 1; j < armory.length; j++) {
       const b = armory[j];
-      const ordered = normalizeRecipePair(a, b);
+      const ordered = normalizeWeaponPair(a, b);
       let both = play(bench, ordered, 'average', pairRuns);
       let meanBoth = mean(both.damage);
       let curBase = baseDmg;
@@ -689,11 +722,11 @@ export const measurePairSynergyMatrix = (pairRuns = 3, recipeRuns = 8): PairSyne
       const pairLift = meanBoth / curBase;
       const additiveLift = (curBase + gainA + gainB) / curBase;
       const epi = Math.log(Math.max(0.05, pairLift) / Math.max(0.05, (curA / curBase) * (curB / curBase)));
-      const rIds = recipesByPair.get(pairKey(a, b)) ?? [];
+      const sharedSynergyAttrs = beltSynergyOverlap(a, [b]);
       pairs.push({
         a,
         b,
-        recipeIds: rIds,
+        sharedSynergyAttrs,
         pairLift,
         additiveLift,
         synergy: syn,
@@ -703,26 +736,53 @@ export const measurePairSynergyMatrix = (pairRuns = 3, recipeRuns = 8): PairSyne
     }
   }
 
-  const recipeNameById = Object.fromEntries(EVOLUTION_RECIPES.map(r => [r.id, r.name]));
-  const recipes = recipeLifts(bench, 'average', recipeRuns).map(r => ({
-    ...r,
-    name: recipeNameById[r.id] ?? r.id,
+  // Per-Weapon 3-Evolution Suite (all 192 evolutions: Evo A / B / C per weapon)
+  const evoNameById = Object.fromEntries(WEAPON_EVOLUTIONS.map(e => [e.id, e.name]));
+  const rawEvos = evolutionLifts(bench, 'average', evoRuns);
+
+  // Rank each weapon's 3 evolutions (1 = strongest, 2 = middle, 3 = weakest) by pure evo composite
+  const byWeapon = new Map<string, EvolutionLift[]>();
+  for (const e of rawEvos) {
+    const list = byWeapon.get(e.weaponId) ?? [];
+    list.push(e);
+    byWeapon.set(e.weaponId, list);
+  }
+  const rankWithinWeapon = new Map<string, 1 | 2 | 3>();
+  for (const list of byWeapon.values()) {
+    const scored = [...list].sort((x, y) => {
+      const sx = Math.pow(Math.max(0.05, x.ratio), 0.55) * Math.pow(Math.max(0.05, x.ruleLift), 0.45);
+      const sy = Math.pow(Math.max(0.05, y.ratio), 0.55) * Math.pow(Math.max(0.05, y.ruleLift), 0.45);
+      return sy - sx || x.variantIndex - y.variantIndex;
+    });
+    scored.forEach((e, idx) => {
+      rankWithinWeapon.set(e.id, Math.min(3, idx + 1) as 1 | 2 | 3);
+    });
+  }
+
+  const evolutions: EvolutionExtendedRow[] = rawEvos.map(e => ({
+    ...e,
+    name: evoNameById[e.id] ?? e.id,
+    withinWeaponRank: rankWithinWeapon.get(e.id) ?? 1,
+    weaponOutputLift: Math.max(0.1, (soloLifts[e.weaponId] ?? 1) * Math.max(0.5, e.ratio)),
   }));
 
-  const nonRecipe = pairs.filter(p => p.recipeIds.length === 0);
-  const withRecipe = pairs.filter(p => p.recipeIds.length > 0);
+  const withSynergy = pairs.filter(p => p.sharedSynergyAttrs.length > 0);
+  const withoutSynergy = pairs.filter(p => p.sharedSynergyAttrs.length === 0);
 
   return {
     armoryIds: [...armory],
     soloLifts,
     totalPairs: pairs.length,
-    recipePairCount: withRecipe.length,
-    nonRecipePairCount: nonRecipe.length,
+    synergyPairCount: withSynergy.length,
+    nonSynergyPairCount: withoutSynergy.length,
     pairs,
-    topNonRecipeSynergies: [...nonRecipe].sort((x, y) => y.synergy - x.synergy).slice(0, 30),
-    topRecipeSynergies: [...withRecipe].sort((x, y) => y.pairLift - x.pairLift).slice(0, 30),
-    clashes: [...pairs].filter(p => p.synergy < 0.78 || p.pairLift < Math.max(soloLifts[p.a], soloLifts[p.b]) * 0.92).sort((x, y) => x.synergy - y.synergy).slice(0, 30),
-    recipes,
+    topSynergyGraphPairs: [...withSynergy].sort((x, y) => y.pairLift - x.pairLift).slice(0, 30),
+    topEmergentSynergies: [...withoutSynergy].sort((x, y) => y.synergy - x.synergy).slice(0, 30),
+    clashes: [...pairs]
+      .filter(p => p.synergy < 0.78 || p.pairLift < Math.max(soloLifts[p.a], soloLifts[p.b]) * 0.92)
+      .sort((x, y) => x.synergy - y.synergy)
+      .slice(0, 30),
+    evolutions,
   };
 };
 
@@ -817,67 +877,53 @@ const playFighterBench = (
   charms: readonly string[],
   tier: Tier,
   runs: number
-) =>
-  withPower(false, () => {
-    const rng = createRng(fighter.length * 97 + stars);
-    const nodes = stars > 0 ? buyTree(fighter, stars, 'plan', rng) : [];
-    const save: AdventureSave = {
-      ...bench.save,
-      selectedFighter: fighter,
-      unlockedFighters: FIGHTERS.map(f => f.name),
-      skillNodes: { [fighter]: nodes },
-      charms: [...charms],
-    };
-    const damages: number[] = [];
-    let survived = 0;
-    for (let i = 0; i < runs; i++) {
-      const { state } = simulateRun(bench.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: true });
-      damages.push(state.totalDamage);
-      if (state.endReason !== 'hearts') survived++;
-    }
-    return { meanDamage: mean(damages), survival: survived / runs };
-  });
+) => {
+  const rng = createRng(fighter.length * 97 + stars);
+  const nodes = stars > 0 ? buyTree(fighter, stars, 'plan', rng) : [];
+  const save: AdventureSave = {
+    ...bench.save,
+    selectedFighter: fighter,
+    unlockedFighters: FIGHTERS.map(f => f.name),
+    skillNodes: { [fighter]: nodes },
+    charms: [...charms],
+  };
+  const damages: number[] = [];
+  let survived = 0;
+  for (let i = 0; i < runs; i++) {
+    const { state } = simulateRun(bench.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: true });
+    damages.push(state.totalDamage);
+    if (state.endReason !== 'hearts') survived++;
+  }
+  return { meanDamage: mean(damages), survival: survived / Math.max(1, runs) };
+};
 
 export const measureFighterMatrix = (curveRuns = 8, cellRuns = 4): FighterMatrixSuite => {
   const late = benches().late;
   const press = pressureBench();
   const armory = [...ALL_ARMORY_WEAPON_IDS];
 
-  // Unarmed baseline with passives stripped via `disablePassives` (keeps identical Parry/Surge/Power/Rainbow/Purity rules!)
-  const bareDummyDmg = Math.max(
-    1,
-    mean(
-      withPower(false, () => {
-        const ds: number[] = [];
-        for (let i = 0; i < curveRuns; i++) {
-          ds.push(
-            simulateRun(late.level, late.save, BOTS.average, seedOf(i), undefined, {
-              skipPicks: true,
-              overrides: { disablePassives: true },
-            }).state.totalDamage
-          );
-        }
-        return ds;
-      })
-    )
-  );
-  const barePressDmg = Math.max(
-    1,
-    mean(
-      withPower(false, () => {
-        const ds: number[] = [];
-        for (let i = 0; i < curveRuns; i++) {
-          ds.push(
-            simulateRun(press.level, press.save, BOTS.average, seedOf(i), undefined, {
-              skipPicks: true,
-              overrides: { disablePassives: true },
-            }).state.totalDamage
-          );
-        }
-        return ds;
-      })
-    )
-  );
+  // Unarmed baseline with passives stripped via `disablePassives` (keeps identical Parry/Surge/Rainbow/Purity rules!)
+  const bareDummyDs: number[] = [];
+  for (let i = 0; i < curveRuns; i++) {
+    bareDummyDs.push(
+      simulateRun(late.level, late.save, BOTS.average, seedOf(i), undefined, {
+        skipPicks: true,
+        overrides: { disablePassives: true },
+      }).state.totalDamage
+    );
+  }
+  const bareDummyDmg = Math.max(1, mean(bareDummyDs));
+
+  const barePressDs: number[] = [];
+  for (let i = 0; i < curveRuns; i++) {
+    barePressDs.push(
+      simulateRun(press.level, press.save, BOTS.average, seedOf(i), undefined, {
+        skipPicks: true,
+        overrides: { disablePassives: true },
+      }).state.totalDamage
+    );
+  }
+  const barePressDmg = Math.max(1, mean(barePressDs));
 
   const curves: FighterCurveRow[] = FIGHTERS.map(f => {
     const d0 = playFighterBench(late, f.name, 0, [], 'average', curveRuns);
@@ -900,7 +946,7 @@ export const measureFighterMatrix = (curveRuns = 8, cellRuns = 4): FighterMatrix
     };
   });
 
-  // 6 Fighters (at 90★ mid-late tree so passives + signature nodes are live) × 63 Weapons on Pressure bench
+  // 6 Fighters (at 90★ mid-late tree so passives + signature nodes are live) × 64 Weapons on Pressure bench
   const treeStars = 90;
   const fighterBase = Object.fromEntries(
     FIGHTERS.map(f => [f.name, playFighterBench(press, f.name, treeStars, [], 'average', cellRuns).meanDamage])
@@ -909,11 +955,10 @@ export const measureFighterMatrix = (curveRuns = 8, cellRuns = 4): FighterMatrix
   const rawCells: Omit<FighterWeaponCell, 'affinity'>[] = [];
   for (const f of FIGHTERS) {
     for (const wId of armory) {
-      const charms = wId === 'understudy' ? ['blast-powder', 'understudy'] : [wId];
-      const baseForCharms =
-        wId === 'understudy'
-          ? playFighterBench(press, f.name, treeStars, ['blast-powder'], 'average', cellRuns).meanDamage
-          : fighterBase[f.name];
+      const charms = PARTNER_WEAPONS.includes(wId) ? ['blast-powder', wId] : [wId];
+      const baseForCharms = PARTNER_WEAPONS.includes(wId)
+        ? playFighterBench(press, f.name, treeStars, ['blast-powder'], 'average', cellRuns).meanDamage
+        : fighterBase[f.name];
       const res = playFighterBench(press, f.name, treeStars, charms, 'average', cellRuns);
       rawCells.push({
         fighter: f.name,
@@ -992,7 +1037,7 @@ export interface ArcanaMatrixSuite {
 /**
  * Realistic 2-wave combat bench for Arcana so every Arcana's upside & curse are live:
  * wave 1 (knocks out around mid-fight, triggering overkill coins, wave-clear heal & intermission shop)
- * + wave 2 (unkillable sponge) + XP level-up picks + armed recipe pair + Shading Surge + hazards.
+ * + wave 2 (unkillable sponge) + XP level-up picks + per-weapon evolutions + Shading Surge + hazards.
  */
 const arcanaCombatBench = () => {
   const ref = getLevel('4-4');
@@ -1012,16 +1057,17 @@ const arcanaCombatBench = () => {
     },
     challenge: { kind: 'noMistakes' },
   };
+  const gear = maxGearFields();
   const base = {
     ...createMaxedSave(),
-    armory: [...ALL_ARMORY_WEAPON_IDS],
-    upgrades: { charm_belt: 3, tarot_deck: 2 },
+    ...gear,
+    upgrades: { charm_belt: 1, tarot_deck: 2 },
     skillNodes: {},
-    // Bring a representative recipe pair so Catalyst Resonance, XP picks & shops all fire naturally
+    // Bring a representative Synergy & Evolution duo so Evolution Resonance, XP picks & shops all fire naturally
     charms: ['flint-spark', 'blast-powder'],
     equippedArcana: [],
   } as AdventureSave;
-  return { level, save: { ...base, ...maxGearFields() } };
+  return { level, save: base };
 };
 
 const runArcanaSample = (
@@ -1030,32 +1076,31 @@ const runArcanaSample = (
   runs: number,
   fighter: CharacterName = 'Orange Tabby',
   stars = 60
-) =>
-  withPower(false, () => {
-    const ab = arcanaCombatBench();
-    const rng = createRng(fighter.length * 53 + stars);
-    const nodes = stars > 0 ? buyTree(fighter, stars, 'plan', rng) : [];
-    const rules = arcanaRules(arcanaIds);
-    const hpScale = rules.foeHpScale ?? 1;
-    const save: AdventureSave = {
-      ...ab.save,
-      selectedFighter: fighter,
-      skillNodes: { [fighter]: nodes },
-      equippedArcana: [...arcanaIds],
-      activeArcana: arcanaIds[0] ?? null,
-    };
-    const eff: number[] = [];
-    const raw: number[] = [];
-    let survived = 0;
-    for (let i = 0; i < runs; i++) {
-      // skipPicks: false so Scholar's Gambit (2x XP, 4 pick options) & Overkill Harvest (shop coins) work!
-      const { state } = simulateRun(ab.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: false });
-      raw.push(state.totalDamage);
-      eff.push(state.totalDamage / hpScale);
-      if (state.endReason !== 'hearts') survived++;
-    }
-    return { effective: median(eff), raw: median(raw), survival: survived / runs, hpScale };
-  });
+) => {
+  const ab = arcanaCombatBench();
+  const rng = createRng(fighter.length * 53 + stars);
+  const nodes = stars > 0 ? buyTree(fighter, stars, 'plan', rng) : [];
+  const rules = arcanaRules(arcanaIds);
+  const hpScale = rules.foeHpScale ?? 1;
+  const save: AdventureSave = {
+    ...ab.save,
+    selectedFighter: fighter,
+    skillNodes: { [fighter]: nodes },
+    equippedArcana: [...arcanaIds],
+    activeArcana: arcanaIds[0] ?? null,
+  };
+  const eff: number[] = [];
+  const raw: number[] = [];
+  let survived = 0;
+  for (let i = 0; i < runs; i++) {
+    // skipPicks: false so Scholar's Gambit (2x XP, 4 pick options) & Overkill Harvest (shop coins) work!
+    const { state } = simulateRun(ab.level, save, BOTS[tier], seedOf(i), undefined, { skipPicks: false });
+    raw.push(state.totalDamage);
+    eff.push(state.totalDamage / hpScale);
+    if (state.endReason !== 'hearts') survived++;
+  }
+  return { effective: median(eff), raw: median(raw), survival: survived / Math.max(1, runs), hpScale };
+};
 
 export const measureArcanaMatrix = (runs = 8): ArcanaMatrixSuite => {
   const soloRuns = Math.max(runs, 10);
@@ -1132,7 +1177,7 @@ export const measureArcanaMatrix = (runs = 8): ArcanaMatrixSuite => {
   return { solo: soloRows, pairs, fighterArcana };
 };
 
-// ─── 5. Covering-Array Endgame Shapley & ×1→×10→×50→×300 Snowball Fan ───────
+// ─── 5. Covering-Array Endgame Shapley & Base-vs-Mult Scaling Fan ───────────
 
 export interface FanBandWindow {
   windowLabel: string;
@@ -1147,17 +1192,19 @@ export interface ShapleyAttribution {
   name: string;
   kind: 'weapon' | 'fighter' | 'arcana';
   role?: WeaponRole;
-  /** Multiplicative endgame DPM factor exp(β_i) inside full 5-charm + Tree + Arcana builds */
+  /** Multiplicative endgame DPM factor exp(β_i) inside full 5-weapon + Tree + Arcana builds */
   shapleyMult: number;
   appearances: number;
 }
 
 export interface CoveringArraySuite {
   buildCount: number;
+  meanBaseDamageShare: number;
+  meanSynergyScore: number;
   snowballTiers: {
     unarmed: FanBandWindow[];
     singleWeapon: FanBandWindow[];
-    recipePair: FanBandWindow[];
+    synergyPair: FanBandWindow[];
     fullBuild: FanBandWindow[];
   };
   endMultipleStats: {
@@ -1192,7 +1239,7 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
   const armory = sb.save.armory;
   const rng = createRng(20261115);
 
-  // Baseline unarmed curve (Power ON: unarmed has 0 power, establishes ×1.0)
+  // Baseline unarmed curve (establishes ×1.0)
   const baseTrace = traceScaleFight([], Math.max(6, runsPerBuild * 2), 'average');
   const baseEnd = Math.max(1, baseTrace.endDpm);
   const baseStart = Math.max(1, baseTrace.startDpm);
@@ -1206,25 +1253,33 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
     singleEnds.push(tr.endDpm / baseEnd);
   }
 
-  // Sample 2: 36 stratified Recipe Pairs
-  const recipes = rng.shuffle([...armableRecipes(sb.save)]).slice(0, 36);
+  // Sample 2: 36 stratified Synergy-Graph-linked weapon pairs
+  const allSynergyPairs: [string, string][] = [];
+  for (let i = 0; i < armory.length; i++) {
+    for (let j = i + 1; j < armory.length; j++) {
+      if (beltSynergyOverlap(armory[i], [armory[j]]).length > 0) {
+        allSynergyPairs.push(normalizeWeaponPair(armory[i], armory[j]));
+      }
+    }
+  }
+  const sampledPairs = rng.shuffle(allSynergyPairs).slice(0, 36);
   const pairCurves: number[][] = [];
   const pairEnds: number[] = [];
-  for (const r of recipes) {
-    const pair = normalizeRecipePair(r.options[0][0], r.options[1][0]);
+  for (const pair of sampledPairs) {
     const tr = traceScaleFight(pair, runsPerBuild, 'average');
     pairCurves.push(tr.dpmBuckets.map(v => v / baseStart));
     pairEnds.push(tr.endDpm / baseEnd);
   }
 
-  // Sample 3: Stratified Latin Covering Array of Full 5-Charm + Fighter (160★) + 2-Arcana + Maxed Workshop builds
-  // Each pass shuffles all 63 weapons into 12 builds of 5 (+ 3 carried into next pass) so every weapon appears almost identically often!
+  // Sample 3: Stratified Latin Covering Array of Full 5-Weapon + Fighter (160★) + 2-Arcana + Maxed Workshop builds
   const pool: string[] = [];
-  const totalBuilds = passesPerSlot * 13; // 15 * 13 = 195 builds -> 975 weapon slots -> ~15.5 appearances per weapon!
+  const totalBuilds = passesPerSlot * 13; // 15 * 13 = 195 builds -> 975 weapon slots -> ~15.2 appearances per weapon!
   while (pool.length < totalBuilds * 5 + 10) pool.push(...rng.shuffle([...armory]));
 
   const fullCurves: number[][] = [];
   const fullEnds: number[] = [];
+  const fullBaseShares: number[] = [];
+  const fullSynergyScores: number[] = [];
   const X: number[][] = [];
   const y: number[] = [];
   const wAppear = Array(armory.length).fill(0);
@@ -1259,6 +1314,16 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
     const fullSave: Partial<AdventureSave> = {
       ...createMaxedSave(),
       ...maxGearFields(),
+      upgrades: {
+        heavy_hitter: 3,
+        tough_hide: 3,
+        hourglass: 3,
+        sharp_eyes: 3,
+        second_wind: 3,
+        charm_belt: 1,
+        tarot_deck: 2,
+        evolution_lab: 2,
+      },
       selectedFighter: fighter,
       skillNodes: { [fighter]: nodes },
       equippedArcana: arcanaPair,
@@ -1271,6 +1336,8 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
 
     fullCurves.push(effBuckets);
     fullEnds.push(effEndMultiple);
+    fullBaseShares.push(tr.baseDamageShare);
+    fullSynergyScores.push(tr.synergyScore);
 
     // Design row: [1 (intercept), 64 weapon indicators, 5 fighter contrasts (vs index 0), 8 arcana indicators]
     const row = Array(1 + armory.length + (FIGHTERS.length - 1) + ARCANA.length).fill(0);
@@ -1292,7 +1359,7 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
       }
     }
     X.push(row);
-    y.push(Math.log(Math.max(1, effEndMultiple)));
+    y.push(Math.log(Math.max(0.2, effEndMultiple)));
   }
 
   const beta = solveRidge(X, y, 2.5);
@@ -1304,7 +1371,7 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
     name: getArmoryWeapon(id)!.name,
     kind: 'weapon',
     role: weaponRole(id),
-    // Center around mean 5-slot peer contribution so >1.00 = beats average endgame charm slot
+    // Center around mean 5-slot peer contribution so >1.00 = beats average endgame weapon slot
     shapleyMult: Math.exp(wBetas[i] - wMeanBeta),
     appearances: wAppear[i],
   }));
@@ -1329,10 +1396,12 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
 
   return {
     buildCount: totalBuilds,
+    meanBaseDamageShare: mean(fullBaseShares),
+    meanSynergyScore: mean(fullSynergyScores),
     snowballTiers: {
       unarmed: summarizeFan([baseTrace.dpmBuckets.map(v => v / baseStart)]),
       singleWeapon: summarizeFan(singleCurves),
-      recipePair: summarizeFan(pairCurves),
+      synergyPair: summarizeFan(pairCurves),
       fullBuild: summarizeFan(fullCurves),
     },
     endMultipleStats: {
@@ -1349,7 +1418,7 @@ export const measureCoveringArrayShapley = (passesPerSlot = 15, runsPerBuild = 3
   };
 };
 
-// ─── 6. 56-Level Campaign Progression & Bayesian Suspense Audit ─────────────
+// ─── 6. Campaign Progression & Bayesian Suspense Audit ──────────────────────
 
 export interface CampaignLevelRow {
   id: string;
@@ -1412,12 +1481,13 @@ export const measureCampaignSuspense = (runs = 20): CampaignSuspenseSuite => {
       timeShares += tShare;
       heartShares += hShare;
     }
+    const denom = Math.max(1, runs);
     return {
-      star1Rate: star1 / runs,
-      winRate: wins / runs,
-      star3Rate: star3 / runs,
-      meanTimeLeftShare: timeShares / runs,
-      meanHeartsLeftShare: heartShares / runs,
+      star1Rate: star1 / denom,
+      winRate: wins / denom,
+      star3Rate: star3 / denom,
+      meanTimeLeftShare: timeShares / denom,
+      meanHeartsLeftShare: heartShares / denom,
     };
   };
 
@@ -1499,7 +1569,7 @@ export const runFullBalanceAtlas = (opts?: {
   weaponRuns?: number;
   buildCount?: number;
   pairRuns?: number;
-  recipeRuns?: number;
+  evoRuns?: number;
   fighterRuns?: number;
   arcanaRuns?: number;
   coveringPasses?: number;
@@ -1511,7 +1581,7 @@ export const runFullBalanceAtlas = (opts?: {
   roles: WEAPON_ROLES,
   targets: BALANCE_TARGETS,
   weaponsSuite: measureWeaponsExtended(opts?.weaponRuns ?? 10, opts?.buildCount ?? 10),
-  pairSuite: measurePairSynergyMatrix(opts?.pairRuns ?? 3, opts?.recipeRuns ?? 8),
+  pairSuite: measurePairSynergyMatrix(opts?.pairRuns ?? 3, opts?.evoRuns ?? 8),
   fighterSuite: measureFighterMatrix(opts?.fighterRuns ?? 8, Math.max(3, Math.floor((opts?.fighterRuns ?? 8) / 2))),
   arcanaSuite: measureArcanaMatrix(opts?.arcanaRuns ?? 8),
   coveringSuite: measureCoveringArrayShapley(opts?.coveringPasses ?? 14, 3),

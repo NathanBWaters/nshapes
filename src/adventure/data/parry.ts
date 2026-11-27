@@ -3,7 +3,7 @@
  *
  * Early fights use default timing-based parrying (ANY valid Trio during the
  * wind-up parries with a 2.5s micro-Stagger; hitting the final golden window
- * triggers a PERFECT PARRY + 8s 2× Stagger). Later foes, Elites, and Bosses
+ * triggers a PERFECT PARRY + 8s Stagger). Later foes, Elites, and Bosses
  * require specific Counter-Sets across 5 distinct foe Parry archetypes
  * (Sluggish Heavy Slam, Hyper Swarm, Stalker Ambush, Tactical Standard, and
  * Boss Escalation) — always shown up front on the pre-battle preview.
@@ -20,13 +20,21 @@ export const PARRY_RULES = {
   /** Snappy Perfect Parry window for Hyper/Swarm foes */
   swarmPerfectWindowMs: 2800,
   /** Damage multiplier on the Set that lands a default (any-Set) Parry */
-  anyParryMult: 1.25,
+  anyParryMult: 1.15,
   /** Damage multiplier on the Set that lands a specific Counter-Set Parry */
-  counterParryMult: 1.4,
+  counterParryMult: 1.25,
   /** Damage multiplier on the Set that lands a PERFECT PARRY */
-  perfectParryMult: 1.75,
+  perfectParryMult: 1.35,
   /** Damage multiplier on ALL Sets while the foe is Staggered */
-  staggerDamageMult: 2,
+  staggerDamageMult: 1.35,
+  /** Flat base damage added to the Set that lands a default (any-Set) Parry */
+  anyParryFlat: 5,
+  /** Flat base damage added to the Set that lands a specific Counter-Set Parry */
+  counterParryFlat: 10,
+  /** Flat base damage added to the Set that lands a PERFECT PARRY */
+  perfectParryFlat: 16,
+  /** Flat base damage added to every Set while the foe is Staggered */
+  staggerFlatBonus: 8,
   /** Micro-Stagger duration for a default (any-Set) timing Parry (ms) — lets beginners feel Tension → Release! */
   anyStaggerMs: 2500,
   /** Stagger duration for a specific Counter Parry (ms) */

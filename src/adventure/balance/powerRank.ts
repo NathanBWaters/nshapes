@@ -63,7 +63,7 @@ export const EVOLUTION_COMPOSITE_WEIGHTS = {
 export const EVOLUTION_BUILD_AROUND_WEIGHTS = {
   cleanTotal: 0.40,
   ruleLift: 0.35,
-  pairOutput: 0.25,
+  weaponOutput: 0.25,
 } as const;
 
 export const FIGHTER_COMPOSITE_WEIGHTS = {
@@ -99,7 +99,7 @@ export const SOLO_TESTER_DIVERGENCE_THRESHOLDS = {
 export const HUMAN_DROUGHT_GAP_THRESHOLDS = {
   /** Peer-normalized log shift between Lognormal calibrated_human and Uniform BOTS.average */
   weaponLogGap: 0.12,
-  /** Evolutions span 208 recipes with fewer seeds per boss, so require a stronger shift (~±40%) */
+  /** Evolutions span 192 per-weapon variants with fewer seeds per boss, so require a stronger shift (~±40%) */
   evolutionLogGap: 0.35,
   /** Fighters have tighter spreads (~±10%) across 36 seeds */
   fighterLogGap: 0.10,
@@ -122,7 +122,7 @@ export type EvolutionLens =
   | 'composite'
   | 'buildAround'
   | 'ruleLift'
-  | 'pairOutput'
+  | 'weaponOutput'
   | 'gauntlet'
   | 'gauntletHuman'
   | 'gauntletSpire';
@@ -140,7 +140,7 @@ export type AnyLens = WeaponLens | EvolutionLens | FighterLens | ArcanaLens;
 
 export const CATEGORY_LENSES: Record<PowerCategory, readonly string[]> = {
   weapons: ['composite', 'inBuild', 'solo', 'pressure', 'shapley', 'gauntlet', 'gauntletHuman', 'gauntletSpire'],
-  evolutions: ['composite', 'buildAround', 'ruleLift', 'pairOutput', 'gauntlet', 'gauntletHuman', 'gauntletSpire'],
+  evolutions: ['composite', 'buildAround', 'ruleLift', 'weaponOutput', 'gauntlet', 'gauntletHuman', 'gauntletSpire'],
   fighters: ['composite', 'fullBuild', 'pressure160', 'dummy160', 'withWeapons90', 'gauntlet', 'gauntletHuman', 'gauntletSpire'],
   arcana: ['composite', 'effectiveAvg', 'effectiveExpert', 'shapley'],
 };
@@ -212,20 +212,21 @@ export interface WeaponEntryMeta {
   pressureNovice: number;
   pressureSurvivalGain: number;
   shapleyMult: number;
-  powerEndMultiple: number;
+  endDpmMultiple: number;
+  baseDamageShare: number;
 }
 
 export interface EvolutionEntryMeta {
   kind: 'evolutions';
-  pair: [string, string];
-  isSignature: boolean;
-  armingPairCount: number;
-  hasEncoreFix: boolean;
+  weaponId: string;
+  variantIndex: 0 | 1 | 2;
+  conditionType: string;
+  triggersPerFight: number;
+  withinWeaponRank: 1 | 2 | 3;
   rawTotalLift: number;
   cleanTotalLift: number;
   ruleLift: number;
-  meanPairLift: number;
-  startsPerFight: number;
+  weaponOutputLift: number;
   ruleFiringsPerFight: number;
   buildAroundMult: number;
 }
@@ -453,7 +454,12 @@ const normalizeLens = (category: PowerCategory, requested?: string): string => {
   if (category === 'weapons' && requested === 'in-build') return 'inBuild';
   if (category === 'evolutions' && (requested === 'build-around' || requested === 'e8')) return 'buildAround';
   if (category === 'evolutions' && (requested === 'rule' || requested === 'rule-lift')) return 'ruleLift';
-  if (category === 'evolutions' && (requested === 'pair' || requested === 'pairLift')) return 'pairOutput';
+  if (
+    category === 'evolutions' &&
+    (requested === 'pair' || requested === 'pairLift' || requested === 'pairOutput' || requested === 'weapon-output')
+  ) {
+    return 'weaponOutput';
+  }
   if (category === 'fighters' && (requested === 'shapley' || requested === 'full-build')) return 'fullBuild';
   if (category === 'fighters' && requested === 'pressure') return 'pressure160';
   if (category === 'fighters' && requested === 'dummy') return 'dummy160';
@@ -833,7 +839,11 @@ const buildWeaponItems = (
         pressureNovice: roundN(p.w.pressureNovice, 3),
         pressureSurvivalGain: roundN(p.w.pressureSurvivalGain, 3),
         shapleyMult: roundN(p.shapVal, 3),
-        powerEndMultiple: roundN(p.w.powerEndMultiple, 2),
+        endDpmMultiple: roundN(
+          p.w.endDpmMultiple ?? (p.w as unknown as { powerEndMultiple?: number }).powerEndMultiple ?? 1,
+          2
+        ),
+        baseDamageShare: roundN(p.w.baseDamageShare ?? 1, 3),
       },
     };
   });
@@ -874,54 +884,86 @@ const buildEvolutionItems = (
   analytics: FullBalanceAtlasData,
   gauntlet?: GauntletReport | null
 ): { items: RawCategoryItem[]; medianChassisLift: number } => {
-  const recipes = analytics.pairSuite.recipes;
   const gauntletById = new Map((gauntlet?.evolutions ?? []).map(e => [e.id, e]));
-  const pairByKey = new Map<string, number>();
-  const pairsByRecipe = new Map<string, number[]>();
 
-  for (const p of analytics.pairSuite.pairs) {
-    const key = p.a < p.b ? `${p.a}|${p.b}` : `${p.b}|${p.a}`;
-    pairByKey.set(key, p.pairLift);
-    for (const rid of p.recipeIds) {
-      const list = pairsByRecipe.get(rid) ?? [];
-      list.push(p.pairLift);
-      pairsByRecipe.set(rid, list);
-    }
+  // Primary path: 192 per-weapon timed evolutions (`analytics.pairSuite.evolutions`).
+  // Gracefully tolerates legacy pre-redesign `analytics.pairSuite.recipes` snapshots until atlas is regenerated.
+  type LegacyRecipeRow = {
+    id: string;
+    name?: string;
+    pair: [string, string];
+    ratio: number;
+    ruleLift: number;
+    starts?: number;
+    ruleFirings?: number;
+  };
+  const legacyPairSuite = analytics.pairSuite as FullBalanceAtlasData['pairSuite'] & {
+    recipes?: LegacyRecipeRow[];
+  };
+  const evoRows = analytics.pairSuite.evolutions ?? [];
+
+  interface NormalizedEvoInput {
+    id: string;
+    name: string;
+    weaponId: string;
+    variantIndex: 0 | 1 | 2;
+    conditionType: string;
+    withinWeaponRank?: 1 | 2 | 3;
+    ratio: number;
+    ruleLift: number;
+    weaponOutputLift: number;
+    triggersPerFight: number;
+    ruleFirings: number;
   }
 
-  // Median universal blank-shell chassis lift across all non-Encore recipes (~1.191)
+  const normalized: NormalizedEvoInput[] =
+    evoRows.length > 0
+      ? evoRows.map(e => ({
+          id: e.id,
+          name: e.name || e.id,
+          weaponId: e.weaponId,
+          variantIndex: e.variantIndex,
+          conditionType: e.conditionType,
+          withinWeaponRank: e.withinWeaponRank,
+          ratio: e.ratio,
+          ruleLift: e.ruleLift,
+          weaponOutputLift: e.weaponOutputLift ?? Math.max(0.1, (analytics.pairSuite.soloLifts?.[e.weaponId] ?? 1) * e.ratio),
+          triggersPerFight: e.triggersPerFight ?? 0,
+          ruleFirings: e.ruleFirings ?? 0,
+        }))
+      : (legacyPairSuite.recipes ?? []).map((r, idx) => ({
+          id: r.id,
+          name: r.name || r.id,
+          weaponId: r.pair[0] ?? 'unknown',
+          variantIndex: (idx % 3) as 0 | 1 | 2,
+          conditionType: 'legacy',
+          ratio: r.ratio,
+          ruleLift: r.ruleLift,
+          weaponOutputLift: Math.max(0.1, (analytics.pairSuite.soloLifts?.[r.pair[0]] ?? 1) * r.ratio),
+          triggersPerFight: r.starts ?? 0,
+          ruleFirings: r.ruleFirings ?? 0,
+        }));
+
   const chassisRatios: number[] = [];
-  for (const r of recipes) {
-    if (r.pair.includes('encore-mask')) continue;
-    const tot = snapshot[`recipe:${r.id}`] ?? r.ratio;
-    const rule = snapshot[`recipe:${r.id}:ruleLift`] ?? r.ruleLift;
+  for (const e of normalized) {
+    const tot = snapshot[`evo:${e.id}`] ?? snapshot[`recipe:${e.id}`] ?? e.ratio;
+    const rule = snapshot[`evo:${e.id}:ruleLift`] ?? snapshot[`recipe:${e.id}:ruleLift`] ?? e.ruleLift;
     if (tot > 0 && rule > 0) chassisRatios.push(tot / rule);
   }
-  const medianChassisLift = chassisRatios.length ? quantile(chassisRatios, 0.5) : 1.191;
+  const medianChassisLift = chassisRatios.length ? quantile(chassisRatios, 0.5) : 1.15;
 
-  const prelim = recipes.map(r => {
-    const [a, b] = r.pair;
-    const canonKey = a < b ? `${a}|${b}` : `${b}|${a}`;
-    const armingLifts = pairsByRecipe.get(r.id) ?? [];
-    const meanPairLift =
-      armingLifts.length > 0
-        ? armingLifts.reduce((s, v) => s + v, 0) / armingLifts.length
-        : (pairByKey.get(canonKey) ?? 1);
-
-    const hasEncore = r.pair.includes('encore-mask');
-    const sTot = snapshot[`recipe:${r.id}`];
-    const sRule = snapshot[`recipe:${r.id}:ruleLift`];
+  const prelim = normalized.map(e => {
+    const sTot = snapshot[`evo:${e.id}`] ?? snapshot[`recipe:${e.id}`];
+    const sRule = snapshot[`evo:${e.id}:ruleLift`] ?? snapshot[`recipe:${e.id}:ruleLift`];
     const ruleBlend =
       sRule !== undefined
-        ? Math.pow(clampPos(sRule), 0.7) * Math.pow(clampPos(r.ruleLift), 0.3)
-        : clampPos(r.ruleLift);
-    const totBlend =
+        ? Math.pow(clampPos(sRule), 0.7) * Math.pow(clampPos(e.ruleLift), 0.3)
+        : clampPos(e.ruleLift);
+    const cleanTotal =
       sTot !== undefined
-        ? Math.pow(clampPos(sTot), 0.7) * Math.pow(Math.max(1.01, r.ratio), 0.3)
-        : Math.max(1.01, r.ratio);
-
-    // Fix Encore Mask denominator artifact: turning evolutions off disables Encore Mask itself
-    const cleanTotal = hasEncore ? ruleBlend * medianChassisLift : totBlend;
+        ? Math.pow(clampPos(sTot), 0.7) * Math.pow(Math.max(1.01, e.ratio), 0.3)
+        : Math.max(1.01, e.ratio);
+    const weaponOutputLift = clampPos(e.weaponOutputLift);
 
     const composite =
       Math.pow(cleanTotal, EVOLUTION_COMPOSITE_WEIGHTS.cleanTotal) *
@@ -929,51 +971,65 @@ const buildEvolutionItems = (
     const buildAround =
       Math.pow(cleanTotal, EVOLUTION_BUILD_AROUND_WEIGHTS.cleanTotal) *
       Math.pow(ruleBlend, EVOLUTION_BUILD_AROUND_WEIGHTS.ruleLift) *
-      Math.pow(clampPos(meanPairLift), EVOLUTION_BUILD_AROUND_WEIGHTS.pairOutput);
+      Math.pow(weaponOutputLift, EVOLUTION_BUILD_AROUND_WEIGHTS.weaponOutput);
 
     return {
-      r,
-      hasEncore,
-      armingPairCount: Math.max(1, armingLifts.length),
-      rawTotalLift: sTot ?? r.ratio,
+      e,
+      rawTotalLift: sTot ?? e.ratio,
       cleanTotal,
       ruleBlend,
-      meanPairLift: clampPos(meanPairLift),
+      weaponOutputLift,
       composite,
       buildAround,
     };
   });
 
-  const minBuildAround = Math.min(...prelim.map(p => p.buildAround));
+  // Compute within-weapon rank (1..3) per weapon across Evo A / B / C
+  const computedWithinRank = new Map<string, 1 | 2 | 3>();
+  const byWeapon = new Map<string, typeof prelim>();
+  for (const p of prelim) {
+    const list = byWeapon.get(p.e.weaponId) ?? [];
+    list.push(p);
+    byWeapon.set(p.e.weaponId, list);
+  }
+  for (const list of byWeapon.values()) {
+    const sorted = [...list].sort((a, b) => b.composite - a.composite || a.e.variantIndex - b.e.variantIndex);
+    sorted.forEach((p, idx) => {
+      computedWithinRank.set(p.e.id, Math.min(3, idx + 1) as 1 | 2 | 3);
+    });
+  }
+
+  const minBuildAround = prelim.length ? Math.min(...prelim.map(p => p.buildAround)) : 1;
 
   const items: RawCategoryItem[] = prelim.map(p => {
-    const gRow = gauntletById.get(p.r.id);
+    const gRow = gauntletById.get(p.e.id);
+    const withinWeaponRank = p.e.withinWeaponRank ?? computedWithinRank.get(p.e.id) ?? 1;
     return {
-      id: p.r.id,
-      name: p.r.name || p.r.id,
+      id: p.e.id,
+      name: p.e.name,
       category: 'evolutions',
       hasGauntlet: !!gRow,
       lensRaw: {
         composite: p.composite,
         buildAround: p.buildAround,
         ruleLift: p.ruleBlend,
-        pairOutput: p.meanPairLift,
+        weaponOutput: p.weaponOutputLift,
         gauntlet: gRow ? clampPos(gRow.avgBotLift) : p.composite,
         gauntletHuman: gRow ? clampPos(gRow.humanBotLift) : p.composite,
         gauntletSpire: gRow ? clampPos(gRow.spireLift) : p.composite,
       },
       meta: {
         kind: 'evolutions',
-        pair: p.r.pair,
-        isSignature: p.armingPairCount > 1,
-        armingPairCount: p.armingPairCount,
-        hasEncoreFix: p.hasEncore,
+        weaponId: p.e.weaponId,
+        variantIndex: p.e.variantIndex,
+        conditionType: p.e.conditionType,
+        triggersPerFight: roundN(p.e.triggersPerFight, 2),
+        withinWeaponRank,
         rawTotalLift: roundN(p.rawTotalLift, 3),
         cleanTotalLift: roundN(p.cleanTotal, 3),
         ruleLift: roundN(p.ruleBlend, 3),
-        meanPairLift: roundN(p.meanPairLift, 3),
-        startsPerFight: roundN(p.r.starts, 2),
-        ruleFiringsPerFight: roundN(p.r.ruleFirings, 1),
+        weaponOutputLift: roundN(p.weaponOutputLift, 3),
+        ruleFiringsPerFight: roundN(p.e.ruleFirings, 1),
         buildAroundMult: roundN(p.buildAround / minBuildAround, 4),
       },
     };
@@ -1518,31 +1574,32 @@ export const renderPowerRankMarkdown = (
   // ── EVOLUTIONS ────────────────────────────────────────────────────────────
   if (cats.includes('evolutions')) {
     const cr = report.categories.evolutions;
+    const slotLabels = ['A', 'B', 'C'] as const;
     out.push(`## Evolutions (${cr.count} · Lens: \`${cr.lens}\`)`, '');
     out.push(
-      `Default lens \`composite\` (\`E7\`) measures **Pure Evolution Upgrade Power** = \`cleanTotal^0.55 · ruleLift^0.45\` (free of carrier-weapon confounding, with Encore Mask pairs adjusted via median universal chassis lift \`×${report.medianChassisLift.toFixed(3)}\` so turning evolutions off never inflates them). **Build-Around (\`E8\`)** adds 25% weight on total armed-pair combat output (\`pairLift\`).`,
+      `Default lens \`composite\` (\`E7\`) measures **Pure Evolution Upgrade Power** = \`cleanTotal^0.55 · ruleLift^0.45\` across all 64 Armory weapons × 3 timed evolutions (median chassis lift \`×${report.medianChassisLift.toFixed(3)}\`). **Build-Around (\`E8\`)** adds 25% weight on total evolved-weapon combat output (\`weaponOutputLift\`).`,
       ''
     );
 
     const gauntletHeaders = report.hasGauntletData ? ['Gauntlet (Hum)'] : [];
     const liveHeaders = report.hasLiveData ? ['Sim', 'Live', '95% CI', 'Fights (Tier)', 'Fun 👍', 'Flags'] : [];
     const renderEvoTable = (rows: readonly PowerRankEntry[]) => {
-      row(['#', 'Evolution', 'Pair', 'Power', 'Added', 'Build-Around (E8)', 'Clean Lift', 'Rule Lift', 'Pair Lift', 'Starts', ...gauntletHeaders, ...liveHeaders]);
-      row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', ...gauntletHeaders.map(() => '---'), ...liveHeaders.map(() => '---')]);
+      row(['#', 'Evolution', 'Weapon (Slot)', 'Trigger', 'In-Wep', 'Power', 'Added', 'Build-Around (E8)', 'Clean Lift', 'Rule Lift', 'Trigs', ...gauntletHeaders, ...liveHeaders]);
+      row(['---', '---', '---', '---', '---', '---', '---', '---', '---', '---', '---', ...gauntletHeaders.map(() => '---'), ...liveHeaders.map(() => '---')]);
       for (const e of rows) {
         const m = e.meta as EvolutionEntryMeta;
-        const badge = `${m.isSignature ? ' ★' : ''}${m.hasEncoreFix ? ' †' : ''}`;
         row([
           e.rank,
-          `${e.name}${badge}`,
-          `\`${m.pair.join(' + ')}\``,
+          e.name,
+          `\`${m.weaponId}\` (${slotLabels[m.variantIndex]})`,
+          m.conditionType,
+          `#${m.withinWeaponRank}/3`,
           `**${fx(e.powerMult)}**`,
           fx(e.addedMult),
           fx(m.buildAroundMult),
           `×${m.cleanTotalLift.toFixed(2)}`,
           `×${m.ruleLift.toFixed(2)}`,
-          `×${m.meanPairLift.toFixed(2)}`,
-          m.startsPerFight.toFixed(1),
+          m.triggersPerFight.toFixed(1),
           ...(report.hasGauntletData ? [fx(e.subLenses.gauntletHuman)] : []),
           ...(report.hasLiveData ? renderLiveColumns(e) : []),
         ]);
@@ -1556,15 +1613,23 @@ export const renderPowerRankMarkdown = (
     } else {
       out.push('### Top 25 Evolutions (Pure Evolution Power)', '');
       renderEvoTable(cr.entries.slice(0, 25));
-      out.push('', '### Top 10 Build-Around Evolutions (`E8`: Recipe Lift + Armed Pair Ceiling)', '');
+      out.push('', '### Top 10 Build-Around Evolutions (`E8`: Evolution Lift + Carrier Weapon Output)', '');
       const topBuildAround = [...cr.entries]
         .sort((a, b) => (b.meta as EvolutionEntryMeta).buildAroundMult - (a.meta as EvolutionEntryMeta).buildAroundMult)
         .slice(0, 10);
-      row(['E8 #', 'Evolution', 'Pair', 'Build-Around (E8)', 'Pure Evo (E7)', 'Pair Lift', 'Rule Lift']);
+      row(['E8 #', 'Evolution', 'Weapon (Slot)', 'Build-Around (E8)', 'Pure Evo (E7)', 'Wep Output', 'Rule Lift']);
       row(['---', '---', '---', '---', '---', '---', '---']);
       topBuildAround.forEach((e, idx) => {
         const m = e.meta as EvolutionEntryMeta;
-        row([idx + 1, `${e.name}${m.isSignature ? ' ★' : ''}`, `\`${m.pair.join(' + ')}\``, `**${fx(m.buildAroundMult)}**`, fx(e.powerMult), `×${m.meanPairLift.toFixed(2)}`, `×${m.ruleLift.toFixed(2)}`]);
+        row([
+          idx + 1,
+          e.name,
+          `\`${m.weaponId}\` (${slotLabels[m.variantIndex]})`,
+          `**${fx(m.buildAroundMult)}**`,
+          fx(e.powerMult),
+          `×${m.weaponOutputLift.toFixed(2)}`,
+          `×${m.ruleLift.toFixed(2)}`,
+        ]);
       });
 
       out.push('', '### Bottom 15 Evolutions', '');
@@ -1577,7 +1642,7 @@ export const renderPowerRankMarkdown = (
         out.push('', '</details>', '');
       }
     }
-    out.push('*★ Signature family recipe (arms from multiple pairs; Pair Lift averaged across arming pairs). † Encore Mask recipe (Clean Lift computed as `ruleLift × medianChassisLift` to remove the evolutions-off denominator artifact).*', '');
+    out.push('*Each Armory weapon carries 3 unlockable timed evolutions (Slot A Core Engine, Slot B Synergy Bridge, Slot C Apex Overdrive); `In-Wep` ranks its 3 variants `#1/3` to `#3/3`.*', '');
   }
 
   // ── FIGHTERS ──────────────────────────────────────────────────────────────
@@ -1615,10 +1680,10 @@ export const renderPowerRankMarkdown = (
     out.push(
       '',
       '> **Fighter simulation nuances & data gaps to keep in mind:**',
-      '> - **Full-build compression:** Inside a maxed 5-charm + 2-Arcana + Power-ON build (`fullBuild` lens), weapons & Power carry ~85% of output, compressing fighters to a tight `1.00× – 1.22×` band (`Pelican` #1 at `1.22×`, `Orange Tabby` #6 at `1.00×`).',
-      '> - **Pelican 90★ vs 160★ capstone jump:** `fighterSuite.cells` evaluates with-weapon performance at 90★ (below the World 4 `SEALED_AT` capstone gate), where Pelican is #6 (`4.24×`), before jumping to `8.11×` at 160★ and `#1` in endgame Shapley (`1.112`).',
-      '> - **Sly Fox speed-vs-survival tradeoff:** Sly Fox leads unarmed 160★ Pressure damage (`×9.47`) on fast 3-trait boards where its 5s combo chains, yet dies in 50% of Pressure fights and falls to #6 (`×2.19`) on slower 5-trait calm boards.',
-      '> - **Current fighter sim gaps:** `balance-snapshot.json` does not yet track fighters, and `fighterSuite.curves` runs average-bot only (6 seeds, unarmed). Live PostHog data with Simpson-adjusted win/DPM deltas will be especially valuable here.',
+      '> - **Full-build compression:** Inside a maxed 5-weapon + 2-Arcana + Synergy-Graph build (`fullBuild` lens), weapons & Synergy hooks carry most endgame output, compressing fighters into a tighter spread than unarmed benches.',
+      '> - **90★ vs 160★ capstone jump:** `fighterSuite.cells` evaluates with-weapon performance at 90★ (below the World 4 `SEALED_AT` capstone gate), whereas `dummy160`, `pressure160`, and `fullBuild` include sealed capstones.',
+      '> - **Speed-vs-survival tradeoffs:** Fast combo fighters can lead unarmed Pressure damage on 3-trait boards while paying a survival penalty or dipping on slower 5-trait boards.',
+      '> - **Current fighter sim gaps:** `balance-snapshot.json` does not yet track fighters, and `fighterSuite.curves` runs average-bot only (unarmed). Live PostHog data with Simpson-adjusted win/DPM deltas & real-enemy `gauntletHuman` rankings are essential alongside dummy lenses.',
       ''
     );
   }

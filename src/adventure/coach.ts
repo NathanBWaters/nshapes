@@ -34,7 +34,9 @@ import { levelFoe } from './data/foes';
 import { MECHANICS } from './data/mechanics';
 import { ASSIST_RULES, SURGE_RULES } from './data/rules';
 import { LOSS_STREAK_ASSIST_STEPS, STUCK_NUDGE_LOSS_THRESHOLD } from './data/relief';
-import { armableRecipesFromArmory, availableStars, COACH_KEYS, hasUnspentStars } from './progress';
+import { getArmoryWeapon } from './data/armory';
+import { evolutionConditionShort, getWeaponEvolution } from './data/evolutions';
+import { availableStars, COACH_KEYS, hasUnspentStars } from './progress';
 
 /** One trait's check across the cards in question (the fight shows them in a strip above the board: TraitChecks.tsx). */
 export interface TraitCheckPill {
@@ -413,8 +415,8 @@ const helpfulSet = (run: RunState, sets: Card[][], held: readonly Card[]): Card[
   return (run.challengeMet ? undefined : pool.find(wanted)) ?? pool[0];
 };
 
-/** What a plain Set deals: three cards, a point each */
-const BASE_SET_DAMAGE = 3;
+/** What a plain Set deals: three cards, 2 base damage each */
+const BASE_SET_DAMAGE = 6;
 
 const RESCUE_LINES = ['Stuck? Start with this one.', 'These two go together…', 'Here is one. Tap all three!'];
 
@@ -697,7 +699,7 @@ export const computeLiveGuidance = (
         glowIds: [pick.id],
         dimIds: [],
         dimOpacity: 1,
-        message: 'Shading Surge ×5! Start with this card!',
+        message: 'Shading Surge +12 & ×1.8! Start with this card!',
         mood: 'curious',
         kind: 'rescue',
       };
@@ -823,7 +825,7 @@ export const parryOnboardingCallout = (
   if (parry.msLeft <= parry.spec.perfectWindowMs && !opts.seenPerfect) {
     return {
       key: COACH_KEYS.parryFirstPerfect,
-      text: 'Gold glow! Match now for PERFECT PARRY (×2 dmg)!',
+      text: 'Gold glow! Match now for PERFECT PARRY (+16 & ×1.35)!',
     };
   }
   if (!opts.seenWindup) {
@@ -835,11 +837,50 @@ export const parryOnboardingCallout = (
   return null;
 };
 
+/** One-shot coach keys for per-weapon evolution anticipation and boss weapon-slot unlocks. */
+export const EVO_ALMOST_COACH_KEY = 'evo_almost_first';
+export const WEAPON_SLOT_UNLOCK_COACH_KEY = 'weapon_slot_unlock_first';
+
+/**
+ * First-time live callout when any equipped weapon hits "Almost Ready" on its
+ * micro-objective evolution tracker (progress === target - 1 or >= 75%).
+ */
+export const evoAlmostOnboardingCallout = (
+  run: RunState,
+  opts: { seenEvoAlmost: boolean; colorblind?: boolean }
+): { key: string; text: string } | null => {
+  if (opts.seenEvoAlmost || run.status !== 'playing' || run.level.rules.sandbox) return null;
+  const ready = run.weaponEvolutions.find(t => t.phase === 'charging' && t.almostReady);
+  if (!ready) return null;
+  const weapon = run.weapons.find(w => w.id === ready.weaponId) ?? getArmoryWeapon(ready.weaponId);
+  const evoDef = getWeaponEvolution(ready.evoId);
+  const weaponName = weapon?.name ?? ready.weaponId;
+  const condShort = evoDef ? evolutionConditionShort(evoDef, opts.colorblind) : '';
+  const withCond = condShort ? `1 step to evolve ${weaponName}! (${condShort})` : '';
+  const text = withCond && withCond.length <= 64 ? withCond : `1 more step to evolve ${weaponName}!`;
+  return { key: EVO_ALMOST_COACH_KEY, text };
+};
+
+/**
+ * Celebratory companion line when clearing World 1 Boss (4th slot) or World 2 Boss (5th slot).
+ */
+export const weaponSlotUnlockCoachLine = (
+  slotNumber: 4 | 5,
+  fighter?: CharacterName
+): { key: string; text: string } => {
+  const voice = companionVoice(fighter);
+  const text =
+    slotNumber === 4
+      ? `${voice.cheer} 4th weapon slot unlocked — add a new Synergy partner!`
+      : `${voice.cheer} 5th weapon slot unlocked — unleash a full-belt engine!`;
+  return { key: `${WEAPON_SLOT_UNLOCK_COACH_KEY}_${slotNumber}`, text };
+};
+
 // ─── Context-aware defeat & 1★ build diagnostics ([OB-17]) ──────────────────
 
 export interface ResultTipAction {
   label: string;
-  kind: 'arm_recipe' | 'open_tree' | 'open_workshop';
+  kind: 'open_armory' | 'open_tree' | 'open_workshop';
   payload?: string;
 }
 
@@ -877,19 +918,36 @@ export const diagnoseResultTip = (
       };
     }
 
-    // Priority 2: Unarmed Evolution on World 2–5 defeat -> 1-tap "Arm <Recipe> & Retry"
-    if (worldNumber(level.biome) >= 2 && save.unlockedEvolutions.length > 0 && run.armedRecipes.length === 0) {
-      const armable = armableRecipesFromArmory(save);
-      if (armable.length > 0) {
-        const top = armable[0].recipe;
+    // Priority 2: Unused or un-triggered Weapon Evolution on World 2–5 defeat -> "Tune Evolutions" Camp Armory CTA
+    const unlockedEvos = save.unlockedWeaponEvolutions ?? [];
+    if (worldNumber(level.biome) >= 2 && unlockedEvos.length > 0) {
+      if (run.weaponEvolutions.length === 0) {
+        const evoDef = unlockedEvos.map(getWeaponEvolution).find(Boolean);
+        const wName = evoDef ? (getArmoryWeapon(evoDef.weaponId)?.name ?? evoDef.weaponId) : 'a weapon';
         return {
-          text: `No Evolution armed! Pair ${top.familyText} to unlock ${top.name} (30s boost).`,
+          text: `No Evolution equipped on your belt! Slot ${wName} in Camp to chase its timed Evolution.`,
           quickAction: {
-            label: `Arm ${top.name} & Retry`,
-            kind: 'arm_recipe',
-            payload: top.id,
+            label: 'Tune Evolutions',
+            kind: 'open_armory',
+            payload: evoDef?.weaponId,
           },
         };
+      }
+      if (run.evolutionsTriggered === 0) {
+        const firstTracker = run.weaponEvolutions[0];
+        const evoDef = getWeaponEvolution(firstTracker.evoId);
+        const wName = getArmoryWeapon(firstTracker.weaponId)?.name ?? firstTracker.weaponId;
+        if (evoDef) {
+          const cond = evolutionConditionShort(evoDef, colorblind);
+          return {
+            text: `Chase ${wName}’s goal (${cond}) to ignite ${evoDef.name}, or swap Evolutions at Camp!`,
+            quickAction: {
+              label: 'Tune Evolutions',
+              kind: 'open_armory',
+              payload: firstTracker.weaponId,
+            },
+          };
+        }
       }
     }
 
@@ -920,7 +978,7 @@ export const diagnoseResultTip = (
     // Priority 4: Unspent Workshop Coins (100% free refund)
     if (save.workshopUnlocked && save.coins >= 60) {
       return {
-        text: `You have ${save.coins.toLocaleString()}¢ ready for Workshop belt & tuning upgrades (100% free refund anytime).`,
+        text: `You have ${save.coins.toLocaleString()}¢ ready for Workshop tuning & Evolution Lab upgrades (100% free refund anytime).`,
         quickAction: {
           label: 'Open Workshop',
           kind: 'open_workshop',
@@ -934,7 +992,7 @@ export const diagnoseResultTip = (
       return {
         text:
           run.parry.spec.counter.kind === 'any'
-            ? `Match any Trio during ${run.parry.spec.attackName} to Parry & open a ×2 Stagger window!`
+            ? `Match any Trio during ${run.parry.spec.attackName} to Parry & open a ×1.35 Stagger (+8 base)!`
             : `Counter ${run.parry.spec.attackName} with ${meta.shortLabel} to shatter the strike & Stagger!`,
       };
     }
@@ -948,12 +1006,12 @@ export const diagnoseResultTip = (
   if (stars === 1 && !accuracy) {
     if (save.armory.includes('rainbow-charm')) {
       if (run.weapons.some(w => w.id === 'rainbow-charm')) {
-        return { text: 'Hunt all-different Trios so Rainbow Charm doubles your hits!' };
+        return { text: 'Hunt all-different Trios so Rainbow Charm supercharges your hits!' };
       }
-      return { text: 'Equip Rainbow Charm on your Weapon Belt so all-different Trios hit twice as hard!' };
+      return { text: 'Equip Rainbow Charm on your Weapon Belt so all-different Trios hit much harder!' };
     }
     if (save.armory.length > 0) {
-      return { text: 'Equip offensive weapons from your Armory so every Trio hits harder!' };
+      return { text: 'Equip synergistic weapons from your Armory so every Trio hits harder!' };
     }
     return null;
   }
@@ -966,14 +1024,13 @@ export const diagnoseResultTip = (
 /**
  * Resolve `1-4D` (The Back Field) so it only exposes traits and features the
  * player has actually unlocked in `save` (A2 + 9 cards until `1-5` / `attr_number`,
- * Hints/Graces/Catalysts only once unlocked).
+ * Hints/Graces/Evolutions only once unlocked).
  */
 export const resolvePracticeLevel = (level: LevelDef, save: AdventureSave): LevelDef => {
   if (!level.rules.sandbox || level.id !== '1-4D') return level;
   const hasNumber = (save.stars['1-5'] ?? 0) >= 1 || save.seenMechanics.includes('attr_number');
   const hasHints = (save.stars['2-4'] ?? 0) >= 1 || save.seenMechanics.includes('hints');
   const hasGraces = (save.stars['2-8'] ?? 0) >= 1 || save.seenMechanics.includes('graces');
-  const hasEvolutions = save.unlockedEvolutions.length > 0 || save.seenMechanics.includes('evolutions');
   return {
     ...level,
     rules: {
@@ -982,7 +1039,6 @@ export const resolvePracticeLevel = (level: LevelDef, save: AdventureSave): Leve
       boardSize: hasNumber ? 12 : 9,
       startingHints: hasHints ? (level.rules.startingHints ?? 3) : 0,
       startingGraces: hasGraces ? (level.rules.startingGraces ?? 2) : 0,
-      evolutionLikelihood: hasEvolutions ? (level.rules.evolutionLikelihood ?? 15) : 0,
     },
   };
 };
@@ -995,7 +1051,7 @@ export const resolvePracticeFeatures = (level: LevelDef, save: AdventureSave): S
   if (save.coinsUnlocked) flags.add('coins');
   if ((save.stars['2-4'] ?? 0) >= 1 || save.seenMechanics.includes('hints')) flags.add('hints');
   if ((save.stars['2-8'] ?? 0) >= 1 || save.seenMechanics.includes('graces')) flags.add('graces');
-  if (save.unlockedEvolutions.length > 0 || save.seenMechanics.includes('evolutions')) flags.add('evolutions');
+  if ((save.unlockedWeaponEvolutions?.length ?? 0) > 0 || save.seenMechanics.includes('evolutions')) flags.add('evolutions');
   if ((save.stars['2-5'] ?? 0) >= 1 || save.seenMechanics.includes('power_cards')) flags.add('power');
   return flags;
 };
@@ -1052,7 +1108,7 @@ const indexAtLeast = (level: LevelDef, targetId: string): boolean => {
   }
 };
 
-/** [OB-11] Damage totals (`⚔ total`, `best`, `POWER ×`) appear from 1-4 (Boom Practice) so 1-7 focuses cleanly on Skill Trees. */
+/** [OB-11] Damage totals (`⚔ total`, `best`) appear from 1-4 (Boom Practice) so 1-7 focuses cleanly on Skill Trees. */
 export const shouldShowDamageNumbers = (level: LevelDef, save: AdventureSave): boolean =>
   !!level.rules.sandbox ||
   indexAtLeast(level, '1-4') ||

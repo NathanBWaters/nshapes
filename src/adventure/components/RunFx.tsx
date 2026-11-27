@@ -17,7 +17,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Svg, Circle } from 'react-native-svg';
 import Icon, { IconName } from '@/components/Icon';
+import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
+import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { band } from '@/audio';
 import { ScreenFlashStorage, useScreenFlashEnabled } from '@/utils/fxSettingsStorage';
@@ -157,42 +159,156 @@ export const EVOLUTION_BANNER_TIMING = {
   exitMs: exitMs(MS.quick),
 } as const;
 
-/** Full-width non-blocking banner when a repeat/post-pick evolution starts or effects are off ([OB-08] + [AU-13] + [FX-14]). */
-export const EvolutionBanner: React.FC<{ recipeId?: string; name: string; icon: IconName; text: string; seconds: number; seq: number }> = ({ recipeId, name, icon, text, seconds, seq }) => {
+export interface EvolutionBannerEntry {
+  /** Per-weapon evolution ID (drives `band.playCutInEvolve`) */
+  id: string;
+  name: string;
+  icon: IconName;
+  text: string;
+  seconds: number;
+  weapon?: Weapon;
+}
+
+export interface EvolutionBannerProps {
+  /** Coalesced list of 1+ evolutions activated on the same Set (preferred) */
+  entries?: readonly EvolutionBannerEntry[];
+  /** Single-entry shorthand props (back-compat / dev showcase) */
+  evolutionId?: string;
+  recipeId?: string;
+  name?: string;
+  icon?: IconName;
+  text?: string;
+  seconds?: number;
+  weapon?: Weapon;
+  seq: number;
+}
+
+/**
+ * Full-width non-blocking banner (`pointerEvents="none"`, zero fight-clock freeze)
+ * for single-weapon repeat awakenings and multi-trigger coalescing (`<Evo 1> + <Evo 2> ACTIVE!`).
+ */
+export const EvolutionBanner: React.FC<EvolutionBannerProps> = ({
+  entries,
+  evolutionId,
+  recipeId,
+  name,
+  icon = 'lorc/crystal-shine',
+  text = '',
+  seconds = 18,
+  weapon,
+  seq,
+}) => {
+  const resolved: readonly EvolutionBannerEntry[] =
+    entries && entries.length > 0
+      ? entries
+      : name
+        ? [{ id: evolutionId ?? recipeId ?? '', name, icon, text, seconds, weapon }]
+        : [];
+  const first = resolved[0];
+  const soundId = first?.id || evolutionId || recipeId;
+
+  const reducedMotion = useReducedMotion();
   const o = useSharedValue(0);
+  const y = useSharedValue(reducedMotion ? 0 : -10);
+  const s = useSharedValue(reducedMotion ? 1 : 0.96);
+
   useEffect(() => {
     cancelAnimation(o);
+    cancelAnimation(y);
+    cancelAnimation(s);
+    const enterDuration = fxMs(EVOLUTION_BANNER_TIMING.enterMs);
+    const holdDuration = fxMs(EVOLUTION_BANNER_TIMING.holdMs);
+    const exitDuration = fxMs(EVOLUTION_BANNER_TIMING.exitMs);
+
     o.value = 0;
     // [FX-14]: Zero horizontal slide; exit (120 ms) is faster than enter (180 ms) and STAYS preserves hold under Reduced Motion
     o.value = withSequence(
       STAYS.reduceMotion,
-      withTiming<number>(1, { duration: fxMs(EVOLUTION_BANNER_TIMING.enterMs), easing: EASE.ui, ...STAYS }),
+      withTiming<number>(1, { duration: enterDuration, easing: EASE.enter, ...STAYS }),
       withDelay(
-        fxMs(EVOLUTION_BANNER_TIMING.holdMs),
-        withTiming<number>(0, { duration: fxMs(EVOLUTION_BANNER_TIMING.exitMs), easing: EASE.exitSoft, ...STAYS }),
+        holdDuration,
+        withTiming<number>(0, { duration: exitDuration, easing: EASE.exitSoft, ...STAYS }),
         STAYS.reduceMotion
       )
     );
-    if (recipeId) {
+
+    if (reducedMotion) {
+      y.value = 0;
+      s.value = 1;
+    } else {
+      y.value = -10;
+      y.value = withSequence(
+        withTiming(0, { duration: enterDuration, easing: EASE.enter }),
+        withDelay(holdDuration, withTiming(-6, { duration: exitDuration, easing: EASE.exitSoft }))
+      );
+      s.value = 0.96;
+      s.value = withSequence(
+        withTiming(1, { duration: enterDuration, easing: EASE.enter }),
+        withDelay(holdDuration, withTiming(0.98, { duration: exitDuration, easing: EASE.exitSoft }))
+      );
+    }
+
+    if (soundId) {
       const b = band as typeof band & {
         playCutInEvolve?: (id: string, opts?: { immediate?: boolean; leadMs?: number }) => void;
       };
       if (typeof b?.playCutInEvolve === 'function') {
-        b.playCutInEvolve(recipeId, { immediate: true, leadMs: 0 });
+        b.playCutInEvolve(soundId, { immediate: true, leadMs: 0 });
       } else if (typeof band?.evolve === 'function' && !band.inFight) {
-        band.evolve(recipeId);
+        band.evolve(soundId);
       }
     }
-    return () => cancelAnimation(o);
-  }, [seq, recipeId, o]);
-  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+    return () => {
+      cancelAnimation(o);
+      cancelAnimation(y);
+      cancelAnimation(s);
+    };
+  }, [seq, soundId, reducedMotion, o, y, s]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: o.value,
+    transform: [{ translateY: y.value }, { scale: s.value }],
+  }));
+  if (!first) return null;
+
+  const isMulti = resolved.length > 1;
+  const maxSecs = resolved.reduce((m, e) => Math.max(m, e.seconds), first.seconds);
+  const headline =
+    resolved.length === 1
+      ? `${first.name}!`
+      : resolved.length === 2
+        ? `${resolved[0].name} + ${resolved[1].name} ACTIVE!`
+        : `${resolved.length} EVOLUTIONS ACTIVE!`;
+  const subline =
+    resolved.length === 1
+      ? first.text
+      : resolved.length === 2
+        ? `${resolved[0].text} · ${resolved[1].text}`
+        : resolved.map(e => e.name).join(' · ');
+
   return (
     <Animated.View pointerEvents="none" style={[st.banner, style]} testID="evolution-banner">
-      <View style={st.bannerIcon}><Icon name={icon} size={30} color={INK} /></View>
+      <View style={st.bannerVisual}>
+        {!isMulti && first.weapon && (
+          <View style={st.bannerWeapon}>
+            <WeaponAvatar weapon={first.weapon} size={26} interactive={false} />
+          </View>
+        )}
+        <View style={[st.bannerIcon, !isMulti && first.weapon && st.bannerIconOverlap]}>
+          <Icon name={isMulti ? 'lorc/crystal-shine' : first.icon} size={26} color={INK} />
+        </View>
+      </View>
       <View style={{ flex: 1 }}>
-        <Text style={st.bannerEyebrow}>EVOLUTION · {seconds} SECONDS</Text>
-        <Text style={st.bannerName}>{name}!</Text>
-        <Text style={st.bannerText} numberOfLines={2}>{text}</Text>
+        <View style={st.bannerEyebrowRow}>
+          <Icon name="lorc/crystal-shine" size={10} color={COLORS.actionYellow} noShadow />
+          <Text style={st.bannerEyebrow} numberOfLines={1}>
+            {isMulti
+              ? `${resolved.length}× EVOLUTION ACTIVE · ${maxSecs}s`
+              : `${first.weapon ? `${first.weapon.name.toUpperCase()} · ` : 'EVOLUTION · '}${first.seconds}s`}
+          </Text>
+        </View>
+        <Text style={st.bannerName} numberOfLines={1} adjustsFontSizeToFit>{headline}</Text>
+        {!!subline && <Text style={st.bannerText} numberOfLines={2}>{subline}</Text>}
       </View>
     </Animated.View>
   );
@@ -487,9 +603,22 @@ const st = StyleSheet.create({
     borderBottomWidth: 3,
     borderColor: COLORS.actionYellow,
   },
-  bannerIcon: { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },
-  bannerEyebrow: { color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 2, fontSize: 10 },
-  bannerName: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 22 },
+  bannerVisual: { flexDirection: 'row', alignItems: 'center' },
+  bannerWeapon: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: COLORS.paperBeige,
+    borderWidth: 2,
+    borderColor: COLORS.canvasWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: COLORS.actionYellow, borderWidth: 2, borderColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
+  bannerIconOverlap: { marginLeft: -10 },
+  bannerEyebrowRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  bannerEyebrow: { flexShrink: 1, color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 1.8, fontSize: 10 },
+  bannerName: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 20 },
   bannerText: { color: DARK.text, fontSize: 12 },
   ring: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   ringHalfClip: { position: 'absolute', top: 0, overflow: 'hidden' },

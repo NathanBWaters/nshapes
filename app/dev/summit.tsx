@@ -22,7 +22,7 @@ import type { SpireNodeKind, SpireRun } from '@/spire/types';
  * - ?fullBelt=true    — populate all 6 weapon slots to test 6/6 swap UX
  * - ?weapons=a,b,...  — equip exact weapon ids (up to 6)
  * - ?arcana=a,b       — equip exact Arcana ids
- * - ?evo=true         — boost Catalyst spawn rate so Evolutions ignite quickly
+ * - ?evo=true         — boost evolution charge speed & duration so Evolutions ignite quickly
  * - ?fighter=Sly+Fox  — fighter name (default Orange Tabby)
  * - ?ascension=0..20  — ascension tier (default 0)
  * - ?seed=12345       — deterministic seed
@@ -92,7 +92,7 @@ export default function DevSummit() {
       if (arcana.length > 0) run = { ...run, arcana };
     }
     if (params.evo === 'true') {
-      run = { ...run, extraEvolutionLikelihood: 95 };
+      run = { ...run, extraEvolutionChargeBonus: 2, extraEvolutionDurationMs: 6000 };
     }
     const roomKind = params.room as SpireNodeKind | undefined;
     if (roomKind && ['shop', 'campfire', 'event', 'treasure'].includes(roomKind)) {

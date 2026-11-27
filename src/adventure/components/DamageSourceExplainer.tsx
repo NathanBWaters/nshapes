@@ -4,9 +4,9 @@
  * Shared card matching `WeaponExplainer.tsx`'s exact visual craft for every
  * non-weapon entry in `BattleDamageStory` (Adventure `LevelResults` and
  * Starfall Summit `SpireRewardScreen` / `SpireEndScreen`) and `FightReplay`:
- * Evolutions, Set-Parry Counters, Shading Surge, Rainbow Strike, Purity Chain,
- * Trap Defusal, Skill Tree Nodes, Fighter Passives, Arcana,
- * Workshop Upgrades, Matched Sets, Power Cards, Power Scaling, and Board FX.
+ * Per-Weapon Timed Evolutions, Synergy Hooks, Holo Cards, Set-Parry Counters,
+ * Shading Surge, Rainbow Strike, Purity Chain, Trap Defusal, Skill Tree Nodes,
+ * Fighter Passives, Arcana, Workshop Upgrades, Matched Sets, and Board FX.
  *
  * GUARDRAIL: Weapons MUST NEVER use this component — every weapon description
  * UI goes exclusively through `WeaponExplainer.tsx`.
@@ -16,14 +16,17 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Icon, { type IconName } from '@/components/Icon';
 import { COLORS } from '@/utils/colors';
 import { ARCANA } from '../data/arcana';
+import { getArmoryWeapon } from '../data/armory';
+import { getWeaponEvolution } from '../data/evolutions';
 import { FIGHTERS } from '../data/fighters';
 import { PARRY_RULES } from '../data/parry';
 import { PASSIVES } from '../data/passives';
-import { SURGE_RULES } from '../data/rules';
+import { BASE_RULES, SURGE_RULES } from '../data/rules';
+import { SYNERGY_ATTR_META } from '../data/synergy';
 import { UPGRADES } from '../data/upgrades';
 import type { DamageSourceKind } from '../engine/damageStory';
-import { EVOLUTION_RULES, getRecipe, getSkillNode } from '../engine/sources';
-import type { PassiveId } from '../types';
+import { EVOLUTION_CHASSIS, getSkillNode } from '../engine/sources';
+import type { PassiveId, SynergyAttrId } from '../types';
 import { INK, TONE } from './ui';
 
 export interface DamageSourceDetailRow {
@@ -44,7 +47,7 @@ export interface ResolvedDamageSourceCopy {
 }
 
 export interface DamageSourceExplainerProps {
-  /** Canonical non-weapon source id (`evo:<id>`, `node:<id>`, `passive:<id>`, `arcana:<id>`, `upgrade:<id>`, `bonus:*`, `set:*`, `power:*`, `fx:*`) */
+  /** Canonical non-weapon source id (`evo:<id>`, `node:<id>`, `passive:<id>`, `arcana:<id>`, `upgrade:<id>`, `bonus:*`, `synergy:*`, `set:*`, `fx:*`) */
   sourceId: string;
   /** Display name fallback (or override when canonical data is absent) */
   name?: string;
@@ -52,7 +55,7 @@ export interface DamageSourceExplainerProps {
   kind?: DamageSourceKind;
   /** Icon fallback */
   icon?: IconName;
-  /** Accent color from chart/series (tints the 44×44 icon medallion and share bar) */
+  /** Accent color from chart/series (tints the 44x44 icon medallion and share bar) */
   accentColor?: string;
   /** Optional gold badge pill on the right of the title (e.g. "MVP", "32% DMG") */
   badge?: string;
@@ -70,7 +73,9 @@ export interface DamageSourceExplainerProps {
 }
 
 const CATEGORY_COLORS = {
-  evolution: '#B45309',
+  evolution: '#7C3AED',
+  synergy: '#0F766E',
+  holo: '#7C3AED',
   parry: '#B91C1C',
   surge: '#BE185D',
   skill: '#1D4ED8',
@@ -78,7 +83,7 @@ const CATEGORY_COLORS = {
   arcana: TONE.arcana,
   upgrade: '#0369A1',
   sets: INK,
-  power: '#C2410C',
+  cardBonus: '#C2410C',
   bonus: '#475569',
 } as const;
 
@@ -98,48 +103,95 @@ export const resolveDamageSourceCopy = (opts: {
   const prefix = colon >= 0 ? sourceId.slice(0, colon) : sourceId;
   const rawId = colon >= 0 ? sourceId.slice(colon + 1) : '';
 
-  // 1. Evolution (`evo:<id>`)
+  // 1. Per-Weapon Timed Evolution (`evo:<weaponId>:<slug>`)
   if (prefix === 'evo') {
-    const recipe = getRecipe(rawId);
-    const secs = Math.round(EVOLUTION_RULES.durationMs / 1000);
-    const evoFlatDamage: number = EVOLUTION_RULES.setDamage;
-    const flatNote = evoFlatDamage !== 0 ? `+${evoFlatDamage} flat Set damage, and ` : '';
-    const universalNote = `Lasts ${secs}s on top of +${EVOLUTION_RULES.startDamage} opening hit, ${flatNote}×${EVOLUTION_RULES.setMultiplier} Set damage (stacks across active Evolutions).`;
+    const evo = getWeaponEvolution(rawId);
+    const parentWeapon = evo ? getArmoryWeapon(evo.weaponId) : undefined;
+    const secs = evo ? Math.round(evo.durationMs / 1000) : 18;
+    const multPct = Math.round(EVOLUTION_CHASSIS.setAdditiveMult * 100);
+    const universalNote = `Lasts ${secs}s on top of +${EVOLUTION_CHASSIS.ignitionBurstDamage} opening burst, +${EVOLUTION_CHASSIS.setFlatDamage} flat base damage, and +${multPct}% Set multiplier (stacks across active Evolutions).`;
     const details: DamageSourceDetailRow[] = [];
-    if (recipe?.familyText) {
+    if (parentWeapon) {
       details.push({
-        icon: 'lorc/crystal-shine',
-        title: 'Recipe pair',
+        icon: parentWeapon.icon as IconName,
+        title: 'Weapon',
         color: CATEGORY_COLORS.evolution,
-        text: recipe.familyText,
+        text: `${parentWeapon.name} — pick 1 of 3 evolutions in Camp Armory before battle.`,
       });
     }
-    details.push({
-      icon: 'lorc/light-bulb',
-      title: 'How to trigger',
-      color: TONE.upside,
-      text: 'Hold both parent items and match a glowing Catalyst card on the board.',
-    });
-    if (recipe?.flavor) {
+    if (evo?.conditionText) {
       details.push({
-        icon: 'lorc/open-book',
-        title: 'Lore',
-        color: TONE.arcana,
-        text: recipe.flavor,
+        icon: 'lorc/archery-target',
+        title: 'How to trigger',
+        color: TONE.upside,
+        text: `${evo.conditionText} (re-triggerable after a ${Math.round((evo.cooldownMs ?? EVOLUTION_CHASSIS.defaultCooldownMs) / 1000)}s cooldown).`,
+      });
+    }
+    if (evo && evo.synergyTags.length > 0) {
+      const tagLabels = evo.synergyTags.map(t => SYNERGY_ATTR_META[t]?.label ?? t).join(' · ');
+      details.push({
+        icon: 'delapouite/sparkles',
+        title: 'Synergy tags',
+        color: CATEGORY_COLORS.synergy,
+        text: tagLabels,
       });
     }
     return {
-      title: recipe?.name ?? name ?? rawId,
-      icon: (recipe?.icon as IconName | undefined) ?? icon ?? 'lorc/crystal-shine',
+      title: evo?.name ?? name ?? rawId,
+      icon: (evo?.icon as IconName | undefined) ?? icon ?? 'lorc/crystal-shine',
       categoryLabel: 'EVOLUTION',
-      categoryColor: CATEGORY_COLORS.evolution,
-      subtitle: subtitle ?? recipe?.familyText ?? 'Weapon Evolution',
-      what: recipe ? `${recipe.activeText} ${universalNote}` : (description ?? universalNote),
+      categoryColor: evo?.accent ?? CATEGORY_COLORS.evolution,
+      subtitle: subtitle ?? (parentWeapon ? `${parentWeapon.name} · ${secs}s Evolution` : 'Weapon Evolution'),
+      what: evo ? `${evo.tagline} ${universalNote}` : (description ?? universalNote),
       details,
     };
   }
 
-  // 2. Skill Tree Node (`node:<id>`)
+  // 2. Synergy Graph Hooks (`synergy:<attr>` or `bonus:synergy`)
+  if (prefix === 'synergy' || sourceId === 'bonus:synergy') {
+    const attrMeta = rawId && rawId in SYNERGY_ATTR_META ? SYNERGY_ATTR_META[rawId as SynergyAttrId] : undefined;
+    return {
+      title: attrMeta ? `${attrMeta.label} Synergy` : (name ?? 'Synergy Hooks'),
+      icon: attrMeta?.icon ?? icon ?? 'delapouite/sparkles',
+      categoryLabel: 'SYNERGY',
+      categoryColor: attrMeta?.color ?? CATEGORY_COLORS.synergy,
+      subtitle: subtitle ?? 'Synergy Graph Scaling',
+      what: attrMeta
+        ? `${attrMeta.description} Weapons sharing ${attrMeta.label} feed each other's base damage all fight long.`
+        : 'Base damage added by your belt weapons feeding off live Synergy Graph counters (Burn, Blast, Links, Holo, Echoes, Streaks, and more).',
+      details: [
+        {
+          icon: 'lorc/light-bulb',
+          title: 'How to build it',
+          color: CATEGORY_COLORS.synergy,
+          text: 'Pair Producer weapons (▲) with Consumer weapons (◆) that share a Synergy tag so every action scales your whole belt.',
+        },
+      ],
+    };
+  }
+
+  // 3. Holo Cards (`bonus:holo` / `set:holo`)
+  if (sourceId === 'bonus:holo' || sourceId === 'set:holo') {
+    const holoPct = Math.round(BASE_RULES.holoCardMult * 100);
+    return {
+      title: name ?? 'Holo Shine',
+      icon: icon ?? 'delapouite/sparkles',
+      categoryLabel: 'HOLO',
+      categoryColor: CATEGORY_COLORS.holo,
+      subtitle: subtitle ?? 'Holo Card Bonus',
+      what: `Each Holo card matched adds +${BASE_RULES.holoCardBonus} base damage and +${holoPct}% additive Set multiplier (×1.2 / ×1.4 / ×1.6 for 1 / 2 / 3 Holo cards).`,
+      details: [
+        {
+          icon: 'delapouite/sparkles',
+          title: 'How to spawn more',
+          color: CATEGORY_COLORS.holo,
+          text: 'Weapons like Field Stone, Catalyst Prism, Ice Block, and several Weapon Evolutions convert board cards into Holo.',
+        },
+      ],
+    };
+  }
+
+  // 4. Skill Tree Node (`node:<id>`)
   if (prefix === 'node') {
     const node = getSkillNode(rawId);
     const details: DamageSourceDetailRow[] = [];
@@ -168,7 +220,7 @@ export const resolveDamageSourceCopy = (opts: {
         details.push({
           icon: 'lorc/flat-star',
           title: 'Capstone',
-          color: CATEGORY_COLORS.evolution,
+          color: '#B45309',
           text: `Sealed capstone unlocked once you earn ${node.requires.starsEarned} campaign stars.`,
         });
       }
@@ -184,7 +236,7 @@ export const resolveDamageSourceCopy = (opts: {
     };
   }
 
-  // 3. Fighter Passive (`passive:<id>`)
+  // 5. Fighter Passive (`passive:<id>`)
   if (prefix === 'passive') {
     const pid = rawId as PassiveId;
     const passive = PASSIVES[pid];
@@ -202,7 +254,7 @@ export const resolveDamageSourceCopy = (opts: {
       icon: 'lorc/tree-branch',
       title: 'How to grow it',
       color: CATEGORY_COLORS.skill,
-      text: "Always on from the first second of every battle. Power it up through nodes on this fighter's Skill Tree.",
+      text: "Always on from the first second of every battle. Strengthen it through nodes on this fighter's Skill Tree.",
     });
     return {
       title: passive?.name ?? name ?? rawId,
@@ -215,7 +267,7 @@ export const resolveDamageSourceCopy = (opts: {
     };
   }
 
-  // 4. Arcana (`arcana:<id>`)
+  // 6. Arcana (`arcana:<id>`)
   if (prefix === 'arcana') {
     const arc = ARCANA.find(a => a.id === rawId);
     const details: DamageSourceDetailRow[] = [];
@@ -246,7 +298,7 @@ export const resolveDamageSourceCopy = (opts: {
     };
   }
 
-  // 5. Workshop / Run Upgrade (`upgrade:<id>`)
+  // 7. Workshop / Run Upgrade (`upgrade:<id>`)
   if (prefix === 'upgrade') {
     const upgrade = UPGRADES.find(u => u.id === rawId);
     const details: DamageSourceDetailRow[] = [];
@@ -279,7 +331,7 @@ export const resolveDamageSourceCopy = (opts: {
     };
   }
 
-  // 6. Combat Mechanics & Special Sources
+  // 8. Combat Mechanics & Special Sources
   if (sourceId === 'bonus:parry') {
     const perfectWin = (PARRY_RULES.perfectWindowMs / 1000).toFixed(1).replace(/\.0$/, '');
     const perfectStagger = Math.round(PARRY_RULES.perfectStaggerMs / 1000);
@@ -289,19 +341,19 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'PARRY',
       categoryColor: CATEGORY_COLORS.parry,
       subtitle: subtitle ?? 'Combat Mechanic',
-      what: `Matching the foe's telegraphed Counter-Set interrupts their attack, multiplies that Set by ×${PARRY_RULES.counterParryMult} (or ×${PARRY_RULES.perfectParryMult} in the golden Perfect Parry window), and Staggers the foe so follow-up hits deal ×${PARRY_RULES.staggerDamageMult} damage.`,
+      what: `Matching the foe's telegraphed Counter-Set interrupts their attack, adds +${PARRY_RULES.counterParryFlat} base & ×${PARRY_RULES.counterParryMult} (or +${PARRY_RULES.perfectParryFlat} & ×${PARRY_RULES.perfectParryMult} in the golden Perfect Parry window), and Staggers the foe (+${PARRY_RULES.staggerFlatBonus} & ×${PARRY_RULES.staggerDamageMult}).`,
       details: [
         {
           icon: 'lorc/stopwatch',
           title: 'Perfect Parry',
-          color: CATEGORY_COLORS.evolution,
-          text: `Land the Counter-Set inside the final ${perfectWin}s golden window for ×${PARRY_RULES.perfectParryMult} damage, +${PARRY_RULES.perfectParryCoins} coins, and an ${perfectStagger}s Stagger.`,
+          color: '#B45309',
+          text: `Land the Counter-Set inside the final ${perfectWin}s golden window for +${PARRY_RULES.perfectParryFlat} base, ×${PARRY_RULES.perfectParryMult}, +${PARRY_RULES.perfectParryCoins}¢, +1 Evolution progress tick, and an ${perfectStagger}s Stagger.`,
         },
         {
           icon: 'lorc/sword-clash',
           title: 'Stagger window',
           color: CATEGORY_COLORS.parry,
-          text: `While Staggered, follow-up Sets deal ×${PARRY_RULES.staggerDamageMult} damage and stack cleanly with Rainbow, Evolutions, and Shading Surge.`,
+          text: `While Staggered, follow-up Sets gain +${PARRY_RULES.staggerFlatBonus} base & ×${PARRY_RULES.staggerDamageMult} and stack cleanly with Rainbow, Evolutions, Holo, and Shading Surge.`,
         },
       ],
     };
@@ -317,13 +369,13 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'SURGE',
       categoryColor: CATEGORY_COLORS.surge,
       subtitle: subtitle ?? 'Combat Mechanic',
-      what: `Every ${calmSec} seconds, Shading Surge adds a 4th trait (shading) for ${surgeSec} seconds and multiplies every Set's combined damage by ×${SURGE_RULES.multiplier}.`,
+      what: `Every ${calmSec} seconds, Shading Surge adds a 4th trait (shading) for ${surgeSec} seconds, granting +${SURGE_RULES.flatBonus} flat base damage and ×${SURGE_RULES.multiplier} on every Set.`,
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'How to play it',
           color: CATEGORY_COLORS.surge,
-          text: `Watch for the ${warnSec}-second heads-up warning. Stack a Rainbow Set, Parry, or active Evolution inside Shading Surge for massive spikes.`,
+          text: `Watch for the ${warnSec}-second heads-up warning. Stack a Rainbow Set, Holo card, Parry, or active Weapon Evolution inside Shading Surge for massive spikes.`,
         },
       ],
     };
@@ -336,13 +388,13 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'BONUS',
       categoryColor: '#7C3AED',
       subtitle: subtitle ?? 'Combat Mechanic',
-      what: 'Sets where all 3 cards differ in every active trait (different shape, color, count, etc.) trigger Rainbow bonuses and multipliers.',
+      what: 'Sets where all 3 cards differ in every active trait (different shape, color, count, etc.) trigger Rainbow bonuses, Prism synergy, and multipliers.',
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'How to spot it',
           color: '#7C3AED',
-          text: 'Pick three cards that share nothing in common. Pairs strongly with Rainbow Charm, Clarity Lens, and Prismatic Fever.',
+          text: 'Pick three cards that share nothing in common. Pairs strongly with Rainbow Charm, Catalyst Prism, Clarity Lens, and Prismatic Fever.',
         },
       ],
     };
@@ -355,13 +407,13 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'BONUS',
       categoryColor: CATEGORY_COLORS.passive,
       subtitle: subtitle ?? 'Combat Mechanic',
-      what: 'Matching consecutive Sets with the same number of differing traits builds a Purity streak that adds escalating bonus damage into your Set before multipliers.',
+      what: 'Escalating across diversity tiers (1-diff → 2-diff → Rainbow) builds a Purity streak that folds escalating flat base damage into your Set before multipliers.',
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'How to chain it',
           color: CATEGORY_COLORS.passive,
-          text: 'Repeat Sets of the same purity tier in a row so the escalating flat bonus gets multiplied by Rainbow, Parry, and Shading Surge.',
+          text: 'Step up your Set diversity in consecutive moves so the escalating base damage gets multiplied by Rainbow, Holo, Evolutions, Parry, and Shading Surge.',
         },
       ],
     };
@@ -374,32 +426,33 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'BONUS',
       categoryColor: CATEGORY_COLORS.passive,
       subtitle: subtitle ?? 'Combat Mechanic',
-      what: 'Defusing Time Bombs or Snares folds bonus damage straight into BASE before multipliers — Time Bombs hurl at the foe (+4 base, +8 under 8s, +14 clutch +0.25 Power under 5s) and Snares add +4.',
+      what: 'Defusing Time Bombs or Snares folds bonus damage straight into BASE before multipliers — Time Bombs hurl at the foe (up to +24 Clutch base under 5s) and feed Hazards synergy.',
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'How to play it',
           color: CATEGORY_COLORS.passive,
-          text: 'Clear Time Bombs safely for +4, or dare a Hot (<8s) or Clutch (<5s) defusal to convert enemy hazards into huge multiplied damage.',
+          text: 'Clear Time Bombs safely, or dare a Hot (<8s) or Clutch (<5s) defusal to convert enemy hazards into huge multiplied base damage and Hazards stacks.',
         },
       ],
     };
   }
 
   if (sourceId === 'set:cards') {
+    const perCard = BASE_RULES.cardBasePoints;
     return {
       title: name ?? 'Matched Sets',
       icon: icon ?? 'lorc/crossed-swords',
       categoryLabel: 'SETS',
       categoryColor: CATEGORY_COLORS.sets,
       subtitle: subtitle ?? 'Core Damage',
-      what: 'Base damage from every valid 3-card Set you matched, summed together with all flat bonuses before your multipliers apply.',
+      what: `Base damage from every valid 3-card Set you matched (${perCard} per card = ${perCard * 3} per Set), summed with card bonuses, Synergy hooks, and flat bonuses before multipliers apply.`,
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'How Set math works',
           color: CATEGORY_COLORS.sets,
-          text: 'Every matched card starts at 1 base damage (3 per Set). Flat bonuses, Power cards, and collateral cards add into this base before Set multipliers fire.',
+          text: `Every matched card starts at ${perCard} base damage (${perCard * 3} per Set). Power cards, Holo cards, Synergy hooks, and active Evolutions stack into this base before Set multipliers fire.`,
         },
       ],
     };
@@ -407,57 +460,38 @@ export const resolveDamageSourceCopy = (opts: {
 
   if (sourceId === 'set:card_bonus') {
     return {
-      title: name ?? 'Power & Charged Cards',
+      title: name ?? 'Power, Holo & Charged Cards',
       icon: icon ?? 'lorc/flat-star',
-      categoryLabel: 'POWER',
-      categoryColor: CATEGORY_COLORS.power,
+      categoryLabel: 'CARDS',
+      categoryColor: CATEGORY_COLORS.cardBonus,
       subtitle: subtitle ?? 'Board Card Bonus',
-      what: 'Extra base damage stored on Power cards, War Drum charges, and Gamble bonus cards — added into your Set before multipliers.',
+      what: `Extra base damage stored on Power cards (+${BASE_RULES.powerCardBonus}), Holo cards (+${BASE_RULES.holoCardBonus} & ×1.2), War Drum charges, and Gamble bonus cards — added into your Set before multipliers.`,
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'Why it hits hard',
-          color: CATEGORY_COLORS.power,
-          text: 'Bonus points printed on a card count as base Set damage, so Rainbow, Parry, Evolution, and Shading Surge multipliers amplify them directly.',
+          color: CATEGORY_COLORS.cardBonus,
+          text: 'Bonus points printed on a card count as base Set damage, so Holo, Active Evolutions, Rainbow, Parry, and Shading Surge multipliers amplify them directly.',
         },
       ],
     };
   }
 
-  if (sourceId === 'power:scale') {
-    return {
-      title: name ?? 'Power Scaling',
-      icon: icon ?? 'lorc/power-lightning',
-      categoryLabel: 'POWER',
-      categoryColor: CATEGORY_COLORS.power,
-      subtitle: subtitle ?? 'Adventure Scaling',
-      what: "Adventure Mode's in-fight Power meter climbs from charm triggers, Parries, Purity chains, clutch Bomb defusals, and Evolutions — multiplying your unified BASE × MULT strike.",
-      details: [
-        {
-          icon: 'lorc/power-lightning',
-          title: 'How it scales',
-          color: CATEGORY_COLORS.power,
-          text: 'Every fight starts at ×1.0. Up to 3 Power adds +1.0× per point (×4.0), then climbs smoothly as 2 + 2√(P − 2) forever with zero hidden belt penalties.',
-        },
-      ],
-    };
-  }
-
-  // 8. Board FX & Follow-up Effects (`fx:*`)
+  // 9. Board FX & Follow-up Effects (`fx:*`)
   if (sourceId === 'fx:burn') {
     return {
       title: name ?? 'Burn Damage',
       icon: icon ?? 'lorc/candle-flame',
       categoryLabel: 'BONUS',
-      categoryColor: CATEGORY_COLORS.power,
+      categoryColor: CATEGORY_COLORS.cardBonus,
       subtitle: subtitle ?? 'Board Effect',
-      what: 'Burning cards scorch the foe over time as they smolder and break, inheriting your active Set multipliers.',
+      what: 'Burning cards scorch the foe over time as they smolder and break, feeding Burn synergy and inheriting active Set multipliers.',
       details: [
         {
           icon: 'lorc/light-bulb',
           title: 'Tip',
-          color: CATEGORY_COLORS.power,
-          text: 'Let burning cards finish on their own while you match fresh Sets — they pay out damage automatically.',
+          color: CATEGORY_COLORS.cardBonus,
+          text: 'Let burning cards finish on their own while you match fresh Sets — they pay out damage automatically and fuel Burn Synergy hooks.',
         },
       ],
     };
@@ -470,7 +504,7 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'BONUS',
       categoryColor: CATEGORY_COLORS.parry,
       subtitle: subtitle ?? 'Board Effect',
-      what: "Explosions shatter neighboring cards around your matched Set, folding every destroyed card's points into your damage.",
+      what: "Explosions shatter neighboring cards around your matched Set, folding every destroyed card's points into your damage and feeding Blast synergy.",
       details: [
         {
           icon: 'lorc/light-bulb',
@@ -514,7 +548,7 @@ export const resolveDamageSourceCopy = (opts: {
           icon: 'lorc/light-bulb',
           title: 'Tip',
           color: '#7C3AED',
-          text: 'Each bounce can trigger another bounce and feed extra damage directly into your combos.',
+          text: 'Each bounce can trigger another bounce and feed extra damage and Blast synergy directly into your combos.',
         },
       ],
     };
@@ -527,7 +561,7 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'BONUS',
       categoryColor: CATEGORY_COLORS.passive,
       subtitle: subtitle ?? 'Board Effect',
-      what: 'Linked cards are tethered in pairs — matching or destroying one pulls its partner down with it for bonus damage.',
+      what: 'Linked cards are tethered in pairs — matching or destroying one pulls its partner down with it for bonus damage and Links synergy.',
       details: [
         {
           icon: 'lorc/light-bulb',
@@ -551,7 +585,7 @@ export const resolveDamageSourceCopy = (opts: {
     };
   }
 
-  // 9. Named generic combat bonuses & clean fallback
+  // 10. Named generic combat bonuses & clean fallback
   if (sourceId === 'bonus:arcana') {
     return {
       title: name ?? 'Arcana',
@@ -583,7 +617,7 @@ export const resolveDamageSourceCopy = (opts: {
       categoryLabel: 'BONUS',
       categoryColor: '#7C3AED',
       subtitle: subtitle ?? 'Combat Multiplier',
-      what: 'Combined multiplier bonuses that amplify your matched cards and flat Set damage together.',
+      what: 'Combined multiplier bonuses (Holo, Active Evolutions, Rainbow, Parry, Shading Surge) that amplify your matched cards and flat Set damage together.',
       details: [],
     };
   }
@@ -622,9 +656,7 @@ export const resolveDamageSourceCopy = (opts: {
           ? { label: 'PASSIVE', color: CATEGORY_COLORS.passive, sub: 'Fighter Passive' }
           : kind === 'set'
             ? { label: 'SETS', color: CATEGORY_COLORS.sets, sub: 'Core Damage' }
-            : kind === 'power'
-              ? { label: 'POWER', color: CATEGORY_COLORS.power, sub: 'Power Scaling' }
-              : { label: 'BONUS', color: CATEGORY_COLORS.bonus, sub: 'Combat Mechanic' };
+            : { label: 'BONUS', color: CATEGORY_COLORS.bonus, sub: 'Combat Mechanic' };
 
   return {
     title: name ?? (rawId || sourceId),

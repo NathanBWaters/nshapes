@@ -7,9 +7,9 @@
  * is overpowered for any tier, underpowered for all of them, a passenger,
  * not worth a slot, or carries a dead rule; and on a shrinking viable pool.
  *
- * BALANCE_REPORT=1 (npm run balance:report) also measures every recipe (both
- * total lift and bespoke ruleLift over the blank evolution shell) and writes
- * docs/balance-report.md and docs/balance-snapshot.json.
+ * BALANCE_REPORT=1 (npm run balance:report) also measures all 192 per-weapon
+ * evolutions (both total lift and bespoke ruleLift over the blank evolution shell)
+ * and writes docs/balance-report.md and docs/balance-snapshot.json.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -67,7 +67,7 @@ describe('balance guardrails', () => {
   let report: BalanceReport;
 
   beforeAll(() => {
-    report = judge(measure({ runs: FULL ? 14 : 8, builds: FULL ? 6 : 4, buildSize: 5, recipes: FULL }));
+    report = judge(measure({ runs: FULL ? 14 : 8, builds: FULL ? 6 : 4, buildSize: 5, evolutions: FULL }));
     if (!FULL) return;
     const file = path.join(DOCS, 'balance-snapshot.json');
     const before: Snapshot = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
@@ -93,8 +93,8 @@ describe('balance guardrails', () => {
   });
 
   (FULL ? it : it.skip)('every evolution is in its band, adds bespoke rule lift, has zero dead rules, and the typical one is a power trip', () => {
-    expect(flagged(['weak-recipe', 'empty-recipe', 'runaway-recipe', 'rare-recipe', 'dead-rule'])).toEqual([]);
-    expect(report.summary.recipeLiftMedian).toBeGreaterThanOrEqual(T.recipeLiftMedian);
-    expect(report.summary.recipeRuleLiftMedian).toBeGreaterThanOrEqual(T.recipeRuleLift[0]);
+    expect(flagged(['weak-evolution', 'empty-evolution', 'runaway-evolution', 'rare-evolution', 'dead-rule'])).toEqual([]);
+    expect(report.summary.evoLiftMedian).toBeGreaterThanOrEqual(T.evoLiftMedian);
+    expect(report.summary.evoRuleLiftMedian).toBeGreaterThanOrEqual(T.evoRuleLift[0]);
   });
 });

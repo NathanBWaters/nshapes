@@ -1,5 +1,6 @@
 /**
- * Pure progression logic: unlock rules, star rewards, purchases.
+ * Pure progression logic: unlock rules, star rewards, 200-bounty evaluation,
+ * per-weapon evolution equipping, slot progression, and lossless save migration.
  * No storage I/O here, so it's easy to test and simulate.
  */
 import type { CharacterName } from '@/types';
@@ -8,11 +9,12 @@ import type {
   ArcanaId,
   BountyDef,
   BountyStats,
-  EvolutionRecipe,
   LevelDef,
   RewardDef,
   RunState,
   SkillNode,
+  Unlock,
+  UnlockReveal,
   UnlockableFeature,
   UpgradeDef,
 } from './types';
@@ -27,8 +29,21 @@ import { getArmoryWeapon, resolveLegacyWeapon } from './data/armory';
 import { MAX_WEAPON_LEVEL } from './data/weaponStats';
 import { LEGACY_WEAPON_RARITY, WEAPONS } from '@/utils/gameDefinitions';
 import { SKILL_NODES, skillTreeOf, CAMPAIGN_STARS } from './data/skillTrees';
-import { BOUNTIES } from './data/bounties';
-import { EVOLUTION_RECIPES } from './data/evolutions';
+import {
+  BOUNTIES,
+  LEGACY_BOUNTY_ID_MAP,
+  getBounty,
+  getWeaponBounties,
+  isBountyUnlocked,
+  isBountyWeaponOwned,
+  readFightMetric,
+} from './data/bounties';
+import {
+  WEAPON_EVOLUTIONS,
+  defaultEvolutionForWeapon,
+  getWeaponEvolution,
+  isWeaponEvolutionId,
+} from './data/weaponEvolutions';
 import { CAMPAIGN_FEATURES, FEATURES, SUMMIT_UNLOCK_LEVEL_ID, isSummitUnlocked } from './data/features';
 import { starRewards, unlockablesOf } from './data/rewards';
 import {
@@ -41,10 +56,23 @@ import {
   settleCauldronWager,
   type CauldronWagerTier,
 } from './data/relief';
-import { inFamily, newRecipesArmedBy } from './engine/sources';
+import {
+  SLOT_4_UNLOCK_LEVEL,
+  SLOT_5_UNLOCK_LEVEL,
+  arcanaSlotsOf,
+  bossUnlockedCharmSlots,
+  charmSlotsOf,
+  fightArcana,
+  fightCharms,
+} from './loadout';
 import { tuningSpent, weaponLevel } from './weaponLevels';
 
+export type { Unlock, UnlockReveal };
 export { SUMMIT_UNLOCK_LEVEL_ID, isSummitUnlocked };
+export { getBounty, getWeaponBounties, isBountyUnlocked, isBountyWeaponOwned };
+
+/** Starter evolution granted on World 1 Boss (1-10 ★1). */
+export const STARTER_EVOLUTION_ID = 'blast-powder:cluster-charge';
 
 /**
  * The shape of a brand-new save. Loading fills anything a stored save lacks
@@ -63,11 +91,14 @@ export const createNewSave = (): AdventureSave => ({
   armory: [],
   charm: null,
   charms: [],
+  equippedEvolutions: {},
+  unlockedWeaponEvolutions: [],
   unlockedArcana: [],
   activeArcana: null,
   equippedArcana: [],
   bountiesUnlocked: false,
   completedBounties: [],
+  bountyProgress: {},
   bountyStats: {
     totalSets: 0,
     rainbowSets: 0,
@@ -80,9 +111,11 @@ export const createNewSave = (): AdventureSave => ({
     fighterWins: {},
     trapsDefused: 0,
     biggestHit: 0,
+    parriesLanded: 0,
   },
   unlockedEvolutions: [],
   discoveredEvolutions: [],
+  legacyEvoMigrated: false,
   upgrades: {},
   weaponUpgrades: {},
   weaponTuning: {},
@@ -257,9 +290,7 @@ const normalizeSkillNodes = (save: AdventureSave): AdventureSave => {
   return { ...save, skillNodes };
 };
 
-// ─── Charm & Arcana slots ───────────────────────────────────────────────────
-
-import { arcanaSlotsOf, charmSlotsOf, fightArcana, fightCharms } from './loadout';
+// ─── Charm, Evolution & Arcana slots ────────────────────────────────────────
 
 const charmSlots = charmSlotsOf;
 const arcanaSlots = arcanaSlotsOf;
@@ -269,10 +300,56 @@ const equippedArcanaOf = fightArcana;
 export {
   BASE_CHARM_SLOTS,
   MAX_CHARM_SLOTS,
+  SLOT_4_UNLOCK_LEVEL,
+  SLOT_5_UNLOCK_LEVEL,
   BASE_ARCANA_SLOTS,
   MAX_ARCANA_SLOTS,
+  bossUnlockedCharmSlots,
 } from './loadout';
 export { charmSlots, arcanaSlots, equippedCharms, equippedArcanaOf };
+
+const weaponIdOfEvolution = (evoId: string): string | undefined => {
+  const def = getWeaponEvolution(evoId);
+  if (def) return def.weaponId;
+  const sep = evoId.indexOf(':');
+  return sep > 0 ? evoId.slice(0, sep) : undefined;
+};
+
+/** All unlocked per-weapon evolution IDs belonging to `weaponId`. */
+export const unlockedEvolutionsForWeapon = (
+  save: Pick<AdventureSave, 'unlockedWeaponEvolutions'>,
+  weaponId: string
+): string[] =>
+  (save.unlockedWeaponEvolutions ?? []).filter(id => weaponIdOfEvolution(id) === weaponId);
+
+/** Currently equipped evolution ID for `weaponId` (or its first unlocked evolution, or null). */
+export const equippedEvolutionOf = (
+  save: Pick<AdventureSave, 'equippedEvolutions' | 'unlockedWeaponEvolutions'>,
+  weaponId: string
+): string | null => {
+  const cur = save.equippedEvolutions?.[weaponId];
+  const unlocked = save.unlockedWeaponEvolutions ?? [];
+  if (cur && unlocked.includes(cur) && weaponIdOfEvolution(cur) === weaponId) {
+    return cur;
+  }
+  return unlockedEvolutionsForWeapon(save, weaponId)[0] ?? null;
+};
+
+/** Select one of a weapon's unlocked per-weapon evolutions (1-tap radio equip). */
+export const equipWeaponEvolution = (
+  save: AdventureSave,
+  weaponId: string,
+  evoId: string
+): AdventureSave => {
+  if (!isWeaponEvolutionId(evoId)) return save;
+  if (weaponIdOfEvolution(evoId) !== weaponId) return save;
+  if (!(save.unlockedWeaponEvolutions ?? []).includes(evoId)) return save;
+  if (save.equippedEvolutions?.[weaponId] === evoId) return save;
+  return {
+    ...save,
+    equippedEvolutions: { ...(save.equippedEvolutions ?? {}), [weaponId]: evoId },
+  };
+};
 
 /** Equip an Armory weapon into a free charm slot. No duplicates; does nothing when every slot is full. */
 export const equipCharm = (save: AdventureSave, weaponId: string): AdventureSave => {
@@ -300,65 +377,6 @@ export const swapCharm = (save: AdventureSave, replaceId: string, withId: string
 };
 
 /**
- * Equip a pair of owned Armory weapons that arms `recipeId`, preserving as many
- * already-equipped charms as the belt slots allow.
- */
-export const armRecipePair = (save: AdventureSave, recipeId: string): AdventureSave => {
-  if (save.unlockedEvolutions.length === 0) return save;
-  const recipe = EVOLUTION_RECIPES.find(r => r.id === recipeId);
-  const slots = charmSlots(save);
-  if (!recipe || slots < 2) return save;
-  const charms = equippedCharms(save);
-  const w0 =
-    charms.find(id => inFamily(id, recipe.families[0])) ??
-    save.armory.find(id => inFamily(id, recipe.families[0]));
-  const w1 =
-    charms.find(id => id !== w0 && inFamily(id, recipe.families[1])) ??
-    save.armory.find(id => id !== w0 && inFamily(id, recipe.families[1]));
-  if (!w0 || !w1) return save;
-  const toAdd = [w0, w1].filter(id => !charms.includes(id));
-  if (toAdd.length === 0) return save;
-  const keepCount = Math.max(0, slots - toAdd.length);
-  const preserved: string[] = [];
-  for (const id of charms) {
-    if (id === w0 || id === w1) preserved.push(id);
-  }
-  for (const id of charms) {
-    if (preserved.length >= keepCount) break;
-    if (id !== w0 && id !== w1) preserved.push(id);
-  }
-  return { ...save, charms: [...preserved, ...toAdd].slice(0, slots) };
-};
-
-/** Every Evolution recipe the player currently owns both weapons for in the Armory (known recipes first). */
-export const armableRecipesFromArmory = (
-  save: AdventureSave
-): { recipe: EvolutionRecipe; known: boolean; pair: [string, string] }[] => {
-  if (save.unlockedEvolutions.length === 0) return [];
-  const knownIds = new Set([...save.unlockedEvolutions, ...save.discoveredEvolutions]);
-  const out: { recipe: EvolutionRecipe; known: boolean; pair: [string, string] }[] = [];
-  for (const recipe of EVOLUTION_RECIPES) {
-    const w0 = save.armory.find(id => inFamily(id, recipe.families[0]));
-    const w1 = save.armory.find(id => id !== w0 && inFamily(id, recipe.families[1]));
-    if (w0 && w1) out.push({ recipe, known: knownIds.has(recipe.id), pair: [w0, w1] });
-  }
-  return out.sort((a, b) => Number(b.known) - Number(a.known));
-};
-
-/** Whether an unequipped Armory weapon fuses with at least one currently equipped charm. */
-export const charmSynergyWithEquipped = (
-  save: AdventureSave,
-  candidateWeaponId: string
-): { known: boolean; recipe: EvolutionRecipe } | null => {
-  if (save.unlockedEvolutions.length === 0 || !save.armory.includes(candidateWeaponId)) return null;
-  const matches = newRecipesArmedBy(equippedCharms(save), candidateWeaponId);
-  if (matches.length === 0) return null;
-  const knownIds = new Set([...save.unlockedEvolutions, ...save.discoveredEvolutions]);
-  const best = matches.find(r => knownIds.has(r.id)) ?? matches[0];
-  return { known: knownIds.has(best.id), recipe: best };
-};
-
-/**
  * Equip an unlocked Arcana. When every slot is taken, the one equipped
  * longest ago makes room (with one slot this is a plain swap).
  */
@@ -375,21 +393,6 @@ export const unequipArcana = (save: AdventureSave, arcanaId: ArcanaId): Adventur
 export const toggleArcana = (save: AdventureSave, arcanaId: ArcanaId): AdventureSave =>
   equippedArcanaOf(save).includes(arcanaId) ? unequipArcana(save, arcanaId) : equipArcana(save, arcanaId);
 
-/** Unlocked recipes whose two families are both among these weapons. */
-export const recipesArmedBy = (weaponIds: readonly string[], unlockedEvolutions: readonly string[]): EvolutionRecipe[] =>
-  EVOLUTION_RECIPES.filter(
-    r => unlockedEvolutions.length > 0 && r.families.every(f => weaponIds.some(id => inFamily(id, f)))
-  );
-
-/** Recipes the equipped charms arm before the fight starts (picks and shop buys can arm more). */
-export const armedRecipes = (save: AdventureSave): EvolutionRecipe[] => recipesArmedBy(equippedCharms(save), save.unlockedEvolutions);
-
-/** For one recipe: which of its two families the equipped charms already cover. */
-export const recipeFamiliesHeld = (save: AdventureSave, recipe: EvolutionRecipe): [boolean, boolean] => {
-  const charms = equippedCharms(save);
-  return [charms.some(id => inFamily(id, recipe.families[0])), charms.some(id => inFamily(id, recipe.families[1]))];
-};
-
 /** Drop anything equipped that is no longer owned or no longer fits the slots. */
 const trimEquipped = (save: AdventureSave): AdventureSave => {
   const charms = equippedCharms(save);
@@ -400,8 +403,18 @@ const trimEquipped = (save: AdventureSave): AdventureSave => {
 
 // ─── Migration from the v1 save shape ───────────────────────────────────────
 
-/** What each fighter level used to cost in coins (level N → N+1). Used only to refund old saves. */
+/** What each fighter level used to cost in coins (level N -> N+1). Used only to refund old saves. */
 export const LEGACY_FIGHTER_LEVEL_COSTS = [60, 120, 200, 320, 480, 700, 1000, 1400, 1900] as const;
+
+/** Extra tiers 2 and 3 of legacy Workshop `charm_belt` (`[300, 900, 2000]`) refunded once on migration. */
+export const LEGACY_CHARM_BELT_EXTRA_COSTS = [900, 2000] as const;
+
+/** Coins refunded when clamping legacy `charm_belt` tiers 2-3 down to the 1-tier optional 6th slot. */
+export const legacyCharmBeltRefund = (beltTier: number | undefined): number => {
+  const tier = Math.max(0, Math.min(3, Math.floor(Number(beltTier) || 0)));
+  if (tier <= 1) return 0;
+  return LEGACY_CHARM_BELT_EXTRA_COSTS.slice(0, tier - 1).reduce((a, b) => a + b, 0);
+};
 
 /** Coins a v1 save spent levelling fighters. */
 export const legacyFighterRefund = (fighterLevels: Record<string, number> | undefined): number =>
@@ -450,20 +463,45 @@ export const migrateWeaponIds = (save: AdventureSave): AdventureSave => {
   return { ...save, coins: save.coins + refund, armory, charms, weaponUpgrades: {}, weaponTuning, legacyWeaponTiers };
 };
 
+/** Map legacy completed bounty IDs to their successor General Bounties without dropping earned weapons/Arcana. */
+const migrateCompletedBounties = (completed: readonly string[] | undefined): string[] => {
+  const out: string[] = [];
+  for (const id of completed ?? []) {
+    const mapped = LEGACY_BOUNTY_ID_MAP[id] ?? id;
+    if (!out.includes(mapped)) out.push(mapped);
+  }
+  return out;
+};
+
 /**
- * Bring an older save to the current shape: fighter levels are refunded in full
- * (they no longer exist), the single charm joins `charms`, the single Arcana
- * joins `equippedArcana`, and old weapon ids become their one weapon
- * (migrateWeaponIds). Safe to run more than once.
+ * Bring an older save to the current shape: fighter levels and legacy
+ * `charm_belt` tiers 2-3 are refunded in full, single charm/Arcana join their
+ * slot arrays, legacy completed bounties map to successors, and old weapon ids
+ * become their one weapon (migrateWeaponIds). Safe to run more than once.
  */
 export const migrateSave = (save: AdventureSave): AdventureSave => {
+  const beltRefund = legacyCharmBeltRefund(save.upgrades?.charm_belt);
+  const upgrades =
+    beltRefund > 0
+      ? { ...(save.upgrades ?? {}), charm_belt: 1 }
+      : { ...(save.upgrades ?? {}) };
+
   const next: AdventureSave = {
     ...save,
-    coins: save.coins + legacyFighterRefund(save.fighterLevels),
+    coins: save.coins + legacyFighterRefund(save.fighterLevels) + beltRefund,
+    upgrades,
     fighterLevels: {},
     skillNodes: save.skillNodes ?? {},
     charms: save.charms ?? [],
+    equippedEvolutions: save.equippedEvolutions ?? {},
+    unlockedWeaponEvolutions: save.unlockedWeaponEvolutions ?? [],
     equippedArcana: save.equippedArcana ?? [],
+    completedBounties: migrateCompletedBounties(save.completedBounties),
+    bountyProgress: save.bountyProgress ?? {},
+    bountyStats: {
+      ...save.bountyStats,
+      parriesLanded: save.bountyStats?.parriesLanded ?? 0,
+    },
     charm: null,
     activeArcana: null,
     consecutiveLosses: save.consecutiveLosses ?? {},
@@ -484,7 +522,7 @@ type LockReason =
   | { kind: 'branch'; parentId: string; need: number };
 
 /**
- * A main level opens when the previous main level has ≥1★ and its region's
+ * A main level opens when the previous main level has >=1★ and its region's
  * star gate is met. A side path opens (and first appears on the map) once its
  * parent level has the stars it asks for: ★★ unless the path says otherwise.
  */
@@ -546,22 +584,6 @@ interface GrantedReward {
   reward: RewardDef;
 }
 
-/** One thing to reveal with fanfare after a level. `star === 0` indicates a Bounty reward. */
-export type Unlock =
-  | { kind: 'fighter'; name: CharacterName; star: number }
-  /**
-   * A new weapon, or (with `level`) a reward naming a weapon already owned:
-   * another copy found, so it is now at that level.
-   */
-  | { kind: 'weapon'; id: string; star: number; firstWeapon: boolean; level?: number }
-  | { kind: 'arcana'; id: ArcanaId; star: number }
-  | { kind: 'evolution'; id: string; star: number; firstEvolution: boolean }
-  | { kind: 'feature'; feature: UnlockableFeature; star: number }
-  /** A secret side path opened on the map (`star` = the stars on its parent that opened it) */
-  | { kind: 'path'; levelId: string; star: number }
-  /** Starfall Summit roguelike mode unlocked upon clearing SUMMIT_UNLOCK_LEVEL_ID */
-  | { kind: 'summit'; star: number };
-
 export interface ResultApplication {
   save: AdventureSave;
   granted: GrantedReward[];
@@ -613,7 +635,7 @@ export const setCauldronWager = (save: AdventureSave, tier: CauldronWagerTier): 
 };
 
 /**
- * [GP-18] Retreat coin retention: quitting a fight after ≥5 Sets retains 50% of
+ * [GP-18] Retreat coin retention: quitting a fight after >=5 Sets retains 50% of
  * earned fight coins so mid-fight retreats never feel completely wasted.
  */
 export const applyRetreatResult = (
@@ -694,12 +716,26 @@ const grant = (
           next.unlockedArcana = [...next.unlockedArcana, u.id];
         }
         break;
-      case 'evolution':
-        if (!next.unlockedEvolutions.includes(u.id)) {
-          unlocks.push({ kind: 'evolution', id: u.id, star, firstEvolution: next.unlockedEvolutions.length === 0 });
-          next.unlockedEvolutions = [...next.unlockedEvolutions, u.id];
+      case 'evolution': {
+        if (!isWeaponEvolutionId(u.id)) break;
+        const unlockedList = next.unlockedWeaponEvolutions ?? [];
+        if (!unlockedList.includes(u.id)) {
+          const weaponId = weaponIdOfEvolution(u.id);
+          unlocks.push({
+            kind: 'evolution',
+            id: u.id,
+            ...(weaponId ? { weaponId } : {}),
+            star,
+            firstEvolution: unlockedList.length === 0,
+          });
+          next.unlockedWeaponEvolutions = [...unlockedList, u.id];
+          // Auto-equip a weapon's first unlocked evolution so it works immediately in the next fight
+          if (weaponId && !next.equippedEvolutions?.[weaponId]) {
+            next.equippedEvolutions = { ...(next.equippedEvolutions ?? {}), [weaponId]: u.id };
+          }
         }
         break;
+      }
     }
   }
   return { save: next, unlocks };
@@ -726,19 +762,21 @@ const recordRunBountyStats = (save: AdventureSave, level: LevelDef, stars: numbe
     destructiveFights: prev.destructiveFights + (destructive || run.explosionsTriggered > 0 ? 1 : 0),
     trapsDefused: (prev.trapsDefused ?? 0) + run.trapsDefused,
     biggestHit: Math.max(prev.biggestHit ?? 0, run.biggestHit),
+    parriesLanded: (prev.parriesLanded ?? 0) + (run.parriesLanded ?? 0),
     fighterWins,
   };
 
+  const forged = run.forgedEvolutions ?? [];
   const discoveredEvolutions =
-    run.forgedRecipes.length > 0
-      ? [...new Set([...save.discoveredEvolutions, ...run.forgedRecipes])]
+    forged.length > 0
+      ? [...new Set([...save.discoveredEvolutions, ...forged])]
       : save.discoveredEvolutions;
   return { ...save, bountyStats, discoveredEvolutions };
 };
 
 /** A practice fight: it is counted as played and its evolutions are remembered; nothing else changes. */
 const applyPracticeResult = (save: AdventureSave, level: LevelDef, run?: RunState): ResultApplication => {
-  const forged = run?.forgedRecipes ?? [];
+  const forged = run?.forgedEvolutions ?? [];
   return {
     save: {
       ...save,
@@ -755,7 +793,7 @@ const applyPracticeResult = (save: AdventureSave, level: LevelDef, run?: RunStat
   };
 };
 
-/** Bank run coins + grant first-time star rewards + update relief/wager state + evaluate bounties. */
+/** Bank run coins + grant first-time star rewards + emit boss slot unlocks + update relief/wager + evaluate all 200 bounties. */
 export const applyLevelResult = (
   save: AdventureSave,
   level: LevelDef,
@@ -782,7 +820,7 @@ export const applyLevelResult = (
           : 0));
   const { adjustedRunCoins, stakeDelta } = settleCauldronWager(wagerTier, effectiveStars, runCoins, save.coins);
 
-  // Update consecutive loss counter (resets on any ≥★ clear; increments on 0★ defeat)
+  // Update consecutive loss counter (resets on any >=★ clear; increments on 0★ defeat)
   const nextConsecutiveLosses: Record<string, number> = { ...(save.consecutiveLosses ?? {}) };
   if (effectiveStars >= 1) {
     delete nextConsecutiveLosses[level.id];
@@ -790,7 +828,7 @@ export const applyLevelResult = (
     nextConsecutiveLosses[level.id] = (nextConsecutiveLosses[level.id] ?? 0) + 1;
   }
 
-  // Pre-1-8 hidden purse: quietly bank 5–10¢ on defeats before Coin Drops unlock
+  // Pre-1-8 hidden purse: quietly bank 5-10¢ on defeats before Coin Drops unlock
   let hiddenPurseDeposited = 0;
   let nextHiddenPurse = save.hiddenPurse ?? 0;
   if (effectiveStars === 0 && !save.coinsUnlocked) {
@@ -869,6 +907,20 @@ export const applyLevelResult = (
     };
   }
 
+  // World 1 Boss (1-10) unlocks the 4th weapon slot & World 2 Boss (2-10) unlocks the 5th weapon slot
+  if ((before.stars[SLOT_4_UNLOCK_LEVEL] ?? 0) < 1 && (next.stars[SLOT_4_UNLOCK_LEVEL] ?? 0) >= 1) {
+    unlocks.push({ kind: 'weapon_slot', slotNumber: 4, levelId: SLOT_4_UNLOCK_LEVEL, star: 1 });
+    // Guarantee starter evolution is granted on first clear of 1-10 even if star reward omits it
+    if (!(next.unlockedWeaponEvolutions ?? []).includes(STARTER_EVOLUTION_ID)) {
+      const starterRes = grant(next, { coins: 0, evolution: STARTER_EVOLUTION_ID }, 1, true);
+      next = starterRes.save;
+      unlocks.push(...starterRes.unlocks);
+    }
+  }
+  if ((before.stars[SLOT_5_UNLOCK_LEVEL] ?? 0) < 1 && (next.stars[SLOT_5_UNLOCK_LEVEL] ?? 0) >= 1) {
+    unlocks.push({ kind: 'weapon_slot', slotNumber: 5, levelId: SLOT_5_UNLOCK_LEVEL, star: 1 });
+  }
+
   // Starfall Summit opens on the first clear of the milestone boss (default 1-10)
   if (
     level.id === SUMMIT_UNLOCK_LEVEL_ID &&
@@ -881,16 +933,47 @@ export const applyLevelResult = (
   const completedBounties: BountyDef[] = [];
   let bountyCoins = 0;
   if (next.bountiesUnlocked) {
-    // Loop so a coin bounty pushing lifetimeCoins past 1,000 can cascade cleanly
+    // Phase A: Advance weapon-linked & single-fight bounty progress from this fight's FightMetrics
+    const heldWeaponIds = new Set((run?.weapons ?? []).map(w => w.id));
+    const fightMetrics = run?.fightMetrics;
+    if (fightMetrics) {
+      const nextProgress: Record<string, number> = { ...(next.bountyProgress ?? {}) };
+      for (const b of BOUNTIES) {
+        if (next.completedBounties.includes(b.id)) continue;
+        if (b.scope === 'save') continue;
+        if (!b.requiresWeapon && b.scope === 'cumulative') continue;
+        if (b.requiresWeapon) {
+          if (!next.armory.includes(b.requiresWeapon) || !heldWeaponIds.has(b.requiresWeapon)) continue;
+        }
+        const val = readFightMetric(fightMetrics, b.metric);
+        if (val <= 0) continue;
+        if (b.scope === 'cumulative') {
+          nextProgress[b.id] = (nextProgress[b.id] ?? 0) + val;
+        } else {
+          nextProgress[b.id] = Math.max(nextProgress[b.id] ?? 0, val);
+        }
+      }
+      next = { ...next, bountyProgress: nextProgress };
+    }
+
+    // Phase B: Fixed-point payout loop so cascading save/coin bounties complete cleanly
     let progressed = true;
     while (progressed) {
       progressed = false;
       for (const b of BOUNTIES) {
         if (next.completedBounties.includes(b.id)) continue;
+        if (!isBountyUnlocked(next, b)) continue;
         if (b.progress(next) >= b.target) {
           progressed = true;
           completedBounties.push(b);
-          const result = grant({ ...next, completedBounties: [...next.completedBounties, b.id] }, b.reward, 0, true, next);
+          const prunedProgress = { ...(next.bountyProgress ?? {}) };
+          delete prunedProgress[b.id];
+          const withDone: AdventureSave = {
+            ...next,
+            completedBounties: [...next.completedBounties, b.id],
+            bountyProgress: prunedProgress,
+          };
+          const result = grant(withDone, b.reward, 0, true, next);
           next = result.save;
           unlocks.push(...result.unlocks);
           bountyCoins += b.reward.coins;
@@ -955,9 +1038,12 @@ export const claimMapKey = (save: AdventureSave, keyId: string, fighter: Charact
 };
 
 /**
- * Bring an older save in line with the current level table: anything a level's
- * already-earned stars now unlock (a fighter, weapon, Arcana, Combo recipe or
- * campaign feature that moved there in an update) is granted. Coins are never paid twice.
+ * Bring an older save in line with the current level, evolution & bounty tables:
+ * - anything a level's already-earned stars now unlock is granted (coins never paid twice);
+ * - veteran saves with legacy pair evolutions receive one-time idempotent goodwill
+ *   credit (Evo A for their equipped / highest-level Armory weapons);
+ * - invalid evolution IDs are pruned and every weapon with an unlocked evolution
+ *   gets a valid default equipped automatically.
  */
 export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
   let next = migrateSave(save);
@@ -965,16 +1051,21 @@ export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
     next = grant(next, { ...reward, coins: 0 }, 0, false).save;
   };
   for (const level of LEVELS) {
-    starRewards(level).slice(0, save.stars[level.id] ?? 0).forEach(regrant);
+    starRewards(level).slice(0, next.stars[level.id] ?? 0).forEach(regrant);
+  }
+  // Ensure 1-10 clear grants starter evolution even for older saves
+  if ((next.stars[SLOT_4_UNLOCK_LEVEL] ?? 0) >= 1) {
+    regrant({ coins: 0, evolution: STARTER_EVOLUTION_ID });
   }
   for (const f of FEATURES) {
     const cleared = !!f.clearLevel && (next.stars[f.clearLevel] ?? 0) >= 1;
     if (!next[f.saveFlag] && (cleared || USED_BEFORE_FLAG[f.id](next))) next = unlockFeature(next, f.id);
   }
   for (const id of next.completedBounties) {
-    const b = BOUNTIES.find(x => x.id === id);
+    const b = getBounty(id);
     if (b) regrant(b.reward);
   }
+
   // Legacy save backfill: non-starting fighters already unlocked before Golden Keys
   // were introduced count against the earliest unclaimed map keys so players keep
   // every friend they earned and still have one key per remaining locked friend.
@@ -991,22 +1082,81 @@ export const reconcileUnlocks = (save: AdventureSave): AdventureSave => {
       if (slot) claimedMapKeys[slot.id] = fighter;
     }
   }
-  // Ensure every fighter recorded on a claimed key is also in unlockedFighters
   const unlockedFighters = [...next.unlockedFighters];
   for (const fighter of Object.values(claimedMapKeys)) {
     if (!unlockedFighters.includes(fighter) && FIGHTERS.some(f => f.name === fighter)) {
       unlockedFighters.push(fighter);
     }
   }
-  // Recipes and weapons that no longer exist (renamed in an update) are dropped
-  const known = new Set(EVOLUTION_RECIPES.map(r => r.id));
+
+  // Filter armory to valid weapons first
+  const validArmory = next.armory.filter(id => !!getArmoryWeapon(id));
+  next = { ...next, unlockedFighters, claimedMapKeys, armory: validArmory };
+
+  // One-time idempotent veteran goodwill credit for legacy pair evolutions
+  if (!next.legacyEvoMigrated) {
+    const legacyUnlockedCount = (next.unlockedEvolutions ?? []).filter(id => !isWeaponEvolutionId(id)).length;
+    const legacyDiscoveredCount = (next.discoveredEvolutions ?? []).filter(id => !isWeaponEvolutionId(id)).length;
+    if (legacyUnlockedCount > 0 || legacyDiscoveredCount > 0) {
+      const credit = Math.min(
+        validArmory.length,
+        legacyUnlockedCount + Math.floor(legacyDiscoveredCount / 4)
+      );
+      if (credit > 0) {
+        const equippedSet = new Set(next.charms);
+        const prioritized = [...validArmory].sort((a, b) => {
+          const eqDiff = Number(equippedSet.has(b)) - Number(equippedSet.has(a));
+          if (eqDiff !== 0) return eqDiff;
+          return weaponLevel(next, b) - weaponLevel(next, a) || a.localeCompare(b);
+        });
+        let grantedCount = 0;
+        for (const wId of prioritized) {
+          if (grantedCount >= credit) break;
+          const evoA = defaultEvolutionForWeapon(wId);
+          if (!evoA) continue;
+          if (!(next.unlockedWeaponEvolutions ?? []).includes(evoA.id)) {
+            regrant({ coins: 0, evolution: evoA.id });
+            grantedCount++;
+          }
+        }
+      }
+      next = { ...next, legacyEvoMigrated: true };
+    }
+  }
+
+  // Sanitize unlocked/equipped/discovered per-weapon evolutions against canonical table
+  const validUnlockedEvos = [...new Set((next.unlockedWeaponEvolutions ?? []).filter(isWeaponEvolutionId))];
+  const unlockedEvoSet = new Set(validUnlockedEvos);
+  const cleanEquippedEvos: Record<string, string> = {};
+  for (const [wId, evoId] of Object.entries(next.equippedEvolutions ?? {})) {
+    if (isWeaponEvolutionId(evoId) && unlockedEvoSet.has(evoId) && weaponIdOfEvolution(evoId) === wId) {
+      cleanEquippedEvos[wId] = evoId;
+    }
+  }
+  for (const evoId of validUnlockedEvos) {
+    const wId = weaponIdOfEvolution(evoId);
+    if (wId && !cleanEquippedEvos[wId]) {
+      cleanEquippedEvos[wId] = evoId;
+    }
+  }
+
+  const validDiscoveredEvos = [...new Set((next.discoveredEvolutions ?? []).filter(isWeaponEvolutionId))];
+
+  // Prune sparse bountyProgress to incomplete valid bounties
+  const doneSet = new Set(next.completedBounties);
+  const cleanBountyProgress: Record<string, number> = {};
+  for (const [bId, val] of Object.entries(next.bountyProgress ?? {})) {
+    if (!doneSet.has(bId) && getBounty(bId) && typeof val === 'number' && Number.isFinite(val) && val > 0) {
+      cleanBountyProgress[bId] = val;
+    }
+  }
+
   next = {
     ...next,
-    unlockedFighters,
-    claimedMapKeys,
-    armory: next.armory.filter(id => !!getArmoryWeapon(id)),
-    unlockedEvolutions: next.unlockedEvolutions.filter(id => known.has(id)),
-    discoveredEvolutions: next.discoveredEvolutions.filter(id => known.has(id)),
+    unlockedWeaponEvolutions: validUnlockedEvos,
+    equippedEvolutions: cleanEquippedEvos,
+    discoveredEvolutions: validDiscoveredEvos,
+    bountyProgress: cleanBountyProgress,
   };
   return trimEquipped(normalizeSkillNodes(next));
 };
@@ -1145,12 +1295,14 @@ export const COACH_KEYS = {
   passives: (fighter: CharacterName) => `passives_${fighter}`,
   /** The first fight where a level places this hazard */
   hazard: (kind: 'timeBombs' | 'snares') => `hazard_${kind}`,
-  /** The first time an evolution starts */
+  /** The first time a per-weapon evolution ignites */
   evolution: 'evolution_first',
+  /** The first time an evolution reaches Almost-Ready anticipation */
+  evoAlmost: 'evo_almost_first',
   /** The first time a weapon gains a scaling stack mid-fight */
   weaponGrowth: 'weapon_growth_first',
-  /** The first time the Power meter climbs on a level with damage numbers */
-  powerMeter: 'power_meter_first',
+  /** The first time a boss expands the weapon belt (4th / 5th slot) */
+  weaponSlotUnlock: 'weapon_slot_unlock_first',
   /** First-ever Timing Parry wind-up callout ([OB-10]) */
   parryFirstWindup: 'parry_first_windup',
   /** First-ever golden Perfect Parry window callout ([OB-10]) */
@@ -1173,11 +1325,19 @@ export const markEndingSeen = (save: AdventureSave): AdventureSave =>
   save.endingSeen ? save : { ...save, endingSeen: true };
 
 /**
- * Dev helper: every star, unlock and Workshop item. Skill trees are left
- * empty so the stars can be spent by hand.
+ * Dev helper: every star, unlock, all 192 per-weapon evolutions, all 200
+ * bounties, and all Workshop items. Skill trees are left empty so stars can be
+ * spent by hand.
  */
 export const createMaxedSave = (): AdventureSave => {
   const mechanicIds = Object.keys(MECHANICS);
+  const allEvoIds = WEAPON_EVOLUTIONS.map(e => e.id);
+  const defaultEquippedEvos: Record<string, string> = {};
+  for (const evo of WEAPON_EVOLUTIONS) {
+    if (evo.slotIndex === 0 && !defaultEquippedEvos[evo.weaponId]) {
+      defaultEquippedEvos[evo.weaponId] = evo.id;
+    }
+  }
   let save: AdventureSave = {
     ...createNewSave(),
     stars: Object.fromEntries(LEVELS.map(l => [l.id, 3])),
@@ -1190,8 +1350,9 @@ export const createMaxedSave = (): AdventureSave => {
       COACH_KEYS.hazard('timeBombs'),
       COACH_KEYS.hazard('snares'),
       COACH_KEYS.evolution,
+      COACH_KEYS.evoAlmost,
       COACH_KEYS.weaponGrowth,
-      COACH_KEYS.powerMeter,
+      COACH_KEYS.weaponSlotUnlock,
       COACH_KEYS.parryFirstWindup,
       COACH_KEYS.parryFirstPerfect,
       COACH_KEYS.counterParryFirst,
@@ -1202,8 +1363,12 @@ export const createMaxedSave = (): AdventureSave => {
     coins: 50000,
     upgrades: Object.fromEntries(UPGRADES.map(u => [u.id, u.costs.length])),
     unlockedArcana: ARCANA.map(a => a.id),
-    unlockedEvolutions: EVOLUTION_RECIPES.map(r => r.id),
-    discoveredEvolutions: EVOLUTION_RECIPES.map(r => r.id),
+    unlockedWeaponEvolutions: allEvoIds,
+    equippedEvolutions: defaultEquippedEvos,
+    discoveredEvolutions: allEvoIds,
+    completedBounties: BOUNTIES.map(b => b.id),
+    bountyProgress: {},
+    legacyEvoMigrated: true,
     revealedPaths: SIDE_PATHS.map(l => l.id),
   };
   for (const f of FEATURES) save = unlockFeature(save, f.id);

@@ -1,5 +1,5 @@
 import { LEVELS, externalPressuresOf, getLevel } from '@/adventure/data/levels';
-import { SURGE_RULES } from '@/adventure/data/rules';
+import { BASE_RULES, SURGE_RULES } from '@/adventure/data/rules';
 import { challengeProgress } from '@/adventure/engine/challenges';
 import { buildDamageStory } from '@/adventure/engine/damageStory';
 import { hasAnySet } from '@/adventure/engine/sets';
@@ -49,37 +49,43 @@ describe('Shading Surge', () => {
     expect(s.board.map(c => [c.id, c.shape, c.color, c.number])).toEqual(before);
   });
 
-  it('a Set during the surge deals ×5 (3 → 15) and counts for the challenge', () => {
+  it('a Set during the surge adds flat base damage and deals ×1.8, counting for the challenge', () => {
+    const plainBase = BASE_RULES.cardBasePoints * 3;
     let s = fight();
     s = playSet(s);
-    expect(s.foeHp).toBe(999 - 3);
+    expect(s.foeHp).toBe(999 - plainBase);
     expect(challengeProgress(s).met).toBe(false);
 
     s = tick(s, SURGE_RULES.calmMs);
     const hp = s.foeHp;
     s = playSet(s);
-    expect(hp - s.foeHp).toBe(3 * SURGE_RULES.multiplier);
+    const expected = Math.round((plainBase + SURGE_RULES.flatBonus) * SURGE_RULES.multiplier);
+    expect(hp - s.foeHp).toBe(expected);
     expect(eventsOf(s, 'surge_hit')).toHaveLength(1);
     expect(s.surge?.sets).toBe(1);
     expect(challengeProgress(s).met).toBe(true);
   });
 
   it('stacks with a charged "next Set" multiplier', () => {
+    const plainBase = BASE_RULES.cardBasePoints * 3;
     let s = fight();
     s = tick(s, SURGE_RULES.calmMs);
     s = { ...s, nextSetMultiplier: 2 };
     const hp = s.foeHp;
     s = playSet(s);
-    expect(hp - s.foeHp).toBe(3 * 2 * SURGE_RULES.multiplier);
+    const expected = Math.round((plainBase + SURGE_RULES.flatBonus) * 2 * SURGE_RULES.multiplier);
+    expect(hp - s.foeHp).toBe(expected);
   });
 
-  it('flat per-Set bonuses are added BEFORE the ×5 Shading Surge multiplier (add-then-multiply)', () => {
+  it('flat per-Set bonuses are added BEFORE the Shading Surge multiplier (add-then-multiply)', () => {
+    const plainBase = BASE_RULES.cardBasePoints * 3;
     let s = fight();
     s = tick(s, SURGE_RULES.calmMs);
     s = { ...s, bonusDamagePerMatch: 2 };
     const hp = s.foeHp;
     s = playSet(s);
-    expect(hp - s.foeHp).toBe((3 + 2) * SURGE_RULES.multiplier);
+    const expected = Math.round((plainBase + 2 + SURGE_RULES.flatBonus) * SURGE_RULES.multiplier);
+    expect(hp - s.foeHp).toBe(expected);
     const entry = s.log[s.log.length - 1];
     expect(entry.set?.multItems).toContainEqual(
       expect.objectContaining({ label: 'Shading Surge', amount: SURGE_RULES.multiplier })
@@ -87,7 +93,7 @@ describe('Shading Surge', () => {
     expect(entry.set?.multiplier).toBe(SURGE_RULES.multiplier);
 
     const story = buildDamageStory(s);
-    expect(Math.round(story.totalDamage)).toBe(25);
+    expect(Math.round(story.totalDamage)).toBe(expected);
     const sum = story.sources.reduce((acc, src) => acc + src.totalDamage, 0);
     expect(Math.abs(sum - story.totalDamage)).toBeLessThanOrEqual(story.sources.length);
   });

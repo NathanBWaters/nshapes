@@ -80,7 +80,7 @@ Options:
   --category <list>      weapons | evolutions | fighters | arcana | all (comma-separated allowed; default: weapons,evolutions,fighters)
   --lens <name>          Sub-lens for the selected category:
                            weapons:    composite (default), inBuild, solo, pressure, shapley, gauntlet, gauntletHuman, gauntletSpire
-                           evolutions: composite (E7 default), buildAround (E8), ruleLift, pairOutput, gauntlet, gauntletHuman, gauntletSpire
+                           evolutions: composite (default), buildAround, ruleLift, weaponOutput, gauntlet, gauntletHuman, gauntletSpire
                            fighters:   composite (default), fullBuild, pressure160, dummy160, withWeapons90, gauntlet, gauntletHuman, gauntletSpire
                            arcana:     composite (default), effectiveAvg, effectiveExpert, shapley
   --mode <mode>          adventure (default) | spire
@@ -107,7 +107,7 @@ Examples:
   npm run balance:power -- --category weapons --lens gauntletSpire --top 15
   npm run balance:power -- --live --era all --solo-tester --top 10 --bottom 5
   npm run balance:power -- --compare blast-powder,chrono-shard
-  npm run balance:power -- --item standing-ovation
+  npm run balance:power -- --item blast-powder:cluster-charge
 `.trim();
 
 const parsePositiveInt = (val: string | undefined, flag: string): number => {
@@ -346,12 +346,13 @@ const formatSingleItemDetail = (entry: PowerRankEntry): string => {
   if (entry.meta.kind === 'weapons') {
     const m = entry.meta as WeaponEntryMeta;
     lines.push(
-      `- **Weapon Profile:** role=\`${m.role}\`${m.partner ? ' (partner-only)' : ''} | inBuild=×${m.inBuildLift.toFixed(2)} | early=×${m.soloEarly.toFixed(2)} | campaign=×${m.soloCampaign.toFixed(2)} | late(nov/avg/exp)=×${m.soloLateNovice.toFixed(2)}/×${m.soloLateAvg.toFixed(2)}/×${m.soloLateExpert.toFixed(2)} | pressure=×${m.pressureAvg.toFixed(2)} | shapley=×${m.shapleyMult.toFixed(2)}`
+      `- **Weapon Profile:** role=\`${m.role}\`${m.partner ? ' (partner-only)' : ''} | inBuild=×${m.inBuildLift.toFixed(2)} | early=×${m.soloEarly.toFixed(2)} | campaign=×${m.soloCampaign.toFixed(2)} | late(nov/avg/exp)=×${m.soloLateNovice.toFixed(2)}/×${m.soloLateAvg.toFixed(2)}/×${m.soloLateExpert.toFixed(2)} | pressure=×${m.pressureAvg.toFixed(2)} | shapley=×${m.shapleyMult.toFixed(2)} | baseShare=${Math.round(m.baseDamageShare * 100)}%`
     );
   } else if (entry.meta.kind === 'evolutions') {
     const m = entry.meta as EvolutionEntryMeta;
+    const slotLabel = (['A', 'B', 'C'] as const)[m.variantIndex] ?? 'A';
     lines.push(
-      `- **Evolution Profile:** pair=\`${m.pair.join(' + ')}\`${m.isSignature ? ` (Signature: ${m.armingPairCount} arming pairs)` : ''}${m.hasEncoreFix ? ' (Encore chassis-adjusted)' : ''} | cleanTotal=×${m.cleanTotalLift.toFixed(2)} (raw ×${m.rawTotalLift.toFixed(2)}) | ruleLift=×${m.ruleLift.toFixed(2)} | pairLift=×${m.meanPairLift.toFixed(2)} | buildAround(E8)=${m.buildAroundMult.toFixed(2)}× | starts=${m.startsPerFight.toFixed(1)}/fight`
+      `- **Evolution Profile:** weapon=\`${m.weaponId}\` (Slot ${slotLabel}, #${m.withinWeaponRank}/3) | cond=\`${m.conditionType}\` | cleanTotal=×${m.cleanTotalLift.toFixed(2)} (raw ×${m.rawTotalLift.toFixed(2)}) | ruleLift=×${m.ruleLift.toFixed(2)} | weaponOutput=×${m.weaponOutputLift.toFixed(2)} | buildAround=${m.buildAroundMult.toFixed(2)}× | triggers=${m.triggersPerFight.toFixed(1)}/fight`
     );
   } else if (entry.meta.kind === 'fighters') {
     const m = entry.meta as FighterEntryMeta;
@@ -386,7 +387,21 @@ const buildSimulatedPostHogCohort = (
   const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rng() * arr.length)];
 
   const weapons = analytics.weaponsSuite.weapons.map(w => w.id);
-  const recipes = analytics.pairSuite.recipes.slice(0, 24);
+  const pairSuiteAny = analytics.pairSuite as unknown as {
+    evolutions?: readonly { id: string; weaponId?: string }[];
+    recipes?: readonly { id: string }[];
+  };
+  const evoPool: readonly { id: string; weaponId?: string }[] =
+    pairSuiteAny.evolutions && pairSuiteAny.evolutions.length > 0
+      ? pairSuiteAny.evolutions
+      : (pairSuiteAny.recipes ?? []).slice(0, 24).map(r => ({ id: r.id }));
+  const evosByWeapon = new Map<string, string[]>();
+  for (const ev of evoPool) {
+    if (!ev.weaponId) continue;
+    const list = evosByWeapon.get(ev.weaponId) ?? [];
+    list.push(ev.id);
+    evosByWeapon.set(ev.weaponId, list);
+  }
   const fighters = analytics.fighterSuite.curves.map(f => f.fighter);
   const arcana = analytics.arcanaSuite.solo.map(a => a.id);
   const levels = analytics.campaignSuite.levels.filter(l => l.id !== '1-1').slice(0, 24);
@@ -449,8 +464,21 @@ const buildSimulatedPostHogCohort = (
     const chosen = new Set<string>();
     while (chosen.size < 4) chosen.add(pick(weapons));
     const held = [...chosen];
+    const equippedEvos: string[] = [];
+    for (const w of held) {
+      const candidates = evosByWeapon.get(w);
+      if (candidates && candidates.length > 0 && rng() < 0.7) {
+        equippedEvos.push(pick(candidates));
+      }
+    }
     const forged: string[] = [];
-    if (rng() < 0.45) forged.push(pick(recipes).id);
+    if (equippedEvos.length > 0) {
+      for (const evoId of equippedEvos) {
+        if (rng() < 0.55) forged.push(evoId);
+      }
+    } else if (evoPool.length > 0 && rng() < 0.45) {
+      forged.push(pick(evoPool).id);
+    }
     const eqArc = rng() < 0.5 ? [pick(arcana)] : [];
 
     // Slight realistic live signal: mild win/DPM boosts for a few items so blending is visible
@@ -495,6 +523,10 @@ const buildSimulatedPostHogCohort = (
         helped_sets: 0,
         evolutions: forged.length,
         evolutions_forged: forged,
+        equipped_evolutions: equippedEvos,
+        weapon_evos_triggered: forged.length,
+        peak_base_damage: Math.round(18 + lvl.world * 12 + rng() * 35),
+        synergy_score_total: Math.round(held.length * 1.5 + rng() * 6),
         weapons: held,
         weapons_offered: [held[0], pick(weapons), pick(weapons)],
         weapons_picked: [held[0]],

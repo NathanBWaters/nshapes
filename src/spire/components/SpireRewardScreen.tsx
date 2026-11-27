@@ -29,12 +29,12 @@ import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getArcana } from '@/adventure/data/arcana';
 import { getSkillNode } from '@/adventure/data/skillTrees';
 import { buildDamageStory, buildSpireRunDamageStory } from '@/adventure/engine/damageStory';
+import { beltSynergyAttrSet, getSynergyAttrMeta } from '@/adventure/ui/synergyMeta';
 import BattleDamageStory from '@/adventure/components/BattleDamageStory';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import FightReplay from '@/adventure/components/FightReplay';
 import {
   ArcanaCard,
-  ArmedEvolutionRow,
   SkillNodeRow,
   WeaponOfferRow,
   type OfferBadge,
@@ -45,7 +45,7 @@ import type { Weapon } from '@/types';
 import {
   buildSpireWeaponBuilds,
   clashesWithBelt,
-  newEvolutionRecipesArmedBy,
+  spireWeaponSynergyOverlap,
 } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS, REWARD_REROLL_COST, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireLastFightSnapshot, SpireRewardBundle, SpireRun } from '../types';
@@ -75,6 +75,7 @@ interface Props {
   onClaimSkill: (nodeId: string) => void;
   onSkipSkill: () => void;
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
+  onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onContinue: () => void;
 }
 
@@ -94,6 +95,7 @@ const SpireRewardScreen: React.FC<Props> = ({
   onClaimSkill,
   onSkipSkill,
   onReorderWeapon,
+  onSelectEvolution,
   onContinue,
 }) => {
   const reduced = useReducedMotion();
@@ -257,7 +259,6 @@ const SpireRewardScreen: React.FC<Props> = ({
             weaponBuilds={storyBuilds}
             startDelayMs={260}
             reduced={reduced}
-            hidePowerNote
             testID="spire-reward-damage-story"
           />
         )}
@@ -306,20 +307,21 @@ const SpireRewardScreen: React.FC<Props> = ({
                       const needsSwap = beltFull && !isUpgrade;
                       const w = getArmoryWeapon(opt.weaponId, { [opt.weaponId]: { level: opt.level, tuning: {} } });
                       if (!w) return null;
-                      const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, opt.weaponId);
+                      const synergyAttrs = isUpgrade ? [] : spireWeaponSynergyOverlap(run, opt.weaponId);
                       const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, opt.weaponId);
                       const badges: OfferBadge[] = [];
                       if (isUpgrade) {
                         badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${opt.level}`, bg: '#D97706' });
                       }
-                      if (newEvos.length > 0) {
+                      if (synergyAttrs.length > 0) {
+                        const top = getSynergyAttrMeta(synergyAttrs[0]);
                         badges.push({
-                          icon: 'sbed/electric',
+                          icon: top.icon,
                           text:
-                            newEvos.length > 1
-                              ? `ARMS ${newEvos[0].name} +${newEvos.length - 1}`
-                              : `ARMS ${newEvos[0].name}`,
-                          bg: TONE.evoReady,
+                            synergyAttrs.length > 1
+                              ? `SYNERGY: ${top.label.toUpperCase()} +${synergyAttrs.length - 1}`
+                              : `SYNERGY: ${top.label.toUpperCase()}`,
+                          bg: top.color,
                         });
                       }
                       if (clashes.length > 0) {
@@ -404,11 +406,23 @@ const SpireRewardScreen: React.FC<Props> = ({
                                 }}
                               />
                             )}
-                            {newEvos.length > 0 && (
-                              <View style={st.evoCallouts} testID={`spire-draft-evo-${i}`}>
-                                {newEvos.slice(0, 2).map(r => (
-                                  <ArmedEvolutionRow key={r.id} recipe={r} showFamily />
-                                ))}
+                            {synergyAttrs.length > 0 && (
+                              <View style={st.synergyStrip} testID={`spire-draft-synergy-${i}`}>
+                                <Text style={st.synergyPrefix}>LINKS WITH BELT:</Text>
+                                {synergyAttrs.slice(0, 3).map(attr => {
+                                  const meta = getSynergyAttrMeta(attr);
+                                  return (
+                                    <View
+                                      key={attr}
+                                      style={[st.synergyPill, { backgroundColor: meta.paleBg, borderColor: meta.color }]}
+                                    >
+                                      <Icon name={meta.icon} size={11} color={meta.color} noShadow />
+                                      <Text style={st.synergyPillText} numberOfLines={1}>
+                                        {meta.label}
+                                      </Text>
+                                    </View>
+                                  );
+                                })}
                               </View>
                             )}
                             {clashes.length > 0 && (
@@ -435,7 +449,10 @@ const SpireRewardScreen: React.FC<Props> = ({
                       <WeaponExplainer
                         weapon={inspectedWeapon}
                         build={{ level: inspectedOffer.level, tuning: {} }}
-                        hidePowerNote
+                        evolutionMode="preview"
+                        allEvolutionsUnlocked
+                        beltSynergyIds={beltSynergyAttrSet(run.weapons, inspectedOffer.weaponId)}
+                        evolutionLabTier={run.upgrades?.evolution_lab ?? 0}
                       />
                     </SpireCrossfadeSwap>
                   )}
@@ -508,7 +525,7 @@ const SpireRewardScreen: React.FC<Props> = ({
                           testID={`spire-arcana-pick-${i}`}
                           arcanaId={id}
                           onPress={() => {
-                            band.cue('catalyst');
+                            band.cue('arcanaGain');
                             setClaimedArcanaName(getArcana(id).name);
                             onClaimArcana(id);
                           }}
@@ -532,6 +549,7 @@ const SpireRewardScreen: React.FC<Props> = ({
           <SpireBeltBar
             run={run}
             onReorder={onReorderWeapon}
+            onSelectEvolution={onSelectEvolution}
             title="BELT ORDER"
             compact
             testIDPrefix="spire-reward-belt"
@@ -716,7 +734,10 @@ const st = StyleSheet.create({
   miniBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 3 },
   miniBtnText: { fontSize: 11, fontWeight: '800', color: INK },
   choiceList: { gap: 8 },
-  evoCallouts: { gap: 4, paddingLeft: 4 },
+  synergyStrip: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5, paddingLeft: 4 },
+  synergyPrefix: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.7, color: TONE.upside },
+  synergyPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 7, paddingVertical: 2 },
+  synergyPillText: { flexShrink: 1, fontSize: 10, fontWeight: '900', color: INK },
   clashBox: { backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1.5, borderColor: '#D97706', paddingHorizontal: 9, paddingVertical: 6, gap: 2 },
   clashText: { fontSize: 11.5, fontWeight: '800', color: '#92400E', lineHeight: 16 },
   confirmSkipBox: { backgroundColor: '#FFFBEB', borderRadius: 12, borderWidth: 2, borderColor: '#B45309', padding: 10, gap: 8 },

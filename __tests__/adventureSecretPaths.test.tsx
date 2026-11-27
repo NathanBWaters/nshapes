@@ -191,10 +191,22 @@ describe('a practice fight', () => {
     expect(real.status).toBe('lost');
   });
 
-  it('lifts the limit on evolutions', () => {
-    expect(start().evolutionCap).toBe(Infinity);
-    expect(startingLoadout(DUMMY, clearedThrough(PARENT.id)).evolutionCap).toBe(Infinity);
-    expect(Number.isFinite(createRun(PARENT, clearedThrough(PARENT.id), { seed: 1 }).evolutionCap)).toBe(true);
+  it('allows parallel per-weapon timed evolutions with no global evolution cap', () => {
+    const saveWithEvos = {
+      ...clearedThrough(PARENT.id),
+      armory: ['blast-powder', 'flint-spark'],
+      charms: ['blast-powder', 'flint-spark'],
+      unlockedWeaponEvolutions: ['blast-powder:cluster-charge', 'flint-spark:cinder-trail'],
+      equippedEvolutions: {
+        'blast-powder': 'blast-powder:cluster-charge',
+        'flint-spark': 'flint-spark:cinder-trail',
+      },
+      seenMechanics: [...clearedThrough(PARENT.id).seenMechanics, 'evolutions'],
+    };
+    const loadout = startingLoadout(DUMMY, saveWithEvos);
+    expect(Object.keys(loadout.equippedEvolutions)).toHaveLength(2);
+    const run = start(saveWithEvos);
+    expect(run.weaponEvolutions).toHaveLength(2);
   });
 
   it('switches on everything the player has learned, wherever that was taught', () => {
@@ -221,18 +233,18 @@ describe('a practice fight', () => {
     expect(s.log[s.log.length - 1].kind).toBe('set');
   });
 
-  it('banks nothing: no stars, coins or bounty progress, only a play and the recipes forged', () => {
+  it('banks nothing: no stars, coins or bounty progress, only a play and the evolutions forged', () => {
     const save = { ...clearedThrough(PARENT.id), coinsUnlocked: true, bountiesUnlocked: true };
     let s = start(save);
     for (let i = 0; i < 20; i++) s = playSet(s);
-    s = { ...s, forgedRecipes: ['phoenix-pyre'] };
+    s = { ...s, forgedEvolutions: ['blast-powder:cluster-charge'] };
     const result = applyLevelResult(save, DUMMY, computeStars(s), s.coins, s);
     expect(result.save.coins).toBe(save.coins);
     expect(result.save.lifetimeCoins).toBe(save.lifetimeCoins);
     expect(result.save.stars).toEqual(save.stars);
     expect(result.save.bountyStats).toEqual(save.bountyStats);
     expect(result.save.plays[DUMMY.id]).toBe(1);
-    expect(result.save.discoveredEvolutions).toContain('phoenix-pyre');
+    expect(result.save.discoveredEvolutions).toContain('blast-powder:cluster-charge');
     expect(result.unlocks).toEqual([]);
     expect(result.coinsBanked + result.starCoins + result.bountyCoins).toBe(0);
   });

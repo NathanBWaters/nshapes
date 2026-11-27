@@ -9,7 +9,7 @@ import { FighterAvatar } from '@/components/fighters';
 import { COLORS } from '@/utils/colors';
 import { MONO_FONT } from '@/utils/fonts';
 import { Heart, INK, TONE } from '@/adventure/components/ui';
-import { spireArmedRecipes } from '../engine/bridge';
+import { summarizeBeltSynergies } from '@/adventure/ui/synergyMeta';
 import { MAX_SUMMIT_WEAPONS } from '../engine/runState';
 import type { SpireRun } from '../types';
 import { SpireCountUp, SpireLightweightBreath, SpireStatPop, SpireTactilePressable } from './SpireMotion';
@@ -31,7 +31,7 @@ const SpireHeader: React.FC<Props> = ({
   sfxOn = true,
   onToggleAudio,
 }) => {
-  const armedCount = spireArmedRecipes(run).length;
+  const synergyCount = summarizeBeltSynergies(run.weapons).length;
   const actTag = run.endless ? `ENDLESS A${run.act}` : `ACT ${run.act}`;
   const audioAllOff = !musicOn && !sfxOn;
   const audioSfxOnly = !musicOn && sfxOn;
@@ -97,12 +97,12 @@ const SpireHeader: React.FC<Props> = ({
                 {run.hearts}/{run.maxHearts}
               </Text>
             </SpireStatPop>
-            {armedCount > 0 && (
-              <SpireStatPop value={armedCount} style={st.evoPopWrap}>
+            {synergyCount > 0 && (
+              <SpireStatPop value={synergyCount} style={st.evoPopWrap} testID="spire-header-synergy">
                 <Text style={st.evoText}>·</Text>
-                <Icon name="sbed/electric" size={11} color={TONE.evoReady} noShadow />
+                <Icon name="lorc/linked-rings" size={11} color={TONE.upside} noShadow />
                 <Text style={st.evoText} numberOfLines={1}>
-                  {armedCount}
+                  {synergyCount}
                 </Text>
               </SpireStatPop>
             )}
@@ -250,7 +250,7 @@ const st = StyleSheet.create({
     flexShrink: 1,
     fontSize: 11,
     fontWeight: '900',
-    color: TONE.evoReady,
+    color: TONE.upside,
     fontVariant: ['tabular-nums'],
   },
   right: {

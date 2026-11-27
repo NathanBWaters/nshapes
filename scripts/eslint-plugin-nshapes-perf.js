@@ -536,7 +536,7 @@ const singleLifecycleAndAudioGatewayRule = {
   },
 };
 
-const BANNER_COMPONENTS = new Set(['CompanionBubble', 'WeaponExplainer', 'PowerExplainer']);
+const BANNER_COMPONENTS = new Set(['CompanionBubble', 'WeaponExplainer']);
 
 function getJsxTagName(openingElement) {
   if (!openingElement || !openingElement.name) return null;

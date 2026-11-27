@@ -3,9 +3,9 @@
  *
  * Plays complete multi-Act roguelike climbs (Act 1 → Act 3 Boss → optional
  * Endless Act 4+) through the REAL `runReducer` and `BOTS` from Adventure Mode
- * with full Wave 1 agency: Belt Reordering (for Understudy), Evolution &
- * Evolution drafting, Gamble clash avoidance, Shop Lock / Sell / Purge / Reroll,
- * Reward Reroll, and risk-calibrated Glass Prism evaluation!
+ * with full agency: Belt Reordering (for Understudy), Synergy Graph drafting,
+ * Gamble clash avoidance, Shop Lock / Sell / Purge / Reroll, Reward Reroll,
+ * and risk-calibrated Glass Prism evaluation.
  */
 import type { CharacterName } from '@/types';
 import type { ArcanaId } from '@/adventure/types';
@@ -13,17 +13,16 @@ import { simulateRun, type BotProfile } from '@/adventure/engine/bot';
 import { createRng } from '@/adventure/engine/rng';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { weaponRole, type WeaponRole } from '@/adventure/data/weaponRoles';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
-import { inFamily } from '@/adventure/engine/sources';
+import { beltSynergyOverlap } from '@/adventure/data/synergy';
 import { getSpireEvent } from '../data/events';
 import { reachableNodeIds } from './mapGen';
 import {
   clashesWithBelt,
-  newEvolutionsArmedBy,
   SPIRE_FIGHT_FEATURES,
   spireEncounterToLevel,
   spireRunOverrides,
   spireRunToVirtualSave,
+  spireWeaponSynergyOverlap,
 } from './bridge';
 import {
   ARCANA_PURGE_COST,
@@ -84,7 +83,6 @@ export interface SpireSimResult {
 const ENGINE_ROLES: ReadonlySet<WeaponRole> = new Set(['damage', 'tricks', 'gambles', 'chains']);
 const PARTNER_IDS: ReadonlySet<string> = new Set(['understudy', 'encore-mask']);
 
-/** Position Understudy immediately right of the highest-level non-partner engine weapon on the belt. */
 const optimizeBeltOrder = (run: SpireRun): SpireRun => {
   const idx = run.weapons.indexOf('understudy');
   if (idx < 0 || run.weapons.length < 2) return run;
@@ -101,31 +99,29 @@ const optimizeBeltOrder = (run: SpireRun): SpireRun => {
     }
   }
   if (bestTarget < 0) return run;
-  // Target index after moving Understudy so it sits right after `bestTarget`
   const desired = idx < bestTarget ? bestTarget : Math.min(run.weapons.length - 1, bestTarget + 1);
   if (idx === desired) return run;
   return reorderSpireWeapon(run, idx, desired);
 };
 
-/** Count armed Evolution recipes for a weapon id list. */
-const countArmedEvolutions = (weaponIds: readonly string[]): number => {
-  let count = 0;
-  for (const r of EVOLUTION_RECIPES) {
-    if (r.families.every(fam => weaponIds.some(id => inFamily(id, fam)))) count += 1;
+/** Count pairwise Synergy Graph overlap edges across the current weapon belt. */
+const countBeltSynergyEdges = (weaponIds: readonly string[]): number => {
+  let edges = 0;
+  for (let i = 0; i < weaponIds.length; i++) {
+    edges += beltSynergyOverlap(weaponIds[i], weaponIds.slice(i + 1)).length;
   }
-  return count;
+  return edges;
 };
 
 /** Holistic belt strength estimate (used to evaluate 6/6 weapon swaps cleanly). */
 const scoreBelt = (weaponIds: readonly string[], weaponLevels: Record<string, number>): number => {
-  const armed = countArmedEvolutions(weaponIds);
-  let score = Math.min(armed, 7) * 2.5 + Math.max(0, armed - 7) * 0.5;
+  const edges = countBeltSynergyEdges(weaponIds);
+  let score = Math.min(edges, 10) * 1.8 + Math.max(0, edges - 10) * 0.4;
 
   for (let i = 0; i < weaponIds.length; i++) {
     const id = weaponIds[i];
     const lv = weaponLevels[id] ?? 1;
     score += lv * (ENGINE_ROLES.has(weaponRole(id)) ? 1.85 : 1.15);
-    // Count each clashing pair once
     const rest = weaponIds.slice(i + 1);
     score -= clashesWithBelt(rest, id).length * 4.5;
   }
@@ -137,10 +133,6 @@ interface WeaponDecision {
   replaceWeaponId?: string;
 }
 
-/**
- * Evaluate a weapon offer (direct add, +1 Lv upgrade, or 6/6 in-place swap)
- * accounting for Evolutions, weapon levels, and Gamble clashes.
- */
 const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): WeaponDecision => {
   const existingLv = run.weaponLevels[weaponId];
   if (existingLv !== undefined) {
@@ -159,11 +151,10 @@ const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): W
     return { score };
   }
 
-  // Room left on the 6-weapon belt: evaluate direct addition
   if (run.weapons.length < MAX_SUMMIT_WEAPONS) {
     let score = 0;
-    const newEvos = newEvolutionsArmedBy(run, weaponId).length;
-    score += Math.min(newEvos, 3) * 3.0;
+    const synOverlap = spireWeaponSynergyOverlap(run, weaponId).length;
+    score += Math.min(synOverlap, 4) * 2.2;
 
     if (ENGINE_ROLES.has(weaponRole(weaponId))) score += 1.2;
     score += (Math.min(MAX_WEAPON_LEVEL, Math.max(1, offerLevel)) - 1) * 1.1;
@@ -174,7 +165,6 @@ const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): W
     return { score };
   }
 
-  // Belt is FULL (6/6): find the best held weapon to swap out if the net delta is meaningfully positive
   const baseVal = scoreBelt(run.weapons, run.weaponLevels);
   const incomingLv = Math.min(MAX_WEAPON_LEVEL, Math.max(1, offerLevel));
   let bestDropId: string | undefined;
@@ -200,34 +190,27 @@ const evaluateWeaponOffer = (run: SpireRun, weaponId: string, offerLevel = 1): W
   };
 };
 
-/** True when taking `arcanaId` fits the run's build cleanly (risk-calibrated for Wave 2 kiss-curse Arcana). */
 const isGoodArcana = (run: SpireRun, arcanaId: ArcanaId, bot: BotProfile): boolean => {
   if (run.arcana.length >= 3 || run.arcana.includes(arcanaId)) return false;
   if (arcanaId === 'scholars_gambit') return false;
   const isRainbowBuild =
     run.fighter === 'Emperor Penguin' || run.weapons.includes('rainbow-charm') || run.arcana.includes('prismatic_fever');
   if (arcanaId === 'monochrome_pact') {
-    // Halves Rainbow / 3-diff damage (×0.5); only worth taking on non-Rainbow builds once the engine can spare it.
     return !isRainbowBuild && !run.arcana.includes('prismatic_fever') && (bot.name === 'expert' || run.act >= 2);
   }
   if (arcanaId === 'prismatic_fever' && run.arcana.includes('monochrome_pact')) return false;
   if (arcanaId === 'controlled_burn') {
-    // Zeroes starting Graces and deals 2 Hearts on cooldown mistakes — avoid on fragile 5–6 Heart average runs.
     return bot.name === 'expert' || run.maxHearts >= 7 || run.fighter === 'Badger';
   }
   if (arcanaId === 'catalyst_resonance') {
-    // Non-evolved Sets deal ×0.75 — only take once at least 2 Evolutions are armed (or Catalyst Prism is held).
-    return countArmedEvolutions(run.weapons) >= 2 || run.weapons.includes('catalyst-prism');
+    return run.weapons.length >= 2 || run.weapons.includes('catalyst-prism');
   }
   if (arcanaId === 'glass_prism') {
-    // Risk-calibrated Glass Prism: strong when max hearts are already lean (<= 4, e.g. high Ascension),
-    // instead of sacrificing an 8+ heart Act 3 survival pool into Snare/Time-Bomb fights.
     return run.maxHearts <= 4 && (bot.name === 'expert' || run.hearts >= 3);
   }
   return true;
 };
 
-/** Find a redundant Lv 1–2 off-role/clashing weapon that can be sold in the shop. */
 const findSellableWeapon = (run: SpireRun): string | null => {
   if (run.weapons.length < 6) return null;
   let worstId: string | null = null;
@@ -237,8 +220,8 @@ const findSellableWeapon = (run: SpireRun): string | null => {
     if (lv > 2) continue;
     const other = run.weapons.filter(x => x !== id);
     const hasClash = clashesWithBelt(other, id).length > 0;
-    const evosLost = Math.max(0, countArmedEvolutions(run.weapons) - countArmedEvolutions(other));
-    const score = (hasClash ? -5 : 0) + evosLost * 3 + lv * 2 + (ENGINE_ROLES.has(weaponRole(id)) ? 1 : 0);
+    const edgesLost = Math.max(0, countBeltSynergyEdges(run.weapons) - countBeltSynergyEdges(other));
+    const score = (hasClash ? -5 : 0) + edgesLost * 2 + lv * 2 + (ENGINE_ROLES.has(weaponRole(id)) ? 1 : 0);
     if (score < worstScore) {
       worstScore = score;
       worstId = id;
@@ -247,7 +230,6 @@ const findSellableWeapon = (run: SpireRun): string | null => {
   return worstScore <= 3 ? worstId : null;
 };
 
-/** Pick the best weapon on the belt to forge (+1 level). */
 const bestForgeTarget = (run: SpireRun): string | undefined => {
   const candidates = run.weapons.filter(id => (run.weaponLevels[id] ?? 1) < MAX_WEAPON_LEVEL);
   if (!candidates.length) return undefined;
@@ -258,10 +240,6 @@ const bestForgeTarget = (run: SpireRun): string | undefined => {
   })[0];
 };
 
-/**
- * Simulate a full Starfall Summit climb for `fighter` at `ascension` with `bot`.
- * Stops after beating Act 3 (or after Act `maxAct` when `playEndless: true`).
- */
 export const simulateSpireClimb = (o: {
   fighter: CharacterName;
   ascension: number;
@@ -345,7 +323,6 @@ export const simulateSpireClimb = (o: {
           });
           return { idx: bestIdx, decision: best };
         };
-        // Reroll weak reward offers when flush with coins
         if (!run.reward.weaponRerolled && bestDecisionOf(run).decision.score <= 1.2 && run.coins >= REWARD_REROLL_COST + 50) {
           run = rerollRewardWeapons(run);
         }
@@ -373,12 +350,10 @@ export const simulateSpireClimb = (o: {
     }
 
     if (run.phase === 'shop' && run.shop) {
-      // 1. Heal if hurt
       if (run.hearts <= Math.ceil(run.maxHearts * 0.65) && run.coins >= run.shop.healCost && !run.shop.healed) {
         run = shopBuyHeal(run);
       }
 
-      // 2. Purge any contradictory Arcana if holding excess gold
       const isRainbowBuild =
         run.fighter === 'Emperor Penguin' || run.weapons.includes('rainbow-charm') || run.arcana.includes('prismatic_fever');
       if (run.coins >= Math.max(90, ARCANA_PURGE_COST) && isRainbowBuild && run.arcana.includes('monochrome_pact')) {
@@ -387,7 +362,6 @@ export const simulateSpireClimb = (o: {
 
       const buyPass = () => {
         let bought = false;
-        // Buy Workshop upgrades first (always-on run-wide power!)
         for (let i = 0; i < (run.shop?.upgrades.length ?? 0); i++) {
           const u = run.shop!.upgrades[i];
           if (!u.sold && !isSpireUpgradeMaxed(run, u.upgradeId) && run.coins >= u.price) {
@@ -396,7 +370,6 @@ export const simulateSpireClimb = (o: {
           }
         }
 
-        // Forge strongest engine weapon
         if (run.shop && !run.shop.forged && run.coins >= run.shop.forgeCost) {
           const target = bestForgeTarget(run);
           if (target) {
@@ -405,7 +378,6 @@ export const simulateSpireClimb = (o: {
           }
         }
 
-        // Score & buy top shop weapons (upgrades prioritized at 4–6 weapons; swaps cleanly at 6/6!)
         const indices = (run.shop?.weapons ?? []).map((_, i) => i);
         const scoredOrder = indices
           .map(i => {
@@ -418,7 +390,6 @@ export const simulateSpireClimb = (o: {
         for (const item of scoredOrder) {
           const cur = run.shop?.weapons[item.i];
           if (!cur || cur.sold) continue;
-          // Re-evaluate against current belt state (earlier purchases in this pass may have filled 6/6!)
           const dec = evaluateWeaponOffer(run, cur.weaponId, cur.level);
           const isUpgrade = run.weaponLevels[cur.weaponId] !== undefined;
           const isNewAtCap = !isUpgrade && run.weapons.length >= MAX_SUMMIT_WEAPONS;
@@ -430,7 +401,6 @@ export const simulateSpireClimb = (o: {
             const sellId = findSellableWeapon(run);
             if (sellId && sellId !== cur.weaponId) run = shopSellWeapon(run, sellId);
           }
-          // Recompute swap target if selling freed a slot
           const nowNewAtCap =
             run.weaponLevels[cur.weaponId] === undefined && run.weapons.length >= MAX_SUMMIT_WEAPONS;
           const finalDec = nowNewAtCap ? evaluateWeaponOffer(run, cur.weaponId, cur.level) : dec;
@@ -441,12 +411,10 @@ export const simulateSpireClimb = (o: {
             );
             bought = true;
           } else if (finalDec.score >= 3 && !cur.locked && run.shop && countShopLocks(run.shop) < MAX_SHOP_LOCKS) {
-            // Lock unaffordable high-synergy weapon for the next Merchant visit!
             run = shopToggleLock(run, 'weapon', item.i);
           }
         }
 
-        // Buy synergistic Arcana
         for (let i = 0; i < (run.shop?.arcana.length ?? 0); i++) {
           const a = run.shop!.arcana[i];
           if (!a.sold && run.coins >= a.price && isGoodArcana(run, a.arcanaId, bot)) {
@@ -458,7 +426,6 @@ export const simulateSpireClimb = (o: {
       };
 
       buyPass();
-      // Reroll while still holding enough gold to keep upgrading/shopping
       for (let r = 0; r < 6 && run.shop; r++) {
         if (run.coins < run.shop.rerollCost + 40) break;
         run = shopReroll(run);

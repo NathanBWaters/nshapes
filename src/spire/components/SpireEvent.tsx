@@ -11,11 +11,12 @@ import { OVERLAP, STAGGER } from '@/utils/motion';
 import { getArcana } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
+import { getSynergyAttrMeta } from '@/adventure/ui/synergyMeta';
 import { ArcanaCard, SkillNodeRow, WeaponOfferRow, type OfferBadge } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { getSpireEvent } from '../data/events';
-import { clashesWithBelt, newEvolutionRecipesArmedBy, spireHeldWeapons } from '../engine/bridge';
+import { clashesWithBelt, spireHeldWeapons, spireWeaponSynergyOverlap } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS, SKIP_WEAPON_COINS } from '../engine/runState';
 import type { SpireEventState, SpireRun } from '../types';
 import SpireSwapPicker from './SpireSwapPicker';
@@ -109,7 +110,7 @@ const SpireEvent: React.FC<Props> = ({
                       testID={`spire-event-opt-${idx}`}
                       disabled={disabled}
                       onPress={() => {
-                        band.cue(opt.tone === 'bold' ? 'catalyst' : 'tap');
+                        band.cue(opt.tone === 'bold' ? 'arcanaGain' : 'tap');
                         onChoose(opt.id);
                       }}
                       style={[
@@ -152,15 +153,19 @@ const SpireEvent: React.FC<Props> = ({
                     const heldLv = run.weaponLevels[o.weaponId];
                     const isUpgrade = heldLv !== undefined;
                     const needsSwap = beltFull && !isUpgrade;
-                    const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, o.weaponId);
+                    const synergyAttrs = isUpgrade ? [] : spireWeaponSynergyOverlap(run, o.weaponId);
                     const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, o.weaponId);
                     const badges: OfferBadge[] = [];
                     if (isUpgrade) badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${o.level}`, bg: '#D97706' });
-                    if (newEvos.length > 0) {
+                    if (synergyAttrs.length > 0) {
+                      const top = getSynergyAttrMeta(synergyAttrs[0]);
                       badges.push({
-                        icon: 'sbed/electric',
-                        text: newEvos.length > 1 ? `${newEvos[0].name} +${newEvos.length - 1}` : newEvos[0].name,
-                        bg: TONE.evoReady,
+                        icon: top.icon,
+                        text:
+                          synergyAttrs.length > 1
+                            ? `SYNERGY: ${top.label.toUpperCase()} +${synergyAttrs.length - 1}`
+                            : `SYNERGY: ${top.label.toUpperCase()}`,
+                        bg: top.color,
                       });
                     }
                     if (clashes.length > 0) badges.push({ icon: 'lorc/laser-warning', text: 'CLASH', bg: '#B91C1C' });
@@ -259,7 +264,7 @@ const SpireEvent: React.FC<Props> = ({
                     label={`Accept ${getArcana(pendingArcana).name}`}
                     icon="lorc/crystal-wand"
                     onPress={() => {
-                      band.cue('catalyst');
+                      band.cue('arcanaGain');
                       onResolveArcana?.(true);
                     }}
                   />

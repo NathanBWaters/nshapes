@@ -33,9 +33,11 @@ import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } 
 import Icon from '@/components/Icon';
 import { WeaponAvatar } from '@/components/weapons';
 import { band, sfx } from '@/audio';
+import { beltSynergyAttrSet } from '../ui/synergyMeta';
 import { COLORS } from '@/utils/colors';
 import { EASE, MS, SCALE, SPRING } from '@/utils/motion';
 import { getArmoryWeapon } from '../data/armory';
+import { getWeaponEvolution } from '../data/evolutions';
 import type { WeaponBuild, WeaponBuilds } from '../data/weaponStats';
 import type {
   CrescendoBeat,
@@ -98,7 +100,6 @@ const KIND_TAG: Record<DamageSourceKind, string> = {
   skill: 'SKILL',
   evolution: 'EVO',
   set: 'SETS',
-  power: 'POWER',
   bonus: 'BONUS',
 };
 
@@ -197,6 +198,8 @@ interface Props {
   title?: string;
   /** Weapon build metadata (levels/tuning) so tapping a weapon opens exact `WeaponExplainer` numbers */
   weaponBuilds?: WeaponBuilds;
+  /** Equipped per-weapon evolutions during this fight (`weaponId -> evoId`) */
+  equippedEvolutions?: Record<string, string>;
   /** Delay before auto-playing the 3-second crescendo (e.g. wait for Adventure stars to land) */
   startDelayMs?: number;
   /** Whether the screen is currently visible / not covered by an unlock modal */
@@ -205,8 +208,6 @@ interface Props {
   reduced?: boolean;
   /** Suppress audio cues when silent (e.g. unit tests) */
   muted?: boolean;
-  /** Hide Adventure-only global Power accumulation notes in WeaponExplainer (used by Spire) */
-  hidePowerNote?: boolean;
   /** Optional compact top toggle slot (e.g. "Full Climb" vs "Final Fight" on SpireEndScreen) */
   headerRight?: React.ReactNode;
   testID?: string;
@@ -216,11 +217,11 @@ const BattleDamageStory: React.FC<Props> = ({
   story,
   title,
   weaponBuilds,
+  equippedEvolutions,
   startDelayMs = 260,
   active = true,
   reduced = false,
   muted = false,
-  hidePowerNote = false,
   headerRight,
   testID = 'battle-damage-story',
 }) => {
@@ -470,9 +471,14 @@ const BattleDamageStory: React.FC<Props> = ({
   const selectedSource: DamageSourceSummary | null = selectedId
     ? story.sources.find(s => s.id === selectedId) ?? null
     : null;
-  const selectedWeapon = selectedSource?.weaponId ? getArmoryWeapon(selectedSource.weaponId, weaponBuilds) : undefined;
+  const selectedWeapon =
+    selectedSource?.kind === 'weapon' && selectedSource.weaponId
+      ? getArmoryWeapon(selectedSource.weaponId, weaponBuilds)
+      : undefined;
   const selectedBuild: WeaponBuild | undefined =
-    selectedSource?.weaponId && weaponBuilds ? weaponBuilds[selectedSource.weaponId] : undefined;
+    selectedSource?.kind === 'weapon' && selectedSource.weaponId && weaponBuilds
+      ? weaponBuilds[selectedSource.weaponId]
+      : undefined;
 
   return (
     <View style={st.panel} testID={testID}>
@@ -692,7 +698,17 @@ const BattleDamageStory: React.FC<Props> = ({
           const isMvp = idx === 0 && story.sources.length > 1;
           const isSelected = selectedId === src.id;
           const pct = Math.max(1, Math.round(src.share * 100));
-          const weaponObj = src.weaponId ? getArmoryWeapon(src.weaponId, weaponBuilds) : undefined;
+          const evoDef = src.kind === 'evolution' && src.id.startsWith('evo:') ? getWeaponEvolution(src.id.slice(4)) : undefined;
+          const ownerWeaponId = src.weaponId ?? evoDef?.weaponId;
+          const weaponObj = ownerWeaponId ? getArmoryWeapon(ownerWeaponId, weaponBuilds) : undefined;
+          const rowDisplayName =
+            src.kind === 'evolution' && weaponObj ? `${weaponObj.name} · ${src.name}` : src.name;
+          const kindLabel =
+            src.id === 'bonus:holo'
+              ? 'HOLO'
+              : src.id === 'bonus:synergy' || src.id.startsWith('synergy:')
+                ? 'SYNERGY'
+                : (KIND_TAG[src.kind] ?? 'BONUS');
           return (
             <TouchableOpacity
               key={src.id}
@@ -704,7 +720,7 @@ const BattleDamageStory: React.FC<Props> = ({
               }}
               style={[st.row, isSelected && st.rowSelected]}
               accessibilityRole="button"
-              accessibilityLabel={`${src.name}: ${Math.round(src.totalDamage)} damage, ${pct}% of total`}
+              accessibilityLabel={`${rowDisplayName}: ${Math.round(src.totalDamage)} damage, ${pct}% of total`}
             >
               {/* Left: Weapon Avatar or Color-Coded Icon Medallion */}
               <View style={[st.iconBadge, { borderColor: src.color }]}>
@@ -720,7 +736,7 @@ const BattleDamageStory: React.FC<Props> = ({
                 <View style={st.rowLabelLine}>
                   <View style={[st.dot, { backgroundColor: src.color }]} />
                   <Text style={st.rowName} numberOfLines={1}>
-                    {src.name}
+                    {rowDisplayName}
                   </Text>
                   {isMvp ? (
                     <Animated.View style={[st.mvpBadge, mvpStyle]}>
@@ -728,8 +744,9 @@ const BattleDamageStory: React.FC<Props> = ({
                       <Text style={st.mvpText}>MVP</Text>
                     </Animated.View>
                   ) : (
-                    <View style={st.kindPill}>
-                      <Text style={st.kindText}>{KIND_TAG[src.kind]}</Text>
+                    <View style={[st.kindPill, src.kind === 'evolution' && st.evoKindPill]}>
+                      {src.kind === 'evolution' && <Icon name="lorc/crystal-shine" size={9} color="#6D28D9" />}
+                      <Text style={[st.kindText, src.kind === 'evolution' && st.evoKindText]}>{kindLabel}</Text>
                     </View>
                   )}
                 </View>
@@ -776,7 +793,9 @@ const BattleDamageStory: React.FC<Props> = ({
               key={selectedWeapon.id}
               weapon={selectedWeapon}
               build={selectedBuild}
-              hidePowerNote={hidePowerNote}
+              evolutionMode="preview"
+              equippedEvolutionId={equippedEvolutions?.[selectedWeapon.id] ?? null}
+              beltSynergyIds={weaponBuilds ? beltSynergyAttrSet(Object.keys(weaponBuilds), selectedWeapon.id) : undefined}
               badge={selectedSource === story.sources[0] ? 'MVP' : `${Math.round(selectedSource.share * 100)}% DMG`}
               result={{
                 text: `${Math.round(selectedSource.totalDamage).toLocaleString()} cumulative dmg (${Math.round(selectedSource.share * 100)}%) · ${selectedSource.hits} ${selectedSource.hits === 1 ? 'hit' : 'hits'} · biggest spike +${Math.round(selectedSource.biggestHit)}.`,
@@ -1046,17 +1065,26 @@ const st = StyleSheet.create({
     letterSpacing: 0.6,
   },
   kindPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
     backgroundColor: COLORS.paperBeige,
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,
     flexShrink: 0,
   },
+  evoKindPill: {
+    backgroundColor: '#F3E8FF',
+  },
   kindText: {
     fontSize: 8.5,
     fontWeight: '900',
     color: TONE.spent,
     letterSpacing: 0.5,
+  },
+  evoKindText: {
+    color: '#6D28D9',
   },
   barTrack: {
     height: 7,

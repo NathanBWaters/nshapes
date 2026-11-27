@@ -108,7 +108,7 @@ export const SUMMIT_THEME_PACKS: readonly SummitThemePack[] = [
   {
     id: 'tempo_clarity',
     name: 'Tempo & Clarity',
-    blurb: 'Extra clock, Catalysts, sight lenses & wild board growth.',
+    blurb: 'Extra clock, fast Evolutions, sight lenses & wild board growth.',
     icon: 'lorc/hourglass',
     accentColor: '#0F766E',
     weapons: [

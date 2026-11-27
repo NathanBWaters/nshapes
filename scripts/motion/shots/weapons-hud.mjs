@@ -2,7 +2,7 @@
  * Lane 3 (stage, weapons, HUD & fight-FX) motion shots:
  *  - Biome battle stage dioramas (`stage-backdrop-meadow`, `stage-backdrop-summit`, plus woods/canyon/peaks)
  *  - Bespoke Weapon Flourishes (`weapon-burst-explosive`, `weapon-burst-chrono`, `weapon-burst-arcane`, + all 8 categories)
- *  - Fight HUD & Parry (`parry-state-shift`, `evo-ring-drain`, `trait-checks-reveal`, `card-hint-hop`)
+ *  - Fight HUD & Parry (`parry-state-shift`, `belt-evo-countdown`, `belt-evo-anticipation`, `trait-checks-reveal`, `card-hint-hop`)
  */
 import { findCards, slotOf } from '../shot-kit.mjs';
 
@@ -116,57 +116,50 @@ const parryStateShift = () => {
   };
 };
 
-/** Find a valid Set that includes the Catalyst card (`hasEvolutionItem`). */
-const findCatalystSet = page =>
-  page.evaluate(() => {
-    const run = window.__nshapesRun;
-    if (!run || !run.board) return null;
-    const { board, attributes } = run;
-    const catIdx = board.findIndex(c => c && c.hasEvolutionItem);
-    if (catIdx < 0) return null;
-    const isSet = (a, b, c) => attributes.every(k => new Set([a[k], b[k], c[k]]).size !== 2);
-    for (let i = 0; i < board.length; i++) {
-      if (i === catIdx || !board[i]) continue;
-      for (let j = i + 1; j < board.length; j++) {
-        if (j === catIdx || !board[j]) continue;
-        if (isSet(board[catIdx], board[i], board[j])) return [catIdx, i, j];
-      }
-    }
-    return null;
-  });
-
-/** EvolutionRing live countdown drain on Training Lab (maxed save -> non-blocking banner, ring starts immediately). */
-const evoRingDrain = () => ({
-  id: 'evo-ring-drain',
-  about: 'EvolutionRing countdown drain across 768ms (checks 4 Hz staircase vs 60fps smooth Reanimated sweep)',
-  path: '/dev/adventure?save=maxed&weapons=blast-powder,mending-charm&intro=false',
+/** GearBelt live 60fps evolved countdown drain on Training Lab (maxed save -> non-blocking banner, golden bar drains immediately). */
+const beltEvoCountdown = () => ({
+  id: 'belt-evo-countdown',
+  about: 'GearBelt golden evolved weapon slot 60fps Reanimated drain bar across 768ms (Training Lab)',
+  path: '/dev/adventure?save=maxed&weapons=blast-powder,flint-spark,mending-charm&intro=false',
   ready: (page, h) => h.until('map-play-next'),
   prepare: async (page, h) => {
     await openTrainingLab(h);
-    await h.go('training-lab-catalyst');
-    await h.advance(200);
-    const cards = await findCatalystSet(page);
-    if (!cards) throw new Error('No Catalyst Set found on 1-4D board');
-    await h.tap(slotOf(cards[0]));
-    await h.advance(140);
-    await h.tap(slotOf(cards[1]));
-    await h.advance(140);
-    await h.tap(slotOf(cards[2]));
-    await h.advance(600);
+    await h.go('training-lab-trigger-evo');
+    await h.advance(350);
     if (await h.present('evolution-cutin')) {
-      await h.advance(400);
+      await h.advance(350);
       await page.mouse.click(195, 300);
       await h.advance(300);
     }
-    await h.until('evolution-ring');
-    // Wait past the Catalyst cascade so the fight clock is actively ticking and the ring wedge is visibly sweeping
-    await h.advance(4200);
+    await h.until('belt-evo-active-blast-powder');
+    // Wait briefly so the fight clock is actively ticking and the 60fps drain bar is visibly sweeping
+    await h.advance(2400);
   },
   trigger: () => {},
-  clip: page => padRect(page, '[data-testid="evolution-ring"]', 8),
+  clip: page => padRect(page, '[data-testid="gear-belt"]', 8),
   frames: 48,
   settleMs: 0,
   preroll: 1,
+  ambient: 0,
+  mute: ['DEAD-STRETCH'],
+});
+
+/** GearBelt Almost-Ready anticipation: 1-shot SCALE.pop pip jump + battery-safe opacity-only amber rim pulse. */
+const beltEvoAnticipation = () => ({
+  id: 'belt-evo-anticipation',
+  about: 'GearBelt Almost-Ready anticipation pip pop (SCALE.pop) + opacity-only amber rim pulse (Training Lab)',
+  path: '/dev/adventure?save=maxed&weapons=blast-powder,flint-spark,mending-charm&intro=false',
+  ready: (page, h) => h.until('map-play-next'),
+  prepare: async (page, h) => {
+    await openTrainingLab(h);
+    await h.until('training-lab-step-evo');
+    // Step Blast Powder (Cluster Charge, target 3) to 1/3 so the trigger tap lands directly on 2/3 (almostReady!)
+    await h.go('training-lab-step-evo');
+    await h.advance(350);
+  },
+  trigger: (page, h) => h.tap('training-lab-step-evo'),
+  clip: page => padRect(page, '[data-testid="gear-belt"]', 8),
+  frames: 60,
   ambient: 0,
   mute: ['DEAD-STRETCH'],
 });
@@ -286,7 +279,8 @@ export default {
     'Arcane weapon flourish & bespoke arcane-star burst (Oracle Eye)'
   ),
   'parry-state-shift': parryStateShift(),
-  'evo-ring-drain': evoRingDrain(),
+  'belt-evo-countdown': beltEvoCountdown(),
+  'belt-evo-anticipation': beltEvoAnticipation(),
   'trait-checks-reveal': traitChecksReveal(),
   'card-hint-hop': cardHintHop(),
 };

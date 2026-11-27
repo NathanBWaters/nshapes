@@ -13,7 +13,7 @@
  *   more of the band playing    the foe is falling; you are on a streak
  *   the band softening gently   you have not made a Set in a while (never dead)
  *   a drum roll under it all    the foe is nearly down: finish it
- *   everything a key higher     an evolution is live (each recipe has its own theme)
+ *   everything a key higher     an evolution is live (each weapon evolution has its own theme)
  *   the music slowing, mellow   level-up pick or the shop: take your time
  */
 import { shade, type ModeName } from './theory';
@@ -77,7 +77,7 @@ export interface FightMood {
   /** The world's arrangement (title, story, camp, map, meadow, woods, canyon, peaks, summit, boss) */
   arrangement: string;
   boss: boolean;
-  status: 'playing' | 'pick' | 'pick_evolution' | 'intermission' | 'won' | 'lost';
+  status: 'playing' | 'pick' | 'intermission' | 'won' | 'lost';
   paused: boolean;
   /** null = this level has no hearts */
   hearts: number | null;
@@ -91,7 +91,7 @@ export interface FightMood {
   waves: number;
   combo: number;
   hotStreak: boolean;
-  /** Active recipe ids, oldest first */
+  /** Active weapon evolution ids, oldest first */
   evolutions: string[];
   /** ms until the next evolution ends (Infinity when none) */
   evolutionEndsMs: number;
@@ -238,13 +238,13 @@ export const restingMix = (arrangement: string): Mix => {
   };
 };
 
-/** How bright each evolution makes the tune, by recipe id. Set by the band from the recipe's theme. */
-export type Brighten = (recipeId: string) => { lift: number; brighten: number };
+/** How bright each evolution makes the tune, by evolution id. Set by the band from the evolution's theme. */
+export type Brighten = (evoId: string) => { lift: number; brighten: number };
 
 export const direct = (m: FightMood, themeOf: Brighten = () => ({ lift: 2, brighten: 1 })): Mix => {
   const home = worldTone(m.arrangement);
   const playing = m.status === 'playing' && !m.paused;
-  const between = m.status === 'pick' || m.status === 'pick_evolution' || m.status === 'intermission';
+  const between = m.status === 'pick' || m.status === 'intermission';
 
   // Hearts → how dark the tune is
   const hasHearts = m.hearts !== null && m.maxHearts !== null && m.maxHearts > 0;

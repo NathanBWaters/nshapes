@@ -49,8 +49,6 @@ export type GrowthWatch =
   | { on: 'own' }
   /** A doubled weapon trigger landed */
   | { on: 'doubled' }
-  /** A Catalyst was matched */
-  | { on: 'catalyst' }
   /** Something a trick weapon pulled off (engine/gear.ts): a finished poster, a full Snowball, a big chest… */
   | { on: 'feat'; name: 'posterDone' | 'doubleMirror' | 'fullSnowball' | 'albumDone' | 'lastHeart' }
   | { on: 'healed' | 'hurt' | 'hintUsed' | 'graceUsed' | 'cardBurned' | 'linkDestroyed' | 'cardBroken' | 'evolutionEnd' };
@@ -104,20 +102,20 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
 
   // ── Damage: these already hit hard, so they grow sideways ─────────────────
   'blast-powder': [
-    { watch: weaponOn('explosion'), every: 3, max: 4, stat: { explosionDamage: 0.25 }, look: 'explosions', gives: 'blasted cards deal +0.25 more damage' },
+    { watch: weaponOn('explosion'), every: 3, max: 4, stat: { explosionDamage: 0.5 }, look: 'explosions', gives: 'blasted cards deal +0.5 more damage' },
   ],
   'rainbow-charm': [
-    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 1, stat: { mult: 0.25 }, look: 'Rainbow Sets', gives: '+0.25× Rainbow multiplier' },
+    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 2, stat: { mult: 0.05, prism: 3 }, look: 'Rainbow Sets', gives: '+0.05× Rainbow multiplier and +3 Rainbow base damage' },
   ],
   'flint-spark': [
     {
       watch: { on: 'cardBurned' },
       every: 4,
       max: 4,
-      stat: { burnDamage: 0.2 },
+      stat: { burnDamage: 0.4 },
       proc: { on: weaponOn('fire'), pct: 5, effect: { do: 'ignite', count: 1 } },
       look: 'cards burned up',
-      gives: 'burns deal +0.2 more and +5% chance a new fire catches an extra card',
+      gives: 'burns deal +0.4 more and +5% chance a new fire catches an extra card',
     },
   ],
   'prismatic-ray': [
@@ -128,14 +126,14 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
       watch: weaponOn('ricochet'),
       every: 3,
       max: 6,
-      stat: { ricochetChance: 3, ricochetDamage: 0.25 },
+      stat: { ricochetChance: 3, ricochetDamage: 0.5 },
       mods: { ricochetHealChance: 3 },
       look: 'ricochets',
-      gives: '+3% ricochet chance, +0.25 ricochet damage, and +3% chance a ricochet heals a heart',
+      gives: '+3% ricochet chance, +0.5 ricochet damage, and +3% chance a ricochet heals a heart',
     },
   ],
   'echo-stone': [
-    { watch: weaponOn('echo'), every: 2, max: 5, stat: { echoChance: 2, strike: 1 }, look: 'echoes', gives: '+2% echo chance and echoes hit +1 harder' },
+    { watch: weaponOn('echo'), every: 2, max: 5, stat: { echoChance: 2, strike: 2 }, look: 'echoes', gives: '+2% echo chance and echoes hit +2 harder' },
   ],
   // The reaction jumps the gap
   'chain-reaction': [
@@ -160,8 +158,8 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
     { watch: { on: 'linkDestroyed' }, every: 4, max: 6, proc: { on: { on: 'linkDestroyed' }, pct: 3, effect: { do: 'trigger', kind: 'echo' } }, look: 'cards destroyed through a link', gives: '+3% chance that a linked card echoes as it goes (a Set is matched for you)' },
   ],
   'revenge-linker': [
-    { watch: { on: 'linkDestroyed' }, every: 4, max: 4, stat: { strike: 0.5, chance: 2 }, look: 'cards destroyed through a link', gives: 'Tripwire and Revenge hit +0.5 harder and link 2% more often' },
-    { watch: { on: 'hurt' }, max: 2, stat: { strike: 1.5, chance: 4 }, look: 'heart you lose', gives: 'Revenge strikes +1.5 harder and links 4% more often' },
+    { watch: { on: 'linkDestroyed' }, every: 4, max: 4, stat: { strike: 1, chance: 2 }, look: 'cards destroyed through a link', gives: 'Tripwire and Revenge hit +1 harder and link 2% more often' },
+    { watch: { on: 'hurt' }, max: 2, stat: { strike: 3, chance: 4 }, look: 'heart you lose', gives: 'Revenge strikes +3 harder and links 4% more often' },
   ],
 
   // ── Board ─────────────────────────────────────────────────────────────────
@@ -170,17 +168,17 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'clarity-lens': [
     { watch: { on: 'own' }, max: 10, mods: { doubleClarityChance: 5 }, look: 'Clarity', gives: '+5% chance a Clarity simplifies two traits at once' },
   ],
-  'rally-horn': [{ watch: { on: 'own' }, stat: { damage: 1 }, look: 'Rally', gives: 'Rally hits +1 harder' }],
-  pinata: [{ watch: { on: 'cardBroken' }, max: 8, stat: { bounty: 2 }, look: 'piñata you break', gives: 'later piñatas hold +2' }],
+  'rally-horn': [{ watch: { on: 'own' }, stat: { damage: 2 }, look: 'Rally', gives: 'Rally hits +2 harder' }],
+  pinata: [{ watch: { on: 'cardBroken' }, max: 8, stat: { bounty: 4 }, look: 'piñata you break', gives: 'later piñatas hold +4' }],
   'amplifier-coil': [
-    { watch: { on: 'doubled' }, max: 6, stat: { chance: 2, shock: 1 }, look: 'trigger it doubles', gives: '+2% amplify chance and the shock hits +1 harder' },
+    { watch: { on: 'doubled' }, max: 6, stat: { chance: 2, shock: 2 }, look: 'trigger it doubles', gives: '+2% amplify chance and the shock hits +2 harder' },
   ],
   'catalyst-prism': [
-    { watch: { on: 'catalyst' }, max: 3, mods: { evolutionDurationMs: 6000 }, look: 'Catalyst you match', gives: 'evolutions last 6s longer, starting with this one' },
+    { watch: { on: 'set', test: 'rainbow' }, every: 2, max: 3, mods: { evolutionDurationMs: 2000 }, now: { do: 'convert', to: 'holo', count: 1 }, look: 'Rainbow Sets', gives: 'turn 1 card Holo and evolutions last 2s longer' },
   ],
-  // The crowd wants more (caps cleanly within Adventure's 3-evolution limit)
+  // The crowd wants more
   'encore-mask': [
-    { watch: { on: 'evolutionEnd' }, max: 2, proc: { on: { on: 'evolutionEnd' }, pct: 40, effect: { do: 'spawnCatalyst' } }, look: 'evolution that ends', gives: '+40% chance that an ending evolution leaves a new Catalyst on the board' },
+    { watch: { on: 'evolutionEnd' }, max: 3, stat: { damage: 6 }, now: { do: 'chargeEvolution', target: 'all', amount: 1 }, look: 'evolution that ends', gives: 'Encore blasts hit +6 harder and all evolutions charge +1 tick' },
   ],
 
   // ── Graces ────────────────────────────────────────────────────────────────
@@ -204,7 +202,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'oracle-eye': [
     { watch: { on: 'set', test: 'hinted' }, max: 6, stat: { refund: 0.25 }, look: 'Set made on a pointed-out card', gives: 'hinted Sets refund +0.25s more on the clock' },
   ],
-  'mystic-sight': [{ watch: { on: 'set', test: 'hinted' }, max: 6, stat: { snipe: 1.5 }, look: 'hinted Set', gives: 'Third Eye snipes hit +1.5 harder' }],
+  'mystic-sight': [{ watch: { on: 'set', test: 'hinted' }, max: 6, stat: { snipe: 3 }, look: 'hinted Set', gives: 'Third Eye snipes hit +3 harder' }],
   // Hints gild the board and build coin momentum
   'fortunes-blessing': [
     {
@@ -236,19 +234,19 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // ── Tricks: each one changes its own game ─────────────────────────────────
   magnet: [{ watch: trickOn('magnet'), chance: 25, max: 3, mods: { magnetMarks: 1 }, look: 'Set through a marked card', gives: 'one more card is marked' }],
   // Bigger posters, bigger rewards
-  'bounty-poster': [{ watch: { on: 'feat', name: 'posterDone' }, max: 3, stat: { damage: 0.5 }, mods: { bountyCards: 1 }, look: 'poster you finish', gives: 'the next poster wants 1 more card and pays +0.5 more for each' }],
+  'bounty-poster': [{ watch: { on: 'feat', name: 'posterDone' }, max: 3, stat: { damage: 1 }, mods: { bountyCards: 1 }, look: 'poster you finish', gives: 'the next poster wants 1 more card and pays +1 more for each' }],
   // A hall of mirrors: it remembers further back
-  'mirror-shard': [{ watch: { on: 'feat', name: 'doubleMirror' }, max: 2, stat: { damage: 1 }, mods: { mirrorDepth: 1 }, look: 'Set that reuses two spots of your last Set', gives: 'the Mirror remembers one Set further back and pays +1' }],
+  'mirror-shard': [{ watch: { on: 'feat', name: 'doubleMirror' }, max: 2, stat: { damage: 2 }, mods: { mirrorDepth: 1 }, look: 'Set that reuses two spots of your last Set', gives: 'the Mirror remembers one Set further back and pays +2' }],
   // The odd one sets up the next trick
   'odd-one-out': [
     { watch: trickOn('odd'), max: 10, proc: { on: { on: 'set' }, pct: 4, effect: { do: 'doubleNext' } }, look: 'Odd One Out', gives: '+4% chance that a Set makes your next weapon trigger fire twice' },
   ],
   // He looks after his investment
-  'devils-bargain': [{ watch: { on: 'feat', name: 'lastHeart' }, max: 4, stat: { damage: 0.75 }, now: { do: 'shield', count: 1 }, look: 'time you fall to your last heart', gives: '+0.75 per missing heart, and your next mistake costs nothing' }],
+  'devils-bargain': [{ watch: { on: 'feat', name: 'lastHeart' }, max: 4, stat: { damage: 1.5 }, now: { do: 'shield', count: 1 }, look: 'time you fall to your last heart', gives: '+1.5 per missing heart, and your next mistake costs nothing' }],
   // Roll it all the way up and it gets bigger
   snowball: [{ watch: { on: 'feat', name: 'fullSnowball' }, max: 2, stat: { max: 1 }, look: 'time the Snowball reaches its limit', gives: 'its limit rises by 1' }],
   // A sticker shower
-  'collectors-album': [{ watch: { on: 'feat', name: 'albumDone' }, stat: { damage: 3 }, now: { do: 'empowerBoard', amount: 1 }, look: 'Album you complete', gives: 'every card on the board gains +1 and the next Album pays +3' }],
+  'collectors-album': [{ watch: { on: 'feat', name: 'albumDone' }, stat: { damage: 6 }, now: { do: 'empowerBoard', amount: 1 }, look: 'Album you complete', gives: 'every card on the board gains +1 and the next Album pays +6' }],
   'wild-card': [{ watch: trickOn('wild'), every: 5, max: 1, mods: { wildMax: 1 }, look: 'wild cards you match', gives: 'a second wild card can be on the board at once' }],
   // The seed sprouts
   'twin-seed': [
@@ -260,7 +258,7 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   'fog-lantern': [
     { watch: trickOn('fog'), max: 6, proc: { on: trickOn('fog'), pct: 8, effect: { do: 'hint', amount: 1 } }, look: 'fog that lifts', gives: '+8% chance that a lifting fog hands you a hint' },
   ],
-  'cursed-idol': [{ watch: trickOn('curse'), max: 2, mods: { curseMultiplierBonus: 0.25 }, look: '×2 card you match', gives: 'later ones multiply by 0.25 more (up to ×2.5)' }],
+  'cursed-idol': [{ watch: trickOn('curse'), max: 2, stat: { damage: 4 }, mods: { curseMultiplierBonus: 0.1 }, look: 'lifted Curse card you match', gives: '+4 base damage and +0.10× multiplier on later Curse cards (up to ×1.55)' }],
   // Broken chains stay on the floor
   'chain-gang': [
     { watch: trickOn('chain'), max: 4, proc: { on: trickOn('chain'), pct: 10, effect: { do: 'link', count: 1 } }, look: 'chain you match together', gives: '+10% chance that a matched chain leaves a link on the board' },
@@ -273,16 +271,16 @@ export const WEAPON_GROWTH: Record<string, GrowthDef[]> = {
   // The pit spreads
   'tar-pit': [{ watch: trickOn('tar'), every: 6, max: 2, mods: { tarRows: 1 }, look: 'Sets in the tar', gives: 'the pit spreads to one more row' }],
   // See through one trick and you are forgiven the next
-  decoy: [{ watch: trickOn('decoy'), max: 5, stat: { chance: 3, damage: 3 }, now: { do: 'grace', amount: 1 }, look: 'decoy you catch', gives: 'gain a grace, and decoys turn up 3% more often and pay +3' }],
+  decoy: [{ watch: trickOn('decoy'), max: 5, stat: { chance: 3, damage: 6 }, now: { do: 'grace', amount: 1 }, look: 'decoy you catch', gives: 'gain a grace, and decoys turn up 3% more often and pay +6' }],
   'long-fuse': [{ watch: trickOn('fuse'), max: 4, mods: { fuseHotMs: 1000 }, look: 'short fuse you match', gives: 'the short-fuse window is 1s longer' }],
   // The cold spreads to the clock
   'ice-block': [{ watch: trickOn('ice'), max: 2, mods: { iceSetsLess: 1 }, now: { do: 'freeze', ms: 2000 }, look: 'thawed card you match', gives: 'the clock freezes for 2s and the next block thaws 1 Set sooner' }],
   // Greed pays
-  'greedy-chest': [{ watch: trickOn('chest'), max: 3, stat: { start: 1 }, look: 'chest you open', gives: 'its floor rises by 1, so new chests hold more and a mistake never drops it lower' }],
+  'greedy-chest': [{ watch: trickOn('chest'), max: 3, stat: { start: 2 }, look: 'chest you open', gives: 'its floor rises by 2, so new chests hold more and a mistake never drops it lower' }],
   // Tighter footing on the rope
-  tightrope: [{ watch: trickOn('tightrope'), every: 4, max: 4, stat: { damage: 1 }, mods: { offRopeBonus: 0.05 }, look: 'Sets on the rope', gives: 'Rope Sets pay +1 more and stepping off costs 5% less' }],
+  tightrope: [{ watch: trickOn('tightrope'), every: 4, max: 4, stat: { damage: 2 }, mods: { offRopeBonus: 0.05 }, look: 'Sets on the rope', gives: 'Rope Sets pay +2 more and stepping off costs 5% less' }],
   // Hotter and jumpier
-  'hot-potato': [{ watch: trickOn('potato'), max: 4, stat: { damage: 0.5 }, mods: { potatoFasterMs: 1500 }, look: 'Hot Potato you match', gives: 'the next is worth +0.5 and jumps 1.5s sooner' }],
+  'hot-potato': [{ watch: trickOn('potato'), max: 4, stat: { damage: 2 }, mods: { potatoFasterMs: 1500 }, look: 'Hot Potato you match', gives: 'the next is worth +2 and jumps 1.5s sooner' }],
 };
 
 /** Weapons that are left without growth on purpose, and why (the explainer says so). */

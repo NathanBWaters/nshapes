@@ -40,7 +40,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'absorb',
         label: 'Absorb the Core',
-        detail: 'Lose 1 ♥ → Draft a Level 2 weapon & gain +6% Catalyst chance.',
+        detail: 'Lose 1 ♥ → Draft a Level 2 weapon & gain +3s Evolution duration.',
         minHearts: 2,
         tone: 'bold',
       },
@@ -84,7 +84,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'salvage',
         label: 'Salvage Star-Iron',
-        detail: 'Gain +1 Heavy Hitter damage on every Set.',
+        detail: 'Gain +2 Heavy Hitter base damage on every Set.',
         tone: 'neutral',
       },
     ],
@@ -140,8 +140,8 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       },
       {
         id: 'catalyst',
-        label: 'Pocket the Catalyst Flask',
-        detail: '+8% Evolution Catalyst chance & +1 Evolution per fight.',
+        label: 'Pocket the Resonance Flask',
+        detail: '+4s Evolution duration & +1 bonus Evolution charge tick.',
         tone: 'neutral',
       },
     ],
@@ -213,8 +213,8 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       },
       {
         id: 'fusion',
-        label: 'Transcribe Fusion Schematics',
-        detail: '+10% Catalyst chance & +1 Evolution allowed per fight.',
+        label: 'Transcribe Overdrive Schematics',
+        detail: '+5s Evolution duration & +1 bonus Evolution charge tick.',
         tone: 'safe',
       },
       {
@@ -249,7 +249,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'spar',
         label: 'Quick Sparring Drill',
-        detail: '+2 Heavy Hitter damage on every Set.',
+        detail: '+4 Heavy Hitter base damage on every Set.',
         tone: 'neutral',
       },
     ],
@@ -296,7 +296,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'prism_shard',
         label: 'Harvest a Prism Shard',
-        detail: 'Gain +2 Heavy Hitter damage & +6% Catalyst chance.',
+        detail: 'Gain +4 Heavy Hitter base damage & +3s Evolution duration.',
         tone: 'safe',
       },
       {
@@ -318,7 +318,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'channel',
         label: 'Channel the Cairn (40¢)',
-        detail: 'Pay 40¢ → Upgrade a chosen weapon by +1 Level & gain +4% Catalyst chance.',
+        detail: 'Pay 40¢ → Upgrade a chosen weapon by +1 Level & gain +2s Evolution duration.',
         minCoins: 40,
         needsWeapon: true,
         tone: 'bold',
@@ -326,7 +326,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'attune_cairn',
         label: 'Draw Starfall Sparks',
-        detail: '+8% Evolution Catalyst chance & +1 Evolution allowed per fight.',
+        detail: '+4s Evolution duration & +1 bonus Evolution charge tick.',
         tone: 'safe',
       },
       {
@@ -360,7 +360,7 @@ export const SPIRE_EVENTS: readonly SpireEventDef[] = [
       {
         id: 'strike',
         label: 'Shatter a Resonance Crystal',
-        detail: 'Gain +1 Heavy Hitter damage on every Set.',
+        detail: 'Gain +2 Heavy Hitter base damage on every Set.',
         tone: 'neutral',
       },
     ],

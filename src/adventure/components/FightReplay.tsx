@@ -1,7 +1,7 @@
 /**
  * Fight replay: the "what just happened" timeline & move-by-move receipt.
  *
- * - Plain-English summary + clickable Power banner + clickable series totals.
+ * - Plain-English summary + per-weapon Evolution triggers + clickable series totals.
  * - Move-column damage chart directly above the Move Inspector so players
  *   immediately see every move's damage, move label, and timestamp.
  * - Tapping any card, outcome chip, math row, or triggered effect opens an
@@ -21,12 +21,12 @@ import type { AdventureSave, FightLogCard, FightLogEntry, PassiveId, RunState } 
 import { Btn, INK, TONE } from './ui';
 import { ARCANA } from '../data/arcana';
 import { getArmoryWeapon } from '../data/armory';
+import { getWeaponEvolution } from '../data/evolutions';
 import { LEVELS, PRACTICE_LEVELS } from '../data/levels';
 import { getPassive, PASSIVES } from '../data/passives';
 import { weaponGuide } from '../data/weaponGuide';
-import { formatPower } from '../data/weaponPower';
 import { replayMoveSnapshot, synthesizeHighlightSnapshot, type FightRecording } from '../engine/replay';
-import { getRecipe, getSkillNode } from '../engine/sources';
+import { getSkillNode } from '../engine/sources';
 import { buildReplayWeapons, fightReplayOf, type FightReplayData } from '../history';
 import HighlightStageModal from './HighlightStageModal';
 import {
@@ -42,8 +42,8 @@ import {
   setMathRows,
 } from './fightReplayText';
 import DamageSourceExplainer from './DamageSourceExplainer';
-import PowerExplainer from './PowerExplainer';
 import WeaponExplainer from './WeaponExplainer';
+import { beltSynergyAttrSet } from '../ui/synergyMeta';
 
 /** Categorical slots 1–3 of the validated chart palette, plus the reserved "critical" status color. */
 export const REPLAY_SERIES = {
@@ -71,7 +71,7 @@ const PAD_X = 6;
 const MIN_SLOT_W = 48;
 
 const SERIES_HELP: Record<Series, string> = {
-  set: 'Damage dealt directly when you matched 3 cards—card points + flat bonuses × Set multipliers × Power.',
+  set: 'Damage dealt directly when you matched 3 cards—card points, Synergy hooks, and flat bonuses × Set multipliers.',
   triggered: 'Bonus blasts, lasers, ricochets, and bursts triggered immediately after a Set.',
   clock: 'Ongoing burn ticks, timed hazards, or clock events between moves.',
 };
@@ -184,8 +184,6 @@ interface Props {
   onClose: () => void;
 }
 
-const fmtMult = (n: number) => (Number.isInteger(n) ? `${n}` : `${Math.round(n * 10) / 10}`);
-
 /** What a log source is, in the words the rest of the game uses for it. */
 const explainRef = (
   ref: string,
@@ -201,8 +199,18 @@ const explainRef = (
     return { name: w?.name ?? id, text: w?.description ?? '', kind: 'weapon', icon: w?.icon };
   }
   if (type === 'evo') {
-    const r = getRecipe(id);
-    return { name: r?.name ?? id, text: r ? `${r.activeText} Live for 30 seconds once a Catalyst is matched (${r.familyText}).` : '', kind: 'evolution', icon: r?.icon };
+    const evo = getWeaponEvolution(id);
+    if (evo) {
+      const parent = weapons.find(x => x.id === evo.weaponId) ?? getArmoryWeapon(evo.weaponId, weaponBuilds);
+      const sec = Math.round(evo.durationMs / 1000);
+      return {
+        name: parent ? `${parent.name} → ${evo.name}` : evo.name,
+        text: `${evo.tagline} (${sec}s active · Trigger: ${evo.conditionText})`,
+        kind: 'evolution',
+        icon: evo.icon,
+      };
+    }
+    return { name: id, text: 'Weapon Evolution active during this fight.', kind: 'evolution', icon: 'lorc/crystal-shine' };
   }
   if (type === 'node') {
     const n = getSkillNode(id);
@@ -219,7 +227,7 @@ const explainRef = (
   return { name: '', text: '', kind: '' };
 };
 
-type ChipKind = 'damage' | 'set' | 'triggered' | 'power' | 'coins' | 'xp' | 'hearts' | 'foeHp';
+type ChipKind = 'damage' | 'set' | 'triggered' | 'coins' | 'xp' | 'hearts' | 'foeHp';
 
 const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, onClose }) => {
   const insets = useSafeAreaInsets();
@@ -241,7 +249,6 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
   const [openMath, setOpenMath] = useState<number | null>(null);
   const [openChip, setOpenChip] = useState<ChipKind | null>(null);
   const [openSeries, setOpenSeries] = useState<Series | null>(null);
-  const [powerBannerOpen, setPowerBannerOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState<number | null>(null);
 
   const highlightSnapshot = useMemo(() => {
@@ -263,7 +270,6 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
     setOpenMath(null);
     setOpenChip(null);
     setOpenSeries(null);
-    setPowerBannerOpen(false);
     setCopied(false);
   }, [data, biggest]);
 
@@ -417,7 +423,10 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
     const payload = {
       level: data.levelId, fighter: data.fighter, status: data.status, endReason: data.endReason,
       weapons: heldWeapons.map(w => w.name), skillNodes: data.skillNodes, arcana: data.arcana ?? [],
-      totalDamage: data.totalDamage, power: data.power ?? 0, log,
+      equippedEvolutions: data.equippedEvolutions ?? {},
+      evosTriggered: data.evosTriggered ?? 0,
+      peakBaseDamage: data.peakBaseDamage ?? 0,
+      totalDamage: data.totalDamage, log,
     };
     try {
       await Clipboard.setStringAsync(JSON.stringify(payload, null, 1));
@@ -428,6 +437,27 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
     }
   };
 
+  /** Timeline markers for every per-weapon Evolution ignited across the fight. */
+  const evolutionTimeline = useMemo(() => {
+    const out: { moveIndex: number; label: string; durationSec?: number }[] = [];
+    log.forEach((e, idx) => {
+      for (const l of e.lines) {
+        if (l.type !== 'evolution_start') continue;
+        const evoId = l.sourceRef?.startsWith('evo:') ? l.sourceRef.slice(4) : undefined;
+        const evoDef = evoId ? getWeaponEvolution(evoId) : undefined;
+        const parentW = evoDef ? (heldWeapons.find(w => w.id === evoDef.weaponId) ?? getArmoryWeapon(evoDef.weaponId)) : undefined;
+        const evoName = evoDef?.name ?? l.text ?? 'Evolution';
+        const label = parentW ? `${parentW.name} → ${evoName}` : evoName;
+        out.push({
+          moveIndex: idx,
+          label,
+          durationSec: evoDef ? Math.round(evoDef.durationMs / 1000) : undefined,
+        });
+      }
+    });
+    return out;
+  }, [log, heldWeapons]);
+
   if (!data || !entry) return null;
   const lines = describeLines(
     entry.lines,
@@ -436,9 +466,7 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
   );
   const s = split(entry);
   const mathRows = entry.set ? setMathRows(entry.set, { lines: entry.lines, cards: entry.cards, held: heldIds }) : [];
-  const powerPoints = data.power ?? 0;
-  const hasAnyPower = powerPoints > 0;
-  const evoCount = others.filter(o => o.ref.startsWith('evo:')).length;
+  const moveEvoStarts = evolutionTimeline.filter(item => item.moveIndex === sel);
 
   const chipHelp = (chip: ChipKind): React.ReactNode => {
     switch (chip) {
@@ -456,17 +484,6 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
         return <Text style={st.explainText}>{entry.heartsDelta > 0 ? `Healed ${entry.heartsDelta} heart${entry.heartsDelta === 1 ? '' : 's'} on this move.` : `Lost ${Math.abs(entry.heartsDelta)} heart${entry.heartsDelta === -1 ? '' : 's'} on this move.`}</Text>;
       case 'foeHp':
         return <Text style={st.explainText}>Remaining foe HP right after this move ({entry.foeHp} out of {entry.foeMaxHp}).</Text>;
-      case 'power':
-        return (
-          <PowerExplainer
-            points={entry.set?.powerPoints ?? (hasAnyPower ? powerPoints : undefined)}
-            multiplier={entry.set?.powerMultiplier}
-            weapons={heldWeapons}
-            evolutionsTriggered={evoCount}
-            subtitle={entry.set?.powerMultiplier ? `At this Set: ×${fmtMult(entry.set.powerMultiplier)} fight-wide damage multiplier` : undefined}
-            compact
-          />
-        );
     }
   };
 
@@ -539,36 +556,27 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
                 </TouchableOpacity>
               )}
 
-              {hasAnyPower && (
-                <>
-                  <TouchableOpacity
-                    testID="replay-power-banner"
-                    style={[st.powerBanner, powerBannerOpen && { backgroundColor: COLORS.actionYellow }]}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    onPress={() => { sfx('click'); setPowerBannerOpen(v => !v); }}
-                  >
-                    <Icon name="lorc/power-lightning" size={16} color={INK} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.powerBannerTitle}>
-                        Power reached {formatPower(powerPoints)}
-                      </Text>
-                      <Text style={st.powerBannerSub}>
-                        Multiplied every hit by {formatPower(powerPoints)} by the end · tap to see what Power is
-                      </Text>
-                    </View>
-                    <Text style={st.powerChevron}>{powerBannerOpen ? '▲' : '▼'}</Text>
-                  </TouchableOpacity>
-                  {powerBannerOpen && (
-                    <PowerExplainer
-                      points={powerPoints}
-                      weapons={heldWeapons}
-                      evolutionsTriggered={evoCount}
-                      subtitle={`Finished the fight at ${formatPower(powerPoints)} damage multiplier`}
-                      compact
-                    />
-                  )}
-                </>
+              {evolutionTimeline.length > 0 && (
+                <View style={st.evoTimelineWrap} testID="replay-evos-triggered">
+                  <Text style={st.evoTimelineHead}>EVOLUTIONS TRIGGERED</Text>
+                  <View style={st.evoChipRow}>
+                    {evolutionTimeline.map((item, idx) => (
+                      <TouchableOpacity
+                        key={`${item.moveIndex}-${idx}`}
+                        testID={`replay-evo-chip-${idx}`}
+                        onPress={() => select(item.moveIndex, true)}
+                        activeOpacity={0.8}
+                        style={st.evoChip}
+                        accessibilityRole="button"
+                      >
+                        <Icon name="lorc/crystal-shine" size={12} color="#7C3AED" />
+                        <Text style={st.evoChipText} numberOfLines={1}>
+                          {item.label}{item.durationSec ? ` (${item.durationSec}s)` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
               )}
             </View>
 
@@ -886,6 +894,19 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
                 </View>
               )}
 
+              {moveEvoStarts.length > 0 && (
+                <View style={st.evoChipRow} testID="replay-move-evos">
+                  {moveEvoStarts.map((item, idx) => (
+                    <View key={idx} style={st.evoChip}>
+                      <Icon name="lorc/crystal-shine" size={12} color="#7C3AED" />
+                      <Text style={st.evoChipText} numberOfLines={1}>
+                        Evolution Triggered: {item.label}{item.durationSec ? ` (${item.durationSec}s)` : ''}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {/* Clickable outcome chips (replaces ambiguous "Set / triggered") */}
               <View style={st.chips}>
                 <Chip
@@ -908,16 +929,6 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
                     value={`+${s.triggered}`}
                     active={openChip === 'triggered'}
                     onPress={() => { sfx('click'); setOpenChip(openChip === 'triggered' ? null : 'triggered'); }}
-                  />
-                )}
-                {(entry.set?.powerMultiplier ?? 1) > 1 && (
-                  <Chip
-                    testID="replay-inspector-power"
-                    label="Power · tap ?"
-                    value={`×${fmtMult(entry.set!.powerMultiplier!)}`}
-                    hot
-                    active={openChip === 'power'}
-                    onPress={() => { sfx('click'); setOpenChip(openChip === 'power' ? null : 'power'); }}
                   />
                 )}
                 {entry.coins !== 0 && (
@@ -965,7 +976,7 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
                     <Text style={st.sectionHint}>tap any row for details</Text>
                   </View>
                   {mathRows.map((r, i) => {
-                    const interactive = !r.total && (!!r.explain || !!r.sourceRef || !!r.isPower);
+                    const interactive = !r.total && (!!r.explain || !!r.sourceRef);
                     const isOpen = openMath === i;
                     const about = r.sourceRef ? explainRef(r.sourceRef, heldWeapons, data.weaponBuilds) : null;
                     return (
@@ -998,26 +1009,13 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
                         </TouchableOpacity>
                         {isOpen && (
                           <View style={st.mathDetail} testID={`replay-math-detail-${i}`}>
-                            {r.isPower ? (
-                              <PowerExplainer
-                                points={r.powerPoints ?? (hasAnyPower ? powerPoints : undefined)}
-                                multiplier={r.powerMultiplier}
-                                weapons={heldWeapons}
-                                evolutionsTriggered={evoCount}
-                                subtitle={`Applied ×${fmtMult(r.powerMultiplier ?? 1)} to your Set subtotal (rounded to nearest whole hit)`}
-                                compact
-                              />
-                            ) : (
-                              <>
-                                {r.explain && <Text style={st.explainText}>{r.explain}</Text>}
-                                {about && about.text ? (
-                                  <View style={st.about}>
-                                    {about.icon && <Icon name={about.icon} size={18} color={INK} />}
-                                    <Text style={st.aboutText}><Text style={st.bold}>{about.name} ({about.kind}): </Text>{about.text}</Text>
-                                  </View>
-                                ) : null}
-                              </>
-                            )}
+                            {r.explain && <Text style={st.explainText}>{r.explain}</Text>}
+                            {about && about.text ? (
+                              <View style={st.about}>
+                                {about.icon && <Icon name={about.icon} size={18} color={INK} />}
+                                <Text style={st.aboutText}><Text style={st.bold}>{about.name} ({about.kind}): </Text>{about.text}</Text>
+                              </View>
+                            ) : null}
                           </View>
                         )}
                       </View>
@@ -1091,6 +1089,9 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
                     weapon={g.weapon}
                     build={data.weaponBuilds[g.id]}
                     growth={data.growth}
+                    evolutionMode="preview"
+                    equippedEvolutionId={data.equippedEvolutions?.[g.id] ?? null}
+                    beltSynergyIds={beltSynergyAttrSet(data.weapons, g.id)}
                     result={{
                       text: gearStatText(g.stat, data.totalDamage, weaponGuide(g.id).kind === 'always' ? 'always' : 'other'),
                       share: data.totalDamage > 0 ? (g.stat?.damage ?? 0) / data.totalDamage : 0,
@@ -1231,20 +1232,22 @@ const st = StyleSheet.create({
   tileLabel: { flex: 1, fontSize: 10, fontWeight: '800', color: INK },
   tileValue: { fontSize: 19, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   tileSub: { fontSize: 10, color: MUTED },
-  powerBanner: {
+  evoTimelineWrap: { gap: 5 },
+  evoTimelineHead: { fontSize: 10, fontWeight: '900', letterSpacing: 1.4, color: '#6D28D9' },
+  evoChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  evoChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: TONE.coinPale,
-    borderRadius: 10,
+    gap: 5,
+    backgroundColor: '#F3E8FF',
+    borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: INK,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderColor: '#7C3AED',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    maxWidth: '100%',
   },
-  powerBannerTitle: { fontSize: 13, fontWeight: '900', color: INK },
-  powerBannerSub: { fontSize: 11, color: INK, opacity: 0.78 },
-  powerChevron: { fontSize: 11, fontWeight: '900', color: INK },
+  evoChipText: { flexShrink: 1, fontSize: 11.5, fontWeight: '900', color: '#5B21B6' },
   highlightPill: {
     flexDirection: 'row',
     alignItems: 'center',

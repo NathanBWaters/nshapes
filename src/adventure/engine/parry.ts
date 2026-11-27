@@ -2,15 +2,17 @@
  * Set-Parrying engine:
  *  - Evaluates whether a matched Set satisfies a foe's Counter requirement
  *  - Advances calm → windup → golden Perfect Parry warning → unparried strike
- *  - Resolves Counter Parries, Perfect Parries, Stagger ×2, and board-fairness stalls
+ *  - Resolves Counter Parries, Perfect Parries, Stagger (+8 base, ×1.35),
+ *    Synergy `parries` updates, `+1` evolution charge tick on Perfect Parry,
+ *    and board-fairness stalls.
  *
  * Pure deterministic logic (uses only fight-clock ms and Draft state).
  */
 import type { AttributeName, Card } from '@/types';
 import type { FoeDef, LevelDef, ParryRequirement, ParrySpec, ParryState } from '../types';
 import { PARRY_RULES, resolveParrySpec } from '../data/parry';
-import { SKILL_FEAT_POWER } from '../data/weaponPower';
-import { addCoins, addPower, addTime, emit, hurt, type Draft } from './fight';
+import { addCoins, addTime, bumpSynergy, emit, enqueue, hurt, type Draft } from './fight';
+import { chargeWeaponEvolutions } from './evolutions';
 import { allSets, countDifferentAttributes, isRainbow } from './sets';
 
 /** Does this valid 3-card Set satisfy the foe's Counter requirement? */
@@ -68,7 +70,6 @@ export const initParryState = (level: LevelDef, foe?: FoeDef, windupScale = 1): 
     windupScale !== 1
       ? { ...rawSpec, windupMs: Math.max(4000, Math.round(rawSpec.windupMs * windupScale)) }
       : rawSpec;
-  // Opening calm is slightly shorter (~70%) so the first telegraph arrives briskly
   const initialCalm = Math.max(5000, Math.round(spec.cooldownMs * 0.7));
   return {
     spec,
@@ -93,7 +94,7 @@ const effectiveCooldownMs = (d: Draft, spec: ParrySpec): number => {
 export const isInPerfectWindow = (p: ParryState | null): boolean =>
   !!p && p.phase === 'windup' && p.msLeft <= p.spec.perfectWindowMs;
 
-/** Damage multiplier from Stagger (×2 while foe is staggered from a Parry). */
+/** Damage multiplier from Stagger while foe is staggered from a Parry. */
 export const parryStaggerMultiplier = (p: ParryState | null): number =>
   p?.phase === 'staggered' ? PARRY_RULES.staggerDamageMult : 1;
 
@@ -139,7 +140,6 @@ export const tickParry = (d: Draft, ms: number): void => {
 
   // phase === 'windup'
   if (nextMs <= 0) {
-    // Telegraph completed unparried — the foe strikes!
     applyUnparriedStrike(d, p.spec);
     const cd = effectiveCooldownMs(d, p.spec);
     d.parry = {
@@ -168,7 +168,6 @@ const applyUnparriedStrike = (d: Draft, spec: ParrySpec): void => {
     return;
   }
   if (spec.penalty === 'glancing') {
-    // World 1 teaching strikes bruise without unexpectedly ending a beginner's run
     if (d.hearts !== null && d.hearts > 1) hurt(d, spec.penaltyAmount ?? 1);
     return;
   }
@@ -179,14 +178,18 @@ export interface ParryResolution {
   kind: 'parry' | 'perfect' | 'stalled' | null;
   /** Direct multiplier applied to the parrying Set */
   multiplier: number;
-  /** Additional stagger multiplier active BEFORE this Set (e.g. already staggered) */
+  /** Elevated flat base damage added BEFORE multipliers on a Parry (+5 / +10 / +16) */
+  flatBonus: number;
+  /** Elevated flat base damage added BEFORE multipliers while attacking a Staggered foe (+8) */
+  staggerFlatBonus: number;
+  /** Whether the foe was already staggered BEFORE this Set */
   wasStaggered: boolean;
 }
 
 /**
  * Evaluate a valid player Set against the foe's live telegraph.
  * Called inside `applyMatch` BEFORE final Set damage is calculated so a
- * Parry / Perfect Parry immediately boosts that Set's damage AND shows up in
+ * Parry / Perfect Parry immediately boosts that Set's base + multiplier AND shows up in
  * the Live Multiplier Ignition breakdown!
  */
 export const resolveParryOnSet = (
@@ -196,16 +199,15 @@ export const resolveParryOnSet = (
   auto: boolean
 ): ParryResolution => {
   const p = d.parry;
-  if (!p) return { kind: null, multiplier: 1, wasStaggered: false };
+  if (!p) return { kind: null, multiplier: 1, flatBonus: 0, staggerFlatBonus: 0, wasStaggered: false };
   const wasStaggered = p.phase === 'staggered';
-  if (auto || p.phase !== 'windup') return { kind: null, multiplier: 1, wasStaggered };
+  const staggerFlatBonus = wasStaggered ? (PARRY_RULES.staggerFlatBonus ?? 8) : 0;
+  if (auto || p.phase !== 'windup') {
+    return { kind: null, multiplier: 1, flatBonus: 0, staggerFlatBonus, wasStaggered };
+  }
 
   const counterHit = !graceUsed && setMatchesCounter(matched, d.attributes, p.spec.counter);
   if (!counterHit) {
-    // Fairness guard: if this foe demands a specific counter AND none was on the board,
-    // clearing cards buys breathing room while refill() guarantees a completing Counter-Set
-    // on the next draw. Never cap stalls while the board genuinely lacks any Counter-Set
-    // (e.g. hazards physically locking matching pairs) so RNG never forces an unavoidable hit.
     if (
       p.spec.counter.kind !== 'any' &&
       !boardHasCounterSet(d.board, d.attributes, p.spec.counter)
@@ -215,9 +217,9 @@ export const resolveParryOnSet = (
         msLeft: Math.min(p.durationMs, p.msLeft + PARRY_RULES.fairnessStallMs),
         stallsUsed: p.stallsUsed + 1,
       };
-      return { kind: 'stalled', multiplier: 1, wasStaggered };
+      return { kind: 'stalled', multiplier: 1, flatBonus: 0, staggerFlatBonus, wasStaggered };
     }
-    return { kind: null, multiplier: 1, wasStaggered };
+    return { kind: null, multiplier: 1, flatBonus: 0, staggerFlatBonus, wasStaggered };
   }
 
   const perfect = p.msLeft <= p.spec.perfectWindowMs;
@@ -227,6 +229,11 @@ export const resolveParryOnSet = (
     : isSpecific
       ? PARRY_RULES.counterParryMult
       : PARRY_RULES.anyParryMult;
+  const flatBonus = perfect
+    ? (PARRY_RULES.perfectParryFlat ?? 16)
+    : isSpecific
+      ? (PARRY_RULES.counterParryFlat ?? 10)
+      : (PARRY_RULES.anyParryFlat ?? 5);
   const staggerMs = perfect
     ? (p.spec.staggerMs ?? PARRY_RULES.perfectStaggerMs)
     : isSpecific
@@ -235,9 +242,12 @@ export const resolveParryOnSet = (
   const bonusCoins = perfect ? PARRY_RULES.perfectParryCoins : PARRY_RULES.parryCoins;
 
   d.parriesLanded += 1;
-  if (perfect) d.perfectParriesLanded += 1;
-  // Skill-feat Power surge (GP-01): rewards clean timing even without charms
-  addPower(d, perfect ? SKILL_FEAT_POWER.perfectParry : SKILL_FEAT_POWER.counterParry);
+  d.fightMetrics.parries += 1;
+  if (perfect) {
+    d.perfectParriesLanded += 1;
+    d.fightMetrics.perfectParries += 1;
+  }
+  bumpSynergy(d, 'parries', perfect ? 2 : 1);
 
   if (staggerMs > 0) {
     d.parry = {
@@ -265,5 +275,8 @@ export const resolveParryOnSet = (
 
   if (bonusCoins > 0) addCoins(d, bonusCoins);
   emit(d, perfect ? 'perfect_parry' : 'parry', multiplier, p.spec.attackName);
-  return { kind: perfect ? 'perfect' : 'parry', multiplier, wasStaggered };
+  enqueue(d, 'parry', undefined, undefined, { perfect });
+  // Perfect Parry charges all equipped charging weapons +1 tick!
+  if (perfect) chargeWeaponEvolutions(d, 'all', 1);
+  return { kind: perfect ? 'perfect' : 'parry', multiplier, flatBonus, staggerFlatBonus, wasStaggered };
 };

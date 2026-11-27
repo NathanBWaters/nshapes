@@ -1,13 +1,14 @@
 /**
  * What a reward unlocks, and the reverse: where each unlockable thing comes
- * from. "Earn ★★ on 1-7 …" style hints are written from this index, so they
- * follow the level and bounty tables instead of restating them.
+ * from. "Earn ★★ on 1-7 …" and weapon-gated bounty hints are written from this
+ * index, so they follow the level and bounty tables instead of restating them.
  */
 import type { CharacterName } from '@/types';
 import type { AdventureSave, ArcanaId, BountyDef, LevelDef, RewardDef, UnlockableFeature } from '../types';
 import { LEVELS, getLevel, isPathHidden } from './levels';
 import { worldNumber } from './biomes';
 import { BOUNTIES } from './bounties';
+import { armoryBaseWeapon } from './armory';
 import { FEATURES } from './features';
 import { MECHANICS } from './mechanics';
 import { MAP_KEYS, isMapKeyClaimed, isMapKeyReached, nextMapKeyFor } from './mapKeys';
@@ -64,8 +65,21 @@ export const unlockSources = (u: Unlockable): UnlockSource[] => SOURCES.get(keyO
 
 export const unlockSource = (u: Unlockable): UnlockSource | null => unlockSources(u)[0] ?? null;
 
-const describeSource = (s: UnlockSource, save?: Pick<AdventureSave, 'stars'>): string => {
-  if (s.via === 'bounty') return `Complete the ${s.bounty.name} bounty`;
+type HintSaveContext = Pick<AdventureSave, 'stars'> &
+  Partial<Pick<AdventureSave, 'claimedMapKeys' | 'unlockedFighters' | 'armory'>>;
+
+const describeSource = (s: UnlockSource, save?: HintSaveContext): string => {
+  if (s.via === 'bounty') {
+    const reqWeapon = s.bounty.requiresWeapon;
+    if (reqWeapon) {
+      const weaponName = armoryBaseWeapon(reqWeapon)?.name ?? reqWeapon;
+      if (save?.armory && !save.armory.includes(reqWeapon)) {
+        return `Unlock ${weaponName}, then complete its '${s.bounty.name}' bounty`;
+      }
+      return `Complete ${weaponName}'s '${s.bounty.name}' bounty`;
+    }
+    return `Complete the '${s.bounty.name}' bounty`;
+  }
   const { level } = s;
   // A side path that has not opened yet stays a secret
   if (save && isPathHidden(level, save)) return `Hidden on a secret path in World ${worldNumber(level.biome)}`;
@@ -73,13 +87,21 @@ const describeSource = (s: UnlockSource, save?: Pick<AdventureSave, 'stars'>): s
   return `Earn ${'★'.repeat(s.via === 'star' ? s.star : 1)} on ${level.id} ${level.name}${elite}`;
 };
 
+/** Plain-English milestone hint for the 4th, 5th, and optional 6th weapon belt slots. */
+export const weaponSlotMilestoneHint = (slotNumber: 4 | 5 | 6): string => {
+  if (slotNumber === 4) return 'Defeat the World 1 Boss (1-10) to unlock your 4th weapon slot.';
+  if (slotNumber === 5) return 'Defeat the World 2 Boss (2-10) to unlock your 5th weapon slot.';
+  return 'Buy Charm Belt in the Camp Workshop for an optional 6th weapon slot.';
+};
+
 /**
  * How to get it, in a few words, or null when nothing in the game grants it.
- * With the player's save, a source on a side path they have not found is not named.
+ * With the player's save, a source on a side path they have not found is not named,
+ * and weapon-gated bounties tell you whether to unlock the required weapon first.
  */
 export const unlockHint = (
   u: Unlockable,
-  save?: Pick<AdventureSave, 'stars'> & Partial<Pick<AdventureSave, 'claimedMapKeys' | 'unlockedFighters'>>
+  save?: HintSaveContext
 ): string | null => {
   const source = unlockSource(u);
   if (source) return describeSource(source, save);

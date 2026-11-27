@@ -13,8 +13,8 @@
 import { CHAIN_LEAD, IMPACT_MS, isSetHit, isSour, takesChainSlot, type TimedEvent } from '@/audio/fightAudio';
 import type { RunEvent } from '../types';
 import { ownerOfEvent } from '../data/weaponGuide';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
-import { getRecipe, getSkillNode } from '../engine/sources';
+import { WEAPON_EVOLUTIONS, getWeaponEvolution } from '../data/evolutions';
+import { getSkillNode } from '../engine/sources';
 import { EVENT_FX } from './catalog';
 import type { AnchorName, Beat, BeatSource, HitTier, Script, Segment } from './types';
 
@@ -53,17 +53,31 @@ export interface ScriptContext {
   reduced?: boolean;
   /** Fight already ended (won/lost): never pause the victory/defeat transition for an Evolution cut-in */
   skipCutIn?: boolean;
-  /** Recipes already seen before or just selected in EvolutionPickOverlay: show non-blocking EvolutionBanner ([OB-08]) */
+  /** Evolutions already seen before: show non-blocking EvolutionBanner instead of pausing ([OB-08]) */
+  bannerOnlyEvolutions?: ReadonlySet<string>;
+  /** Back-compat alias for `bannerOnlyEvolutions` */
   bannerOnlyRecipes?: ReadonlySet<string>;
   /** Force non-blocking EvolutionBanner for all evolutions in this script */
   forceBanner?: boolean;
 }
 
-/** The recipe an evolution event is about (the engine names it by id or by name). */
-export const recipeIdOfEvent = (e: RunEvent): string | null =>
-  EVOLUTION_RECIPES.find(r => r.id === e.text || r.name === e.text)?.id ?? null;
+/** The per-weapon evolution an event refers to (resolved from `source: evo:<id>` or `text` id/name). */
+export const evolutionIdOfEvent = (e: RunEvent): string | null => {
+  if (e.source) {
+    const base = e.source.split('#')[0];
+    if (base.startsWith('evo:')) {
+      const id = base.slice(4);
+      if (getWeaponEvolution(id)) return id;
+    }
+  }
+  if (!e.text) return null;
+  return WEAPON_EVOLUTIONS.find(def => def.id === e.text || def.name === e.text)?.id ?? null;
+};
 
-/** Who caused it: the rule behind it, or the held weapon that owns that kind of event. */
+/** Back-compat barrel alias for `evolutionIdOfEvent`. */
+export const recipeIdOfEvent = evolutionIdOfEvent;
+
+/** Who caused it: the rule behind it, the weapon's belt slot, or the held weapon that owns that event. */
 export const sourceOfEvent = (e: RunEvent, ctx: ScriptContext): BeatSource | null => {
   if (e.source) {
     const base = e.source.split('#')[0];
@@ -71,15 +85,29 @@ export const sourceOfEvent = (e: RunEvent, ctx: ScriptContext): BeatSource | nul
       const id = base.slice(5);
       return { ref: `node:${id}`, name: getSkillNode(id)?.name ?? id, anchor: 'fighter' };
     }
+    if (base.startsWith('weapon:')) {
+      const id = base.slice(7);
+      const w = ctx.weapons.find(item => item.id === id);
+      return { ref: `weapon:${id}`, name: w?.name ?? id, anchor: `weapon:${id}` };
+    }
     if (base.startsWith('evo:')) {
       const id = base.slice(4);
-      return { ref: `evo:${id}`, name: getRecipe(id)?.name ?? id, anchor: `evo:${id}` };
+      const def = getWeaponEvolution(id);
+      const anchor: AnchorName = def ? `weapon:${def.weaponId}` : 'fighter';
+      return { ref: `evo:${id}`, name: def?.name ?? id, anchor };
     }
     const held = /^w(\d+):(.*)$/.exec(base);
     if (held) {
       const w = ctx.weapons[Number(held[1])];
       const id = w?.id ?? held[2];
       return { ref: `weapon:${id}`, name: w?.name ?? id, anchor: `weapon:${id}` };
+    }
+  }
+  if (e.type === 'evolution_start' || e.type === 'evolution_end') {
+    const evoId = evolutionIdOfEvent(e);
+    const def = evoId ? getWeaponEvolution(evoId) : undefined;
+    if (def) {
+      return { ref: `evo:${def.id}`, name: def.name, anchor: `weapon:${def.weaponId}` };
     }
   }
   const owner = ownerOfEvent(e.type, e.text, ctx.weapons.map(w => w.id));
@@ -195,9 +223,11 @@ export const scriptFor = (events: readonly RunEvent[], ctx: ScriptContext): Scri
       chunk.push(e);
       continue;
     }
-    const id = recipeIdOfEvent(e);
+    const id = evolutionIdOfEvent(e);
     const segKind: 'cutIn' | 'banner' =
-      ctx.forceBanner || (id !== null && ctx.bannerOnlyRecipes?.has(id)) ? 'banner' : 'cutIn';
+      ctx.forceBanner || (id !== null && (ctx.bannerOnlyEvolutions?.has(id) || ctx.bannerOnlyRecipes?.has(id)))
+        ? 'banner'
+        : 'cutIn';
     // [OB-08] Non-blocking banner evolutions never hold the fight clock on their own
     chunk.push(segKind === 'banner' ? { ...e, clock: true } : e);
     const prev = segments[segments.length - 1];

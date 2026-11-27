@@ -21,11 +21,12 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { EASE, MS, OVERLAP, SCALE, SPRING, STAGGER } from '@/utils/motion';
 import { MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
+import { beltSynergyAttrSet } from '@/adventure/ui/synergyMeta';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards';
 import { Btn, DARK, Eyebrow, INK, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
-import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
+import { buildSpireWeaponBuilds, spireEquippedEvolutions, spireHeldWeapons } from '../engine/bridge';
 import type { SpireCampfireState, SpireRun } from '../types';
 import SpireBeltBar from './SpireBeltBar';
 import {
@@ -42,10 +43,20 @@ interface Props {
   onForge: (weaponId: string) => void;
   onMeditate: (nodeId: string) => void;
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
+  onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onLeave: () => void;
 }
 
-const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMeditate, onReorderWeapon, onLeave }) => {
+const SpireCampfire: React.FC<Props> = ({
+  run,
+  campfire,
+  onRest,
+  onForge,
+  onMeditate,
+  onReorderWeapon,
+  onSelectEvolution,
+  onLeave,
+}) => {
   const reduced = useReducedMotion();
   const [subMode, setSubMode] = useState<'main' | 'forge' | 'meditate'>('main');
   const [focusedForgeId, setFocusedForgeId] = useState<string | null>(null);
@@ -90,6 +101,8 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
 
   const held = spireHeldWeapons(run);
   const builds = buildSpireWeaponBuilds(run);
+  const equippedEvos = spireEquippedEvolutions(run);
+  const labTier = run.upgrades?.evolution_lab ?? 0;
   const forgeable = held.filter(w => (run.weaponLevels[w.id] ?? 1) < MAX_WEAPON_LEVEL);
   const availSkills = campfire.skillOptions.filter(id => !run.skillNodes.includes(id));
   const focusedWeapon = forgeable.find(w => w.id === focusedForgeId) ?? forgeable[0] ?? null;
@@ -231,7 +244,17 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
                   );
                 })}
               </View>
-              {focusedWeapon && <WeaponExplainer weapon={focusedWeapon} build={builds[focusedWeapon.id]} />}
+              {focusedWeapon && (
+                <WeaponExplainer
+                  weapon={focusedWeapon}
+                  build={builds[focusedWeapon.id]}
+                  evolutionMode="preview"
+                  allEvolutionsUnlocked
+                  equippedEvolutionId={equippedEvos[focusedWeapon.id]}
+                  beltSynergyIds={beltSynergyAttrSet(run.weapons, focusedWeapon.id)}
+                  evolutionLabTier={labTier}
+                />
+              )}
               <Btn small variant="secondary" label="Back" onPress={() => setSubMode('main')} />
             </View>
           ) : (
@@ -264,6 +287,7 @@ const SpireCampfire: React.FC<Props> = ({ run, campfire, onRest, onForge, onMedi
           <SpireBeltBar
             run={run}
             onReorder={onReorderWeapon}
+            onSelectEvolution={onSelectEvolution}
             title="INSPECT & REORDER BELT"
             compact
             testIDPrefix="spire-campfire-belt"

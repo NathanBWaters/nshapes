@@ -11,7 +11,7 @@
  */
 import { ARCANA } from '@/adventure/data/arcana';
 import { armoryBaseWeapon, resolveLegacyWeapon } from '@/adventure/data/armory';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS, WEAPON_EVOLUTION_MAP, evolutionsForWeapon } from '@/adventure/data/evolutions';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { MAIN_LEVELS } from '@/adventure/data/levels';
 import type { BattleOutcome, BattleRecord } from '@/adventure/history';
@@ -104,6 +104,9 @@ export interface NormalizedFightRow {
   weaponsPicked: string[];
   weaponsBought: string[];
   evolutions: string[];
+  equippedEvolutions?: Record<string, string>;
+  peakBaseDamage?: number | null;
+  synergyScoreTotal?: number | null;
   arcana: string[];
   funRating: FunRating | null;
   funTags: FunTag[];
@@ -152,6 +155,12 @@ export interface BalanceRow {
   id: string;
   name: string;
   category: BalanceCategory;
+  /** Owning Armory weapon ID for per-weapon evolution rows (`category === 'evolution'`). */
+  weaponId?: string;
+  /** Owning Armory weapon display name for per-weapon evolution rows. */
+  weaponName?: string;
+  /** Evolution slot index (0 = Evo A, 1 = Evo B, 2 = Evo C) for per-weapon evolution rows. */
+  slotIndex?: 0 | 1 | 2;
   usedCount: number;
   decidedCount: number;
   wins: number;
@@ -167,6 +176,14 @@ export interface BalanceRow {
   avgTriggeredShare: number;
   lowSample: boolean;
   status: BalanceStatus;
+}
+
+/** Side-by-side Evo A / B / C breakdown for a single Armory weapon in `/dev/analytics`. */
+export interface WeaponEvolutionGroupRow {
+  weaponId: string;
+  weaponName: string;
+  totalUsed: number;
+  slots: [BalanceRow | null, BalanceRow | null, BalanceRow | null];
 }
 
 export interface SegmentFunMetric {
@@ -221,6 +238,7 @@ export interface AnalyticsDashboardReport {
     weapons: BalanceRow[];
     fighters: BalanceRow[];
     evolutions: BalanceRow[];
+    evolutionsByWeapon: WeaponEvolutionGroupRow[];
     arcana: BalanceRow[];
   };
   enjoyment: {
@@ -252,7 +270,7 @@ const LEVEL_ORDER_MAP = new Map<string, { order: number; name: string; world: nu
 );
 
 const WEAPON_NAME_MAP = new Map<string, string>();
-const EVO_NAME_MAP = new Map<string, string>(EVOLUTION_RECIPES.map(e => [e.id, e.name]));
+const EVO_NAME_MAP = new Map<string, string>(WEAPON_EVOLUTIONS.map(e => [e.id, e.name]));
 const ARCANA_NAME_MAP = new Map<string, string>(ARCANA.map(a => [a.id, a.name]));
 
 const resolveWeaponName = (id: string): string => {
@@ -276,6 +294,35 @@ const asStringArray = (val: unknown): string[] => {
     }
   }
   return [];
+};
+
+const asStringRecord = (val: unknown): Record<string, string> => {
+  const out: Record<string, string> = {};
+  let obj: unknown = val;
+  if (typeof val === 'string' && (val.trim().startsWith('{') || val.trim().startsWith('['))) {
+    try {
+      obj = JSON.parse(val);
+    } catch {
+      return out;
+    }
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (typeof item === 'string' && item.includes(':')) {
+        const wId = item.slice(0, item.indexOf(':'));
+        if (wId) out[wId] = item;
+      }
+    }
+    return out;
+  }
+  if (obj && typeof obj === 'object') {
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof k === 'string' && k.length > 0 && typeof v === 'string' && v.length > 0) {
+        out[k] = v;
+      }
+    }
+  }
+  return out;
 };
 
 const isWinOutcome = (outcome: BattleOutcome): boolean => outcome === 'won' || outcome === 'survived';
@@ -389,6 +436,8 @@ export const normalizeBattleRecord = (
     weaponsPicked: [],
     weaponsBought: [],
     evolutions: [],
+    ...(b.equippedEvolutions ? { equippedEvolutions: { ...b.equippedEvolutions } } : {}),
+    ...(typeof b.peakBaseDamage === 'number' ? { peakBaseDamage: b.peakBaseDamage } : {}),
     arcana: b.replay?.arcana ?? [],
     funRating: b.funRating ?? null,
     funTags: (b.funTags ?? []).filter((t): t is FunTag => VALID_TAGS.has(t)),
@@ -500,6 +549,15 @@ export const normalizePostHogLikeEvent = (raw: Record<string, unknown>): Normali
     weaponsPicked: normalizeWeaponBag(asStringArray(p.weapons_picked)),
     weaponsBought: normalizeWeaponBag(asStringArray(p.weapons_bought)),
     evolutions: asStringArray(p.evolutions_forged ?? p.evolutionsForged),
+    ...(Object.keys(asStringRecord(p.equipped_evolutions ?? p.equippedEvolutions)).length > 0
+      ? { equippedEvolutions: asStringRecord(p.equipped_evolutions ?? p.equippedEvolutions) }
+      : {}),
+    ...(optNum(p.peak_base_damage ?? p.peakBaseDamage) !== null
+      ? { peakBaseDamage: optNum(p.peak_base_damage ?? p.peakBaseDamage) }
+      : {}),
+    ...(optNum(p.synergy_score_total ?? p.synergyScoreTotal) !== null
+      ? { synergyScoreTotal: optNum(p.synergy_score_total ?? p.synergyScoreTotal) }
+      : {}),
     arcana: asStringArray(p.arcana),
     funRating,
     funTags: asStringArray(p.fun_tags).filter((t): t is FunTag => VALID_TAGS.has(t)),
@@ -1075,10 +1133,18 @@ export const analyzeFights = (
         else if (funRate !== null && funRate < 0.58 && a.funRated >= 5) status = 'frustrating';
         else if (funRate !== null && funRate >= 0.8 && (adjustedWinDelta ?? 0) >= -0.04) status = 'crowd_pleaser';
 
+        const evoDef = category === 'evolution' ? WEAPON_EVOLUTION_MAP.get(id) : undefined;
         return {
           id,
           name: nameOf(id),
           category,
+          ...(evoDef
+            ? {
+                weaponId: evoDef.weaponId,
+                weaponName: resolveWeaponName(evoDef.weaponId),
+                slotIndex: evoDef.slotIndex,
+              }
+            : {}),
           usedCount: a.used,
           decidedCount: a.decided,
           wins: a.wins,
@@ -1103,6 +1169,27 @@ export const analyzeFights = (
   const fighters = buildBalanceTable('fighter', r => (r.fighter && r.fighter !== 'Unknown' ? [r.fighter] : []), id => id);
   const evolutions = buildBalanceTable('evolution', r => r.evolutions, id => EVO_NAME_MAP.get(id) ?? id);
   const arcana = buildBalanceTable('arcana', r => r.arcana, id => ARCANA_NAME_MAP.get(id) ?? id);
+
+  // Group per-weapon evolutions (Evo A / B / C side-by-side) for /dev/analytics
+  const evoGroupMap = new Map<string, WeaponEvolutionGroupRow>();
+  for (const row of evolutions) {
+    if (!row.weaponId || row.slotIndex === undefined) continue;
+    let grp = evoGroupMap.get(row.weaponId);
+    if (!grp) {
+      grp = {
+        weaponId: row.weaponId,
+        weaponName: row.weaponName ?? resolveWeaponName(row.weaponId),
+        totalUsed: 0,
+        slots: [null, null, null],
+      };
+      evoGroupMap.set(row.weaponId, grp);
+    }
+    grp.slots[row.slotIndex] = row;
+    grp.totalUsed += row.usedCount;
+  }
+  const evolutionsByWeapon = Array.from(evoGroupMap.values()).sort(
+    (a, b) => b.totalUsed - a.totalUsed || a.weaponName.localeCompare(b.weaponName)
+  );
 
   // --- Enjoyment vs Friction Diagnostics ---
   const funRateOf = (subset: readonly NormalizedFightRow[]): number | null => {
@@ -1180,7 +1267,7 @@ export const analyzeFights = (
     retention,
     journeyBreakdown,
     funnel,
-    balance: { weapons, fighters, evolutions, arcana },
+    balance: { weapons, fighters, evolutions, evolutionsByWeapon, arcana },
     enjoyment: {
       winFunRate: funRateOf(winRows),
       lossFunRate: funRateOf(lossRows),
@@ -1228,7 +1315,9 @@ export const generateSimulatedCohort = (
   const fighterNames = FIGHTERS.map(f => f.name);
   const earlyWeapons = ['blast-powder', 'flint-spark', 'mending-charm', 'fortunes-favor', 'oracle-eye', 'chrono-shard'];
   const lateWeapons = ['chain-reaction', 'chaos-shard', 'soul-harvest', 'prismatic-ray', 'grace-conduit', 'echo-stone'];
-  const allEvos = EVOLUTION_RECIPES.slice(0, 9).map(e => e.id);
+  const simWeaponEvos = new Map<string, string[]>(
+    [...earlyWeapons, ...lateWeapons].map(wId => [wId, evolutionsForWeapon(wId).map(e => e.id)])
+  );
   const allArcana = ARCANA.map(a => a.id);
 
   let fightSeq = 0;
@@ -1338,7 +1427,18 @@ export const generateSimulatedCohort = (
         const droughtMs = Math.round((outcome === 'lost' || outcome === 'left' ? 11_000 : 6_500) + rng() * 14_000);
         const closeCall = (outcome === 'won' && rng() < 0.34) || (outcome === 'lost' && rng() < 0.3);
         const diedWithHints = outcome === 'lost' && rng() < 0.55;
-        const evo = world >= 2 && rng() < 0.38 ? [pickOne(allEvos, rng)] : [];
+        const equippedEvos: Record<string, string> = {};
+        const evo: string[] = [];
+        if (world >= 2) {
+          for (const wId of weapons) {
+            const opts = simWeaponEvos.get(wId);
+            if (opts && opts.length > 0) {
+              const chosenEvo = pickOne(opts, rng);
+              equippedEvos[wId] = chosenEvo;
+              if (rng() < 0.35) evo.push(chosenEvo);
+            }
+          }
+        }
 
         let funRating: FunRating | null = null;
         const funTags: FunTag[] = [];
@@ -1390,6 +1490,9 @@ export const generateSimulatedCohort = (
           weaponsPicked: [picked],
           weaponsBought: [],
           evolutions: evo,
+          ...(Object.keys(equippedEvos).length > 0 ? { equippedEvolutions: equippedEvos } : {}),
+          peakBaseDamage: Math.round(14 + world * 12 + rng() * 24),
+          synergyScoreTotal: Math.round(6 + world * 8 + rng() * 16),
           arcana: arcanaPick,
           funRating,
           funTags,

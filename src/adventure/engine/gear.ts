@@ -36,16 +36,16 @@ import type { AttributeName, Card } from '@/types';
 import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
 import type { FightLogMathItem, GearState } from '../types';
 import type { TrickKind } from '../rules/types';
-import { TRICK_RULES } from '../data/rules';
+import { BASE_RULES, TRICK_RULES } from '../data/rules';
 import { getAdjacentIndices } from '@/utils/weaponEffects';
-import { dealDamage, emit, enqueue, foeMultiplier, GRID_COLS, hurt, mods, recycle, signalGrowth, touchable, updateCards, type Draft } from './fight';
+import { bumpSynergy, dealDamage, emit, enqueue, foeMultiplier, GRID_COLS, hurt, mods, notifyEvoEvent, recycle, signalGrowth, touchable, updateCards, type Draft } from './fight';
 import { allSets, differingAttributes, hasAnySet, isSelectable } from './sets';
 
 /** Traits the Collector's Album has a page for (background is a board dressing, not a page) */
 const ALBUM_TRAITS: readonly AttributeName[] = ['shape', 'color', 'number', 'shading'];
 export const albumTraits = (attributes: readonly AttributeName[]): AttributeName[] => attributes.filter(a => ALBUM_TRAITS.includes(a));
 /** Mini-stamp bonus damage for each intermediate Collector's Album page filled */
-export const ALBUM_PAGE_BONUS = 3;
+export const ALBUM_PAGE_BONUS = 6;
 
 const albumPagesFor = (d: Draft): AttributeName[] =>
   d.gear.albumPages ?? albumTraits(d.surge ? d.level.rules.attributes : d.attributes);
@@ -130,6 +130,10 @@ export const repairGlass = (d: Draft, callout = 'Glass Sword reforged!') => {
 };
 
 const shatterGlass = (d: Draft, why: string) => {
+  if (mods(d).unbreakableGlass) {
+    d.gear.glassSinceMs = d.elapsedMs;
+    return;
+  }
   // A reforged sword (its growth) takes the blow once and starts its clock again
   if (Math.round(mods(d).glassSpares ?? 0) > d.gear.glassSparesUsed) {
     d.gear.glassSparesUsed += 1;
@@ -209,6 +213,11 @@ export const gearSetBonus = (
     const times = TRICK_RULES.curseMultiplier + (m.curseMultiplierBonus ?? 0);
     multiplier *= times;
     emit(d, 'rule', times, `Curse broken ×${times}`);
+    if ((m.curseFlatDamage ?? 0) > 0) {
+      add(m.curseFlatDamage!, 'Cursed Idol!', undefined, 'cursed card flat bonus', 'weapon:cursed-idol');
+    }
+    bumpSynergy(d, 'hazards', 1);
+    notifyEvoEvent(d, { on: 'hazard', hazardKind: 'curse' });
     paid(d, 'curse');
     multItems.push({
       label: 'Cursed Idol',
@@ -217,21 +226,29 @@ export const gearSetBonus = (
       sourceRef: 'weapon:cursed-idol',
     });
   }
-  if (set.matched.some(c => c.isWild)) paid(d, 'wild');
+  if (set.matched.some(c => c.isWild)) {
+    bumpSynergy(d, 'prism', 1);
+    paid(d, 'wild');
+  }
   if (on(m.chainDamage) && set.matched.some(c => c.shackle && ids.has(c.shackle))) {
+    bumpSynergy(d, 'marks', 1);
     add(m.chainDamage, 'Chain Gang!', 'chain', 'matched linked chain cards', 'weapon:chain-gang');
   }
   if (on(m.thornDamage)) {
     const hits = set.matched.filter(c => c.thornAt !== undefined).length;
+    if (hits > 0) {
+      bumpSynergy(d, 'hazards', hits);
+      for (let k = 0; k < hits; k++) notifyEvoEvent(d, { on: 'hazard', hazardKind: 'thorn' });
+    }
     add(hits * m.thornDamage, 'Thorns', 'thorn', hits === 1 ? 'cleared a thorned card' : `cleared ${hits} thorned cards`, 'weapon:thorn-bush');
   }
   if (on(m.rustGold)) {
     // A rusty card can lose what it is worth, never more
-    const lost = set.matched.reduce((sum, c) => sum + Math.min(c.rust ?? 0, 1 + (c.bonusPoints ?? 0) + (c.charge ?? 0)), 0);
+    const basePts = BASE_RULES.cardBasePoints ?? 2;
+    const lost = set.matched.reduce((sum, c) => sum + Math.min(c.rust ?? 0, basePts + (c.bonusPoints ?? 0) + (c.charge ?? 0)), 0);
     add(-lost, 'Rust', undefined, 'rusty cards lost damage', 'weapon:rust');
     const gilded = set.matched.filter(c => c.rusted);
     if (gilded.length > 0) {
-      // Honor current rustGold (including active evolutions like Ancient Relic / Old Powder and growth) on ALREADY-gilded cards
       const targetGold = Math.round(m.rustGold);
       const extraGold = gilded.reduce((sum, c) => {
         const stamped = d.gear.rustGoldStamped?.[c.id];
@@ -241,34 +258,48 @@ export const gearSetBonus = (
       if (extraGold > 0) {
         add(extraGold, 'Golden Rust!', undefined, 'bonus golden rust value', 'weapon:rust');
       }
+      bumpSynergy(d, 'hazards', gilded.length);
       paid(d, 'rust');
     }
   }
   if (on(m.tarDamage) && set.slots.some(i => tarRows(d).includes(Math.floor(i / GRID_COLS)))) {
+    bumpSynergy(d, 'hazards', 1);
     add(m.tarDamage, 'Tar Pit', 'tar', 'matched in the sticky tar row', 'weapon:tar-pit');
   }
   if (on(m.decoyDamage) && set.matched.some(c => c.decoyOf && ids.has(c.decoyOf))) {
+    bumpSynergy(d, 'marks', 1);
     add(m.decoyDamage, 'Decoy found!', 'decoy', 'matched a decoy with its pair', 'weapon:decoy');
   }
   if (on(m.fuseDamage)) {
     const hits = set.matched.filter(c => c.fuseHot).length;
+    if (hits > 0) {
+      bumpSynergy(d, 'hazards', hits);
+      for (let k = 0; k < hits; k++) notifyEvoEvent(d, { on: 'hazard', hazardKind: 'fuse' });
+    }
     add(hits * m.fuseDamage, 'Short fuse', 'fuse', hits === 1 ? 'beat a hot fuse' : `beat ${hits} hot fuses`, 'weapon:long-fuse');
   }
-  if (set.matched.some(c => c.thawed)) paid(d, 'ice');
+  if (set.matched.some(c => c.thawed)) {
+    bumpSynergy(d, 'hazards', 1);
+    paid(d, 'ice');
+  }
   const chest = set.matched.find(c => c.chest !== undefined);
   if (chest) {
     const pts = chest.chest ?? 0;
+    bumpSynergy(d, 'marks', 1);
     add(pts, 'Greedy Chest!', 'chest', `chest saved +${pts} bonus damage`, 'weapon:greedy-chest');
   }
   if (on(m.potatoDamage) && set.matched.some(c => c.hot)) {
+    bumpSynergy(d, 'hazards', 1);
     add(m.potatoDamage, 'Hot Potato!', 'potato', 'matched the hot potato card', 'weapon:hot-potato');
   }
 
   if (on(m.magnetDamage) && set.matched.some(c => c.magnet)) {
+    bumpSynergy(d, 'marks', 1);
     add(m.magnetDamage, 'Magnet!', 'magnet', 'matched the magnetized card', 'weapon:magnet');
   }
   if (on(m.bountyDamage) && g.bounty) {
     const wanted = set.matched.filter(c => !c.isWild && valueOf(c, g.bounty!.attribute) === g.bounty!.value).length;
+    if (wanted > 0) bumpSynergy(d, 'marks', wanted);
     add(wanted * m.bountyDamage, 'Bounty!', 'bounty', `${wanted} wanted card${wanted === 1 ? '' : 's'}`, 'weapon:bounty-poster');
   }
   if (on(m.missingHeartDamage)) {
@@ -292,6 +323,7 @@ export const gearSetBonus = (
   if (on(m.oddOneOutDamage) && !set.graceUsed) {
     const n = d.attributes.length;
     if (set.diffCount === 1 || (n >= 4 && set.diffCount === n - 1)) {
+      bumpSynergy(d, 'prism', 1);
       add(m.oddOneOutDamage, 'Odd one out!', 'odd', set.diffCount === 1 ? 'only 1 trait differed' : 'only 1 trait matched', 'weapon:odd-one-out');
     }
   }
@@ -302,6 +334,7 @@ export const gearSetBonus = (
     const pages = albumPagesFor(d);
     const page = set.graceUsed ? null : albumPageOf(set.matched, d.attributes, g.album, pages);
     if (page) {
+      bumpSynergy(d, 'prism', 1);
       g.album = [...g.album, page];
       if (pages.every(a => g.album.includes(a))) {
         g.album = [];
@@ -316,7 +349,7 @@ export const gearSetBonus = (
     // The first Set of a wave starts the rope; after that, stay next to your last Set
     if (g.lastSetSlots.length === 0 || set.slots.some(i => touching(d, g.lastSetSlots).has(i))) {
       add(m.tightropeDamage, 'Tightrope', 'tightrope', 'stayed on the rope', 'weapon:tightrope');
-    } else {
+    } else if (!m.noOffRopePenalty) {
       const off = Math.min(1, TRICK_RULES.offRopeMultiplier + (m.offRopeBonus ?? 0));
       multiplier *= off;
       if (off < 1) {
@@ -355,6 +388,8 @@ export const resolveTwins = (d: Draft, matched: Card[]) => {
     const idx = d.board.findIndex(c => c.id === id);
     if (idx < 0 || !touchable(d, idx)) continue;
     const rawTwin = mods(d).twinDamage ?? 0;
+    d._turnCardsDestroyed += 1;
+    bumpSynergy(d, 'destruction', 1);
     emit(d, 'hit', dealDamage(d, rawTwin * d._setMultiplier * foeMultiplier(d)), 'Twin', { slots: [idx], cards: [d.board[idx]] });
     paid(d, 'twin');
     recycle(d, [idx]);
@@ -402,13 +437,16 @@ export const afterSetGear = (d: Draft, set: GearSet) => {
   }
   if (on(m.chestGrowth)) updateCards(d, sitting.filter(i => d.board[i].chest !== undefined), c => ({ ...c, chest: (c.chest ?? 0) + m.chestGrowth! }));
   if (set.auto) return;
-  // Ice Block: every Set of yours chips at it
+  // Ice Block: every Set of yours chips at it; thawing grants Holo shine
+  let thawedCount = 0;
   updateCards(d, d.board.map((c, i) => ((c.frozen ?? 0) > 0 ? i : -1)).filter(i => i >= 0), c => {
     const frozen = (c.frozen ?? 0) - 1;
     if (frozen > 0) return { ...c, frozen };
+    thawedCount += 1;
     const { frozen: _f, locked: _l, ...rest } = c;
-    return { ...rest, thawed: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(m.frozenDamage ?? 0) };
+    return { ...rest, thawed: true, holo: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(m.frozenDamage ?? 0) };
   });
+  if (thawedCount > 0) bumpSynergy(d, 'holo', thawedCount);
   g.mirrorMemory = [g.lastSetSlots, ...g.mirrorMemory].filter(slots => slots.length > 0).slice(0, 3);
   g.lastSetSlots = set.slots;
   // Glass Sword: if shattered, landing a Rainbow Set or 3 consecutive clean Sets reforges it!
@@ -466,13 +504,17 @@ export const tickGear = (d: Draft) => {
   if (due.length) {
     updateCards(d, due, c => {
       const { fogFlipAt: _at, fogBonus, ...rest } = c;
-      return rest.isFaceDown ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(fogBonus ?? 0) } : rest;
+      return rest.isFaceDown
+        ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(fogBonus ?? 0), ...(m.fogHolo ? { holo: true } : {}) }
+        : rest;
     });
+    bumpSynergy(d, 'hazards', due.length);
+    if (m.fogHolo) bumpSynergy(d, 'holo', due.length);
     emit(d, 'rule', due.length, 'The fog lifts', { slots: due });
     paid(d, 'fog');
   }
 
-  // Cursed Idol: a curse that runs out leaves a ×2 card, or moves to a neighbour
+  // Cursed Idol: a curse that runs out leaves a boosted doubler card, or moves to a neighbour
   for (const id of d.board.filter(c => c.cursedUntil !== undefined && d.elapsedMs >= c.cursedUntil).map(c => c.id)) {
     const i = d.board.findIndex(c => c.id === id);
     const next = getAdjacentIndices(i, d.board.length).filter(j => touchable(d, j) && isSelectable(d.board[j]) && !d.board[j].doubler);
@@ -482,7 +524,7 @@ export const tickGear = (d: Draft) => {
       return spreads ? rest : { ...rest, doubler: true };
     });
     if (spreads) updateCards(d, [d._rng.pick(next)], c => ({ ...c, locked: true, cursedUntil: d.elapsedMs + TRICK_RULES.curseMs }));
-    emit(d, 'rule', undefined, spreads ? 'The curse spreads' : 'Curse lifted: ×2 card', { slots: [i] });
+    emit(d, 'rule', undefined, spreads ? 'The curse spreads' : `Curse lifted: ×${TRICK_RULES.curseMultiplier} card`, { slots: [i] });
   }
 
   // Thorn Bush: thorns left too long bite
@@ -690,18 +732,20 @@ export const advanceTricks = (d: Draft, ms: number) => {
         if (slot >= 0) liftedFog.push(slot);
         const { fogFlipAt: _at, fogBonus, ...rest } = c;
         return rest.isFaceDown
-          ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(fogBonus ?? 0) }
+          ? { ...rest, isFaceDown: false, bonusPoints: (rest.bonusPoints ?? 0) + Math.round(fogBonus ?? 0), ...(m.fogHolo ? { holo: true } : {}) }
           : rest;
       }
       return { ...c, fogFlipAt: nextAt };
     });
     if (liftedFog.length) {
+      bumpSynergy(d, 'hazards', liftedFog.length);
+      if (m.fogHolo) bumpSynergy(d, 'holo', liftedFog.length);
       emit(d, 'rule', liftedFog.length, 'The fog lifts', { slots: liftedFog });
       paid(d, 'fog');
     }
   }
 
-  // 2. Cursed Idol: shorten cursedUntil; any curse that finishes becomes a guaranteed ×2 doubler (no penalty spread)
+  // 2. Cursed Idol: shorten cursedUntil; any curse that finishes becomes a guaranteed boosted card (no penalty spread)
   const cursedIdx = d.board.map((c, i) => (c.cursedUntil !== undefined ? i : -1)).filter(i => i >= 0);
   const liftedCurse: number[] = [];
   if (cursedIdx.length) {
@@ -715,7 +759,7 @@ export const advanceTricks = (d: Draft, ms: number) => {
       }
       return { ...c, cursedUntil: nextUntil };
     });
-    if (liftedCurse.length) emit(d, 'rule', undefined, 'Curse lifted: ×2 card', { slots: liftedCurse });
+    if (liftedCurse.length) emit(d, 'rule', undefined, `Curse lifted: ×${TRICK_RULES.curseMultiplier} card`, { slots: liftedCurse });
   }
 
   // 3. Long Fuse: pull un-hot fuses into the bonus hot window without burning them out as duds
@@ -735,12 +779,15 @@ export const advanceTricks = (d: Draft, ms: number) => {
   // 4. Ice Block: chip frozen counter toward thaw
   const iceIdx = d.board.map((c, i) => ((c.frozen ?? 0) > 0 ? i : -1)).filter(i => i >= 0);
   if (iceIdx.length) {
+    let thawed = 0;
     updateCards(d, iceIdx, c => {
       const frozen = (c.frozen ?? 0) - steps;
       if (frozen > 0) return { ...c, frozen };
+      thawed += 1;
       const { frozen: _f, locked: _l, ...rest } = c;
-      return { ...rest, thawed: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(m.frozenDamage ?? 0) };
+      return { ...rest, thawed: true, holo: true, bonusPoints: (c.bonusPoints ?? 0) + Math.round(m.frozenDamage ?? 0) };
     });
+    if (thawed > 0) bumpSynergy(d, 'holo', thawed);
   }
 
   // 5. Rust: age rusting cards toward golden transformation
@@ -807,6 +854,7 @@ export const addMagnet = (d: Draft, count: number) => {
   const chosen = [...d._rng.shuffle(prioritized), ...d._rng.shuffle(fallback)].slice(0, count);
   if (chosen.length === 0) return;
   updateCards(d, chosen, c => ({ ...c, magnet: true }));
+  bumpSynergy(d, 'marks', chosen.length);
   emit(d, 'rule', chosen.length, 'Magnetized!', { slots: chosen });
 };
 

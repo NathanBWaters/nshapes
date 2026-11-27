@@ -29,8 +29,8 @@ export interface DailyMutatorModifiers {
   shopPriceScale: number;
   parrySpeedScale: number;
   parryBonusCoins: number;
-  extraEvolutionLikelihood: number;
-  extraEvolutionCap: number;
+  extraEvolutionDurationMs: number;
+  extraEvolutionChargeBonus: number;
   startingCoinsDelta: number;
   startingGracesDelta: number;
   startingHintsDelta: number;
@@ -45,8 +45,8 @@ const DEFAULT_MODS: DailyMutatorModifiers = {
   shopPriceScale: 1,
   parrySpeedScale: 1,
   parryBonusCoins: 0,
-  extraEvolutionLikelihood: 0,
-  extraEvolutionCap: 0,
+  extraEvolutionDurationMs: 0,
+  extraEvolutionChargeBonus: 0,
   startingCoinsDelta: 0,
   startingGracesDelta: 0,
   startingHintsDelta: 0,
@@ -59,8 +59,8 @@ export const dailyMutatorModifiers = (id?: SummitDailyMutatorId | null): DailyMu
     case 'catalyst_surge':
       return {
         ...DEFAULT_MODS,
-        extraEvolutionLikelihood: 12,
-        extraEvolutionCap: 1,
+        extraEvolutionDurationMs: 4000,
+        extraEvolutionChargeBonus: 1,
       };
     case 'double_elites':
       return {

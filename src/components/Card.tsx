@@ -1,12 +1,12 @@
 import React, { createContext, memo, useCallback, useContext, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
-import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Line, Pattern, Polygon, Rect } from 'react-native-svg';
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Svg, { Circle, Defs, Line, Path, Pattern, Polygon, Rect } from 'react-native-svg';
 import { Card as CardType, Background } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { MONO_FONT } from '@/utils/fonts';
 import { selectionHaptic } from '@/utils/haptics';
-import { EASE, SCALE } from '@/utils/motion';
+import { EASE, MS, SCALE } from '@/utils/motion';
 import {
   cardBgPatternMeta,
   cardColorCode,
@@ -29,11 +29,10 @@ import { useBurnTimer } from '@/hooks/useBurnTimer';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Icon, { type IconName } from './Icon';
 
-/** Board-level static visual overlays (Mirror Shard, Tightrope, Catalyst target, Hot Potato timestamp, 5th background attribute). */
+/** Board-level static visual overlays (Mirror Shard, Tightrope, Hot Potato timestamp, 5th background attribute). */
 export interface CardBoardOverlay {
   mirrorCardIds?: ReadonlySet<string>;
   tightropeCardIds?: ReadonlySet<string>;
-  catalystRecipeName?: string | null;
   potatoAtMs?: number;
   /** True when the 5th `background` attribute is active so White/Tinted/Dark codes render consistently in Colorblind Mode. */
   backgroundAttributeActive?: boolean;
@@ -254,6 +253,29 @@ const SlotEarTab: React.FC<{
   );
 });
 
+/**
+ * Static diagonal crystalline prism sheen for Holo cards (0% battery, zero outer
+ * border/outline so selection border stays exclusive, center shapes stay 100% clear).
+ */
+const HoloPrismSheen: React.FC<{ darkStock: boolean }> = memo(function HoloPrismSheen({ darkStock }) {
+  const bandFill = darkStock ? 'rgba(196, 181, 253, 0.16)' : 'rgba(124, 58, 237, 0.10)';
+  const gleamFill = darkStock ? 'rgba(244, 114, 182, 0.14)' : 'rgba(236, 72, 153, 0.08)';
+  const starFill = darkStock ? 'rgba(233, 213, 255, 0.55)' : 'rgba(124, 58, 237, 0.28)';
+  return (
+    <View testID="card-holo-sheen" pointerEvents="none" style={styles.patternLayer}>
+      <Svg width="100%" height="100%" viewBox="0 0 100 130" preserveAspectRatio="none">
+        {/* Soft corner diagonal sheen ribbons tucked away from central shapes */}
+        <Polygon points="56,0 100,0 100,44" fill={bandFill} />
+        <Polygon points="42,0 52,0 100,48 100,58" fill={gleamFill} />
+        <Polygon points="0,92 38,130 0,130" fill={bandFill} />
+        <Polygon points="0,82 48,130 40,130 0,90" fill={gleamFill} />
+        {/* Crisp four-point prism glint near lower-right edge */}
+        <Path d="M88 102 L90 107 L95 109 L90 111 L88 116 L86 111 L81 109 L86 107 Z" fill={starFill} />
+      </Svg>
+    </View>
+  );
+});
+
 /** The snare icon points down; turn it to face the card the snare points at. */
 const SNARE_ROTATION: Record<NonNullable<CardType['snare']>, string> = { down: '0deg', left: '90deg', up: '180deg', right: '-90deg' };
 
@@ -288,8 +310,6 @@ interface CardProps {
   mirrorSlot?: boolean;
   /** Optional direct Tightrope valid slot highlight override */
   tightropeSlot?: boolean;
-  /** Optional direct Catalyst target Evolution name override */
-  catalystLabel?: string | null;
   /** Optional direct override indicating the 5th `background` attribute is active */
   showBackgroundCode?: boolean;
   /** Adventure's Effects switch: off skips the finger-down scale squish while keeping instant haptics */
@@ -313,7 +333,6 @@ const Card: React.FC<CardProps> = ({
   potatoAtMs,
   mirrorSlot,
   tightropeSlot,
-  catalystLabel,
   showBackgroundCode,
   effects = true,
 }) => {
@@ -327,7 +346,6 @@ const Card: React.FC<CardProps> = ({
   const isClickDisabled = disabled || isUnselectable;
   const isMirrorSlot = (mirrorSlot ?? boardOverlay.mirrorCardIds?.has(card.id) ?? false) && !isDud && !isFaceDown;
   const isTightropeSlot = (tightropeSlot ?? boardOverlay.tightropeCardIds?.has(card.id) ?? false) && !isDud && !isFaceDown;
-  const resolvedCatalystLabel = catalystLabel !== undefined ? catalystLabel : (boardOverlay.catalystRecipeName ?? null);
   const resolvedPotatoAtMs = potatoAtMs !== undefined ? potatoAtMs : boardOverlay.potatoAtMs;
   const bgAttrActive =
     showBackgroundCode ??
@@ -379,6 +397,26 @@ const Card: React.FC<CardProps> = ({
   // [FX-25]: 60fps GPU burn progress overlay opacity driven directly by Reanimated SharedValue
   const fireOverlayStyle = useAnimatedStyle(() => ({
     opacity: burnProgress.value * 0.3,
+  }));
+
+  // 1-shot GPU pop when a Holo card spawns (zero infinite loops, 0% idle battery)
+  const holoPop = useSharedValue(1);
+  useEffect(() => {
+    if (!card.holo || !allowPressMotion) {
+      cancelAnimation(holoPop);
+      holoPop.value = 1;
+      return;
+    }
+    holoPop.value = 0.82;
+    holoPop.value = withSequence(
+      withTiming(SCALE.pop, { duration: Math.round(MS.feedback * 0.6), easing: EASE.pop }),
+      withTiming(1, { duration: Math.round(MS.feedback * 0.6), easing: EASE.ui })
+    );
+    return () => cancelAnimation(holoPop);
+  }, [card.holo, allowPressMotion, holoPop]);
+
+  const holoBadgeStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: holoPop.value }],
   }));
 
   // Desktop fine-pointer hover glow (shadow only; borders/outlines are strictly for selection)
@@ -446,8 +484,13 @@ const Card: React.FC<CardProps> = ({
       return cardStyles;
     }
 
+    // Holo card soft lavender wash on default/white stock (keeps Blueprint Mist & Charcoal stocks distinct, zero outer border!)
+    if (card.holo && (!card.background || card.background === 'white') && !isHint) {
+      cardStyles.push(styles.holoLightBg);
+    }
+
     // IMPORTANT: Borders/outlines are EXCLUSIVELY reserved for selection state.
-    // Bombs, countdowns, fire, mirror, and tightrope NEVER override card borders.
+    // Bombs, countdowns, fire, mirror, tightrope, holo, and marked NEVER override card borders.
     if (selected) {
       cardStyles.push(styles.selected);
     }
@@ -587,13 +630,13 @@ const Card: React.FC<CardProps> = ({
       priority: number,
       icon: IconName,
       iconColor: string,
-      opts?: { rotate?: string; label?: string }
+      opts?: { rotate?: string; label?: string; testID?: string }
     ) => {
       chips.push({
         key,
         priority,
         node: (
-          <View key={key} style={styles.stateIndicator}>
+          <View key={key} testID={opts?.testID} style={styles.stateIndicator}>
             <View style={opts?.rotate ? { transform: [{ rotate: opts.rotate }] } : undefined}>
               <Icon name={icon} size={CARD_HAZARD_ICON_SIZE} color={iconColor} noShadow />
             </View>
@@ -649,7 +692,10 @@ const Card: React.FC<CardProps> = ({
       pushIconChip('hot', 34, 'delapouite/potato', '#C2410C');
     }
 
-    // Priority 4: Passive Marks (Magnet / Bounty / Chest / Twin / Connected)
+    // Priority 4: Passive Marks (Marked / Magnet / Bounty / Chest / Twin / Connected)
+    if (card.marked) {
+      pushIconChip('marked', 39, 'lorc/archery-target', '#DC2626', { testID: 'card-marked-badge' });
+    }
     if (card.magnet) {
       pushIconChip('magnet', 40, 'lorc/magnet', COLORS.redSurface);
     }
@@ -721,7 +767,7 @@ const Card: React.FC<CardProps> = ({
     <Animated.View testID="card-press-wrap" style={[styles.pressRoot, pressAnimStyle]}>
     <Pressable
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
-      accessibilityLabel={`${number} ${spokenColor} ${shading} ${spokenShape}${spokenBg ? ` on ${spokenBg}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? (resolvedCatalystLabel ? (resolvedCatalystLabel === 'Pick Evo' ? ', evolution choice catalyst' : `, catalyst for ${resolvedCatalystLabel}`) : ', evolution ready') : ', dormant catalyst') : ''}${isMirrorSlot ? ', mirror slot' : ''}${isTightropeSlot ? ', on tightrope' : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
+      accessibilityLabel={`${number} ${spokenColor} ${shading} ${spokenShape}${spokenBg ? ` on ${spokenBg}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.holo && visible ? ', holo card, plus 4 base damage and 1.2x multiplier' : ''}${card.marked && visible ? ', marked' : ''}${isMirrorSlot ? ', mirror slot' : ''}${isTightropeSlot ? ', on tightrope' : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
       accessibilityState={{ selected: Boolean(selected) }}
       style={[
         getCardStyle(),
@@ -744,6 +790,9 @@ const Card: React.FC<CardProps> = ({
       {showBgMicroTag && bgMeta.pattern !== 'none' && (
         <ColorblindBgCornerPattern pattern={bgMeta.pattern} />
       )}
+
+      {/* Holo static prism corner sheen (zero card outer border — borders stay exclusive to selection) */}
+      {!!card.holo && visible && <HoloPrismSheen darkStock={card.background === 'charcoal'} />}
 
       {/* Mirror Shard & Tightrope non-border top-corner triangular ear-tabs (selection border stays exclusive) */}
       {isMirrorSlot && <SlotEarTab side="left" color="#0284C7" testID="card-mirror-frame" />}
@@ -813,48 +862,16 @@ const Card: React.FC<CardProps> = ({
         </View>
       )}
 
-      {/* ZONE 3 (Top-Right): Hidden Evolution Catalyst ONLY (zero collision with armor health pips) */}
-      {!!card.hasEvolutionItem && visible && (
-        <>
-          <View
-            style={[styles.catalystBackdrop, { opacity: card.evolutionReady ? 0.24 : 0.14 }]}
-            pointerEvents="none"
-          >
-            <Icon
-              name="lorc/crystal-shine"
-              size={34}
-              color={card.evolutionReady ? '#D97706' : '#7C3AED'}
-              noShadow
-            />
-          </View>
-          <View
-            testID="card-evolution-catalyst"
-            style={[
-              styles.badge,
-              styles.badgeTopRight,
-              card.evolutionReady ? styles.catalystBadgeReady : styles.catalystBadgeDormant,
-              resolvedCatalystLabel ? (hasTopLeftBadges ? styles.catalystBadgeWithCoin : styles.catalystBadgeNamed) : null,
-            ]}
-            pointerEvents="none"
-          >
-            <Icon
-              name="lorc/crystal-shine"
-              size={10}
-              color={card.evolutionReady ? COLORS.deepOnyx : '#5B21B6'}
-              noShadow
-            />
-            {card.evolutionReady && (
-              <Text
-                testID="card-catalyst-name"
-                style={styles.catalystBadgeText}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {resolvedCatalystLabel || 'EVO'}
-              </Text>
-            )}
-          </View>
-        </>
+      {/* ZONE 3 (Top-Right): High-contrast Holo Prism badge ONLY (zero collision with armor health pips) */}
+      {!!card.holo && visible && (
+        <Animated.View
+          testID="card-holo-badge"
+          style={[styles.badge, styles.badgeTopRight, styles.holoBadge, holoBadgeStyle]}
+          pointerEvents="none"
+        >
+          <Icon name="delapouite/sparkles" size={10} color="#FFFFFF" noShadow />
+          <Text style={styles.holoBadgeText} numberOfLines={1}>HOLO</Text>
+        </Animated.View>
       )}
 
       {/* ZONE 5 (Bottom-Right): Power / Charge bonus damage badge */}
@@ -1123,41 +1140,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.deepOnyx,
   },
-  catalystBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
+  holoLightBg: {
+    backgroundColor: '#FAF5FF',
   },
-  catalystBadgeDormant: {
+  holoBadge: {
     flexDirection: 'row',
     gap: 2,
-    backgroundColor: '#EDE9FE',
-    borderColor: '#6D28D9',
-  },
-  catalystBadgeReady: {
-    flexDirection: 'row',
-    gap: 2,
-    backgroundColor: COLORS.actionYellow,
-    borderColor: COLORS.deepOnyx,
-  },
-  catalystBadgeNamed: {
-    maxWidth: '88%',
+    height: 18,
+    minWidth: 0,
     paddingHorizontal: 4,
+    backgroundColor: '#7C3AED',
+    borderColor: '#4C1D95',
   },
-  catalystBadgeWithCoin: {
-    maxWidth: '58%',
-    paddingHorizontal: 4,
-  },
-  catalystBadgeText: {
+  holoBadgeText: {
     flexShrink: 1,
-    fontSize: 8,
+    fontSize: 8.5,
     fontWeight: '900',
-    color: COLORS.deepOnyx,
-    letterSpacing: 0.3,
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
   },
   slotEarTab: {
     position: 'absolute',
@@ -1518,7 +1518,6 @@ const areCardPropsEqual = (prev: CardProps, next: CardProps): boolean =>
   prev.potatoAtMs === next.potatoAtMs &&
   prev.mirrorSlot === next.mirrorSlot &&
   prev.tightropeSlot === next.tightropeSlot &&
-  prev.catalystLabel === next.catalystLabel &&
   prev.showBackgroundCode === next.showBackgroundCode &&
   prev.effects === next.effects &&
   prev.onClick === next.onClick &&

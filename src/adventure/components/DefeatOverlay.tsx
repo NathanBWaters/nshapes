@@ -7,7 +7,7 @@
  * `fight_ended` telemetry and offering:
  *   - Cause of defeat + near-miss readout ("Prickle had just 4 HP left!")
  *   - Pre-`1-8` "Closest Yet!" foe-damage progress bar + hidden coin purse note
- *   - Context-aware `diagnoseResultTip` + 1-tap "Arm <Recipe> & Retry" / Skill Tree / Workshop
+ *   - Context-aware `diagnoseResultTip` + 1-tap "Tune Evolutions" / Skill Tree / Workshop CTA
  *   - Optional Friendly Tailwind relief toggle (`consecutiveLosses >= 2`)
  *   - Compact links to Full Breakdown (`LevelResults`), Camp, and Map
  *
@@ -38,9 +38,8 @@ export interface DefeatOverlayProps {
   result: ResultApplication;
   onRetry: () => void;
   onFullBreakdown: () => void;
-  onCamp: (tab?: 'fighters' | 'workshop') => void;
+  onCamp: (tab?: 'fighters' | 'workshop' | 'armory' | 'bounties') => void;
   onMap: () => void;
-  onArmRecipeAndRetry?: (recipeId: string) => void;
   onToggleTailwind?: (active: boolean) => void;
 }
 
@@ -59,7 +58,6 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
   onFullBreakdown,
   onCamp,
   onMap,
-  onArmRecipeAndRetry,
   onToggleTailwind,
 }) => {
   const reduced = useReducedMotion();
@@ -139,8 +137,8 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
     const qa = diagnostic?.quickAction;
     if (!qa) return;
     sfx('confirm');
-    if (qa.kind === 'arm_recipe' && qa.payload && onArmRecipeAndRetry) {
-      onArmRecipeAndRetry(qa.payload);
+    if (qa.kind === 'open_armory') {
+      onCamp('armory');
     } else if (qa.kind === 'open_tree') {
       onCamp('fighters');
     } else if (qa.kind === 'open_workshop') {
@@ -233,7 +231,7 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
                 >
                   <Icon
                     name={
-                      diagnostic.quickAction.kind === 'arm_recipe'
+                      diagnostic.quickAction.kind === 'open_armory'
                         ? 'lorc/crystal-shine'
                         : diagnostic.quickAction.kind === 'open_tree'
                           ? 'lorc/flat-star'

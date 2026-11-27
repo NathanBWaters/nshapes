@@ -164,6 +164,19 @@ export const fightEventProps = (
   const spire = extras.spire;
   const tailwindActive = Boolean(extras.tailwindActive ?? run.tailwindActive ?? false);
   const cauldronWager: CauldronWagerTier = extras.cauldronWager ?? run.cauldronWager ?? 0;
+
+  const equippedEvolutions: Record<string, string> = {};
+  for (const w of run.weapons) {
+    const evoId = run.equippedEvolutions?.[w.id] ?? record.equippedEvolutions?.[w.id];
+    if (typeof evoId === 'string' && evoId.length > 0) equippedEvolutions[w.id] = evoId;
+  }
+  const peakBaseDamage = Math.round(run.fightMetrics?.maxBaseDamage ?? record.peakBaseDamage ?? 0);
+  const synergyScoreTotal = Object.values(run.synergy ?? {}).reduce(
+    (sum, v) => sum + (typeof v === 'number' && Number.isFinite(v) ? v : 0),
+    0
+  );
+  const weaponEvosTriggered: Record<string, number> = { ...(run.fightMetrics?.weaponEvos ?? {}) };
+
   return {
     fight_id: fightId,
     mode: spire ? 'spire' : 'adventure',
@@ -201,6 +214,8 @@ export const fightEventProps = (
     dpm: record.dpm,
     biggest_hit: record.biggestHit,
     biggest_hit_share: biggestHitShare,
+    peak_base_damage: peakBaseDamage,
+    synergy_score_total: synergyScoreTotal,
     triggered_damage: triggeredDamage,
     triggered_damage_share: triggeredDamageShare,
     sets: record.sets,
@@ -221,8 +236,9 @@ export const fightEventProps = (
     graces_used: run.roundStats?.gracesUsed ?? 0,
     coins: record.coins,
     evolutions: record.evolutions,
-    evolutions_forged: run.forgedRecipes,
-    power: record.power ?? null,
+    evolutions_forged: run.forgedEvolutions ?? [],
+    equipped_evolutions: equippedEvolutions,
+    weapon_evos_triggered: weaponEvosTriggered,
     waves_reached: run.wave,
     xp_level: run.xpLevel,
     weapons: record.weapons,

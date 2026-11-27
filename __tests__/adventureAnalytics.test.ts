@@ -6,14 +6,14 @@
  * pressure equity, and Arcana EV + survival bounds).
  *
  * Full Atlas mode (`BALANCE_ATLAS=1` / `npm run balance:atlas`): sweeps all 64
- * weapons (8D behavioral uniqueness + MAP-Elites + Snowball trajectories), all
- * C(64,2) = 2,016 weapon pairs, all 208 evolutions, all 6 fighters × 64 weapons,
+ * weapons (8D behavioral uniqueness + MAP-Elites + Synergy trajectories), all
+ * C(64,2) = 2,016 weapon pairs, all 192 per-weapon evolutions, all 6 fighters × 64 weapons,
  * all 8 Arcana + 28 Arcana pairs, Covering-Array endgame builds, and all 59
  * campaign levels, writing `docs/balance-analytics.json`.
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { benches, recipeLifts, synergy } from '@/adventure/balance/lab';
+import { benches, evolutionLifts, synergy } from '@/adventure/balance/lab';
 import {
   measureArcanaMatrix,
   measureFighterMatrix,
@@ -24,7 +24,7 @@ import {
   solveRidge,
 } from '@/adventure/balance/analytics';
 import { ALL_ARMORY_WEAPON_IDS } from '@/adventure/data/armory';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
 
 const FULL = !!process.env.BALANCE_ATLAS;
 const SNAPSHOT_OUT = process.env.SNAPSHOT_OUT;
@@ -74,31 +74,34 @@ describe('analytics primitives & pressure bench', () => {
     expect(pb.save.armory.length).toBe(ALL_ARMORY_WEAPON_IDS.length);
   });
 
-  it('keeps tuned edge-case evolutions and ricochet pairs inside healthy bands', () => {
+  it('keeps representative per-weapon evolutions and ricochet pairs inside healthy bands', () => {
     const late = benches().late;
-    const rows = recipeLifts(late, 'average', 14, [
-      'heart-pinata',
-      'lucky-break',
-      'gold-detector',
-      'reverb',
-      'standing-ovation',
-      'body-double',
-      'deep-learning',
+    const rows = evolutionLifts(late, 'average', 10, [
+      'blast-powder:cluster-charge',
+      'mending-charm:sanctuary-pulse',
+      'twin-seed:burning-twins',
+      'echo-stone:resonance-wave',
+      'encore-mask:second-act',
+      'understudy:dress-rehearsal',
+      'wisdom-chain:compound-dividend',
     ]);
+    expect(rows).toHaveLength(7);
     for (const r of rows) {
       expect({ id: r.id, ratio: r.ratio, ok: r.ratio >= 1.04 }).toEqual({ id: r.id, ratio: r.ratio, ok: true });
-      if (!r.pair.includes('encore-mask')) {
-        expect({ id: r.id, ratio: r.ratio, ok: r.ratio <= 2.6 }).toEqual({ id: r.id, ratio: r.ratio, ok: true });
-      }
-      expect({ id: r.id, ruleLift: r.ruleLift, ok: r.ruleLift >= 1.04 && r.ruleLift <= 1.85 }).toEqual({
+      expect({ id: r.id, ratio: r.ratio, ok: r.ratio <= 2.6 }).toEqual({ id: r.id, ratio: r.ratio, ok: true });
+      expect({ id: r.id, ruleLift: r.ruleLift, ok: r.ruleLift >= 1.02 && r.ruleLift <= 2.2 }).toEqual({
         id: r.id,
         ruleLift: r.ruleLift,
         ok: true,
       });
-      expect({ id: r.id, starts: r.starts, ok: r.starts >= 0.15 }).toEqual({ id: r.id, starts: r.starts, ok: true });
+      expect({ id: r.id, triggers: r.triggersPerFight, ok: r.triggersPerFight >= 0.15 }).toEqual({
+        id: r.id,
+        triggers: r.triggersPerFight,
+        ok: true,
+      });
       expect({ id: r.id, deadRules: r.deadRules }).toEqual({ id: r.id, deadRules: [] });
     }
-    // Chaos Shard + Understudy no longer hits 100% deterministic full-board ricochet wipe
+    // Chaos Shard + Understudy stays inside healthy synergy bounds
     expect(synergy(late, 'chaos-shard', 'understudy', 'average', 6)).toBeLessThan(3.5);
   });
 
@@ -161,7 +164,7 @@ describe('analytics primitives & pressure bench', () => {
       weaponRuns: 8,
       buildCount: 8,
       pairRuns: 3,
-      recipeRuns: 6,
+      evoRuns: 6,
       fighterRuns: 6,
       arcanaRuns: 6,
       coveringPasses: 14,
@@ -174,7 +177,7 @@ describe('analytics primitives & pressure bench', () => {
     const nWeapons = ALL_ARMORY_WEAPON_IDS.length;
     expect(atlas.weaponsSuite.weapons.length).toBe(nWeapons);
     expect(atlas.pairSuite.totalPairs).toBe((nWeapons * (nWeapons - 1)) / 2);
-    expect(atlas.pairSuite.recipes.length).toBe(EVOLUTION_RECIPES.length);
+    expect(atlas.pairSuite.evolutions.length).toBe(WEAPON_EVOLUTIONS.length);
     expect(atlas.fighterSuite.cells.length).toBe(6 * nWeapons);
     expect(atlas.arcanaSuite.solo.length).toBe(8);
     expect(atlas.arcanaSuite.pairs.length).toBe(28);

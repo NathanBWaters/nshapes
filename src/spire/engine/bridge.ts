@@ -4,18 +4,19 @@
  * Converts a `SpireRun` + `SpireEncounter` into a standard `LevelDef`, a
  * virtual `AdventureSave`, `RunOverrides`, and `FeatureFlag` set so EVERY
  * Summit fight — and every pre-fight stat calculation — runs through the exact
- * same `startingLoadout`, `runReducer`, `AdventureRun`, `UPGRADES`, 208
- * Evolutions, Set-Parrying, Multiplier Ignition, Kill-Cam, and Audio Band!
+ * same `startingLoadout`, `runReducer`, `AdventureRun`, `UPGRADES`, 192
+ * Per-Weapon Timed Evolutions, Synergy Graph, Set-Parrying, Multiplier Ignition,
+ * Kill-Cam, and Audio Band!
  */
 import type { AttributeName, Weapon } from '@/types';
-import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef } from '@/adventure/types';
+import type { AdventureSave, FeatureFlag, LevelDef, SynergyAttrId } from '@/adventure/types';
 import type { WeaponBuilds } from '@/adventure/data/weaponStats';
 import { COACH_KEYS, createNewSave } from '@/adventure/progress';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { defaultEvolutionForWeapon, getWeaponEvolution, WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
+import { beltSynergyOverlap } from '@/adventure/data/synergy';
 import { MECHANICS } from '@/adventure/data/mechanics';
 import { ARCANA } from '@/adventure/data/arcana';
 import { ALL_ARMORY_WEAPON_IDS, charmWeapons, getArmoryWeapon } from '@/adventure/data/armory';
-import { armedRecipesFor, newRecipesArmedBy } from '@/adventure/engine/sources';
 import { startingLoadout, type Loadout } from '@/adventure/loadout';
 import type { RunOverrides } from '@/adventure/engine/run';
 import type { SpireEncounter, SpireRun } from '../types';
@@ -35,7 +36,8 @@ export const SPIRE_FIGHT_FEATURES: ReadonlySet<FeatureFlag> = new Set<FeatureFla
   'evolutions',
 ]);
 
-export const ALL_EVOLUTION_IDS: readonly string[] = EVOLUTION_RECIPES.map(r => r.id);
+/** All 192 Per-Weapon Timed Evolution IDs — unlocked freely inside Starfall Summit runs for build experimentation. */
+export const ALL_EVOLUTION_IDS: readonly string[] = WEAPON_EVOLUTIONS.map(e => e.id);
 
 /** Build a `WeaponBuilds` lookup from the Summit run's weapon levels. */
 export const buildSpireWeaponBuilds = (run: Pick<SpireRun, 'weaponLevels'>): WeaponBuilds => {
@@ -50,25 +52,29 @@ export const buildSpireWeaponBuilds = (run: Pick<SpireRun, 'weaponLevels'>): Wea
 export const spireHeldWeapons = (run: Pick<SpireRun, 'weapons' | 'weaponLevels'>): Weapon[] =>
   charmWeapons(run.weapons, buildSpireWeaponBuilds(run));
 
-/** Armed evolution recipe ids for a Summit run's current weapons. */
-export const spireArmedRecipes = (run: Pick<SpireRun, 'weapons' | 'weaponLevels'>): string[] =>
-  armedRecipesFor(spireHeldWeapons(run), ALL_EVOLUTION_IDS);
+/** Resolve equipped evolution IDs for every weapon currently held on the Summit belt (defaults to Evo A). */
+export const spireEquippedEvolutions = (
+  run: Pick<SpireRun, 'weapons' | 'equippedEvolutions'>
+): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const wid of run.weapons) {
+    const chosen = run.equippedEvolutions?.[wid];
+    const valid = chosen ? getWeaponEvolution(chosen) : undefined;
+    if (valid && valid.weaponId === wid) {
+      out[wid] = valid.id;
+    } else {
+      const def = defaultEvolutionForWeapon(wid);
+      if (def) out[wid] = def.id;
+    }
+  }
+  return out;
+};
 
-/**
- * Which NEW evolutions would adding `candidateWeaponId` arm with the run's
- * current weapons? Delegates directly to shared `newRecipesArmedBy` in
- * `src/adventure/engine/sources.ts`.
- */
-export const newEvolutionsArmedBy = (
+/** Synergy Graph attributes shared between `candidateWeaponId` and the run's current belt. */
+export const spireWeaponSynergyOverlap = (
   run: Pick<SpireRun, 'weapons'>,
   candidateWeaponId: string
-): string[] => newRecipesArmedBy(run.weapons, candidateWeaponId).map(r => r.id);
-
-/** Full `EvolutionRecipe` objects newly armed by adding `candidateWeaponId` to the current belt. */
-export const newEvolutionRecipesArmedBy = (
-  run: Pick<SpireRun, 'weapons'>,
-  candidateWeaponId: string
-): EvolutionRecipe[] => newRecipesArmedBy(run.weapons, candidateWeaponId);
+): SynergyAttrId[] => beltSynergyOverlap(candidateWeaponId, run.weapons);
 
 export interface SpireClashWarning {
   partnerId: string;
@@ -180,8 +186,8 @@ export const spireEncounterToLevel = (run: SpireRun, encounter: SpireEncounter):
     startingGraces: run.startingGraces,
     shadingSurge: encounter.shadingSurge,
     ...(encounter.hazards ? { hazards: encounter.hazards } : {}),
-    ...(run.extraEvolutionLikelihood > 0 ? { evolutionLikelihood: run.extraEvolutionLikelihood } : {}),
-    ...(run.extraEvolutionCap > 0 ? { extraEvolutionCap: run.extraEvolutionCap } : {}),
+    ...(run.extraEvolutionDurationMs > 0 ? { extraEvolutionDurationMs: run.extraEvolutionDurationMs } : {}),
+    ...(run.extraEvolutionChargeBonus > 0 ? { extraEvolutionChargeBonus: run.extraEvolutionChargeBonus } : {}),
   },
   foes: encounter.foes,
   challenge: { kind: 'noMistakes' },
@@ -196,7 +202,7 @@ export const spireEncounterToLevel = (run: SpireRun, encounter: SpireEncounter):
   ...(encounter.kind === 'elite' ? { isElite: true } : {}),
 });
 
-/** Build a virtual `AdventureSave` reflecting the Summit run's exact fighter, gear, skills, Arcana, and shared UPGRADES. */
+/** Build a virtual `AdventureSave` reflecting the Summit run's exact fighter, gear, equipped evolutions, skills, Arcana, and shared UPGRADES. */
 export const spireRunToVirtualSave = (
   run: SpireRun,
   prefs: { musicOn: boolean; effectsOn: boolean } = { musicOn: true, effectsOn: true }
@@ -208,27 +214,28 @@ export const spireRunToVirtualSave = (
     unlockedFighters: [run.fighter],
     armory: [...ALL_ARMORY_WEAPON_IDS],
     charms: [...run.weapons],
+    equippedEvolutions: spireEquippedEvolutions(run),
+    unlockedWeaponEvolutions: [...ALL_EVOLUTION_IDS],
     skillNodes: { [run.fighter]: [...run.skillNodes] },
     unlockedArcana: ARCANA.map(a => a.id),
     equippedArcana: [...run.arcana],
-    unlockedEvolutions: [...ALL_EVOLUTION_IDS],
+    unlockedEvolutions: [],
     discoveredEvolutions: [...run.stats.forgedRecipeIds],
     coinsUnlocked: true,
     workshopUnlocked: true,
     bountiesUnlocked: false,
     upgrades: {
       ...(run.upgrades ?? {}),
-      // `run.maxHearts` already includes any Tough Hide tiers bought during the climb
       tough_hide: 0,
     },
     musicOn: prefs.musicOn,
     effectsOn: prefs.effectsOn,
-    // Mark all intro/coach tips seen so Summit fights stay brisk and never interrupt with campaign tutorial tips
     seenMechanics: Object.keys(MECHANICS),
     seenCoachMarks: [
       ...Object.keys(MECHANICS).map(COACH_KEYS.event),
       COACH_KEYS.evolution,
-      COACH_KEYS.powerMeter,
+      COACH_KEYS.evoAlmost,
+      COACH_KEYS.weaponSlotUnlock,
       COACH_KEYS.weaponGrowth,
     ],
   };
@@ -236,23 +243,17 @@ export const spireRunToVirtualSave = (
 
 /**
  * Overrides passed to `createRun` / `AdventureRun` so Starfall Summit keeps
- * persistent HP, lets all 6 Summit weapons enter combat regardless of Adventure's
- * `charm_belt` meta-upgrade (Summit enforces `MAX_SUMMIT_WEAPONS = 6` in `runState.ts`),
- * and uses pure item-driven scaling (no generic Power snowball).
+ * persistent HP and lets all 6 Summit weapons enter combat regardless of Adventure's
+ * `charm_belt` meta-upgrade (Summit enforces `MAX_SUMMIT_WEAPONS = 6` in `runState.ts`).
  */
 export const spireRunOverrides = (run: SpireRun): RunOverrides => ({
   startingHearts: run.hearts,
   uncappedCharms: true,
   uncappedArcana: true,
   weaponBuilds: buildSpireWeaponBuilds(run),
-  powerScaling: 0,
-  stackEvolutionMultipliers: true,
 });
 
-/**
- * Compute the exact combat `Loadout` (clock, bonus damage, hints, graces,
- * armed evolutions, catalyst chance) via Adventure's shared `startingLoadout`.
- */
+/** Compute the exact combat `Loadout` via Adventure's shared `startingLoadout`. */
 export const spireEncounterLoadout = (run: SpireRun, encounter: SpireEncounter): Loadout =>
   startingLoadout(
     spireEncounterToLevel(run, encounter),

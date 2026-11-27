@@ -2,13 +2,17 @@
  * Which lessons a player still has to sit through before a fight, and the
  * lesson pages that are written from their save rather than fixed in data.
  */
-import type { AdventureSave, EvolutionRecipe, LessonPage, LevelDef, MechanicDef } from './types';
+import type { AdventureSave, LessonPage, LevelDef, MechanicDef, WeaponEvolutionDef } from './types';
 import { MAIN_LEVELS } from './data/levels';
 import { MECHANICS } from './data/mechanics';
-import { EVOLUTION_RECIPES } from './data/evolutions';
+import { getArmoryWeapon } from './data/armory';
+import {
+  defaultEvolutionForWeapon,
+  evolutionConditionShort,
+  evolutionConditionText,
+  getWeaponEvolution,
+} from './data/evolutions';
 import { LESSON_KEYS } from './progress';
-
-const recipeOf = (id: string): EvolutionRecipe | undefined => EVOLUTION_RECIPES.find(r => r.id === id);
 
 /** The mechanic that explains evolutions: the one that switches them on, else the older id. */
 export const evolutionsMechanicId = (): string | undefined =>
@@ -23,26 +27,48 @@ export interface LessonPlan {
   marks: string[];
 }
 
-/** The evolutions lesson, rewritten around the recipe the player unlocked first. */
+const firstOwnedEvolution = (save: AdventureSave): WeaponEvolutionDef | undefined => {
+  // Prefer an evolution currently equipped on one of the player's belt weapons
+  for (const weaponId of save.charms) {
+    const equippedId = save.equippedEvolutions?.[weaponId];
+    if (equippedId) {
+      const def = getWeaponEvolution(equippedId);
+      if (def) return def;
+    }
+  }
+  // Otherwise pick the first unlocked per-weapon evolution
+  for (const evoId of save.unlockedWeaponEvolutions ?? []) {
+    const def = getWeaponEvolution(evoId);
+    if (def) return def;
+  }
+  return defaultEvolutionForWeapon('blast-powder');
+};
+
+/** The evolutions lesson, rewritten around the weapon evolution the player unlocked first. */
 export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef => {
   const id = evolutionsMechanicId();
   const base = id ? MECHANICS[id] : undefined;
   if (!base) throw new Error('No mechanic explains evolutions');
-  const recipe = save.unlockedEvolutions.map(recipeOf).find((r): r is EvolutionRecipe => !!r);
-  if (!recipe) return base;
+  const evo = firstOwnedEvolution(save);
+  if (!evo) return base;
+  const weapon = getArmoryWeapon(evo.weaponId);
+  const weaponName = weapon?.name ?? evo.weaponId;
+  const condFull = evolutionConditionText(evo);
+  const condShort = evolutionConditionShort(evo);
+  const secs = Math.round(evo.durationMs / 1000);
   return {
     ...base,
-    tagline: `${recipe.name} is ready — match the Catalyst card to evolve!`,
+    tagline: `${evo.name} is ready on ${weaponName} — ${condFull.toLowerCase()} to evolve!`,
     body: [
-      `Equip both families of ${recipe.name} (${recipe.familyText}) to arm it.`,
-      `Match the glowing Catalyst card in any Set: ${recipe.activeText}`,
+      `Equip ${weaponName} on your Weapon Belt with ${evo.name} selected (each weapon has 3 Evolutions unlocked via Bounties).`,
+      `Mid-fight, ${condFull.toLowerCase()} to burst for +18 base damage and ignite ${evo.name} for ${secs}s: ${evo.tagline}`,
     ],
     demo: {
       type: 'icons',
       items: [
-        { icon: 'lorc/gems', label: 'Equip both families' },
-        { icon: 'lorc/crystal-shine', label: 'Match the Catalyst' },
-        { icon: recipe.icon, label: recipe.name },
+        { icon: weapon?.icon ?? 'lorc/gems', label: weaponName },
+        { icon: 'lorc/archery-target', label: condShort },
+        { icon: evo.icon, label: `${evo.name} (${secs}s)` },
       ],
     },
   };
@@ -52,12 +78,7 @@ export const buildAdaptiveEvolutionMechanic = (save: AdventureSave): MechanicDef
 
 /**
  * In playing order: the level's own mechanic the first time, then the
- * evolutions lesson once the player owns a recipe and gear is on.
- *
- * (The level that pays the first recipe used to open with a page announcing
- * it. A wall of text about a reward, before a boss, about something that
- * does nothing in that fight: it is gone. The reward is teased on the preview
- * as a secret, and explained by its own reveal when it is won.)
+ * evolutions lesson once the player owns a weapon evolution and gear is on.
  */
 export const lessonsDueBefore = (level: LevelDef, save: AdventureSave): LessonPlan[] => {
   // Level 1-1 teaches directly on the live board with glowing cards & Orange Tabby — zero pre-fight modals!
@@ -67,16 +88,17 @@ export const lessonsDueBefore = (level: LevelDef, save: AdventureSave): LessonPl
   const plans: LessonPlan[] = [];
   if (!seen(LESSON_KEYS.mechanic(level.introduces))) {
     plans.push({
-      // The level that teaches evolutions teaches them around the recipe the player owns
+      // The level that teaches evolutions teaches them around the weapon evolution the player owns
       mechanic: level.introduces === evoId ? buildAdaptiveEvolutionMechanic(save) : MECHANICS[level.introduces],
       marks: [LESSON_KEYS.mechanic(level.introduces)],
     });
   }
+  const hasAnyEvo = (save.unlockedWeaponEvolutions?.length ?? 0) > 0;
   if (
     evoId &&
     level.introduces !== evoId &&
     !level.rules.noGear &&
-    save.unlockedEvolutions.length > 0 &&
+    hasAnyEvo &&
     !seen(LESSON_KEYS.mechanic(evoId)) &&
     // Saves from before the rename recorded the lesson under its old id
     !seen(LESSON_KEYS.mechanic('weapon_evolutions'))

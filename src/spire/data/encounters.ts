@@ -50,7 +50,7 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
     startingCoins: 65,
     startingHints: 2,
     startingGraces: 1,
-    tagline: 'Starts armed for Phoenix Pyre — brawls hard and heals through blasts.',
+    tagline: 'Blast & Vitality synergy — detonates clusters and heals into Over-Shields.',
   },
   'Sly Fox': {
     fighter: 'Sly Fox',
@@ -60,17 +60,17 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
     startingCoins: 85,
     startingHints: 2,
     startingGraces: 2,
-    tagline: 'Starts armed for Avalanche — blistering combos that ramp Snowball & War Drum bursts.',
+    tagline: 'Blistering Streaks engine — fast combos ramp Snowball stacks & War Drum slams.',
   },
   Corgi: {
     fighter: 'Corgi',
     starterWeapon: 'growth-seed',
     bonusWeapon: 'chaos-shard',
-    maxHearts: 7,
-    startingCoins: 90,
+    maxHearts: 8,
+    startingCoins: 145,
     startingHints: 2,
     startingGraces: 2,
-    tagline: 'Starts armed for Shard Garden — expands the board with Fetch Power cards and ricochet storms.',
+    tagline: 'Wide-board Destruction — grows the field with Fetch bonus cards & ricochet storms.',
   },
   Badger: {
     fighter: 'Badger',
@@ -80,7 +80,7 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
     startingCoins: 85,
     startingHints: 2,
     startingGraces: 2,
-    tagline: 'Starts armed for Bloodline — massive Heart pool, Grudge retaliation, and cross-board lasers.',
+    tagline: 'Laser & Vitality bruiser — deep Heart pool, Grudge retaliation & cross-board beams.',
   },
   'Emperor Penguin': {
     fighter: 'Emperor Penguin',
@@ -90,7 +90,7 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
     startingCoins: 70,
     startingHints: 2,
     startingGraces: 1,
-    tagline: 'Starts armed for Rainbow Nova — ×2 Rainbow hits, Deep Freeze locks, and rapid Catalysts.',
+    tagline: 'Prism & Holo virtuoso — Rainbow bursts, Deep Freeze locks & rapid Evolution charge.',
   },
   Pelican: {
     fighter: 'Pelican',
@@ -100,7 +100,7 @@ export const STARTER_KITS: Record<CharacterName, FighterStarterKit> = {
     startingCoins: 75,
     startingHints: 3,
     startingGraces: 1,
-    tagline: 'Starts armed for Wildfire Echo — free Big Scoops, blazing fire spreads, and echo chains.',
+    tagline: 'Echo & Burn maestro — free Big Scoops, blazing card spreads & cascading echoes.',
   },
 };
 
@@ -187,22 +187,22 @@ export const canonicalLevelEnemyName = (levelId: string): string => {
 
 /**
  * Calibrated base HP curve per Act and row (row 0..5 = floors, row 6 = Boss).
- * Tuned for pure item-driven scaling (`powerScaling: 0`) under the 6-weapon belt
- * cap (`MAX_SUMMIT_WEAPONS = 6`): damage climbs from upgraded weapons (Lv 2→5),
- * curated 6-slot synergies, board procs, stacking Evolutions (×1.5 per active
- * Evolution), Fighter Skill Tree nodes, Arcana wildcards, Set-Parries, and
- * Shading Surge (×5 in Act 3).
+ * Tuned for native Synergy Graph scaling under the 6-weapon belt cap
+ * (`MAX_SUMMIT_WEAPONS = 6`): damage climbs from elevated card/weapon bases,
+ * upgraded weapons (Lv 2→5), 15-node Synergy hooks, parallel per-weapon timed
+ * Evolutions (+8 flat & +0.20× additive each), Holo cards (+4 & ×1.2), Fighter
+ * Skill Tree nodes, Arcana wildcards, Set-Parries, and Shading Surge (+12 & ×1.8 in Act 3).
  */
 const BASE_ACT_HP: Record<number, { start: number; end: number; eliteMult: number; boss: number; timer: number; skirmishTimer: number }> = {
-  1: { start: 105, end: 280, eliteMult: 1.4, boss: 630, timer: 100, skirmishTimer: 78 },
-  2: { start: 540, end: 1240, eliteMult: 1.32, boss: 2350, timer: 110, skirmishTimer: 94 },
-  3: { start: 2300, end: 5100, eliteMult: 1.3, boss: 11200, timer: 112, skirmishTimer: 106 },
+  1: { start: 145, end: 760, eliteMult: 1.35, boss: 1950, timer: 100, skirmishTimer: 78 },
+  2: { start: 2800, end: 7200, eliteMult: 1.32, boss: 14000, timer: 110, skirmishTimer: 94 },
+  3: { start: 10500, end: 21500, eliteMult: 1.3, boss: 38000, timer: 112, skirmishTimer: 106 },
 };
 
 const actCurve = (act: number) => {
   if (act <= 3) return BASE_ACT_HP[act] ?? BASE_ACT_HP[3];
   const endlessStep = act - 3;
-  const scale = Math.pow(2.05, endlessStep);
+  const scale = Math.pow(1.75, endlessStep);
   return {
     start: Math.round(BASE_ACT_HP[3].end * 0.95 * scale),
     end: Math.round(BASE_ACT_HP[3].boss * 1.2 * scale),

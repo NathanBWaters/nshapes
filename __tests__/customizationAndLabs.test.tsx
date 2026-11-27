@@ -24,7 +24,6 @@ import WeaponDemoClip, { WEAPON_DEMO_ARCHETYPE, getWeaponDemoSpec } from '@/adve
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { ARCANA } from '@/adventure/data/arcana';
 import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '@/adventure/data/armory';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
 import { LEVELS, getLevel } from '@/adventure/data/levels';
 import { PARRY_RULES } from '@/adventure/data/parry';
 import { SURGE_RULES } from '@/adventure/data/rules';
@@ -240,7 +239,7 @@ describe('[GP-21] & [UI-20] Loadout Presets, Auto-Equip, Slot Reorder, Camp & Le
     expect(built.summary).toContain('Auto-equipped');
   });
 
-  it('filterAndSortArmory filters by search, role, Lv 2+, Equipped, and Fuses', () => {
+  it('filterAndSortArmory filters by search, role, Lv 2+, Equipped, and Synergy', () => {
     const save = {
       ...createMaxedSave(),
       charms: ['blast-powder'],
@@ -251,9 +250,9 @@ describe('[GP-21] & [UI-20] Loadout Presets, Auto-Equip, Slot Reorder, Camp & Le
     const equippedOnly = filterAndSortArmory(save, { quick: 'equipped', role: 'all', query: '', sort: 'level' });
     expect(equippedOnly.map(w => w.id)).toEqual(['blast-powder']);
 
-    const fusingOnly = filterAndSortArmory(save, { quick: 'fuses', role: 'all', query: '', sort: 'fuses' });
-    expect(fusingOnly.length).toBeGreaterThan(0);
-    expect(fusingOnly.every(w => w.id !== 'blast-powder')).toBe(true);
+    const synergyOnly = filterAndSortArmory(save, { quick: 'synergy', role: 'all', query: '', sort: 'synergy' });
+    expect(synergyOnly.length).toBeGreaterThan(0);
+    expect(synergyOnly.every(w => w.id !== 'blast-powder')).toBe(true);
   });
 
   it('Camp renders Next Goal, TEST LOADOUT, search/filter/presets, Understudy warning, and belt reorder', () => {
@@ -425,7 +424,8 @@ describe('[TP-11] devOverrides, FightDebugDrawer & /dev Studio Hub', () => {
     const actions = {
       onSetFoeHp: jest.fn(),
       onToggleFreezeClock: jest.fn(),
-      onSpawnCatalyst: jest.fn(),
+      onTriggerEvo: jest.fn(),
+      onAdvanceEvo: jest.fn(),
       onForceParry: jest.fn(),
       onForceSurge: jest.fn(),
       onHotSwapWeapon: jest.fn(),
@@ -456,8 +456,10 @@ describe('[TP-11] devOverrides, FightDebugDrawer & /dev Studio Hub', () => {
     expect(actions.onSetFoeHp).toHaveBeenCalledWith(1);
     fireEvent.press(view.getByTestId('debug-freeze-clock'));
     expect(actions.onToggleFreezeClock).toHaveBeenCalledTimes(1);
-    fireEvent.press(view.getByTestId('debug-spawn-catalyst'));
-    expect(actions.onSpawnCatalyst).toHaveBeenCalledTimes(1);
+    fireEvent.press(view.getByTestId('debug-trigger-evo'));
+    expect(actions.onTriggerEvo).toHaveBeenCalledTimes(1);
+    fireEvent.press(view.getByTestId('debug-advance-evo'));
+    expect(actions.onAdvanceEvo).toHaveBeenCalledTimes(1);
     fireEvent.press(view.getByTestId('debug-parry-perfect'));
     expect(actions.onForceParry).toHaveBeenCalledWith('perfect');
     fireEvent.press(view.getByTestId('debug-force-surge'));
@@ -503,13 +505,14 @@ describe('[TP-12] TrainingLabBar sandbox controls & rolling 15s DPS', () => {
     expect(stats.triggerCount).toBe(3);
   });
 
-  it('wires hot-swap Fighter/Weapons/Arcana, Spawn Catalyst, Parry, Surge, Dummy Modes, Reset & Return', () => {
+  it('wires hot-swap Fighter/Weapons/Arcana, Trigger/Step Evo, Parry, Surge, Dummy Modes, Reset & Return', () => {
     const save = createMaxedSave();
     const actions = {
       onSwapFighter: jest.fn(),
       onToggleWeapon: jest.fn(),
       onToggleArcana: jest.fn(),
-      onSpawnCatalyst: jest.fn(),
+      onTriggerEvo: jest.fn(),
+      onAdvanceEvo: jest.fn(),
       onTriggerParry: jest.fn(),
       onToggleSurge: jest.fn(),
       onChangeDummyMode: jest.fn(),
@@ -524,7 +527,20 @@ describe('[TP-12] TrainingLabBar sandbox controls & rolling 15s DPS', () => {
             fighter: 'Orange Tabby',
             weapons: [getArmoryWeapon('blast-powder')!],
             arcana: [],
-            armedRecipes: [EVOLUTION_RECIPES[0].id],
+            weaponEvolutions: [
+              {
+                weaponId: 'blast-powder',
+                evoId: 'blast-powder:cluster-charge',
+                phase: 'charging',
+                progress: 0,
+                target: 3,
+                almostReady: false,
+                activeRemainingMs: 0,
+                durationMs: 15000,
+                cooldownRemainingMs: 0,
+                triggersCount: 0,
+              },
+            ],
             surge: null,
             parry: null,
             elapsedMs: 10_000,
@@ -540,8 +556,10 @@ describe('[TP-12] TrainingLabBar sandbox controls & rolling 15s DPS', () => {
 
     expect(view.getByTestId('training-lab-dps')).toBeTruthy();
     expect(view.getByTestId('training-lab-peak')).toBeTruthy();
-    fireEvent.press(view.getByTestId('training-lab-catalyst'));
-    expect(actions.onSpawnCatalyst).toHaveBeenCalledTimes(1);
+    fireEvent.press(view.getByTestId('training-lab-trigger-evo'));
+    expect(actions.onTriggerEvo).toHaveBeenCalledTimes(1);
+    fireEvent.press(view.getByTestId('training-lab-step-evo'));
+    expect(actions.onAdvanceEvo).toHaveBeenCalledTimes(1);
     fireEvent.press(view.getByTestId('training-lab-parry'));
     expect(actions.onTriggerParry).toHaveBeenCalledWith('immortal');
     fireEvent.press(view.getByTestId('training-lab-surge'));

@@ -19,26 +19,28 @@ export type ExtendedArcanaRules = ArcanaRules;
 const percentMore = (scale: number) => Math.round((scale - 1) * 100);
 
 const monochromePact: ExtendedArcanaRules = {
-  singleTraitBonusDamage: 8,
-  singleTraitPowerBonus: 0.15,
-  rainbowMultiplier: 0.5,
-  highDiffDamageScale: 0.5,
+  singleTraitBonusDamage: 16,
+  singleTraitMarkCount: 1,
+  rainbowMultiplier: 0.65,
+  highDiffDamageScale: 0.65,
 };
 const prismaticFever: ExtendedArcanaRules = {
-  rainbowMultiplier: 3.5,
+  rainbowMultiplier: 1.5,
+  rainbowFlatBonus: 14,
   rainbowTimeBonus: 1.5,
-  nonRainbowDamageDelta: -2,
+  nonRainbowDamageDelta: -3,
 };
 const controlledBurn: ExtendedArcanaRules = {
   mistakeBurn: { cooldownMs: 5000, cards: 4 },
-  mistakeBurnDamageScale: 1.5,
-  mistakeBurnPowerBonus: 0.2,
+  mistakeBurnFlatBonus: 4,
+  mistakeBurnDamageScale: 1.35,
   startingGraces: 0,
   cooldownMistakeHearts: 2,
 };
 const glassPrism: ExtendedArcanaRules = {
-  specialCardChanceScale: 4,
-  powerCardBonusOverride: 4,
+  specialCardChanceScale: 3,
+  holoCardChanceScale: 3,
+  powerCardBonusOverride: 10,
   maxHeartsLock: 3,
   noHeal: true,
 };
@@ -51,14 +53,14 @@ const overkillHarvest: ExtendedArcanaRules = {
 const scholarsGambit: ExtendedArcanaRules = {
   xpScale: 2,
   pickOptions: 4,
-  levelUpPowerBonus: 0.3,
+  levelUpBaseDamageBonus: 6,
   charmSlotDelta: -1,
 };
 const catalystResonance: ExtendedArcanaRules = {
-  catalystChanceScale: 2.5,
-  catalystRespawns: 2,
-  evolutionBurstBonus: { damage: 20, time: 6 },
-  nonEvolvedDamageScale: 0.75,
+  evolutionChargeBonus: 1,
+  evolutionDurationBonusMs: 5000,
+  evolutionBurstBonus: { damage: 26, time: 4 },
+  nonEvolvedDamageScale: 0.8,
 };
 const tempoSurge: ExtendedArcanaRules = {
   setTimeBonus: 1.5,
@@ -75,7 +77,7 @@ export const ARCANA: ArcanaDef[] = [
     name: 'Monochrome Pact',
     icon: 'lorc/stone-block',
     tagline: 'Simple Sets hit like boulders; complex Sets lose their edge.',
-    upside: `1-varied Sets deal +${monochromePact.singleTraitBonusDamage} flat damage and add +${monochromePact.singleTraitPowerBonus} Power.`,
+    upside: `1-varied Sets deal +${monochromePact.singleTraitBonusDamage} flat base damage and mark ${monochromePact.singleTraitMarkCount} card.`,
     tradeoff: `Rainbows and 3+ varied Sets deal ×${monochromePact.rainbowMultiplier} damage.`,
   },
   {
@@ -85,8 +87,8 @@ export const ARCANA: ArcanaDef[] = [
     name: 'Prismatic Fever',
     icon: 'lorc/rainbow-star',
     tagline: 'All-in on Rainbow Sets.',
-    upside: `Rainbow Sets deal ×${prismaticFever.rainbowMultiplier} damage and restore +${prismaticFever.rainbowTimeBonus}s on timed fights.`,
-    tradeoff: `Non-Rainbow Sets deal −${-prismaticFever.nonRainbowDamageDelta!} base damage (min 1).`,
+    upside: `Rainbow Sets deal ×${prismaticFever.rainbowMultiplier}, +${prismaticFever.rainbowFlatBonus} flat base damage, and restore +${prismaticFever.rainbowTimeBonus}s on timed fights.`,
+    tradeoff: `Non-Rainbow Sets deal −${-prismaticFever.nonRainbowDamageDelta!} base damage (min 2).`,
   },
   {
     id: 'controlled_burn',
@@ -95,7 +97,7 @@ export const ARCANA: ArcanaDef[] = [
     name: 'Controlled Burn',
     icon: 'lorc/fire-ring',
     tagline: 'Timed mistakes spark wildfire; reckless misses sear twice as hard.',
-    upside: `Every ${controlledBurn.mistakeBurn!.cooldownMs / 1000}s, a wrong Set ignites ${controlledBurn.mistakeBurn!.cards} cards (×${controlledBurn.mistakeBurnDamageScale} burn dmg) and adds +${controlledBurn.mistakeBurnPowerBonus} Power instead of costing a heart.`,
+    upside: `Every ${controlledBurn.mistakeBurn!.cooldownMs / 1000}s, a wrong Set ignites ${controlledBurn.mistakeBurn!.cards} cards (+${controlledBurn.mistakeBurnFlatBonus} base burn & ×${controlledBurn.mistakeBurnDamageScale} burn dmg) instead of costing a heart.`,
     tradeoff: `Start with ${controlledBurn.startingGraces} Graces, and mistakes while on cooldown cost ${controlledBurn.cooldownMistakeHearts} Hearts.`,
   },
   {
@@ -104,8 +106,8 @@ export const ARCANA: ArcanaDef[] = [
     numeral: 'IV',
     name: 'Glass Prism',
     icon: 'lorc/diamond-hard',
-    tagline: 'Flood the board with lethal Charged and Gold cards on a razor-thin life bar.',
-    upside: `Charged (+${glassPrism.powerCardBonusOverride} dmg, doubled) and Gold (+${BASE_RULES.coinCardValue}¢) cards spawn ${glassPrism.specialCardChanceScale}× as often.`,
+    tagline: 'Flood the board with lethal Charged, Gold, and Holo cards on a razor-thin life bar.',
+    upside: `Charged (+${glassPrism.powerCardBonusOverride} base dmg, doubled), Gold (+${BASE_RULES.coinCardValue}¢), and Holo cards spawn ${glassPrism.specialCardChanceScale}× as often.`,
     tradeoff: `Maximum Hearts are locked to ${glassPrism.maxHeartsLock} and all healing is disabled.`,
   },
   {
@@ -125,17 +127,17 @@ export const ARCANA: ArcanaDef[] = [
     name: "Scholar's Gambit",
     icon: 'lorc/open-book',
     tagline: 'Travel light and forge your arsenal mid-battle.',
-    upside: `${scholarsGambit.xpScale}× XP, ${scholarsGambit.pickOptions} weapon choices per level-up, and +${scholarsGambit.levelUpPowerBonus} Power on every level-up.`,
+    upside: `${scholarsGambit.xpScale}× XP, ${scholarsGambit.pickOptions} weapon choices per level-up, and +${scholarsGambit.levelUpBaseDamageBonus} fight-long base damage on every level-up.`,
     tradeoff: `Enter the fight with ${-scholarsGambit.charmSlotDelta!} fewer equipped Weapon slot.`,
   },
   {
     id: 'catalyst_resonance',
     rules: catalystResonance,
     numeral: 'VII',
-    name: 'Catalyst Resonance',
+    name: 'Evolution Resonance',
     icon: 'lorc/crystal-wand',
     tagline: 'Live for Evolutions; starve without them.',
-    upside: `${catalystResonance.catalystChanceScale}× Catalyst chance, +${catalystResonance.catalystRespawns} Evolutions/fight, and every Evolution bursts for +${catalystResonance.evolutionBurstBonus!.damage} dmg / +${catalystResonance.evolutionBurstBonus!.time}s.`,
+    upside: `All weapons gain +${catalystResonance.evolutionChargeBonus} bonus progress when charging evolutions, evolutions last +${catalystResonance.evolutionDurationBonusMs! / 1000}s, and each ignites for +${catalystResonance.evolutionBurstBonus!.damage} dmg / +${catalystResonance.evolutionBurstBonus!.time}s.`,
     tradeoff: `Non-evolved Sets deal ×${catalystResonance.nonEvolvedDamageScale} damage.`,
   },
   {
@@ -158,7 +160,7 @@ export const ARCANA_SHORT_NAMES: Readonly<Record<ArcanaId, string>> = {
   glass_prism: 'Glass',
   overkill_harvest: 'Harvest',
   scholars_gambit: 'Scholar',
-  catalyst_resonance: 'Catalyst',
+  catalyst_resonance: 'Evolve',
   tempo_surge: 'Tempo',
 };
 
@@ -170,26 +172,28 @@ const ADDITIVE = [
   'maxHeartsDelta',
   'nonRainbowDamageDelta',
   'singleTraitBonusDamage',
-  'singleTraitPowerBonus',
-  'mistakeBurnPowerBonus',
-  'levelUpPowerBonus',
+  'singleTraitMarkCount',
+  'rainbowFlatBonus',
+  'mistakeBurnFlatBonus',
+  'levelUpBaseDamageBonus',
+  'evolutionChargeBonus',
+  'evolutionDurationBonusMs',
   'setTimeBonus',
   'setComboBonus',
   'rainbowTimeBonus',
   'overkillCoinsPerDamage',
   'overkillCarryPct',
   'waveClearHeal',
-  'catalystRespawns',
   'charmSlotDelta',
 ] as const;
 
 const SCALES = [
   'foeHpScale',
   'specialCardChanceScale',
+  'holoCardChanceScale',
   'damageScale',
   'timerSpeedScale',
   'xpScale',
-  'catalystChanceScale',
   'nonEvolvedDamageScale',
   'highDiffDamageScale',
   'mistakeBurnDamageScale',

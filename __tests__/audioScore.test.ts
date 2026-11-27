@@ -41,15 +41,15 @@ import {
 import { audioFlags } from '@/audio/settings';
 import * as songsMod from '@/audio/songs';
 import { ARRANGEMENTS, INTRO_PICKUP, THEME, THEME_B, THEME_BATTLE_B } from '@/audio/songs';
-import { themeOf } from '@/audio/themes';
+import { EVOLUTION_IDS, RECIPE_IDS, themeOf } from '@/audio/themes';
 import {
   BRIGHTNESS, MODES, PROGRESSIONS, chordRoot, degreeToMidi, degreeToSemis, hashOf, isMinor, ladderDegree, ladderRung, LADDER_TOP,
   midiToFreq, nextGridTime, parseNote, shade, strum,
 } from '@/audio/theory';
 import {
-  WEAPON_VOICES, evolutionTheme, hasWeaponVoice, recipeIdOf, riffNotes, stingOf, themeSignature, voiceSignature, weaponIdOf, weaponVoice,
+  WEAPON_VOICES, evolutionIdOf, evolutionTheme, hasWeaponVoice, recipeIdOf, riffNotes, stingOf, themeSignature, voiceSignature, weaponIdOf, weaponVoice,
 } from '@/audio/voices';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS, evolutionsForWeapon } from '@/adventure/data/evolutions';
 import { ownerOfEvent } from '@/adventure/data/weaponGuide';
 import { BIOMES } from '@/adventure/data/biomes';
 import { getArmoryWeapon } from '@/adventure/data/armory';
@@ -237,11 +237,14 @@ describe('weapon voices', () => {
     expect(voiceSignature(a)).not.toBe(voiceSignature(weaponVoice('another-future-weapon')));
   });
 
-  it('reads the weapon or recipe out of a rule key', () => {
+  it('reads the weapon or evolution id out of a rule or anchor key', () => {
     expect(weaponIdOf('w2:war-drum#0')).toBe('war-drum');
     expect(weaponIdOf('w:pinata')).toBe('pinata');
-    expect(weaponIdOf('evo:phoenix-pyre#1')).toBeNull();
+    expect(weaponIdOf('weapon:blast-powder')).toBe('blast-powder');
+    expect(weaponIdOf('evo:blast-powder:cluster-charge#0')).toBeNull();
     expect(weaponIdOf('node:tabby-purr#0')).toBeNull();
+    expect(evolutionIdOf('evo:blast-powder:cluster-charge#0')).toBe('blast-powder:cluster-charge');
+    expect(recipeIdOf('evo:blast-powder:cluster-charge#0')).toBe('blast-powder:cluster-charge');
     expect(recipeIdOf('evo:phoenix-pyre#1')).toBe('phoenix-pyre');
     expect(recipeIdOf('w2:war-drum#0')).toBeNull();
   });
@@ -258,35 +261,53 @@ describe('weapon voices', () => {
 });
 
 describe('evolution themes', () => {
-  it('every recipe has a theme made from two real weapon voices', () => {
-    expect(EVOLUTION_RECIPES.length).toBeGreaterThanOrEqual(200);
-    for (const r of EVOLUTION_RECIPES) {
-      const t = themeOf(r.id);
-      expect(t.weapons).toHaveLength(2);
-      for (const id of t.weapons) expect({ recipe: r.id, id, voiced: hasWeaponVoice(id) }).toEqual({ recipe: r.id, id, voiced: true });
-      expect(t.weapons[0]).not.toBe(t.weapons[1]);
+  it('every one of the 192 per-weapon evolutions has a theme anchored to its owning weapon voice', () => {
+    expect(WEAPON_EVOLUTIONS).toHaveLength(192);
+    expect(EVOLUTION_IDS).toHaveLength(192);
+    expect(RECIPE_IDS).toEqual(EVOLUTION_IDS);
+    for (const evo of WEAPON_EVOLUTIONS) {
+      const t = themeOf(evo.id);
+      expect(t.weaponId).toBe(evo.weaponId);
+      expect(t.variantIndex).toBe(evo.slotIndex);
+      expect(t.weapons).toEqual([evo.weaponId]);
+      expect({ evo: evo.id, id: t.weaponId, voiced: hasWeaponVoice(t.weaponId) }).toEqual({
+        evo: evo.id,
+        id: t.weaponId,
+        voiced: true,
+      });
+      expect(t.insts[0]).not.toBe(t.insts[1]);
       expect(t.fanfare.length).toBeGreaterThanOrEqual(5);
       expect(t.lift).toBeGreaterThanOrEqual(2);
       expect(t.lift).toBeLessThanOrEqual(7);
       expect(t.brighten).toBeGreaterThanOrEqual(1);
       // The fanfare ends on its highest note
       expect(t.fanfare[t.fanfare.length - 1]).toBeGreaterThanOrEqual(7);
+      expect(t.fanfare[t.fanfare.length - 1]).toBe(Math.max(...t.fanfare));
+    }
+    // Every weapon's 3 variants (A/B/C) use distinct grooves & companions
+    for (const weaponId of createMaxedSave().armory) {
+      const variants = evolutionsForWeapon(weaponId);
+      expect(variants).toHaveLength(3);
+      const grooves = new Set(variants.map(v => themeOf(v.id).groove));
+      const companions = new Set(variants.map(v => themeOf(v.id).insts[1]));
+      expect(grooves.size).toBe(3);
+      expect(companions.size).toBe(3);
     }
   });
 
-  it('no two recipes have the same theme', () => {
+  it('no two evolutions across all 192 share the same theme signature', () => {
     const seen = new Map<string, string>();
-    for (const r of EVOLUTION_RECIPES) {
-      const sig = `${themeSignature(themeOf(r.id))}|${themeOf(r.id).weapons.join('+')}`;
-      expect({ id: r.id, sameAs: seen.get(sig) }).toEqual({ id: r.id, sameAs: undefined });
-      seen.set(sig, r.id);
+    for (const evo of WEAPON_EVOLUTIONS) {
+      const sig = themeSignature(themeOf(evo.id));
+      expect({ id: evo.id, sameAs: seen.get(sig) }).toEqual({ id: evo.id, sameAs: undefined });
+      seen.set(sig, evo.id);
     }
   });
 
-  it('a theme is the same every time and an unknown recipe still gets one', () => {
-    const r = EVOLUTION_RECIPES[0];
-    expect(evolutionTheme(r.id, r.families)).toEqual(themeOf(r.id));
-    expect(themeOf('not-a-recipe').fanfare.length).toBeGreaterThan(0);
+  it('a theme is deterministic and an unknown evolution id still gets a valid fallback', () => {
+    const evo = WEAPON_EVOLUTIONS[0];
+    expect(evolutionTheme(evo.id, evo.weaponId, evo.slotIndex)).toEqual(themeOf(evo.id));
+    expect(themeOf('not-a-recipe').fanfare.length).toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -432,9 +453,55 @@ describe('fight events → sounds', () => {
   const ev = (type: RunEventType, amount?: number, text?: string, source?: string): RunEvent => ({ id: 1, type, amount, text, source });
   const names = (sounds: FightSound[]) => sounds.map(s => (s.kind === 'cue' ? s.name : s.kind === 'sting' ? `sting:${s.weapon}` : `payout:${s.tier}`));
 
-  it('every event has a row, and every row names a real cue', () => {
+  it('every event has a row, catalyst_spawn is removed, and every row names a real cue', () => {
     for (const cue of Object.values(EVENT_CUE)) if (cue) expect(CUE_NAMES).toContain(cue);
-    expect(Object.keys(EVENT_CUE).length).toBeGreaterThan(50);
+    expect(Object.keys(EVENT_CUE).length).toBe(80);
+    expect('catalyst_spawn' in EVENT_CUE).toBe(false);
+    expect(EVENT_CUE.evo_almost).toBe('evoAlmost');
+    expect(EVENT_CUE.evo_progress).toBe('evoProgress');
+    expect(EVENT_CUE.evo_charge).toBe('evoCharge');
+    expect(EVENT_CUE.holo_spawn).toBe('twinkle');
+    expect(EVENT_CUE.marked).toBe('armed');
+  });
+
+  it('rate-limits Tier C evo_progress to max 1 per Set, mutes it on evo_almost/evolution_start, and avoids stray weapon stings', () => {
+    const multiTick = soundsFor(
+      [
+        ev('hit', 12),
+        ev('evo_progress', 0.33, '1/3', 'weapon:blast-powder'),
+        ev('evo_progress', 0.66, '2/3', 'weapon:war-drum'),
+        ev('evo_progress', 0.5, '2/4', 'weapon:flint-spark'),
+      ],
+      { weapons: ['blast-powder', 'war-drum', 'flint-spark'], combo: 2 }
+    );
+    expect(names(multiTick)).toEqual(['payout:1', 'evoProgress']);
+    expect(multiTick[1]).toMatchObject({ kind: 'cue', name: 'evoProgress', amount: 0.66 });
+
+    const withAlmost = soundsFor(
+      [
+        ev('hit', 12),
+        ev('evo_progress', 0.5, '1/2', 'weapon:blast-powder'),
+        ev('evo_almost', undefined, '1 LEFT!', 'weapon:war-drum'),
+      ],
+      { weapons: ['blast-powder', 'war-drum'], combo: 2 }
+    );
+    expect(names(withAlmost)).toEqual(['payout:1', 'evoAlmost']);
+
+    const withStart = soundsFor(
+      [
+        ev('evolution_start', undefined, WEAPON_EVOLUTIONS[0].id, 'weapon:blast-powder'),
+        ev('evo_progress', 0.5, '1/2', 'weapon:war-drum'),
+        ev('evolution_end', undefined, WEAPON_EVOLUTIONS[0].name, 'weapon:blast-powder'),
+      ],
+      { weapons: ['blast-powder', 'war-drum'], combo: 2 }
+    );
+    expect(withStart).toEqual([]);
+
+    const charged = soundsFor(
+      [ev('evo_charge', 1, 'Charge!', 'w0:catalyst-prism#0')],
+      { weapons: ['catalyst-prism'], combo: 1 }
+    );
+    expect(names(charged)).toEqual(['evoCharge', 'sting:catalyst-prism']);
   });
 
   it("a Set's own hit is the payout, sized by everything the move dealt", () => {
@@ -507,6 +574,20 @@ describe('the fight the band hears', () => {
     expect(m.evolutions).toEqual([]);
     expect(m.alerts).toEqual(NO_ALERTS);
     expect(m.weapons).toEqual(s.weapons.map(w => w.id));
+
+    // Active per-weapon timed evolutions flow cleanly from run.weaponEvolutions into moodOf
+    const evoA = WEAPON_EVOLUTIONS[0];
+    const evoB = WEAPON_EVOLUTIONS[3];
+    const withActiveEvos = {
+      ...s,
+      weaponEvolutions: [
+        { weaponId: evoA.weaponId, evoId: evoA.id, phase: 'charging' as const, progress: 2, target: 3, almostReady: true, activeRemainingMs: 0, durationMs: evoA.durationMs, cooldownRemainingMs: 0, triggersCount: 0 },
+        { weaponId: evoB.weaponId, evoId: evoB.id, phase: 'active' as const, progress: 0, target: 3, almostReady: false, activeRemainingMs: 4200, durationMs: evoB.durationMs, cooldownRemainingMs: 0, triggersCount: 1 },
+      ],
+    };
+    const evolvedMood = moodOf(withActiveEvos, { arrangement: 'woods', paused: false, timeTotal: s.timeLeft });
+    expect(evolvedMood.evolutions).toEqual([evoB.id]);
+    expect(evolvedMood.evolutionEndsMs).toBe(4200);
   });
 
   it('a Set raises the combo, lowers the foe and resets the idle clock', () => {
@@ -687,7 +768,7 @@ describe('[AU-02] native audio bridge & pre-rendered .m4a pack', () => {
     band.payout({ combo: 4, tier: 2, rainbow: true });
     band.fire('blast-powder');
     band.cue('perfectParry');
-    band.evolve(EVOLUTION_RECIPES[0].id);
+    band.evolve(WEAPON_EVOLUTIONS[0].id);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -928,8 +1009,9 @@ describe('[AU-14] & [AU-15] pitch folding, FM Nyquist safety & phone-speaker mas
       const mock = createInspectableContext(sampleRate);
       const restore = chip.useContext(mock.ctx);
       try {
-        // Test every arrangement (including peaks with leadOctave: 12) at full intensity + evolution
-        for (const arrangement of Object.keys(ARRANGEMENTS)) {
+        // Test every arrangement (including peaks with leadOctave: 12) at full intensity + all 3 evolution variants
+        const variantEvos = [0, 1, 2].map(slot => WEAPON_EVOLUTIONS.find(e => e.slotIndex === slot)!);
+        for (const [idx, arrangement] of Object.keys(ARRANGEMENTS).entries()) {
           band.renderScript(
             3,
             [
@@ -939,7 +1021,7 @@ describe('[AU-14] & [AU-15] pitch folding, FM Nyquist safety & phone-speaker mas
                   arrangement,
                   foeHp: 0.1,
                   combo: 15,
-                  evolutions: [EVOLUTION_RECIPES[0].id],
+                  evolutions: [variantEvos[idx % 3].id],
                   evolutionEndsMs: 20000,
                   weapons: ['snowball', 'glass-sword', 'fortunes-favor', 'cascade-core'],
                 }),
@@ -949,7 +1031,7 @@ describe('[AU-14] & [AU-15] pitch folding, FM Nyquist safety & phone-speaker mas
           );
         }
 
-        // Test payout across combos 1..20 + high-register cues
+        // Test payout across combos 1..20 + high-register & evolution cues
         for (let combo = 1; combo <= 20; combo++) {
           band.payout({ combo, tier: 3, rainbow: combo === 20 });
         }
@@ -959,7 +1041,12 @@ describe('[AU-14] & [AU-15] pitch folding, FM Nyquist safety & phone-speaker mas
         band.cue('star', { amount: 3 });
         band.cue('keyFound');
         band.cue('friendRescued');
+        band.cue('arcanaGain');
         band.cue('catalyst');
+        band.cue('evoAlmost');
+        band.cue('evoProgress', { amount: 0.9 });
+        band.cue('evoCharge');
+        band.cue('evoEnd');
 
         // Separate audio-rate FM modulators from melodic carriers & partials
         const modulators = mock.oscs.filter(o => o.targetIsParam && o.freq > 20);
@@ -1220,8 +1307,14 @@ describe('Wave 3 Audio Mastery: 4-tier priority, transients, room split, immedia
       expect(chip.sfxTiers.C?.gain.value).toBeCloseTo(SFX_TIER_GAINS.C, 4);
       expect(chip.sfxDuckGain).not.toBeNull();
 
-      // Every cue has an explicit priority tier and monotonic payout gains
+      // Every cue has an explicit priority tier (including new evolution & Arcana cues) and monotonic payout gains
       for (const name of CUE_NAMES) expect(['S', 'A', 'B', 'C']).toContain(CUE_TIER[name]);
+      expect(CUE_TIER.evoAlmost).toBe('A');
+      expect(CUE_TIER.evoCharge).toBe('B');
+      expect(CUE_TIER.arcanaGain).toBe('B');
+      expect(CUE_TIER.catalyst).toBe('B');
+      expect(CUE_TIER.evoProgress).toBe('C');
+      expect(CUE_TIER.evoEnd).toBe('C');
       expect(PAYOUT_TIER_GAIN[0]).toBeLessThan(PAYOUT_TIER_GAIN[1]);
       expect(PAYOUT_TIER_GAIN[1]).toBeLessThan(PAYOUT_TIER_GAIN[2]);
       expect(PAYOUT_TIER_GAIN[2]).toBeLessThan(PAYOUT_TIER_GAIN[3]);
@@ -1454,14 +1547,14 @@ describe('Wave 3 Audio Mastery: 4-tier priority, transients, room split, immedia
       const evolveSpy = jest.spyOn(band, 'evolve');
       const cueSpy = jest.spyOn(band, 'cue');
       band.setMood(mood());
-      band.setMood(mood({ evolutions: [EVOLUTION_RECIPES[0].id], status: 'pick' }));
+      band.setMood(mood({ evolutions: [WEAPON_EVOLUTIONS[0].id], status: 'pick' }));
       expect(evolveSpy).not.toHaveBeenCalled();
       expect(cueSpy).not.toHaveBeenCalledWith('reelStop', expect.anything());
 
       // Mount-synced APIs fire cleanly on demand
       playSpy.mockClear();
-      band.playCutInEvolve(EVOLUTION_RECIPES[0].id);
-      expect(evolveSpy).toHaveBeenCalledWith(EVOLUTION_RECIPES[0].id, { immediate: true, leadMs: 90 });
+      band.playCutInEvolve(WEAPON_EVOLUTIONS[0].id);
+      expect(evolveSpy).toHaveBeenCalledWith(WEAPON_EVOLUTIONS[0].id, { immediate: true, leadMs: 90 });
 
       cueSpy.mockClear();
       band.playWeaponPickReelStop();

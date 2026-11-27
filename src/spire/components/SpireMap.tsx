@@ -29,6 +29,7 @@ interface Props {
   run: SpireRun;
   onSelectNode: (nodeId: string) => void;
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
+  onSelectEvolution?: (weaponId: string, evoId: string) => void;
 }
 
 const NODE_STYLE: Record<SpireNodeKind, { label: string; icon: IconName; bg: string; fg: string; border: string }> = {
@@ -45,7 +46,7 @@ const ROW_H = 82;
 const TOP_PAD = 36;
 const BOSS_ROW_EXTRA = 22;
 
-const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
+const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon, onSelectEvolution }) => {
   const reducedMotion = useReducedMotion();
   const scrollRef = useRef<ScrollView>(null);
   const didInitialScrollRef = useRef(false);
@@ -219,6 +220,7 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon }) => {
             <SpireBeltBar
               run={run}
               onReorder={onReorderWeapon}
+              onSelectEvolution={onSelectEvolution}
               title="BELT ORDER"
               compact
               testIDPrefix="spire-map-belt"

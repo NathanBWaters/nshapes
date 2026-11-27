@@ -3,8 +3,8 @@
  *
  * Designed as a clean, self-contained roguelike climb module (`src/spire/`) that
  * reuses Adventure Mode's combat engine (`runReducer`, `AdventureRun`), weapons
- * (`getArmoryWeapon`, `WeaponExplainer`), 208 Evolutions, Fighter Skill Trees,
- * Arcana, Set-Parrying, Live Multiplier Ignition, Kill-Cam, and adaptive audio.
+ * (`getArmoryWeapon`, `WeaponExplainer`), 192 Per-Weapon Timed Evolutions, Fighter
+ * Skill Trees, Arcana, Set-Parrying, Live Multiplier Ignition, Kill-Cam, and adaptive audio.
  */
 import type { CharacterName, Weapon } from '@/types';
 import type { IconName } from '@/components/Icon';
@@ -231,12 +231,16 @@ export interface SpireRun {
   startingGraces: number;
   /** Shared Adventure Workshop upgrade tiers (heavy_hitter, hourglass, sharp_eyes, second_wind, lucky_purse, evolution_lab, tough_hide). */
   upgrades: Record<string, number>;
-  extraEvolutionCap: number;
-  extraEvolutionLikelihood: number;
+  /** Extra active evolution duration (ms) accumulated from Daily Mutators & Summit events */
+  extraEvolutionDurationMs: number;
+  /** Bonus evolution condition progress ticks accumulated from Daily Mutators & Summit events */
+  extraEvolutionChargeBonus: number;
 
   // Persistent build (strictly capped at MAX_SUMMIT_WEAPONS = 6!)
   weapons: string[];
   weaponLevels: Record<string, number>;
+  /** Equipped per-weapon timed evolution ID (`weaponId -> evoId`); players can freely switch among all 3 per weapon */
+  equippedEvolutions?: Record<string, string>;
   arcana: ArcanaId[];
   skillNodes: string[];
 

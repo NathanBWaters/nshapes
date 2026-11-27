@@ -291,7 +291,6 @@ const SpireEndScreen: React.FC<Props> = ({
             weaponBuilds={activeStory === finalFightStory && lastFight ? lastFight.builds : builds}
             startDelayMs={380}
             reduced={reduced}
-            hidePowerNote
             testID="spire-end-damage-story"
             headerRight={
               canToggleScope ? (

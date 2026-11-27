@@ -1,71 +1,79 @@
 /**
- * Where a fight's rules come from (skill nodes, held weapons, active
- * evolutions) and how their standing modifiers add up. Pure: shared by the
- * engine and by the pre-fight loadout preview.
+ * Where a fight's rules come from (skill nodes, held weapons + their Synergy
+ * Graph cross-edges, active per-weapon timed evolutions, weapon growth) and
+ * how their standing modifiers add up. Pure: shared by the engine and by
+ * pre-fight loadout previews.
  */
 import type { Weapon } from '@/types';
-import type { EvolutionRecipe, LevelDef } from '../types';
+import type { SynergyCounters, WeaponEvolutionRuntime } from '../types';
 import type { Modifiers, Rule, RuleSource, WeaponTriggerKind } from '../rules/types';
+import type { WeaponBuilds } from '../data/weaponStats';
 import { getSkillNode } from '../data/skillTrees';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { getWeaponEvolution } from '../data/evolutions';
 import { weaponRuleSource } from '../data/armory';
+import { UNDERSTUDY_ID } from '../data/adventureWeapons';
+import {
+  evaluateWeaponSynergyModifiers,
+  weaponSynergyRules,
+  type SynergyEvalContext,
+} from '../data/synergy';
 
-export const EVOLUTION_RULES = {
-  /** % chance per refill batch while a recipe is armed */
-  baseLikelihood: 16,
-  /** Workshop "Evolution Lab": % per tier */
-  labPerTier: 4,
-  durationMs: 30000,
-  perFight: 3,
-  /** Every active evolution adds this to every Set */
-  setDamage: 2,
-  /** While any evolution is active, every Set's own hit is multiplied by this */
-  setMultiplier: 1.5,
-  /** Starting an evolution hits the foe for this much */
-  startDamage: 10,
-  /** Starting an evolution adds this much Power (data/weaponPower.ts): combining weapons surges your scaling */
-  power: 1.5,
+/** Universal Evolved-Weapon Chassis constants (spec-combat-synergy.md §6.3). */
+export const EVOLUTION_CHASSIS = {
+  /** Flat base damage added to every Set per currently active evolved weapon */
+  setFlatDamage: 8,
+  /** Additive Set multiplier per active evolved weapon: 1 + activeCount * 0.20 */
+  setAdditiveMult: 0.2,
+  /** Instant base damage burst dealt when any weapon evolution ignites */
+  ignitionBurstDamage: 18,
+  /** Default recharge cooldown (ms) after an evolution expires before charging resumes */
+  defaultCooldownMs: 3000,
+  /** Extra active duration (ms) per Workshop Evolution Lab tier */
+  labDurationMsPerTier: 2000,
 } as const;
 
-export { getSkillNode };
+export { getSkillNode, getWeaponEvolution };
 
-export const getRecipe = (id: string): EvolutionRecipe | undefined => EVOLUTION_RECIPES.find(r => r.id === id);
-
-/** A weapon id belongs to a family when it is listed in it (or is an old copy id of one, `x-rare`). */
-export const inFamily = (weaponId: string, family: string[]) => family.some(p => weaponId === p || weaponId.startsWith(`${p}-`));
-
-/**
- * Recipes whose two families are both held, in recipe order. Once the player
- * knows any recipe (`known` is non-empty: evolutions are unlocked), EVERY
- * recipe arms from its weapons: the rest are discovered by forging them.
- */
-export const armedRecipesFor = (weapons: Weapon[], known: readonly string[]): string[] =>
-  known.length === 0
-    ? []
-    : EVOLUTION_RECIPES.filter(r => r.families.every(fam => weapons.some(w => inFamily(w.id, fam)))).map(r => r.id);
+/** Currently active per-weapon timed evolution trackers. */
+export const activeWeaponEvolutions = (
+  evos: readonly WeaponEvolutionRuntime[]
+): WeaponEvolutionRuntime[] => evos.filter(e => e.phase === 'active');
 
 /**
- * Evolution recipes that adding `candidateWeaponId` to `heldWeaponIds` would
- * newly arm (ignoring recipes already armed by `heldWeaponIds`).
- * Shared by Adventure Mode (`charmSynergyWithEquipped`) and Starfall Spire.
+ * Effective weapon ID for scaling/Synergy lookups at belt slot `index`.
+ * Understudy copies its immediate left neighbor (when present and not another Understudy).
  */
-export const newRecipesArmedBy = (
-  heldWeaponIds: readonly string[],
-  candidateWeaponId: string
-): EvolutionRecipe[] => {
-  if (heldWeaponIds.includes(candidateWeaponId)) return [];
-  return EVOLUTION_RECIPES.filter(r => {
-    const alreadyArmed = r.families.every(fam => heldWeaponIds.some(id => inFamily(id, fam)));
-    if (alreadyArmed) return false;
-    return (
-      (inFamily(candidateWeaponId, r.families[0]) && heldWeaponIds.some(id => inFamily(id, r.families[1]))) ||
-      (inFamily(candidateWeaponId, r.families[1]) && heldWeaponIds.some(id => inFamily(id, r.families[0])))
-    );
-  });
+export const effectiveWeaponIdAt = (weapons: readonly Weapon[], index: number): string => {
+  const w = weapons[index];
+  if (!w) return '';
+  if (w.id === UNDERSTUDY_ID && index > 0) {
+    const left = weapons[index - 1];
+    if (left && left.id !== UNDERSTUDY_ID) return left.id;
+  }
+  return w.id;
+};
+
+/** Effective weapon level for Synergy hook scaling at belt slot `index`. */
+export const effectiveWeaponLevelAt = (
+  weapons: readonly Weapon[],
+  index: number,
+  builds?: WeaponBuilds
+): number => {
+  const w = weapons[index];
+  if (!w) return 1;
+  const ownLv = builds?.[w.id]?.level ?? w.level ?? 1;
+  if (w.id === UNDERSTUDY_ID && index > 0) {
+    const left = weapons[index - 1];
+    if (left && left.id !== UNDERSTUDY_ID) {
+      const leftLv = builds?.[left.id]?.level ?? left.level ?? 1;
+      return Math.max(ownLv, leftLv);
+    }
+  }
+  return ownLv;
 };
 
 export interface KeyedRule {
-  /** Stable for the whole fight: `node:<id>#i`, `w<slot>:<weaponId>#i`, `evo:<id>#i` */
+  /** Stable for the whole fight: `node:<id>#i`, `w<slot>:<weaponId>#i`, `evo:<evoId>#i` */
   key: string;
   rule: Rule;
 }
@@ -73,10 +81,17 @@ export interface KeyedRule {
 export interface SourceInputs {
   skillNodes: readonly string[];
   weapons: readonly Weapon[];
-  activeEvolutions: readonly { id: string }[];
+  /** Per-weapon timed evolution trackers (only `phase === 'active'` entries contribute live sources) */
+  weaponEvolutions: readonly WeaponEvolutionRuntime[];
+  /** Optional weapon build levels for Synergy `modPerStep` scaling */
+  weaponBuilds?: WeaponBuilds;
+  /** Optional live 15-node Synergy Graph counters for `modPerStep` modifiers */
+  synergy?: SynergyCounters;
+  /** Optional live hearts/clock/links context for special Synergy hooks */
+  synergyCtx?: SynergyEvalContext;
   /** Standing modifiers from weapon growth this fight (data/weaponGrowth.ts) */
   growth?: Modifiers;
-  /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal shell) */
+  /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal chassis) */
   blankEvolutionRules?: boolean;
 }
 
@@ -88,13 +103,34 @@ export const liveSources = (s: SourceInputs): { key: string; source: RuleSource 
     if (n) out.push({ key: `node:${id}`, source: n });
   }
   s.weapons.forEach((w, i) => {
-    const src = weaponRuleSource(w);
-    if (src.rules?.length || src.modifiers) out.push({ key: `w${i}:${w.id}`, source: src });
+    const baseSrc = weaponRuleSource(w);
+    const effId = effectiveWeaponIdAt(s.weapons, i);
+    const effLv = effectiveWeaponLevelAt(s.weapons, i, s.weaponBuilds);
+    const synRules: Rule[] =
+      w.id === UNDERSTUDY_ID && effId !== UNDERSTUDY_ID
+        ? [...weaponSynergyRules(UNDERSTUDY_ID), ...weaponSynergyRules(effId)]
+        : weaponSynergyRules(w.id);
+    const synMods = s.synergy
+      ? evaluateWeaponSynergyModifiers(effId, effLv, s.synergy, s.synergyCtx)
+      : undefined;
+    const hasSynMods = synMods && Object.keys(synMods).length > 0;
+    const rules = synRules.length > 0 ? [...(baseSrc.rules ?? []), ...synRules] : baseSrc.rules;
+    const modifiers = hasSynMods ? combineModifiers([baseSrc.modifiers, synMods]) : baseSrc.modifiers;
+    if (rules?.length || (modifiers && Object.keys(modifiers).length > 0)) {
+      out.push({
+        key: `w${i}:${w.id}`,
+        source: {
+          ...(rules?.length ? { rules } : {}),
+          ...(modifiers && Object.keys(modifiers).length > 0 ? { modifiers } : {}),
+        },
+      });
+    }
   });
   if (!s.blankEvolutionRules) {
-    for (const e of s.activeEvolutions) {
-      const r = getRecipe(e.id);
-      if (r) out.push({ key: `evo:${e.id}`, source: r.source });
+    for (const e of s.weaponEvolutions) {
+      if (e.phase !== 'active') continue;
+      const def = getWeaponEvolution(e.evoId);
+      if (def) out.push({ key: `evo:${e.evoId}`, source: def.source });
     }
   }
   if (s.growth && Object.keys(s.growth).length > 0) out.push({ key: 'growth', source: { modifiers: s.growth } });
@@ -140,17 +176,3 @@ export const combineModifiers = (list: (Modifiers | undefined)[]): Modifiers => 
 };
 
 export const modifiersOf = (s: SourceInputs): Modifiers => combineModifiers(liveSources(s).map(x => x.source.modifiers));
-
-/** Percent chance that a refill brings a Catalyst (before the Rainbow bonus). */
-export const evolutionLikelihoodFor = (labTier: number, mods: Modifiers, catalystChanceScale = 1): number =>
-  Math.max(0, (EVOLUTION_RULES.baseLikelihood + EVOLUTION_RULES.labPerTier * labTier + (mods.evolutionLikelihood ?? 0)) * catalystChanceScale);
-
-/** Evolutions a fight allows (practice has no limit; Boss & 3+ wave encounters grant +2 cap). */
-export const evolutionCapFor = (level: LevelDef, mods: Modifiers, extraCap = 0): number =>
-  level.rules.sandbox
-    ? Infinity
-    : EVOLUTION_RULES.perFight +
-      (level.isBoss || level.foes.length >= 3 ? 2 : 0) +
-      (level.rules.extraEvolutionCap ?? 0) +
-      (mods.extraEvolutionsPerFight ?? 0) +
-      extraCap;

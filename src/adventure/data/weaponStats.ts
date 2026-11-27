@@ -168,6 +168,7 @@ export const weaponValues = (w: Weapon, build: WeaponBuild = BASE_BUILD): Record
 // ─── Wording ────────────────────────────────────────────────────────────────
 
 const num = (n: number) => String(tidy(Math.round(n * 10) / 10));
+const num2 = (n: number) => String(tidy(n));
 const pct = (n: number) => `${num(n)}%`;
 /** Clean integer count (never fractional ranges like "2-3") */
 export const count = (n: number) => String(Math.round(tidy(n)));
@@ -175,40 +176,40 @@ const plural = (n: number, word: string) => `${word}${Math.round(tidy(n)) === 1 
 
 /** A stat line's value as shown in the Workshop ("36%", "+1.5", "2") */
 export const formatStat = (unit: Unit, n: number): string =>
-  unit === '%' ? pct(n) : unit === 's' ? `${num(n)}s` : unit === 'dmg' ? `+${num(n)}` : unit === '×' ? `×${num(n)}` : num(n);
+  unit === '%' ? pct(n) : unit === 's' ? `${num(n)}s` : unit === 'dmg' ? `+${num(n)}` : unit === '×' ? `×${num2(n)}` : num(n);
 
 type Text = { description: string; shortDescription: string };
 type V = Record<string, number>;
 
 /**
  * Descriptions of the plain (stat) weapons from their current numbers.
- * Collateral is the base damage per destroyed card (engine/fight.ts), shown
- * as a total with the weapon's bonus.
+ * Collateral base damage per destroyed card (engine/fight.ts: 2 blast/burn/ricochet,
+ * 4 laser) is shown as a total with the weapon's bonus.
  */
 const STAT_TEXT: Record<string, (v: V) => Text> = {
   'blast-powder': v => ({
-    description: `${pct(v.explosionChance)} chance per Set to blast the cards next to it. Each blasted card deals ${num(1 + v.explosionDamage)} damage.`,
-    shortDescription: `${pct(v.explosionChance)} blast, ${num(1 + v.explosionDamage)} dmg per card`,
+    description: `${pct(v.explosionChance)} chance per Set to blast the cards next to it. Each blasted card deals ${num(2 + v.explosionDamage)} damage.`,
+    shortDescription: `${pct(v.explosionChance)} blast, ${num(2 + v.explosionDamage)} dmg per card`,
   }),
   'oracle-eye': v => ({
     description: `Idle Radar: after ${ORACLE_WAIT_S}s without a Set, ${pct(v.autoHintChance)} chance to point out a card of a Set. Matching a hinted Set refunds +${num(v.refund)}s on the clock.`,
     shortDescription: `${ORACLE_WAIT_S}s auto-hint (${pct(v.autoHintChance)}); hinted Sets +${num(v.refund)}s`,
   }),
   'mystic-sight': v => ({
-    description: `2-Card Precision Sniper: ${pct(v.autoHintChance)} auto-hint chance (${pct(v.enhancedHintChance)} point out 2 cards). Hinted Sets deal +${num(v.snipe)}, and every ${MYSTIC_EVERY}rd hinted Set primes ×1.5 next Set.`,
-    shortDescription: `${pct(v.enhancedHintChance)} 2-card hints; hinted Sets +${num(v.snipe)} & ×1.5`,
+    description: `2-Card Precision Sniper: ${pct(v.autoHintChance)} auto-hint chance (${pct(v.enhancedHintChance)} point out 2 cards). Hinted Sets deal +${num(v.snipe)} base, and every ${MYSTIC_EVERY}rd hinted Set primes ×1.25 next Set.`,
+    shortDescription: `${pct(v.enhancedHintChance)} 2-card hints; hinted Sets +${num(v.snipe)} & ×1.25`,
   }),
   'field-stone': v => ({
-    description: `Start every fight with ${count(v.fieldSize)} extra ${plural(v.fieldSize, 'card')} (+${pct(v.catalystBoost)} Catalyst odds). At ${WEAPON_CADENCE.FIELD_OVERFLOW_BOARD}+ cards, waves open and every ${WEAPON_CADENCE.FIELD_OVERFLOW_EVERY}th Set spawns a Power card.`,
-    shortDescription: `+${count(v.fieldSize)} cards, +${pct(v.catalystBoost)} Catalysts & overflow Power cards`,
+    description: `Start every fight with ${count(v.fieldSize)} extra ${plural(v.fieldSize, 'card')} (+${pct(v.holoChance)} Holo card odds). At 15+ cards, waves open with a Holo card; at ${WEAPON_CADENCE.FIELD_OVERFLOW_BOARD}+ cards, every ${WEAPON_CADENCE.FIELD_OVERFLOW_EVERY}th Set spawns a Power card.`,
+    shortDescription: `+${count(v.fieldSize)} cards, +${pct(v.holoChance)} Holo odds & overflow Holo/Power cards`,
   }),
   'growth-seed': v => ({
-    description: `${pct(v.boardGrowthChance)} chance per Set to add a card to the board (or empower the board at max size). Each time it fires, every card on the board deals +1 more when matched.`,
-    shortDescription: `${pct(v.boardGrowthChance)} growth, board +1 each time`,
+    description: `${pct(v.boardGrowthChance)} chance per Set to add a card to the board (or empower the board at max size). Each time it fires, every card on the board deals +2 more when matched.`,
+    shortDescription: `${pct(v.boardGrowthChance)} growth, board +2 each time`,
   }),
   'flint-spark': v => ({
-    description: `${pct(v.fireSpreadChance)} chance per Set to ignite adjacent cards. Each burned card deals ${num(1 + v.burnDamage)} damage (carrying your Set's multipliers) and may spread fire.`,
-    shortDescription: `${pct(v.fireSpreadChance)} fire, ${num(1 + v.burnDamage)} dmg per burned card`,
+    description: `${pct(v.fireSpreadChance)} chance per Set to ignite adjacent cards. Each burned card deals ${num(2 + v.burnDamage)} damage (carrying your Set's multipliers) and may spread fire.`,
+    shortDescription: `${pct(v.fireSpreadChance)} fire, ${num(2 + v.burnDamage)} dmg per burned card`,
   }),
   'second-chance': v => ({
     description: `Safety Cushion: start every fight with ${count(v.graces)} extra ${plural(v.graces, 'grace')}, with a ${pct(v.keepChance)} chance a spent grace is spared and stays ready.`,
@@ -231,7 +232,7 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `+${count(v.maxHints)} ${plural(v.maxHints, 'hint')}; spending a hint freezes ${num(v.freeze)}s`,
   }),
   'seeker-lens': v => ({
-    description: `Hint Hoarder: ${pct(v.hintGainChance)} chance per Set to gain a hint. Every unspent hint you hold adds +${num(v.perHint)} damage to every Set.`,
+    description: `Hint Hoarder: ${pct(v.hintGainChance)} chance per Set to gain a hint. Every unspent hint you hold adds +${num(v.perHint)} base damage to every Set.`,
     shortDescription: `${pct(v.hintGainChance)} hint; +${num(v.perHint)} dmg per unspent hint held`,
   }),
   'scholars-tome': v => ({
@@ -251,19 +252,19 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `${pct(v.timeGainChance)} chance of +${num(v.timeGainAmount)}s`,
   }),
   'prismatic-ray': v => ({
-    description: `${pct(v.laserChance)} chance per Set to fire a laser through a row or column. Each card hit deals ${num(2 + v.laserDamage)} damage.`,
-    shortDescription: `${pct(v.laserChance)} laser, ${num(2 + v.laserDamage)} dmg per card`,
+    description: `${pct(v.laserChance)} chance per Set to fire a laser through a row or column. Each card hit deals ${num(4 + v.laserDamage)} damage.`,
+    shortDescription: `${pct(v.laserChance)} laser, ${num(4 + v.laserDamage)} dmg per card`,
   }),
   'chaos-shard': v => ({
-    description: `${pct(v.ricochetChance)} chance per Set to ricochet into a random card, ${pct(v.ricochetChainChance)} to keep bouncing. Each hit deals ${num(1 + v.ricochetDamage)} damage.`,
-    shortDescription: `${pct(v.ricochetChance)} ricochet, ${num(1 + v.ricochetDamage)} dmg per hit`,
+    description: `${pct(v.ricochetChance)} chance per Set to ricochet into a random card, ${pct(v.ricochetChainChance)} to keep bouncing. Each hit deals ${num(2 + v.ricochetDamage)} damage.`,
+    shortDescription: `${pct(v.ricochetChance)} ricochet, ${num(2 + v.ricochetDamage)} dmg per hit`,
   }),
   'echo-stone': v => ({
-    description: `${pct(v.echoChance)} chance per Set to match another Set for you (an echo). Every echo also hits the foe for ${num(v.strike)}.`,
+    description: `${pct(v.echoChance)} chance per Set to match another Set for you (an echo). Every echo also hits the foe for +${num(v.strike)}.`,
     shortDescription: `${pct(v.echoChance)} echo, +${num(v.strike)} per echo`,
   }),
   'chain-reaction': v => ({
-    description: `${pct(v.echoChance)} chance per Set to echo (match another Set for you). ${pct(v.chainReactionChance)} of echoes match 2 Sets, and every echo hits the foe for ${num(v.strike)}.`,
+    description: `${pct(v.echoChance)} chance per Set to echo (match another Set for you). ${pct(v.chainReactionChance)} of echoes match 2 Sets, and every echo hits the foe for +${num(v.strike)}.`,
     shortDescription: `${pct(v.echoChance)} echo, ${pct(v.chainReactionChance)} double, +${num(v.strike)} each`,
   }),
   connector: v => ({
@@ -291,11 +292,11 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `${pct(v.timeGainChance)} +${num(v.timeGainAmount)}s; time gains: ${pct(v.bridgeChance)} echo`,
   }),
   'soul-harvest': v => ({
-    description: `${pct(v.ricochetChance)} chance per Set to ricochet into a random card for ${num(1 + v.ricochetDamage)}. Sets that destroy extra cards have a ${pct(v.bridgeChance)} chance to heal 1 heart, and every heal (even at full hearts) hits the foe for ${num(v.strike)}.`,
+    description: `${pct(v.ricochetChance)} chance per Set to ricochet into a random card for ${num(2 + v.ricochetDamage)}. Sets that destroy extra cards have a ${pct(v.bridgeChance)} chance to heal 1 heart, and every heal (even at full hearts) hits the foe for +${num(v.strike)}.`,
     shortDescription: `${pct(v.ricochetChance)} ricochet; destroys: ${pct(v.bridgeChance)} heal; heals hit +${num(v.strike)}`,
   }),
   'cascade-core': v => ({
-    description: `${pct(v.echoChance)} chance per Set to echo (match another Set for you). Every echo: ${pct(v.bridgeChance)} chance to set a card on fire. Burned cards deal ${num(1 + v.burnDamage)}.`,
+    description: `${pct(v.echoChance)} chance per Set to echo (match another Set for you). Every echo: ${pct(v.bridgeChance)} chance to set a card on fire. Burned cards deal ${num(2 + v.burnDamage)}.`,
     shortDescription: `${pct(v.echoChance)} echo; echoes: ${pct(v.bridgeChance)} fire`,
   }),
   'fortunes-blessing': v => ({
@@ -303,11 +304,11 @@ const STAT_TEXT: Record<string, (v: V) => Text> = {
     shortDescription: `Wave gold card; 2× gold + ${pct(v.bonusHintChance)} hint; coins: ${pct(v.bridgeChance)} hint`,
   }),
   'wisdom-chain': v => ({
-    description: `Dividend Loop: +${WISDOM_COIN_PCT}% coins, ${pct(v.xpGainChance)} XP chance (+2 XP every ${WISDOM_XP_EVERY}th Set), XP has ${pct(v.bridgeChance)} coin chance, and wave openers prime ×${num(v.openerMult)} next Set.`,
-    shortDescription: `+${WISDOM_COIN_PCT}% coins, XP→${pct(v.bridgeChance)} coin, wave openers ×${num(v.openerMult)}`,
+    description: `Dividend Loop: +${WISDOM_COIN_PCT}% coins, ${pct(v.xpGainChance)} XP chance (+2 XP every ${WISDOM_XP_EVERY}th Set), XP has ${pct(v.bridgeChance)} coin chance, and wave openers deal +8 base & prime ×${num2(v.openerMult)} next Set.`,
+    shortDescription: `+${WISDOM_COIN_PCT}% coins, XP→${pct(v.bridgeChance)} coin, wave openers +8 & ×${num2(v.openerMult)}`,
   }),
   'grace-conduit': v => ({
-    description: `Defensive Retaliator: +${count(v.graces)} starting ${plural(v.graces, 'grace')}. Every grace save has a ${pct(v.bridgeChance)} chance to fire a laser (${num(2 + v.laserDamage)} dmg per card).`,
+    description: `Defensive Retaliator: +${count(v.graces)} starting ${plural(v.graces, 'grace')}. Every grace save has a ${pct(v.bridgeChance)} chance to fire a laser (${num(4 + v.laserDamage)} dmg per card).`,
     shortDescription: `+${count(v.graces)} ${plural(v.graces, 'grace')}; saves: ${pct(v.bridgeChance)} laser`,
   }),
   'life-link': v => ({

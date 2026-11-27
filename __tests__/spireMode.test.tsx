@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { ALL_ARMORY_WEAPON_IDS } from '@/adventure/data/armory';
 import { ARCANA } from '@/adventure/data/arcana';
+import { WEAPON_EVOLUTIONS, evolutionsForWeapon } from '@/adventure/data/evolutions';
 import { skillTreeOf } from '@/adventure/data/skillTrees';
 import { getUpgrade } from '@/adventure/data/upgrades';
 import { loadAdventureSave, writeAdventureSave } from '@/adventure/save';
@@ -24,7 +25,6 @@ import {
   SUMMIT_THEME_PACKS,
   buildFocusedWeaponPool,
 } from '@/spire/data/themePacks';
-import { createDailySpireRun } from '@/spire/engine/runState';
 import {
   ARCANA_PURGE_COST,
   MAX_SHOP_LOCKS,
@@ -43,8 +43,10 @@ import {
   claimRewardWeapon,
   claimTreasure,
   completeSpireBattle,
+  createDailySpireRun,
   createSpireRun,
   enterEndlessSpire,
+  equipSpireWeaponEvolution,
   grantSpireWeapon,
   isSpireUpgradeMaxed,
   leaveShop,
@@ -73,14 +75,16 @@ import {
 } from '@/spire/engine/runState';
 import { simulateSpireClimb } from '@/spire/engine/bot';
 import {
+  ALL_EVOLUTION_IDS,
   SPIRE_FIGHT_FEATURES,
   clashesWithBelt,
-  spireArmedRecipes,
   spireEncounterLoadout,
   spireEncounterToLevel,
+  spireEquippedEvolutions,
   spireHeldWeapons,
   spireRunOverrides,
   spireRunToVirtualSave,
+  spireWeaponSynergyOverlap,
 } from '@/spire/engine/bridge';
 import {
   createInitialSpireMeta,
@@ -156,7 +160,9 @@ describe('Starfall Summit — Map DAG, Events & Shared Engine Bridge', () => {
     }
   });
 
-  it('every fighter has a valid Level 2 starter kit that arms a Floor 1 Evolution in the shared pool', () => {
+  it('every fighter has a valid Level 2 starter kit with armed per-weapon Evolutions across the 192-evolution pool', () => {
+    expect(ALL_EVOLUTION_IDS).toHaveLength(192);
+    expect(WEAPON_EVOLUTIONS).toHaveLength(192);
     for (const f of FIGHTERS) {
       const kit = STARTER_KITS[f.name];
       expect(kit).toBeDefined();
@@ -165,31 +171,44 @@ describe('Starfall Summit — Map DAG, Events & Shared Engine Bridge', () => {
       const run = createSpireRun(f.name, 0, 1001);
       expect(run.weaponLevels[kit.starterWeapon]).toBe(2);
       expect(run.weaponLevels[kit.bonusWeapon]).toBe(2);
-      expect(spireArmedRecipes(run).length).toBeGreaterThanOrEqual(1);
+      const equippedEvos = spireEquippedEvolutions(run);
+      expect(Object.keys(equippedEvos)).toHaveLength(2);
+      expect(equippedEvos[kit.starterWeapon]).toBeTruthy();
+      expect(equippedEvos[kit.bonusWeapon]).toBeTruthy();
     }
   });
 
-  it('runs item-driven Spire fights with zero generic Power scaling, stacking Evolution multipliers, and anti-bloat drafts', () => {
+  it('runs item-driven Spire fights with per-weapon Evolutions, Synergy Graph hooks, and anti-bloat drafts', () => {
     let run = createSpireRun('Corgi', 0, 4242);
     const firstId = reachableNodeIds(run.map, null)[0];
     run = selectSpireNode(run, firstId);
     const enc = run.activeEncounter!;
     const overrides = spireRunOverrides(run);
-    expect(overrides.powerScaling).toBe(0);
-    expect(overrides.stackEvolutionMultipliers).toBe(true);
+    expect(overrides.uncappedCharms).toBe(true);
+    expect(overrides.uncappedArcana).toBe(true);
 
     const sim = simulateRun(spireEncounterToLevel(run, enc), spireRunToVirtualSave(run), BOTS.expert, 777, undefined, {
       skipPicks: true,
       features: new Set(SPIRE_FIGHT_FEATURES),
       overrides,
     });
-    expect(sim.state.power).toBe(0);
+    expect(sim.state.weaponEvolutions.length).toBeGreaterThanOrEqual(2);
     expect(sim.state.totalDamage).toBeGreaterThan(0);
 
-    // First Skirmish win grants an early Fighter Skill Node draft
-    const afterWin = completeSpireBattle(run, { ...sim.state, status: 'won', endReason: 'defeated', foeHp: 0 });
+    // First Skirmish win grants an early Fighter Skill Node draft and records forgedEvolutions cleanly
+    const sampleEvoId = sim.state.weaponEvolutions[0].evoId;
+    const afterWin = completeSpireBattle(run, {
+      ...sim.state,
+      status: 'won',
+      endReason: 'defeated',
+      foeHp: 0,
+      evolutionsTriggered: 1,
+      forgedEvolutions: [sampleEvoId],
+    });
     expect(afterWin.phase).toBe('reward');
     expect(afterWin.reward?.skillOptions.length).toBeGreaterThan(0);
+    expect(afterWin.stats.evolutionsForged).toBeGreaterThanOrEqual(1);
+    expect(afterWin.stats.forgedRecipeIds).toContain(sampleEvoId);
 
     // Drafts & Arcana exclude dead XP-only items (scholars-tome + wisdom-chain) and include upgrade offers for held weapons
     expect(SPIRE_EXCLUDED_WEAPONS.has('scholars-tome')).toBe(true);
@@ -513,10 +532,29 @@ describe('Starfall Summit — Map DAG, Events & Shared Engine Bridge', () => {
     expect(loadSpireRun()?.id).toBe(run.id);
 
     writeAdventureSave(createNewSave());
-    syncSpireDiscoveriesToAdventure(['phoenix-pyre']);
-    expect(loadAdventureSave().discoveredEvolutions).toContain('phoenix-pyre');
+    const discoveredId = WEAPON_EVOLUTIONS[0].id;
+    syncSpireDiscoveriesToAdventure([discoveredId]);
+    expect(loadAdventureSave().discoveredEvolutions).toContain(discoveredId);
     resetSpireStorage();
     expect(loadSpireRun()).toBeNull();
+  });
+
+  it('supports equipSpireWeaponEvolution for all 3 evolutions per weapon and guards mismatches cleanly', () => {
+    const run = createSpireRun('Orange Tabby', 0, 2027);
+    const weaponId = run.weapons[0];
+    const [evoA, evoB, evoC] = evolutionsForWeapon(weaponId);
+    expect(spireEquippedEvolutions(run)[weaponId]).toBe(evoA.id);
+
+    const withB = equipSpireWeaponEvolution(run, weaponId, evoB.id);
+    expect(spireEquippedEvolutions(withB)[weaponId]).toBe(evoB.id);
+    expect(spireRunToVirtualSave(withB).equippedEvolutions?.[weaponId]).toBe(evoB.id);
+
+    const withC = equipSpireWeaponEvolution(withB, weaponId, evoC.id);
+    expect(spireEquippedEvolutions(withC)[weaponId]).toBe(evoC.id);
+
+    // Rejects mismatched evolution belonging to a different weapon
+    const otherEvo = WEAPON_EVOLUTIONS.find(e => e.weaponId !== weaponId)!;
+    expect(equipSpireWeaponEvolution(withC, weaponId, otherEvo.id)).toBe(withC);
   });
 
   it('reuses Adventure ALL_ARMORY_WEAPON_IDS, canonical UPGRADES, and startingLoadout without duplicate specs', () => {
@@ -544,7 +582,7 @@ describe('Starfall Summit — Map DAG, Events & Shared Engine Bridge', () => {
     const withUpgrades = { ...run, upgrades: { ...run.upgrades, heavy_hitter: 2, hourglass: 1 } };
     const firstFight = withUpgrades.map.nodes.find(n => n.encounter)!.encounter!;
     const loadout = spireEncounterLoadout(withUpgrades, firstFight);
-    expect(loadout.bonusDamagePerMatch).toBe(2);
+    expect(loadout.bonusDamagePerMatch).toBe(getUpgrade('heavy_hitter').bonusDamage!(2));
     expect(loadout.timer).toBe(firstFight.timer + 8);
   });
 
@@ -1160,8 +1198,16 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
     );
     expect(campView.getByTestId('spire-campfire')).toBeTruthy();
 
-    const buildView = render(<SpireBuildModal visible run={run} onClose={() => {}} />);
+    const onSelectEvolution = jest.fn();
+    const [, blastEvoB] = evolutionsForWeapon('blast-powder');
+    const buildView = render(
+      <SpireBuildModal visible run={run} onSelectEvolution={onSelectEvolution} onClose={() => {}} />
+    );
     expect(buildView.getByTestId('spire-build-weapon-blast-powder')).toBeTruthy();
+    expect(buildView.getByTestId('spire-build-synergy')).toBeTruthy();
+    expect(buildView.getByTestId('spire-build-evo-blast-powder')).toBeTruthy();
+    fireEvent.press(buildView.getByTestId(`evo-option-${blastEvoB.id}`));
+    expect(onSelectEvolution).toHaveBeenCalledWith('blast-powder', blastEvoB.id);
 
     // Ensure claimRewardWeapon works cleanly as well
     const rewardRun = claimRewardWeapon(
@@ -1254,7 +1300,7 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
     expect(onRateEnd).toHaveBeenCalledWith('down', []);
   });
 
-  it('renders explicit EVO details & Clash warnings on SpireShop/SpireRewardScreen and Accept/Decline on Wandering Alchemist', () => {
+  it('renders Belt Synergy match badges & Clash warnings on SpireShop/SpireRewardScreen and Accept/Decline on Wandering Alchemist', () => {
     const base = createSpireRun('Orange Tabby', 0, 1111);
     const clashRun = {
       ...base,
@@ -1263,6 +1309,10 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
       weaponLevels: { 'blast-powder': 2, 'chain-gang': 2 },
       arcana: ['monochrome_pact' as const],
     };
+    const synergyCandidate = SPIRE_WEAPON_POOL.find(
+      id => !clashRun.weapons.includes(id) && spireWeaponSynergyOverlap(clashRun, id).length > 0
+    )!;
+    expect(synergyCandidate).toBeTruthy();
     const onToggleLock = jest.fn();
     const onSell = jest.fn();
     const onPurge = jest.fn();
@@ -1272,7 +1322,7 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
         shop={{
           weapons: [
             { weaponId: 'long-fuse', level: 2, price: 65, sold: false },
-            { weaponId: 'pinata', level: 2, price: 65, sold: false },
+            { weaponId: synergyCandidate, level: 2, price: 65, sold: false },
           ],
           arcana: [],
           upgrades: [],
@@ -1298,7 +1348,7 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
       />
     );
     expect(shopView.getByTestId('spire-shop-clash-0')).toBeTruthy();
-    expect(shopView.getByTestId('spire-shop-evo-1')).toBeTruthy();
+    expect(shopView.getByTestId('spire-shop-synergy-1')).toBeTruthy();
     fireEvent.press(shopView.getByTestId('spire-shop-lock-weapon-0'));
     expect(onToggleLock).toHaveBeenCalledWith('weapon', 0);
     fireEvent.press(shopView.getByTestId('spire-shop-belt-sell-chain-gang'));
@@ -1306,7 +1356,7 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
     fireEvent.press(shopView.getByTestId('spire-shop-purge-arcana-monochrome_pact'));
     expect(onPurge).toHaveBeenCalledWith('monochrome_pact');
 
-    // Reward screen also renders clash warning & explicit Evo card
+    // Reward screen also renders clash warning & Belt Synergy match strip
     const rewardView = render(
       <SpireRewardScreen
         run={clashRun}
@@ -1321,7 +1371,7 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
           perfectParries: 0,
           weaponOptions: [
             { weaponId: 'long-fuse', level: 2 },
-            { weaponId: 'pinata', level: 2 },
+            { weaponId: synergyCandidate, level: 2 },
           ],
           weaponClaimed: false,
           weaponRerolled: false,
@@ -1343,7 +1393,7 @@ describe('Starfall Summit — Shared UI Components Render Cleanly & Zero-"Spire"
       />
     );
     expect(rewardView.getByTestId('spire-draft-clash-0')).toBeTruthy();
-    expect(rewardView.getByTestId('spire-draft-evo-1')).toBeTruthy();
+    expect(rewardView.getByTestId('spire-draft-synergy-1')).toBeTruthy();
 
     // Wandering Alchemist shows explicit preview + Accept / Decline buttons
     const onResolveArcana = jest.fn();

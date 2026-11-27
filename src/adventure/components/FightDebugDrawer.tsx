@@ -3,8 +3,8 @@
  *
  * Mounts cleanly into `AdventureRun` (benefiting both Adventure Mode & Starfall
  * Summit) and renders strictly in `__DEV__`:
- *  - State controls: Set Foe HP (1 / 25% / 50% / Full), Freeze Clock, Spawn
- *    Catalyst, Force Parry Wind-Up / Perfect Window, Force Shading Surge,
+ *  - State controls: Set Foe HP (1 / 25% / 50% / Full), Freeze Clock, Trigger
+ *    Evo / Step Evo +1, Force Parry Wind-Up / Perfect Window, Force Shading Surge,
  *    Hot-Swap / Add Any Weapon (Lv 1–5), Set Hearts.
  *  - Inspection & Speed: Slow-Mo (`0.25×` / `0.5×` / `1×` wired to `fxClock`)
  *    + Layer Visibility Toggles (Hide FX / Dim Board / Show Anchors).
@@ -36,7 +36,8 @@ import { INK } from './ui';
 export interface FightDebugActions {
   onSetFoeHp?: (hp: number) => void;
   onToggleFreezeClock?: () => void;
-  onSpawnCatalyst?: () => void;
+  onTriggerEvo?: () => void;
+  onAdvanceEvo?: () => void;
   onForceParry?: (window: 'windup' | 'perfect') => void;
   onForceSurge?: () => void;
   onHotSwapWeapon?: (weaponId: string, level: number) => void;
@@ -180,7 +181,8 @@ const FightDebugDrawer: React.FC<FightDebugDrawerProps> = ({
                 active={clockFrozen}
                 onPress={() => actions?.onToggleFreezeClock?.()}
               />
-              <Chip testID="debug-spawn-catalyst" label="Spawn Catalyst" onPress={() => actions?.onSpawnCatalyst?.()} />
+              <Chip testID="debug-trigger-evo" label="Trigger Evo" onPress={() => actions?.onTriggerEvo?.()} />
+              <Chip testID="debug-advance-evo" label="Step Evo +1" onPress={() => actions?.onAdvanceEvo?.()} />
               <Chip testID="debug-parry-windup" label="Parry Wind-Up" onPress={() => actions?.onForceParry?.('windup')} />
               <Chip testID="debug-parry-perfect" label="Perfect Window" onPress={() => actions?.onForceParry?.('perfect')} />
               <Chip

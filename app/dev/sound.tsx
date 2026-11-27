@@ -3,7 +3,7 @@
  *
  * Start the band, switch Monitor Mode (Flat Stereo / Phone Sim 300-5 kHz Mono /
  * Low Vol -12 dB), audition all 10 arrangements, 6 fighter voices, biome ambience,
- * Kill-Cam 3-beat arc, 64 weapon voices, 208 evolution themes, and every cue.
+ * Kill-Cam 3-beat arc, 64 weapon voices, 192 per-weapon evolution themes, and every cue.
  * "Check levels" renders a scripted fight offline and reports stereo peak,
  * mono-sum peak, broadband RMS, and 300-5000 Hz phone-band RMS.
  */
@@ -26,8 +26,8 @@ import { NO_ALERTS, type FightAlerts, type FightMood } from '@/audio/director';
 import { INSTRUMENT_NAMES } from '@/audio/instruments';
 import { themeOf } from '@/audio/themes';
 import { WEAPON_VOICES } from '@/audio/voices';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
-import { WEAPON_ROLES, weaponRole } from '@/adventure/data/weaponRoles';
+import { WEAPON_EVOLUTIONS, evolutionsForWeapon } from '@/adventure/data/evolutions';
+import { WEAPON_ROLES, weaponRole, type WeaponRole } from '@/adventure/data/weaponRoles';
 import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { registerInterval } from '@/utils/perfWatchdog';
@@ -143,7 +143,7 @@ export default function SoundStudio() {
   const [monitorMode, setMonitorModeState] = useState<MonitorMode>('flat');
   const [activeAmbience, setActiveAmbience] = useState<AmbienceBiome | null>(null);
   const [fighterKind, setFighterKind] = useState<FighterCallKind>('signature');
-  const [recipeFilter, setRecipeFilter] = useState(0);
+  const [evoRoleFilter, setEvoRoleFilter] = useState<WeaponRole | 'all'>('damage');
   const [report, setReport] = useState<string | null>(null);
   const [, tick] = useState(0);
 
@@ -207,12 +207,16 @@ export default function SoundStudio() {
       evolutionEndsMs: 30000,
     });
 
-  const recipes = useMemo(() => EVOLUTION_RECIPES.slice(recipeFilter * 24, recipeFilter * 24 + 24), [recipeFilter]);
+  const evoWeapons = useMemo(() => {
+    const allIds = Object.keys(WEAPON_VOICES).filter(id => evolutionsForWeapon(id).length > 0);
+    return evoRoleFilter === 'all' ? allIds : allIds.filter(id => weaponRole(id) === evoRoleFilter);
+  }, [evoRoleFilter]);
   const mix = band.currentMix;
   const diag = chip.getDiagnostics();
 
   const check = async () => {
     setReport('Rendering stereo + mono-sum + 300-5kHz phone-band check…');
+    const firstEvoId = WEAPON_EVOLUTIONS[0].id;
     const fight = { ...baseMood('summit'), weapons: ['blast-powder', 'war-drum', 'mending-charm', 'snowball', 'greedy-chest'] };
     const buf = await renderOffline({
       sampleRate: 44100,
@@ -229,9 +233,10 @@ export default function SoundStudio() {
               b.payout({ combo: 4, tier: 2 });
               b.fire('blast-powder', 2);
               b.cue('blast', { slot: 3 });
+              b.cue('evoAlmost', { slot: 4 });
             },
           },
-          { at: 6, mood: { ...fight, combo: 8, foeHp: 0.15, evolutions: [EVOLUTION_RECIPES[0].id], evolutionEndsMs: 30000 }, run: b => b.playCutInEvolve(EVOLUTION_RECIPES[0].id) },
+          { at: 6, mood: { ...fight, combo: 8, foeHp: 0.15, evolutions: [firstEvoId], evolutionEndsMs: 20000 }, run: b => b.playCutInEvolve(firstEvoId) },
           {
             at: 9,
             run: b => {
@@ -351,7 +356,42 @@ export default function SoundStudio() {
           label="Cut-In Evolve (90ms)"
           onPress={() => {
             unlockAudio();
-            band.playCutInEvolve(EVOLUTION_RECIPES[0].id);
+            band.playCutInEvolve(WEAPON_EVOLUTIONS[0].id);
+          }}
+        />
+        <Chip
+          label="Evo Almost (Tier A)"
+          onPress={() => {
+            unlockAudio();
+            band.cue('evoAlmost');
+          }}
+        />
+        <Chip
+          label="Evo Progress (Tier C)"
+          onPress={() => {
+            unlockAudio();
+            band.cue('evoProgress', { amount: 0.66 });
+          }}
+        />
+        <Chip
+          label="Evo Charge (Tier B)"
+          onPress={() => {
+            unlockAudio();
+            band.cue('evoCharge');
+          }}
+        />
+        <Chip
+          label="Evo End (Tier C)"
+          onPress={() => {
+            unlockAudio();
+            band.cue('evoEnd');
+          }}
+        />
+        <Chip
+          label="Arcana Gain (Tier B)"
+          onPress={() => {
+            unlockAudio();
+            band.cue('arcanaGain');
           }}
         />
         <Chip
@@ -449,27 +489,47 @@ export default function SoundStudio() {
         </Row>
       ))}
 
-      <Text style={st.h2}>Evolutions ({EVOLUTION_RECIPES.length} themes)</Text>
-      <Row title="Page">
-        {Array.from({ length: Math.ceil(EVOLUTION_RECIPES.length / 24) }, (_, i) => (
-          <Chip key={i} label={`${i * 24 + 1}–${Math.min(EVOLUTION_RECIPES.length, i * 24 + 24)}`} on={recipeFilter === i} onPress={() => setRecipeFilter(i)} />
+      <Text style={st.h2}>Evolutions ({WEAPON_EVOLUTIONS.length} themes · 64 weapons × 3)</Text>
+      <Row title="Filter by weapon role">
+        <Chip label="All (64)" on={evoRoleFilter === 'all'} onPress={() => setEvoRoleFilter('all')} />
+        {WEAPON_ROLES.map(role => (
+          <Chip
+            key={role.id}
+            label={role.label}
+            on={evoRoleFilter === role.id}
+            onPress={() => setEvoRoleFilter(role.id)}
+          />
         ))}
       </Row>
-      <Row title="Tap: fanfare · hold: make it live">
-        {recipes.map(r => {
-          const t = themeOf(r.id);
-          return (
-            <Chip
-              key={r.id}
-              testID={`studio-recipe-${r.id}`}
-              label={`${r.name} · +${t.lift} ${t.groove}`}
-              on={mood.evolutions.includes(r.id)}
-              onPress={() => band.auditionEvolution(r.id)}
-              onLongPress={() => toggleEvolution(r.id)}
-            />
-          );
-        })}
-      </Row>
+      <Text style={st.note}>Tap A / B / C to audition weapon-anchored fanfare · long-press to make it live in the band.</Text>
+      {evoWeapons.map(weaponId => {
+        const evos = evolutionsForWeapon(weaponId);
+        const voice = WEAPON_VOICES[weaponId];
+        return (
+          <Row
+            key={weaponId}
+            title={`${weaponId} · ${voice ? INSTRUMENT_NAMES[voice.inst] : 'synth'}`}
+          >
+            {evos.map(evo => {
+              const t = themeOf(evo.id);
+              const slotLabel = ['A', 'B', 'C'][evo.slotIndex];
+              return (
+                <Chip
+                  key={evo.id}
+                  testID={`studio-evo-${evo.id}`}
+                  label={`${slotLabel}: ${evo.name} · +${t.lift} ${t.groove} (${INSTRUMENT_NAMES[t.insts[1]]})`}
+                  on={mood.evolutions.includes(evo.id)}
+                  onPress={() => {
+                    unlockAudio();
+                    band.auditionEvolution(evo.id);
+                  }}
+                  onLongPress={() => toggleEvolution(evo.id)}
+                />
+              );
+            })}
+          </Row>
+        );
+      })}
 
       <Text style={st.h2}>Cues ({CUE_NAMES.length})</Text>
       <View style={st.wrap}>

@@ -1,7 +1,7 @@
 /**
  * NShapes 6-Tier Multi-Difficulty Enemy Gauntlet CLI (`npm run balance:gauntlet`).
  *
- * Runs all 64 Armory weapons, 6 Fighters, and 208 Evolutions across 6 real
+ * Runs all 64 Armory weapons, 6 Fighters, and 192 Per-Weapon Evolutions across 6 real
  * escalating enemy tiers (Adv 1-10, Adv 2-5/2-6, Spire A2 Boss Boar A0,
  * Adv 4-6/4-10, Spire A3 Boss A0 & A18, Adv 5-5 Hydra) under BOTH
  * `BOTS.average` and Nathan's PostHog-calibrated `calibrated_human` bot

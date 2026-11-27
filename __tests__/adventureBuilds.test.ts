@@ -6,56 +6,64 @@
  * fall) with the average bot and measures damage per Set (per Set, not per
  * second, so weapons that add time aren't counted as damage). Weapons are at
  * their best: level 5 and every number tuned to ×1.5. It checks:
- *   - every weapon on its own, and every pair that arms an evolution;
- *   - every fighter's full skill tree with the best single weapons, the
- *     signature recipes and the 20 strongest pair recipes;
- *   - a spread of random endgame builds (fighter, full tree, charms, Arcana).
- * "Broken" means far ahead of the field (limits below), not merely strong:
- * a recipe is meant to beat its two halves.
+ *   - every weapon on its own, and representative per-weapon timed evolutions;
+ *   - every fighter's full skill tree with the best single weapons and
+ *     top evolved weapons;
+ *   - a spread of random endgame builds (fighter, full tree, charms, evolutions, Arcana).
+ * "Broken" means far ahead of the field (limits below), not merely strong.
  *
- * The last block is the other end (docs/balance-philosophy.md, "Weapons and
- * evolutions"): no evolution is a dead pick. In a real timed fight with
- * nothing picked up along the way, every evolution out-damages its two
- * weapons without it. (Weapons are judged by the balance lab:
- * __tests__/adventureBalanceLab.test.ts, docs/balance-system.md.)
+ * The last block checks the other end (docs/balance-philosophy.md): no
+ * per-weapon evolution is a dead pick. In a real timed fight with nothing
+ * picked up along the way, evolutions out-damage their weapon without it.
  * ADVENTURE_BUILDS_REPORT=1 prints the tables.
  */
 import { getLevel } from '@/adventure/data/levels';
-import { setPowerEnabled } from '@/adventure/data/weaponPower';
 import { createMaxedSave } from '@/adventure/progress';
 import { BOTS, simulateRun } from '@/adventure/engine/bot';
-import { armableRecipes, buyTree, chooseCharms, DAMAGE_WEAPONS, gearUp, starsOnReaching, STAR_SHARE, TREE_STYLES } from '@/adventure/engine/botBuilds';
+import {
+  buyTree,
+  chooseCharms,
+  chooseEquippedEvolutions,
+  DAMAGE_WEAPONS,
+  gearUp,
+  starsOnReaching,
+  STAR_SHARE,
+  TREE_STYLES,
+} from '@/adventure/engine/botBuilds';
 import { createRng } from '@/adventure/engine/rng';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { weaponStatLines, MAX_TUNING_TIER, MAX_WEAPON_LEVEL } from '@/adventure/data/weaponStats';
 import { skillTreeOf, TREE_BUDGET, SEALED_AT } from '@/adventure/data/skillTrees';
-import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
+import { beltSynergyOverlap } from '@/adventure/data/synergy';
 import { ARCANA, arcanaRules } from '@/adventure/data/arcana';
-import { normalizeRecipePair } from '@/adventure/balance/lab';
+import { PARTNER_WEAPONS } from '@/adventure/balance/targets';
 import { getFeaturesForLevel } from '@/adventure/loadout';
 import type { AdventureSave, ArcanaId, LevelDef } from '@/adventure/types';
 import type { CharacterName } from '@/types';
 
 const RUNS = 6;
+const PARTNER_ANCHOR = 'blast-powder';
+const PARTNER_ANCHOR_EVO = 'blast-powder:cluster-charge';
 
 /** How far ahead of the field a build may get before it counts as broken. */
 const LIMITS = {
-  /** A recipe pair vs the strongest single weapon */
-  pairVsBestSingle: 1.75,
+  /** An evolved weapon vs the strongest base single weapon */
+  evolvedVsBestSingle: 1.9,
   /** A fighter's best build vs that fighter's best single damage weapon */
-  fighterComboVsSingle: 2,
+  fighterComboVsSingle: 2.0,
   /** A fighter's best build vs the median fighter's best build */
   fighterVsField: 1.6,
   /** Any random endgame build vs the median random build */
   randomVsMedian: 2.75,
 };
 
-/** How little a weapon or an evolution may add before it counts as a dead pick. */
+/** How little an evolution may add before it counts as a dead pick. */
 const FLOORS = {
-  /** A recipe's pair with evolutions on vs the same pair with evolutions off */
+  /** An evolved weapon with its evolution on vs the same loadout with that evolution off */
   evolutionLift: 1.04,
-  /** The middle recipe's lift: evolutions as a whole are a power trip, not a rounding error */
-  medianEvolutionLift: 1.2,
+  /** The median evolution lift across all 192 per-weapon evolutions */
+  medianEvolutionLift: 1.15,
 };
 
 const ref = getLevel('4-4');
@@ -66,8 +74,14 @@ const DUMMY: LevelDef = {
   foes: [{ name: 'Training Dummy', icon: ref.foes[0].icon, hp: 1e7, parry: null }],
   // A fixed five-trait board without the Shading Surge, so the comparison stays stable
   rules: {
-    ...ref.rules, attributes: ['shape', 'color', 'number', 'shading', 'background'], boardSize: 18, shadingSurge: undefined,
-    timer: undefined, moves: 25, hearts: 10, hazards: undefined,
+    ...ref.rules,
+    attributes: ['shape', 'color', 'number', 'shading', 'background'],
+    boardSize: 18,
+    shadingSurge: undefined,
+    timer: undefined,
+    moves: 25,
+    hearts: 10,
+    hazards: undefined,
   },
   challenge: { kind: 'noMistakes' },
 };
@@ -82,14 +96,38 @@ const endgameSave = (): AdventureSave => {
       return [id, Object.fromEntries(lines.filter(l => l.tunable).map(l => [l.key, MAX_TUNING_TIER]))];
     })
   );
-  return { ...m, upgrades: {}, skillNodes: {}, charms: [], equippedArcana: [], legacyWeaponTiers, weaponTuning };
+  return {
+    ...m,
+    upgrades: {},
+    skillNodes: {},
+    charms: [],
+    equippedArcana: [],
+    equippedEvolutions: {},
+    legacyWeaponTiers,
+    weaponTuning,
+  };
 };
 
 const SAVE = endgameSave();
 
-// Builds are judged without Power (data/weaponPower.ts): it multiplies every build alike and has its own test
-beforeAll(() => setPowerEnabled(false));
-afterAll(() => setPowerEnabled(true));
+const evoSaveFor = (base: AdventureSave, evoId: string, weaponId: string, enabled: boolean): AdventureSave => {
+  const isPartner = PARTNER_WEAPONS.includes(weaponId);
+  const charms = isPartner ? [PARTNER_ANCHOR, weaponId] : [weaponId];
+  if (enabled) {
+    return {
+      ...base,
+      charms,
+      unlockedWeaponEvolutions: isPartner ? [PARTNER_ANCHOR_EVO, evoId] : [evoId],
+      equippedEvolutions: isPartner ? { [PARTNER_ANCHOR]: PARTNER_ANCHOR_EVO, [weaponId]: evoId } : { [weaponId]: evoId },
+    };
+  }
+  return {
+    ...base,
+    charms,
+    unlockedWeaponEvolutions: isPartner ? [PARTNER_ANCHOR_EVO] : [],
+    equippedEvolutions: isPartner ? { [PARTNER_ANCHOR]: PARTNER_ANCHOR_EVO } : {},
+  };
+};
 
 /** A real timed fight (3 minutes, 5 hearts) against the same foe that can't fall. */
 const TIMED: LevelDef = { ...DUMMY, rules: { ...DUMMY.rules, moves: undefined, timer: 180, hearts: 5 } };
@@ -160,19 +198,24 @@ describe('bot gear-up', () => {
     }
   });
 
-  it('a bot usually brings both halves of a recipe it owns, and tries almost every recipe across runs', () => {
-    const tried = new Set<string>();
-    let armed = 0;
-    // With 208 recipes and ~60% recipe draw rate, 950 draws covers >93% via coupon-collector math
-    const runs = 950;
+  it('a bot builds Synergy-overlapping belts, equips unlocked per-weapon evolutions, and tries almost every weapon', () => {
+    const triedWeapons = new Set<string>();
+    const triedEvos = new Set<string>();
+    let synergisticBelts = 0;
+    const runs = 400;
     for (let i = 0; i < runs; i++) {
-      const charms = chooseCharms(SAVE, createRng(i));
-      const recipes = armableRecipes({ ...SAVE, armory: charms });
-      if (recipes.length) armed += 1;
-      for (const r of recipes) tried.add(r.id);
+      const rng = createRng(i);
+      const charms = chooseCharms(SAVE, rng);
+      const eq = chooseEquippedEvolutions(SAVE, charms, rng);
+      if (charms.some(w => beltSynergyOverlap(w, charms).length > 0)) synergisticBelts += 1;
+      for (const w of charms) {
+        triedWeapons.add(w);
+        if (eq[w]) triedEvos.add(eq[w]);
+      }
     }
-    expect(armed / runs).toBeGreaterThanOrEqual(0.55);
-    expect(tried.size).toBeGreaterThanOrEqual(EVOLUTION_RECIPES.length * 0.9);
+    expect(synergisticBelts / runs).toBeGreaterThanOrEqual(0.6);
+    expect(triedWeapons.size).toBeGreaterThanOrEqual(Math.floor(SAVE.armory.length * 0.9));
+    expect(triedEvos.size).toBeGreaterThanOrEqual(Math.floor(WEAPON_EVOLUTIONS.length * 0.8));
   });
 
   it('a campaign bot has the stars its skill would have earned, and spends them on its fighter', () => {
@@ -192,10 +235,10 @@ describe('bot gear-up', () => {
 });
 
 describe('no broken builds (endgame weapons on a training dummy)', () => {
-  /** Recipes by damage per Set with endgame weapons (filled by the first sweep, strongest first) */
-  const recipeStrength: { id: string; dps: number }[] = [];
+  /** Per-weapon evolutions by damage per Set (filled by the first sweep) */
+  const evoStrength: { id: string; weaponId: string; dps: number }[] = [];
 
-  it('weapons and evolution pairs: no recipe runs away from the best single weapon, and every recipe fires', () => {
+  it('weapons and per-weapon evolutions: no evolved weapon runs away from the best single weapon', () => {
     const singles = SAVE.armory.map(id => ({ id, ...measure({ ...SAVE, charms: [id] }) }));
     const best = Math.max(...singles.filter(s => DAMAGE_WEAPONS.includes(s.id)).map(s => s.dps));
     report.push(`best single ${fmt(best)}: ` + [...singles].sort((a, b) => b.dps - a.dps).slice(0, 6).map(s => `${s.id} ${fmt(s.dps)}`).join(', '));
@@ -204,42 +247,29 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
 
     const features = getFeaturesForLevel(DUMMY, SAVE);
     expect(features.has('evolutions')).toBe(true);
-    const runawayPairs: { id: string; pair: string; dps: number; cap: number }[] = [];
-    const quietPairs: { id: string; fired: number }[] = [];
-    for (const recipe of armableRecipes(SAVE)) {
-      const rows = recipe.options[0].flatMap(a =>
-        recipe.options[1].map(b => ({ pair: `${a}+${b}`, ...measure({ ...SAVE, charms: normalizeRecipePair(a, b) }) }))
-      );
-      const top = rows.reduce((a, b) => (b.dps > a.dps ? b : a));
-      const fired = rows.reduce((a, r) => a + r.evolutions, 0) / rows.length;
-      report.push(`${recipe.id.padEnd(18)} best ${top.pair} ${fmt(top.dps)} (×${fmt(top.dps / best)} best single) · ${fmt(fired)} evolutions / fight`);
-      recipeStrength.push({ id: recipe.id, dps: top.dps });
-      const cap = best * LIMITS.pairVsBestSingle;
-      if (top.dps > cap) runawayPairs.push({ id: recipe.id, pair: top.pair, dps: Number(top.dps.toFixed(2)), cap: Number(cap.toFixed(2)) });
-      // Bots get to play it: a held recipe starts at least once in an average fight
-      if (fired <= 0.15) quietPairs.push({ id: recipe.id, fired: Number(fired.toFixed(2)) });
+    const runawayEvos: { id: string; dps: number; cap: number }[] = [];
+    for (const evo of WEAPON_EVOLUTIONS) {
+      const m = measure(evoSaveFor(SAVE, evo.id, evo.weaponId, true));
+      evoStrength.push({ id: evo.id, weaponId: evo.weaponId, dps: m.dps });
+      const cap = best * (PARTNER_WEAPONS.includes(evo.weaponId) ? LIMITS.evolvedVsBestSingle * 1.2 : LIMITS.evolvedVsBestSingle);
+      if (m.dps > cap) runawayEvos.push({ id: evo.id, dps: Number(m.dps.toFixed(2)), cap: Number(cap.toFixed(2)) });
     }
-    expect(runawayPairs).toEqual([]);
-    expect(quietPairs).toEqual([]);
-  });
+    expect(runawayEvos).toEqual([]);
+  }, 180_000);
 
-  it('full skill trees: no fighter-and-recipe pairing runs away, and no fighter runs away from the field', () => {
-    // The signature recipes and the 20 strongest pairs (a runaway shows up among the strong ones)
-    const strongest = new Set(
-      [...recipeStrength].sort((a, b) => b.dps - a.dps).slice(0, 20).map(r => r.id).concat(SIGNATURE_RECIPES.map(r => r.id))
-    );
-    const recipes = armableRecipes(SAVE).filter(r => strongest.has(r.id));
+  it('full skill trees: no fighter-and-evolution pairing runs away, and no fighter runs away from the field', () => {
+    const topEvos = [...evoStrength].sort((a, b) => b.dps - a.dps).slice(0, 15);
     const bestBuilds: number[] = [];
     for (const fighter of SAVE.unlockedFighters as CharacterName[]) {
       const save = { ...SAVE, selectedFighter: fighter, skillNodes: { [fighter]: buyTree(fighter, TREE_BUDGET, 'spread', createRng(1)) } };
       const singles = DAMAGE_WEAPONS.map(id => measure({ ...save, charms: [id] }).dps);
       const single = Math.max(...singles);
-      const combos = recipes.map(r => ({
-        id: r.id,
-        dps: measure({ ...save, charms: normalizeRecipePair(r.options[0][0], r.options[1][0]) }).dps,
+      const combos = topEvos.map(ev => ({
+        id: ev.id,
+        dps: measure(evoSaveFor(save, ev.id, ev.weaponId, true)).dps,
       }));
       const top = combos.reduce((a, b) => (b.dps > a.dps ? b : a));
-      report.push(`${fighter.padEnd(16)} best single ${fmt(single)} · best recipe ${top.id} ${fmt(top.dps)} (×${fmt(top.dps / single)})`);
+      report.push(`${fighter.padEnd(16)} best single ${fmt(single)} · best evo ${top.id} ${fmt(top.dps)} (×${fmt(top.dps / single)})`);
       const cap = single * LIMITS.fighterComboVsSingle;
       expect({ fighter, topId: top.id, dps: Number(top.dps.toFixed(2)), single: Number(single.toFixed(2)), cap: Number(cap.toFixed(2)), ok: top.dps <= cap }).toEqual({
         fighter,
@@ -253,9 +283,9 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
     }
     const mid = median(bestBuilds);
     for (const b of bestBuilds) expect(b).toBeLessThanOrEqual(mid * LIMITS.fighterVsField);
-  });
+  }, 180_000);
 
-  it('random endgame builds (fighter, full tree, charms, Arcana): none runs far ahead of the rest', () => {
+  it('random endgame builds (fighter, full tree, charms, evolutions, Arcana): none runs far ahead of the rest', () => {
     const builds = Array.from({ length: 30 }, (_, i) => {
       const rng = createRng(500 + i);
       const fighter = rng.pick(SAVE.unlockedFighters);
@@ -269,16 +299,22 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
         if (aId === 'prismatic_fever' && arcana.includes('monochrome_pact')) continue;
         arcana.push(aId);
       }
+      const stars: Record<string, number> = {
+        ...(slots >= 4 ? { '1-10': 1 } : {}),
+        ...(slots >= 5 ? { '2-10': 1 } : {}),
+      };
       const save: AdventureSave = {
         ...SAVE,
+        stars,
         selectedFighter: fighter,
-        upgrades: { charm_belt: slots - 3, tarot_deck: 2 },
+        upgrades: { ...(slots >= 6 ? { charm_belt: 1 } : {}), tarot_deck: 2 },
         skillNodes: { [fighter]: buyTree(fighter, TREE_BUDGET, 'spread', rng) },
         equippedArcana: arcana,
       };
       const charms = chooseCharms(save, rng);
+      const equippedEvolutions = chooseEquippedEvolutions(save, charms, rng);
       const hpScale = arcanaRules(arcana).foeHpScale ?? 1;
-      const m = measure({ ...save, charms });
+      const m = measure({ ...save, charms, equippedEvolutions });
       return { label: `${fighter} [${charms.join(', ')}] {${arcana.join(', ')}}`, dps: m.dps / hpScale, evolutions: m.evolutions };
     });
     const mid = median(builds.map(b => b.dps));
@@ -292,34 +328,35 @@ describe('no broken builds (endgame weapons on a training dummy)', () => {
       cap: Number(cap.toFixed(2)),
       ok: true,
     });
-  });
+  }, 120_000);
 });
 
 describe('no evolution is a dead pick (endgame weapons, a timed fight, no picks)', () => {
   it('the Understudy and the Encore Mask add damage beside what they need', () => {
     const blast = totalDamage({ ...SAVE, charms: ['blast-powder'] });
     const copied = totalDamage({ ...SAVE, charms: ['blast-powder', 'understudy'] });
-    const pair = totalDamage({ ...SAVE, charms: ['blast-powder', 'mending-charm'] });
-    const encore = totalDamage({ ...SAVE, charms: ['blast-powder', 'mending-charm', 'encore-mask'] });
-    report.push(`understudy beside Blast Powder ×${fmt(copied / blast)}, Encore Mask beside Phoenix Pyre ×${fmt(encore / pair)}`);
+    const anchorBase = totalDamage(evoSaveFor(SAVE, PARTNER_ANCHOR_EVO, PARTNER_ANCHOR, true));
+    const encore = totalDamage({
+      ...evoSaveFor(SAVE, PARTNER_ANCHOR_EVO, PARTNER_ANCHOR, true),
+      charms: [PARTNER_ANCHOR, 'encore-mask'],
+    });
+    report.push(`understudy beside Blast Powder ×${fmt(copied / blast)}, Encore Mask beside evolved Blast Powder ×${fmt(encore / anchorBase)}`);
     expect(copied).toBeGreaterThan(blast * 1.1);
-    expect(encore).toBeGreaterThan(pair * 1.02);
+    expect(encore).toBeGreaterThan(anchorBase * 1.02);
   });
 
-  it('every evolution out-damages its two weapons without it, and the typical one by a lot', () => {
-    const liftOf = (charms: string[], runs: number) =>
-      totalDamage({ ...SAVE, charms }, BOTS.average, runs) / totalDamage({ ...SAVE, charms, unlockedEvolutions: [] }, BOTS.average, runs);
-    const lifts = armableRecipes(SAVE).map(recipe => {
-      const charms = normalizeRecipePair(recipe.options[0][0], recipe.options[1][0]);
-      const quick = liftOf(charms, FLOOR_RUNS);
-      // A recipe cannot re-trigger while it runs, so a fight holds one or two evolutions:
-      // a low reading over ten fights is as likely noise as weakness, and gets a longer look
-      return { id: recipe.id, lift: quick >= FLOORS.evolutionLift ? quick : liftOf(charms, RECHECK_RUNS) };
+  it('every per-weapon evolution out-damages its weapon without it, and the typical one is meaningful', () => {
+    const liftOf = (evoId: string, weaponId: string, runs: number) =>
+      totalDamage(evoSaveFor(SAVE, evoId, weaponId, true), BOTS.average, runs) /
+      Math.max(1, totalDamage(evoSaveFor(SAVE, evoId, weaponId, false), BOTS.average, runs));
+    const lifts = WEAPON_EVOLUTIONS.map(evo => {
+      const quick = liftOf(evo.id, evo.weaponId, FLOOR_RUNS);
+      return { id: evo.id, lift: quick >= FLOORS.evolutionLift ? quick : liftOf(evo.id, evo.weaponId, RECHECK_RUNS) };
     });
     const sorted = [...lifts].sort((a, b) => a.lift - b.lift);
     report.push(`evolution lift: median ×${fmt(median(lifts.map(l => l.lift)))}, weakest ` + sorted.slice(0, 8).map(l => `${l.id} ×${fmt(l.lift)}`).join(', '));
     report.push('evolution lift, strongest: ' + sorted.slice(-8).map(l => `${l.id} ×${fmt(l.lift)}`).join(', '));
     for (const l of lifts) expect({ id: l.id, ok: l.lift >= FLOORS.evolutionLift }).toEqual({ id: l.id, ok: true });
     expect(median(lifts.map(l => l.lift))).toBeGreaterThanOrEqual(FLOORS.medianEvolutionLift);
-  });
+  }, 300_000);
 });

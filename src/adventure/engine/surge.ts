@@ -4,9 +4,9 @@
  * The board plays on the level's attributes (three) with every card solid.
  * Every SURGE_RULES.calmMs of fight clock, shading switches on for
  * SURGE_RULES.surgeMs: each card on the board keeps its shape, color and
- * number and takes a shading, and every Set made meanwhile deals ×5. Then the
- * cards go back to solid. The surge runs on the fight clock, so freezes,
- * level-ups and the shop pause it.
+ * number and takes a shading, and every Set made meanwhile gains +12 base
+ * damage and ×1.8 multiplier. Then the cards go back to solid. The surge runs
+ * on the fight clock, so freezes, level-ups and the shop pause it.
  */
 import { ATTRIBUTE_VALUES } from '@/utils/gameUtils';
 import { SURGE_RULES } from '../data/rules';
@@ -21,6 +21,9 @@ export const initialSurge = (): SurgeState => ({ active: false, msLeft: SURGE_RU
 /** The multiplier on a Set scored now. */
 export const surgeMultiplier = (d: Draft): number => (d.surge?.active ? SURGE_RULES.multiplier : 1);
 
+/** Elevated flat base damage added on every Set made during an active Shading Surge (+12). */
+export const surgeFlatBonus = (d: Draft): number => (d.surge?.active ? (SURGE_RULES.flatBonus ?? 12) : 0);
+
 /** Give every board card a shading, keeping at least one Set on the board. */
 const shadeBoard = (d: Draft) => {
   const base = d.board;
@@ -28,7 +31,6 @@ const shadeBoard = (d: Draft) => {
     d.board = base.map(c => ({ ...c, shading: d._rng.pick(ATTRIBUTE_VALUES.shading) }));
     if (hasAnySet(d.board, d.attributes)) return;
   }
-  // Rare: no luck. Take a three-trait Set and give its cards one shading.
   const sets = allSets(base.filter(isSelectable), d.level.rules.attributes);
   if (sets.length === 0) return;
   const ids = new Set(d._rng.pick(sets).map(c => c.id));

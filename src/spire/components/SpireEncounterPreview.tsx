@@ -17,8 +17,9 @@ import { useColorblind } from '@/utils/cardColors';
 import { formatParryCounterMeta } from '@/utils/cardVisuals';
 import { getBiome } from '@/adventure/data/biomes';
 import { foeDisplay } from '@/adventure/data/foes';
+import { summarizeBeltSynergies } from '@/adventure/ui/synergyMeta';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
-import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice } from '@/adventure/components/SharedCards';
+import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice, SynergySummaryChips } from '@/adventure/components/SharedCards';
 import { Btn, CoinPill, Eyebrow, Heart, INK, Skulls, TONE } from '@/adventure/components/ui';
 import { spireEncounterLoadout } from '../engine/bridge';
 import type { SpireEncounter, SpireRun } from '../types';
@@ -31,6 +32,7 @@ interface Props {
   onFight: () => void;
   onInspectBuild: () => void;
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
+  onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onBack?: () => void;
 }
 
@@ -40,6 +42,7 @@ const SpireEncounterPreview: React.FC<Props> = ({
   onFight,
   onInspectBuild,
   onReorderWeapon,
+  onSelectEvolution,
   onBack,
 }) => {
   const colorblind = useColorblind();
@@ -49,7 +52,8 @@ const SpireEncounterPreview: React.FC<Props> = ({
   const foeDef = encounter.foes[0];
   const foe = foeDisplay(foeDef);
   const loadout = spireEncounterLoadout(run, encounter);
-  const armed = loadout.armedRecipes.length;
+  const armed = Object.keys(loadout.equippedEvolutions).length;
+  const beltSynergies = summarizeBeltSynergies(run.weapons);
   const totalClock = loadout.timer ?? encounter.timer;
   const isBoss = encounter.kind === 'boss';
   const isElite = encounter.kind === 'elite';
@@ -125,7 +129,7 @@ const SpireEncounterPreview: React.FC<Props> = ({
                 <View style={st.firstCounterCallout} testID="spire-first-counter-callout">
                   <Icon name="lorc/shield-reflect" size={15} color="#92400E" />
                   <Text style={st.firstCounterText}>
-                    FIRST COUNTER-PARRY: Match a {counterMeta.shortLabel} Trio while the foe winds up to break their strike for 2× Stagger!
+                    FIRST COUNTER-PARRY: Match a {counterMeta.shortLabel} Trio while the foe winds up to break their strike for ×1.35 Stagger!
                   </Text>
                 </View>
               </SpireStaggerItem>
@@ -135,10 +139,18 @@ const SpireEncounterPreview: React.FC<Props> = ({
 
             {encounter.hazards && <HazardNotices hazards={encounter.hazards} testID="spire-preview-hazards" />}
 
+            {beltSynergies.length > 0 && (
+              <View style={st.synergyStrip} testID="spire-preview-synergy">
+                <Text style={st.lootLabel}>BELT SYNERGY</Text>
+                <SynergySummaryChips links={beltSynergies} />
+              </View>
+            )}
+
             {onReorderWeapon && run.weapons.includes('understudy') && run.weapons.length > 1 && (
               <SpireBeltBar
                 run={run}
                 onReorder={onReorderWeapon}
+                onSelectEvolution={onSelectEvolution}
                 title="PRE-FIGHT BELT ORDER"
                 compact
                 testIDPrefix="spire-preview-belt"
@@ -218,6 +230,7 @@ const st = StyleSheet.create({
     lineHeight: 16,
   },
   lootRow: { backgroundColor: COLORS.paperBeige, borderRadius: 10, borderWidth: 1.5, borderColor: '#D6CFC4', padding: 10, gap: 6 },
+  synergyStrip: { backgroundColor: '#F0FDFA', borderRadius: 10, borderWidth: 1.5, borderColor: '#99F6E4', padding: 9, gap: 5 },
   lootLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
   lootPills: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   lootPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.canvasWhite, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 4 },

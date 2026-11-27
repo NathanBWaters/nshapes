@@ -124,6 +124,30 @@ export default {
     trigger: async (page, h) => h.tap((await h.present('unlock-later')) ? 'unlock-later' : 'unlock-primary'),
     frames: 150,
   },
+  'unlock-slot-expand': {
+    id: 'unlock-slot-expand',
+    about: 'World 1 Boss (1-10) 3->4 Weapon Slot UnlockReveal expansion strip beat (/dev/results?level=1-10&stars=1&save=before)',
+    path: '/dev/results?level=1-10&stars=1&save=before&seed=10',
+    ready: (page, h) => h.until('results-actions'),
+    prepare: async (page, h) => {
+      // Advance past preceding reveals (e.g. starter evolution Cluster Charge) until the 4th Weapon Slot silhouette appears
+      for (let guard = 0; guard < 12; guard++) {
+        await h.until(async () => (await h.present('unlock-reveal')) || (await h.present('unlock-primary')));
+        await h.advance(550);
+        const isSlotReveal = await page.evaluate(() =>
+          /weapon slot/i.test(document.querySelector('[data-testid="unlock-modal"]')?.innerText ?? '')
+        );
+        if (isSlotReveal && (await h.present('unlock-reveal'))) return;
+        if (await h.present('unlock-reveal')) {
+          await h.tap('unlock-reveal');
+        } else {
+          await h.tap('unlock-primary');
+        }
+      }
+    },
+    trigger: (page, h) => h.tap('unlock-reveal'),
+    frames: 100,
+  },
   'results-story': {
     id: 'results-story',
     about: 'The 3-second Brotato cumulative weapon & passive damage story crescendo on a geared 2-4 win (/dev/results?case=geared)',

@@ -55,7 +55,7 @@ const TABS: { id: DashboardTab; label: string; icon: IconName }[] = [
   { id: 'posthog', label: 'PostHog', icon: 'delapouite/pie-chart' },
 ];
 
-export type BalanceTabKey = keyof AnalyticsDashboardReport['balance'];
+export type BalanceTabKey = 'weapons' | 'fighters' | 'evolutions' | 'arcana';
 
 const BALANCE_CATEGORIES: { id: BalanceTabKey; label: string }[] = [
   { id: 'weapons', label: 'Weapons' },
@@ -63,6 +63,8 @@ const BALANCE_CATEGORIES: { id: BalanceTabKey; label: string }[] = [
   { id: 'evolutions', label: 'Evolutions' },
   { id: 'arcana', label: 'Arcana' },
 ];
+
+const EVO_SLOT_LABELS = ['Evo A', 'Evo B', 'Evo C'] as const;
 
 const fmtPct = (v: number | null, digits = 0): string =>
   v === null || !Number.isFinite(v) ? '—' : `${(v * 100).toFixed(digits)}%`;
@@ -306,7 +308,10 @@ function BalanceTab({
   chartWidth: number;
 }) {
   const [category, setCategory] = useState<BalanceTabKey>('weapons');
+  const [evoView, setEvoView] = useState<'grouped' | 'flat'>('grouped');
   const rows = report.balance[category];
+  const evoGroups = report.balance.evolutionsByWeapon;
+  const showGroupedEvos = category === 'evolutions' && evoView === 'grouped' && evoGroups.length > 0;
 
   return (
     <View style={styles.sectionStack} testID="analytics-panel-balance">
@@ -329,6 +334,20 @@ function BalanceTab({
             </TouchableOpacity>
           );
         })}
+        {category === 'evolutions' && evoGroups.length > 0 && (
+          <TouchableOpacity
+            testID="analytics-evo-view-toggle"
+            style={styles.subPill}
+            onPress={() => {
+              sfx('click');
+              setEvoView(prev => (prev === 'grouped' ? 'flat' : 'grouped'));
+            }}
+          >
+            <Text style={styles.subPillText}>
+              {evoView === 'grouped' ? 'View: By Weapon (A/B/C)' : 'View: Flat List'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <BalanceQuadrantChart
@@ -342,10 +361,64 @@ function BalanceTab({
           Simpson&apos;s-Paradox-Adjusted {BALANCE_CATEGORIES.find(c => c.id === category)?.label} Balance
         </Text>
         <Text style={styles.cardSub}>
-          Adjusted Δ compares win rate vs expected win rate at each level/tier where it ran
+          {showGroupedEvos
+            ? 'Per-weapon 3-evolution breakdown (Evo A / Evo B / Evo C side-by-side)'
+            : 'Adjusted Δ compares win rate vs expected win rate at each level/tier where it ran'}
         </Text>
         {rows.length === 0 ? (
           <Text style={styles.emptyNotice}>No items recorded in this category yet.</Text>
+        ) : showGroupedEvos ? (
+          evoGroups.map(grp => (
+            <View key={grp.weaponId} style={styles.evoGroupCard} testID={`analytics-evo-group-${grp.weaponId}`}>
+              <View style={styles.wallHead}>
+                <Text style={styles.rowStrong}>{grp.weaponName}</Text>
+                <Text style={styles.rowMeta}>{grp.totalUsed} triggers</Text>
+              </View>
+              <View style={styles.evoSlotGrid}>
+                {grp.slots.map((slotRow, idx) => {
+                  const slotLabel = EVO_SLOT_LABELS[idx];
+                  if (!slotRow) {
+                    return (
+                      <View key={`${grp.weaponId}-${idx}`} style={[styles.evoSlotCell, styles.evoSlotEmpty]}>
+                        <Text style={styles.evoSlotTag}>{slotLabel}</Text>
+                        <Text style={styles.rowMeta}>No data</Text>
+                      </View>
+                    );
+                  }
+                  const st = STATUS_COLORS[slotRow.status];
+                  return (
+                    <View key={slotRow.id} style={styles.evoSlotCell}>
+                      <View style={styles.inlineTitle}>
+                        <Text style={styles.evoSlotTag}>{slotLabel}</Text>
+                        <View style={[styles.pill, { backgroundColor: st.bg }]}>
+                          <Text style={[styles.pillText, { color: st.fg }]}>{st.label}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.evoSlotName}>{slotRow.name}</Text>
+                      <Text
+                        style={[
+                          styles.evoSlotDelta,
+                          {
+                            color:
+                              (slotRow.adjustedWinDelta ?? 0) >= 0.08
+                                ? '#9A4400'
+                                : (slotRow.adjustedWinDelta ?? 0) <= -0.08
+                                  ? '#A32018'
+                                  : COLORS.slateCharcoal,
+                          },
+                        ]}
+                      >
+                        Δ {fmtDelta(slotRow.adjustedWinDelta)} · {Math.round(slotRow.avgDpm)} DPM
+                      </Text>
+                      <Text style={styles.rowMeta}>
+                        {slotRow.usedCount} runs · Win {fmtPct(slotRow.rawWinRate)} · Fun {fmtPct(slotRow.funRate)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          ))
         ) : (
           rows.map(row => {
             const st = STATUS_COLORS[row.status];
@@ -354,13 +427,22 @@ function BalanceTab({
                 <View style={styles.listMain}>
                   <View style={styles.inlineTitle}>
                     <Text style={styles.rowStrong}>{row.name}</Text>
+                    {row.weaponName && row.slotIndex !== undefined && (
+                      <View style={[styles.pill, { backgroundColor: COLORS.paperBeige }]}>
+                        <Text style={[styles.pillText, { color: COLORS.slateCharcoal }]}>
+                          {row.weaponName} · {EVO_SLOT_LABELS[row.slotIndex]}
+                        </Text>
+                      </View>
+                    )}
                     <View style={[styles.pill, { backgroundColor: st.bg }]}>
                       <Text style={[styles.pillText, { color: st.fg }]}>{st.label}</Text>
                     </View>
                   </View>
                   <Text style={styles.rowMeta}>
-                    {row.usedCount} runs · Raw Win {fmtPct(row.rawWinRate)} · Pick{' '}
-                    {fmtPct(row.pickRate)} ({row.pickedOrBoughtCount}/{row.offeredCount})
+                    {row.usedCount} runs · Raw Win {fmtPct(row.rawWinRate)}
+                    {row.offeredCount > 0
+                      ? ` · Pick ${fmtPct(row.pickRate)} (${row.pickedOrBoughtCount}/${row.offeredCount})`
+                      : ''}
                   </Text>
                 </View>
                 <View style={styles.listRight}>
@@ -1314,5 +1396,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6E685F',
     paddingVertical: 8,
+  },
+  evoGroupCard: {
+    borderTopWidth: 1,
+    borderTopColor: '#ECE7DF',
+    paddingTop: 9,
+    gap: 6,
+  },
+  evoSlotGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  evoSlotCell: {
+    flexGrow: 1,
+    flexBasis: 200,
+    backgroundColor: COLORS.paperBeige,
+    borderRadius: RADIUS.button,
+    borderWidth: 1.5,
+    borderColor: COLORS.slateCharcoal,
+    padding: 8,
+    gap: 3,
+  },
+  evoSlotEmpty: {
+    opacity: 0.55,
+  },
+  evoSlotTag: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.slateCharcoal,
+    letterSpacing: 0.4,
+  },
+  evoSlotName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.slateCharcoal,
+  },
+  evoSlotDelta: {
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

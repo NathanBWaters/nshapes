@@ -44,7 +44,9 @@ export const gearModifiers = (run: RunState): Modifiers =>
   modifiersOf({
     skillNodes: run.skillNodes,
     weapons: run.weapons,
-    activeEvolutions: run.activeEvolutions,
+    weaponEvolutions: run.weaponEvolutions ?? [],
+    weaponBuilds: run.weaponBuilds,
+    synergy: run.synergy,
     growth: growthModifiers(run.growth ?? {}),
   });
 

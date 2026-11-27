@@ -30,8 +30,9 @@ import {
   rollSummitThemePacks,
   type SummitThemePackId,
 } from '../data/themePacks';
+import { defaultEvolutionForWeapon, getWeaponEvolution } from '@/adventure/data/evolutions';
+import { beltSynergyOverlap } from '@/adventure/data/synergy';
 import { generateActMap, reachableNodeIds } from './mapGen';
-import { newEvolutionsArmedBy } from './bridge';
 import type {
   SpireCampfireState,
   SpireEncounter,
@@ -133,7 +134,7 @@ export const rollSynergyWeapons = (
     if (avail.length === 0) return null;
 
     if (slotIndex === 0 && !isWildcard) {
-      const synergy = avail.filter(id => newEvolutionsArmedBy(run, id).length > 0);
+      const synergy = avail.filter(id => beltSynergyOverlap(id, run.weapons).length > 0);
       if (synergy.length > 0 && rng.next() < 0.82) {
         const synEngine = synergy.filter(id => ENGINE_ROLES.has(weaponRole(id)));
         const synPool = synEngine.length > 0 && rng.next() < 0.75 ? synEngine : synergy;
@@ -253,10 +254,16 @@ export const grantSpireWeapon = (run: SpireRun, weaponId: string, level = 1): Sp
     };
   }
   if (run.weapons.length >= MAX_SUMMIT_WEAPONS) return run;
+  const defEvo = defaultEvolutionForWeapon(weaponId);
+  const equippedEvolutions = {
+    ...(run.equippedEvolutions ?? {}),
+    ...(defEvo && !run.equippedEvolutions?.[weaponId] ? { [weaponId]: defEvo.id } : {}),
+  };
   return {
     ...run,
     weapons: [...run.weapons, weaponId],
     weaponLevels: { ...run.weaponLevels, [weaponId]: Math.min(MAX_WEAPON_LEVEL, Math.max(1, level)) },
+    equippedEvolutions,
   };
 };
 
@@ -281,7 +288,29 @@ export const replaceSpireWeapon = (
   const weaponLevels = { ...run.weaponLevels };
   delete weaponLevels[dropWeaponId];
   weaponLevels[newWeaponId] = clampedLv;
-  return { ...run, weapons, weaponLevels };
+  const equippedEvolutions = { ...(run.equippedEvolutions ?? {}) };
+  delete equippedEvolutions[dropWeaponId];
+  const defEvo = defaultEvolutionForWeapon(newWeaponId);
+  if (defEvo && !equippedEvolutions[newWeaponId]) equippedEvolutions[newWeaponId] = defEvo.id;
+  return { ...run, weapons, weaponLevels, equippedEvolutions };
+};
+
+/** Switch which of the 3 per-weapon timed evolutions is equipped on a held Summit weapon. */
+export const equipSpireWeaponEvolution = (
+  run: SpireRun,
+  weaponId: string,
+  evoId: string
+): SpireRun => {
+  if (!run.weapons.includes(weaponId)) return run;
+  const def = getWeaponEvolution(evoId);
+  if (!def || def.weaponId !== weaponId) return run;
+  return {
+    ...run,
+    equippedEvolutions: {
+      ...(run.equippedEvolutions ?? {}),
+      [weaponId]: evoId,
+    },
+  };
 };
 
 /**
@@ -575,8 +604,15 @@ export const createSpireRun = (
   }
 
   const upgrades: Record<string, number> = {
-    evolution_lab: 1, // Starfall Summit starts with Evolution Lab active so Catalysts flow early!
+    evolution_lab: 1, // Starfall Summit starts with Evolution Lab active (+2s evolution duration)
     ...(dailyMod.heavyHitterBonus > 0 ? { heavy_hitter: dailyMod.heavyHitterBonus } : {}),
+  };
+
+  const starterEvo = defaultEvolutionForWeapon(kit.starterWeapon);
+  const bonusEvo = defaultEvolutionForWeapon(kit.bonusWeapon);
+  const equippedEvolutions: Record<string, string> = {
+    ...(starterEvo ? { [kit.starterWeapon]: starterEvo.id } : {}),
+    ...(bonusEvo ? { [kit.bonusWeapon]: bonusEvo.id } : {}),
   };
 
   return {
@@ -596,10 +632,11 @@ export const createSpireRun = (
     startingHints: kit.startingHints + dailyMod.startingHintsDelta,
     startingGraces: kit.startingGraces + dailyMod.startingGracesDelta,
     upgrades,
-    extraEvolutionCap: dailyMod.extraEvolutionCap,
-    extraEvolutionLikelihood: 6 + dailyMod.extraEvolutionLikelihood,
+    extraEvolutionDurationMs: dailyMod.extraEvolutionDurationMs,
+    extraEvolutionChargeBonus: dailyMod.extraEvolutionChargeBonus,
     weapons: [kit.starterWeapon, kit.bonusWeapon],
     weaponLevels: { [kit.starterWeapon]: 2, [kit.bonusWeapon]: 2 },
+    equippedEvolutions,
     arcana: [],
     skillNodes: [],
     map,
@@ -814,7 +851,7 @@ export const completeSpireBattle = (run: SpireRun, fight: RunState): SpireRun =>
   const won = fight.status === 'won' && fight.endReason === 'defeated';
   const seenEnemies = recordSeenEnemy(run.seenEnemies, enc.name);
   const dpm = damagePerMinute(fight);
-  const mergedRecipes = [...new Set([...run.stats.forgedRecipeIds, ...fight.forgedRecipes])];
+  const mergedRecipes = [...new Set([...run.stats.forgedRecipeIds, ...fight.forgedEvolutions])];
   const { sourceDamage, floorLedger } = mergeSpireDamageLedger(
     run.stats.sourceDamage,
     run.stats.floorLedger,
@@ -1140,11 +1177,14 @@ export const shopSellWeapon = (run: SpireRun, weaponId: string): SpireRun => {
   const priceScale = shopPriceScaleOf(run);
   const nextLevels = { ...run.weaponLevels };
   delete nextLevels[weaponId];
+  const nextEvos = { ...(run.equippedEvolutions ?? {}) };
+  delete nextEvos[weaponId];
   return {
     ...run,
     coins: run.coins + refund,
     weapons: run.weapons.filter(id => id !== weaponId),
     weaponLevels: nextLevels,
+    equippedEvolutions: nextEvos,
     shop: {
       ...run.shop,
       // Reset any unsold upgrade offer for this weapon to standalone Lv 1 so
@@ -1355,9 +1395,9 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
     const key = `${ev.id}:${optionId}`;
     switch (key) {
       case 'starfall_shrine:absorb':
-        next = { ...next, hearts: Math.max(1, next.hearts - 1), extraEvolutionLikelihood: next.extraEvolutionLikelihood + 6 };
+        next = { ...next, hearts: Math.max(1, next.hearts - 1), extraEvolutionDurationMs: next.extraEvolutionDurationMs + 3000 };
         pendingWeaponOptions = rollSynergyWeapons(next, rng, 3, 2);
-        outcomeText = 'Starlight sears your paws (−1 ♥, +6% Catalyst chance). Pick a Level 2 weapon!';
+        outcomeText = 'Starlight sears your paws (−1 ♥, +3s evolution duration). Pick a Level 2 weapon!';
         break;
       case 'starfall_shrine:dust':
         next = { ...next, coins: next.coins + 65 };
@@ -1437,10 +1477,10 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
       case 'wandering_alchemist:catalyst':
         next = {
           ...next,
-          extraEvolutionLikelihood: next.extraEvolutionLikelihood + 8,
-          extraEvolutionCap: next.extraEvolutionCap + 1,
+          extraEvolutionDurationMs: next.extraEvolutionDurationMs + 3000,
+          extraEvolutionChargeBonus: next.extraEvolutionChargeBonus + 1,
         };
-        outcomeText = 'Catalysts surge (+8% chance & +1 Evolution per fight)!';
+        outcomeText = 'Overdrive tonic! +1 evolution progress tick & +3s evolution duration!';
         break;
 
       case 'gamblers_dice:high_stakes': {
@@ -1525,10 +1565,10 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
       case 'ancient_library:fusion':
         next = {
           ...next,
-          extraEvolutionLikelihood: next.extraEvolutionLikelihood + 10,
-          extraEvolutionCap: next.extraEvolutionCap + 1,
+          extraEvolutionDurationMs: next.extraEvolutionDurationMs + 4000,
+          extraEvolutionChargeBonus: next.extraEvolutionChargeBonus + 1,
         };
-        outcomeText = 'Fusion mastery! +10% Catalyst chance and +1 Evolution per fight!';
+        outcomeText = 'Evolution mastery! +1 evolution progress tick and +4s evolution duration!';
         break;
       case 'ancient_library:clarity':
         next = bumpUpgrade(bumpUpgrade(next, 'sharp_eyes', 2), 'hourglass', 1);
@@ -1616,9 +1656,9 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
       case 'prism_obelisk:prism_shard':
         next = {
           ...bumpUpgrade(next, 'heavy_hitter', 2),
-          extraEvolutionLikelihood: next.extraEvolutionLikelihood + 6,
+          extraEvolutionDurationMs: next.extraEvolutionDurationMs + 3000,
         };
-        outcomeText = 'Prism resonance! +2 flat Set damage & +6% Catalyst chance.';
+        outcomeText = 'Prism resonance! +2 flat Set damage & +3s evolution duration.';
         break;
       case 'prism_obelisk:bask':
         next = { ...next, maxHearts: next.maxHearts + 1, hearts: Math.min(next.maxHearts + 1, next.hearts + 1) };
@@ -1632,24 +1672,24 @@ export const chooseEventOption = (run: SpireRun, optionId: string): SpireRun => 
             ...next,
             coins: next.coins - 40,
             stats: { ...next.stats, coinsSpent: next.stats.coinsSpent + 40 },
-            extraEvolutionLikelihood: next.extraEvolutionLikelihood + 4,
+            extraEvolutionDurationMs: next.extraEvolutionDurationMs + 2000,
           };
           pendingForge = true;
           pendingForgeDelta = 1;
-          outcomeText = 'Starlight flows through the cairn (−40¢, +4% Catalyst chance). Choose a weapon to forge +1 Level!';
+          outcomeText = 'Starlight flows through the cairn (−40¢, +2s evolution duration). Choose a weapon to forge +1 Level!';
         } else {
-          next = { ...next, extraEvolutionLikelihood: next.extraEvolutionLikelihood + 6 };
-          outcomeText = 'Every weapon is already maxed — the cairn infuses your belt with +6% Catalyst chance for free!';
+          next = { ...next, extraEvolutionDurationMs: next.extraEvolutionDurationMs + 3000 };
+          outcomeText = 'Every weapon is already maxed — the cairn infuses your belt with +3s evolution duration for free!';
         }
         break;
       }
       case 'starlight_forge:attune_cairn':
         next = {
           ...next,
-          extraEvolutionLikelihood: next.extraEvolutionLikelihood + 8,
-          extraEvolutionCap: next.extraEvolutionCap + 1,
+          extraEvolutionDurationMs: next.extraEvolutionDurationMs + 3000,
+          extraEvolutionChargeBonus: next.extraEvolutionChargeBonus + 1,
         };
-        outcomeText = 'Starfall sparks orbit your belt (+8% Catalyst chance & +1 Evolution per fight)!';
+        outcomeText = 'Starfall sparks orbit your belt (+1 evolution progress tick & +3s evolution duration)!';
         break;
       case 'starlight_forge:rest_cairn':
         next = {

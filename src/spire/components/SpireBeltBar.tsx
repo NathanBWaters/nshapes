@@ -8,11 +8,12 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { COLORS } from '@/utils/colors';
+import { beltSynergyAttrSet } from '@/adventure/ui/synergyMeta';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
 import { WeaponChip } from '@/adventure/components/SharedCards';
 import { INK, PopIn, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
-import { buildSpireWeaponBuilds, spireHeldWeapons } from '../engine/bridge';
+import { buildSpireWeaponBuilds, spireEquippedEvolutions, spireHeldWeapons } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS, spireWeaponSellValue } from '../engine/runState';
 import type { SpireRun } from '../types';
 import { SpireStatPop, SpireTactilePressable } from './SpireMotion';
@@ -20,6 +21,7 @@ import { SpireStatPop, SpireTactilePressable } from './SpireMotion';
 interface Props {
   run: SpireRun;
   onReorder?: (fromIndex: number, toIndex: number) => void;
+  onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onSell?: (weaponId: string) => void;
   title?: string;
   compact?: boolean;
@@ -29,6 +31,7 @@ interface Props {
 const SpireBeltBar: React.FC<Props> = ({
   run,
   onReorder,
+  onSelectEvolution,
   onSell,
   title = 'MY BELT',
   compact = false,
@@ -37,6 +40,8 @@ const SpireBeltBar: React.FC<Props> = ({
   const [inspectId, setInspectId] = useState<string | null>(null);
   const held = spireHeldWeapons(run);
   const builds = buildSpireWeaponBuilds(run);
+  const equippedEvos = spireEquippedEvolutions(run);
+  const labTier = run.upgrades?.evolution_lab ?? 0;
 
   if (held.length === 0) return null;
 
@@ -167,7 +172,13 @@ const SpireBeltBar: React.FC<Props> = ({
             weapon={inspected}
             build={builds[inspected.id]}
             defaultOpen
-            hidePowerNote
+            evolutionMode={onSelectEvolution ? 'select' : 'preview'}
+            allEvolutionsUnlocked
+            showEvolutionsWhenClosed
+            equippedEvolutionId={equippedEvos[inspected.id]}
+            beltSynergyIds={beltSynergyAttrSet(run.weapons, inspected.id)}
+            evolutionLabTier={labTier}
+            onSelectEvolution={onSelectEvolution}
           />
         </PopIn>
       )}

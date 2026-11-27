@@ -4,7 +4,7 @@
  * Graduates dev tools into an effortless customization sandbox (Sakurai Ep. #180
  * Pillar 4 & #193 Debug Mode):
  *  - Live Rolling 15s DPS & Peak Hit Meter + Trigger Counter + Reset Dummy
- *  - 1-tap "Spawn Catalyst" (when an Evolution is armed), "Trigger Parry",
+ *  - 1-tap "Trigger Evo" & "Step Evo +1" (for equipped weapons), "Trigger Parry",
  *    and "Toggle Surge"
  *  - Dummy Mode selector: Immortal Dummy, Timing Parry Dummy, Counter-Parry
  *    Drill (All Orange / All Circles / Rainbow), Shading Surge Drill
@@ -128,7 +128,8 @@ export interface TrainingLabActions {
   onSwapFighter?: (fighter: CharacterName) => void;
   onToggleWeapon?: (weaponId: string) => void;
   onToggleArcana?: (arcanaId: ArcanaId) => void;
-  onSpawnCatalyst?: () => void;
+  onTriggerEvo?: () => void;
+  onAdvanceEvo?: () => void;
   onTriggerParry?: (mode?: DummyMode) => void;
   onToggleSurge?: () => void;
   onChangeDummyMode?: (mode: DummyMode) => void;
@@ -143,7 +144,7 @@ export interface TrainingLabBarProps {
     | 'fighter'
     | 'weapons'
     | 'arcana'
-    | 'armedRecipes'
+    | 'weaponEvolutions'
     | 'surge'
     | 'parry'
     | 'elapsedMs'
@@ -182,7 +183,7 @@ const TrainingLabBar: React.FC<TrainingLabBarProps> = ({
 
   const builds = useMemo(() => weaponBuilds(save), [save]);
   const heldWeaponIds = useMemo(() => new Set(run.weapons.map(w => w.id)), [run.weapons]);
-  const hasArmedEvo = run.armedRecipes.length > 0;
+  const hasTrackedEvo = (run.weaponEvolutions?.length ?? 0) > 0;
   const surgeActive = Boolean(run.surge?.active);
   const modeMeta = DUMMY_MODES.find(m => m.id === activeMode) ?? DUMMY_MODES[0];
 
@@ -230,7 +231,7 @@ const TrainingLabBar: React.FC<TrainingLabBarProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Action Strip: Hot-Swap · Spawn Catalyst · Trigger Parry · Toggle Surge */}
+      {/* Action Strip: Hot-Swap · Trigger Evo · Step Evo +1 · Trigger Parry · Toggle Surge */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.actionRow}>
         <TouchableOpacity
           testID="training-lab-swap-toggle"
@@ -243,17 +244,29 @@ const TrainingLabBar: React.FC<TrainingLabBarProps> = ({
         </TouchableOpacity>
 
         <TouchableOpacity
-          testID="training-lab-catalyst"
-          disabled={!hasArmedEvo}
-          onPress={() => actions?.onSpawnCatalyst?.()}
-          style={[st.actionPill, hasArmedEvo ? st.actionEvo : st.actionDisabled]}
+          testID="training-lab-trigger-evo"
+          disabled={!hasTrackedEvo}
+          onPress={() => actions?.onTriggerEvo?.()}
+          style={[st.actionPill, hasTrackedEvo ? st.actionEvo : st.actionDisabled]}
           activeOpacity={0.85}
-          accessibilityState={{ disabled: !hasArmedEvo }}
+          accessibilityState={{ disabled: !hasTrackedEvo }}
         >
           <Icon name="lorc/crystal-shine" size={13} color={INK} />
           <Text style={st.actionText}>
-            {hasArmedEvo ? 'Spawn Catalyst' : 'No Evo Armed'}
+            {hasTrackedEvo ? 'Trigger Evo' : 'No Evo'}
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          testID="training-lab-step-evo"
+          disabled={!hasTrackedEvo}
+          onPress={() => actions?.onAdvanceEvo?.()}
+          style={[st.actionPill, hasTrackedEvo ? st.actionEvo : st.actionDisabled]}
+          activeOpacity={0.85}
+          accessibilityState={{ disabled: !hasTrackedEvo }}
+        >
+          <Icon name="lorc/power-lightning" size={13} color={INK} />
+          <Text style={st.actionText}>Step Evo +1</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

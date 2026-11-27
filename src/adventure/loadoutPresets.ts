@@ -1,30 +1,36 @@
 /**
- * [GP-21] Armory Loadout Helpers:
+ * [GP-21] Armory Loadout Presets & Reordering:
  *  - 3 persistent named Loadout Presets (Burst / Survival / Farm) stored in MMKV
- *    independently of `save.ts`.
+ *    independently of `save.ts`, with backwards-compatible per-weapon
+ *    `equippedEvolutions` snapshot/restore.
  *  - Pure `reorderCharmSlots` helper for belt slot left/right reordering (`Understudy`).
- *  - 1-tap `autoBuildLoadout(save, level)` foe-aware & evolution-aware builder.
- *  - Shared `filterAndSortArmory` helper for all 64 Armory weapons across Camp & LevelPreview.
+ *  - Re-exports `autoBuildLoadout` and `filterAndSortArmory` from `loadout.ts`.
  */
-import type { CharacterName, Weapon } from '@/types';
+import type { CharacterName } from '@/types';
 import { storage } from '@/utils/storage';
-import { SPIRE_CLASH_PAIRS } from '@/spire/engine/bridge';
 import { ARCANA } from './data/arcana';
-import { UNDERSTUDY_ID } from './data/adventureWeapons';
-import { getArmoryWeapon } from './data/armory';
-import { EVOLUTION_RECIPES } from './data/evolutions';
-import { foeDisplay } from './data/foes';
-import { weaponRole, type WeaponRole } from './data/weaponRoles';
 import {
-  arcanaSlots,
-  charmSlots,
-  charmSynergyWithEquipped,
-  equippedArcanaOf,
-  equippedCharms,
-  weaponBuilds,
-  weaponLevel,
-} from './progress';
-import type { AdventureSave, ArcanaId, LevelDef } from './types';
+  arcanaSlotsOf,
+  autoBuildLoadout,
+  charmSlotsOf,
+  fightArcana,
+  fightCharms,
+  filterAndSortArmory,
+  type ArmoryFilterOptions,
+  type ArmoryQuickFilter,
+  type ArmorySortMode,
+  type AutoBuildResult,
+} from './loadout';
+import type { AdventureSave, ArcanaId } from './types';
+
+export {
+  autoBuildLoadout,
+  filterAndSortArmory,
+  type ArmoryFilterOptions,
+  type ArmoryQuickFilter,
+  type ArmorySortMode,
+  type AutoBuildResult,
+};
 
 export const PRESET_SLOT_COUNT = 3;
 export const DEFAULT_PRESET_NAMES = ['Burst', 'Survival', 'Farm'] as const;
@@ -36,12 +42,27 @@ export interface LoadoutPreset {
   fighter: CharacterName;
   charms: string[];
   arcana: ArcanaId[];
+  /** Optional snapshot of equipped per-weapon evolutions for the preset's charms */
+  equippedEvolutions?: Record<string, string>;
   savedAt: number;
 }
 
 const VALID_ARCANA_IDS = new Set<string>(ARCANA.map(a => a.id));
 
 const emptyPresetSlots = (): (LoadoutPreset | null)[] => [null, null, null];
+
+const sanitizeEquippedEvos = (raw: unknown): Record<string, string> | undefined => {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined;
+  const out: Record<string, string> = {};
+  let count = 0;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof k === 'string' && k.length > 0 && typeof v === 'string' && v.length > 0) {
+      out[k] = v;
+      count++;
+    }
+  }
+  return count > 0 ? out : undefined;
+};
 
 const isPresetLike = (v: unknown): v is LoadoutPreset => {
   if (typeof v !== 'object' || v === null || Array.isArray(v)) return false;
@@ -67,7 +88,16 @@ export const loadLoadoutPresets = (): (LoadoutPreset | null)[] => {
     for (let i = 0; i < PRESET_SLOT_COUNT; i++) {
       const item = parsed[i];
       if (isPresetLike(item)) {
-        out[i] = { ...item, slot: i as 0 | 1 | 2 };
+        const equippedEvolutions = sanitizeEquippedEvos(item.equippedEvolutions);
+        out[i] = {
+          slot: i as 0 | 1 | 2,
+          name: item.name,
+          fighter: item.fighter,
+          charms: [...item.charms],
+          arcana: [...item.arcana],
+          savedAt: typeof item.savedAt === 'number' && Number.isFinite(item.savedAt) ? item.savedAt : 0,
+          ...(equippedEvolutions ? { equippedEvolutions } : {}),
+        };
       }
     }
     return out;
@@ -91,12 +121,21 @@ export const saveLoadoutPreset = (
 ): (LoadoutPreset | null)[] => {
   const next = loadLoadoutPresets();
   const resolvedName = (name ?? next[slot]?.name ?? DEFAULT_PRESET_NAMES[slot]).trim() || DEFAULT_PRESET_NAMES[slot];
+  const charms = [...fightCharms(save)];
+  const equippedEvolutions: Record<string, string> = {};
+  for (const wId of charms) {
+    const evoId = save.equippedEvolutions?.[wId];
+    if (typeof evoId === 'string' && evoId.length > 0) {
+      equippedEvolutions[wId] = evoId;
+    }
+  }
   next[slot] = {
     slot,
     name: resolvedName,
     fighter: save.selectedFighter,
-    charms: [...equippedCharms(save)],
-    arcana: [...equippedArcanaOf(save)],
+    charms,
+    arcana: [...fightArcana(save)],
+    ...(Object.keys(equippedEvolutions).length > 0 ? { equippedEvolutions } : {}),
     savedAt: Date.now(),
   };
   writePresets(next);
@@ -110,12 +149,12 @@ export const clearLoadoutPreset = (slot: 0 | 1 | 2): (LoadoutPreset | null)[] =>
   return next;
 };
 
-/** Apply a saved preset safely against the player's currently unlocked inventory and slot limits. */
+/** Apply a saved preset safely against the player's currently unlocked inventory, evolutions, and slot limits. */
 export const applyLoadoutPreset = (save: AdventureSave, preset: LoadoutPreset): AdventureSave => {
   const fighter = save.unlockedFighters.includes(preset.fighter)
     ? preset.fighter
     : save.selectedFighter;
-  const maxCharms = charmSlots(save);
+  const maxCharms = charmSlotsOf(save);
   const ownedSet = new Set(save.armory);
   const charms: string[] = [];
   for (const id of preset.charms) {
@@ -123,7 +162,7 @@ export const applyLoadoutPreset = (save: AdventureSave, preset: LoadoutPreset): 
       charms.push(id);
     }
   }
-  const maxArc = arcanaSlots(save);
+  const maxArc = arcanaSlotsOf(save);
   const unlockedArc = new Set<string>(save.unlockedArcana);
   const arcana: ArcanaId[] = [];
   for (const id of preset.arcana) {
@@ -131,11 +170,22 @@ export const applyLoadoutPreset = (save: AdventureSave, preset: LoadoutPreset): 
       arcana.push(id);
     }
   }
+  // Merge valid unlocked per-weapon evolutions from preset without clobbering unrelated weapons
+  const unlockedEvos = new Set<string>(save.unlockedWeaponEvolutions ?? []);
+  const equippedEvolutions: Record<string, string> = { ...(save.equippedEvolutions ?? {}) };
+  if (preset.equippedEvolutions) {
+    for (const [weaponId, evoId] of Object.entries(preset.equippedEvolutions)) {
+      if (ownedSet.has(weaponId) && unlockedEvos.has(evoId) && evoId.startsWith(`${weaponId}:`)) {
+        equippedEvolutions[weaponId] = evoId;
+      }
+    }
+  }
   return {
     ...save,
     selectedFighter: fighter,
     charms,
     equippedArcana: arcana,
+    equippedEvolutions,
   };
 };
 
@@ -145,7 +195,7 @@ export const reorderCharmSlots = (
   fromIndex: number,
   toIndex: number
 ): AdventureSave => {
-  const charms = [...equippedCharms(save)];
+  const charms = [...fightCharms(save)];
   if (
     fromIndex < 0 ||
     toIndex < 0 ||
@@ -158,195 +208,4 @@ export const reorderCharmSlots = (
   const [moved] = charms.splice(fromIndex, 1);
   charms.splice(toIndex, 0, moved);
   return { ...save, charms };
-};
-
-const inFamily = (id: string, family: readonly string[]): boolean =>
-  family.some(prefix => id === prefix || id.startsWith(`${prefix}-`));
-
-const clashesWithSelected = (selected: readonly string[], candidate: string): boolean =>
-  SPIRE_CLASH_PAIRS.some(
-    pair =>
-      (pair.a === candidate && selected.includes(pair.b)) ||
-      (pair.b === candidate && selected.includes(pair.a))
-  );
-
-const TIME_ONLY_WEAPONS = new Set(['chrono-shard', 'time-drop', 'temporal-rift', 'echo-chamber']);
-const BLAST_CLEAR_WEAPONS = new Set(['blast-powder', 'prismatic-ray', 'flint-spark', 'chaos-shard', 'echo-stone']);
-const SURVIVAL_WEAPONS = new Set(['mending-charm', 'life-vessel', 'life-link', 'second-chance', 'fortune-token']);
-
-export interface AutoBuildResult {
-  save: AdventureSave;
-  summary: string;
-  armedEvolution: string | null;
-}
-
-/**
- * [GP-21] 1-tap "Auto-Equip for Foe": inspects owned Armory weapons, levels,
- * armed Evolutions, `SPIRE_CLASH_PAIRS`, and upcoming level rules/foe abilities
- * to equip a cohesive belt with zero clashing gambles and proper `Understudy` placement.
- */
-export const autoBuildLoadout = (save: AdventureSave, level?: LevelDef | null): AutoBuildResult => {
-  const slots = charmSlots(save);
-  const owned = [...new Set(save.armory)].filter(id => Boolean(getArmoryWeapon(id)));
-  if (slots <= 0 || owned.length === 0) {
-    return { save, summary: 'No Armory weapons to equip yet.', armedEvolution: null };
-  }
-
-  const untimed = Boolean(level && !level.rules.timer && !level.rules.sandbox);
-  const hasHazards = Boolean(level?.rules.hazards?.timeBombs || level?.rules.hazards?.snares);
-  const foeTexts = (level?.foes ?? [])
-    .map(f => `${f.enemy ?? ''} ${foeDisplay(f).ability ?? ''}`.toLowerCase())
-    .join(' ');
-  const wantsBoardClear = hasHazards || /dud|lock|clog|face-down|stone|bomb|snare/.test(foeTexts);
-  const highPressure = Boolean(level && (level.isBoss || level.difficulty >= 4 || hasHazards));
-
-  const weaponScore = (id: string): number => {
-    let score = weaponLevel(save, id) * 14;
-    const role = weaponRole(id);
-    if (role === 'damage') score += 12;
-    else if (role === 'chains' || role === 'board') score += 8;
-    else if (role === 'tricks') score += 6;
-    else if (role === 'survival') score += highPressure ? 11 : 4;
-    else if (role === 'tempo') score += 5;
-    else if (role === 'insight') score += 5;
-    else if (role === 'gambles') score += 2;
-
-    if (untimed && TIME_ONLY_WEAPONS.has(id)) score -= 25;
-    if (wantsBoardClear && BLAST_CLEAR_WEAPONS.has(id)) score += 10;
-    if (highPressure && SURVIVAL_WEAPONS.has(id)) score += 7;
-    if (foeTexts.includes('fire') && foeTexts.includes('reduce') && id === 'flint-spark') score -= 18;
-    if (foeTexts.includes('blast') && foeTexts.includes('reduce') && id === 'blast-powder') score -= 18;
-    if (foeTexts.includes('laser') && foeTexts.includes('reduce') && id === 'prismatic-ray') score -= 18;
-    if (id === UNDERSTUDY_ID) score += 4;
-    return score;
-  };
-
-  const chosen: string[] = [];
-  let armedEvolution: string | null = null;
-
-  // 1. If evolutions are unlocked and we have >=2 slots, pick the highest-scoring non-clashing Evolution pair
-  if (slots >= 2 && (save.unlockedEvolutions.length > 0 || save.discoveredEvolutions.length > 0)) {
-    let bestPair: { a: string; b: string; name: string; score: number } | null = null;
-    for (const recipe of EVOLUTION_RECIPES) {
-      const known =
-        save.unlockedEvolutions.includes(recipe.id) ||
-        save.discoveredEvolutions.includes(recipe.id);
-      const aCandidates = owned
-        .filter(id => id !== UNDERSTUDY_ID && inFamily(id, recipe.families[0]))
-        .sort((x, y) => weaponScore(y) - weaponScore(x));
-      const bCandidates = owned
-        .filter(id => id !== UNDERSTUDY_ID && inFamily(id, recipe.families[1]))
-        .sort((x, y) => weaponScore(y) - weaponScore(x));
-      if (aCandidates.length === 0 || bCandidates.length === 0) continue;
-      for (const a of aCandidates.slice(0, 2)) {
-        for (const b of bCandidates.slice(0, 2)) {
-          if (a === b || clashesWithSelected([a], b)) continue;
-          const total = weaponScore(a) + weaponScore(b) + (known ? 20 : 12);
-          if (!bestPair || total > bestPair.score) {
-            bestPair = { a, b, name: known ? recipe.name : 'an Evolution', score: total };
-          }
-        }
-      }
-    }
-    if (bestPair) {
-      chosen.push(bestPair.a, bestPair.b);
-      armedEvolution = bestPair.name;
-    }
-  }
-
-  // 2. Fill remaining belt slots with highest-scoring non-clashing weapons
-  const ranked = [...owned].sort((a, b) => weaponScore(b) - weaponScore(a) || a.localeCompare(b));
-  for (const id of ranked) {
-    if (chosen.length >= slots) break;
-    if (chosen.includes(id)) continue;
-    if (id === UNDERSTUDY_ID && chosen.length === 0) continue;
-    if (clashesWithSelected(chosen, id)) continue;
-    chosen.push(id);
-  }
-  // Fallback if clash pruning left slots empty
-  for (const id of ranked) {
-    if (chosen.length >= slots) break;
-    if (!chosen.includes(id)) chosen.push(id);
-  }
-
-  // 3. Ensure `understudy` sits directly to the right of the strongest non-understudy charm (never slot 0!)
-  const uIdx = chosen.indexOf(UNDERSTUDY_ID);
-  if (uIdx >= 0 && chosen.length >= 2) {
-    chosen.splice(uIdx, 1);
-    let bestAnchor = 0;
-    let bestAnchorScore = -Infinity;
-    chosen.forEach((id, idx) => {
-      const s = weaponScore(id);
-      if (s > bestAnchorScore) {
-        bestAnchorScore = s;
-        bestAnchor = idx;
-      }
-    });
-    chosen.splice(bestAnchor + 1, 0, UNDERSTUDY_ID);
-  }
-
-  const nextSave: AdventureSave = { ...save, charms: chosen.slice(0, slots) };
-  const evoNote = armedEvolution ? ` (arms ${armedEvolution})` : '';
-  const summary = `Auto-equipped ${nextSave.charms.length} weapon${nextSave.charms.length === 1 ? '' : 's'}${evoNote}`;
-  return { save: nextSave, summary, armedEvolution };
-};
-
-export type ArmoryQuickFilter = 'all' | 'fuses' | 'equipped' | 'lv2plus';
-export type ArmorySortMode = 'shelves' | 'fuses' | 'level' | 'az';
-
-export interface ArmoryFilterOptions {
-  quick: ArmoryQuickFilter;
-  role: WeaponRole | 'all';
-  query: string;
-  sort: ArmorySortMode;
-}
-
-/** Shared filter & sort pipeline for all 64 Armory weapons across Camp and LevelPreview. */
-export const filterAndSortArmory = (
-  save: AdventureSave,
-  options: ArmoryFilterOptions
-): Weapon[] => {
-  const builds = weaponBuilds(save);
-  const charms = equippedCharms(save);
-  const q = options.query.trim().toLowerCase();
-
-  const items: Weapon[] = [];
-  for (const id of save.armory) {
-    const w = getArmoryWeapon(id, builds);
-    if (!w) continue;
-    const isEquipped = charms.includes(id);
-    const lvl = weaponLevel(save, id);
-    const fuses = !isEquipped && Boolean(charmSynergyWithEquipped(save, id));
-
-    if (options.quick === 'fuses' && !fuses) continue;
-    if (options.quick === 'equipped' && !isEquipped) continue;
-    if (options.quick === 'lv2plus' && lvl < 2) continue;
-    if (options.role !== 'all' && weaponRole(id) !== options.role) continue;
-    if (q.length > 0) {
-      const hay = `${w.name} ${w.shortDescription} ${w.description} ${weaponRole(id)}`.toLowerCase();
-      if (!hay.includes(q)) continue;
-    }
-    items.push(w);
-  }
-
-  if (options.sort === 'shelves') {
-    return items;
-  }
-
-  return [...items].sort((a, b) => {
-    if (options.sort === 'az') {
-      return a.name.localeCompare(b.name);
-    }
-    const lvlA = weaponLevel(save, a.id);
-    const lvlB = weaponLevel(save, b.id);
-    if (options.sort === 'level') {
-      return lvlB - lvlA || a.name.localeCompare(b.name);
-    }
-    // 'fuses': fusing unequipped weapons first, then equipped, then higher level, then A-Z
-    const eqA = charms.includes(a.id);
-    const eqB = charms.includes(b.id);
-    const fuseA = !eqA && Boolean(charmSynergyWithEquipped(save, a.id)) ? 2 : eqA ? 1 : 0;
-    const fuseB = !eqB && Boolean(charmSynergyWithEquipped(save, b.id)) ? 2 : eqB ? 1 : 0;
-    return fuseB - fuseA || lvlB - lvlA || a.name.localeCompare(b.name);
-  });
 };

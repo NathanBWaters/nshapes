@@ -13,20 +13,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ARCANA } from '@/adventure/data/arcana';
 import { ALL_ARMORY_WEAPON_IDS, armoryBaseWeapon } from '@/adventure/data/armory';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { LEVELS } from '@/adventure/data/levels';
+import { PARRY_RULES } from '@/adventure/data/parry';
 import { COMBO_MS_PER_EXTRA_TRAIT, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '@/adventure/data/passives';
+import { BASE_RULES, SURGE_RULES, TRICK_RULES } from '@/adventure/data/rules';
 import { CAMPAIGN_STARS, SEALED_AT, TREE_BUDGET, skillTreeOf } from '@/adventure/data/skillTrees';
+import { SYNERGY_ATTR_IDS, WEAPON_SYNERGY_HOOKS, WEAPON_SYNERGY_PROFILES } from '@/adventure/data/synergy';
 import { HINTED_SET_MS, WEAPON_GROWTH } from '@/adventure/data/weaponGrowth';
-import {
-  POWER_KNEE,
-  POWER_LEVEL_FLOOR,
-  POWER_SHARE,
-  POWER_TAIL,
-  powerPer,
-  powerWatches,
-} from '@/adventure/data/weaponPower';
+import { EVOLUTION_CHASSIS } from '@/adventure/engine/sources';
 import type { AdventureWeapon } from '@/adventure/types';
 import { DEFAULT_PLAYER_STATS } from '@/utils/gameDefinitions';
 import type {
@@ -102,6 +98,10 @@ const COSMETIC_KEYS = new Set([
   'say',
   'text',
   'tagline',
+  'shortVerb',
+  'conditionText',
+  'conditionShort',
+  'accent',
   'upside',
   'tradeoff',
   'numeral',
@@ -155,6 +155,18 @@ export const computeItemFingerprints = (): BalanceFingerprintsSnapshot['items'] 
       now: g.now,
       proc: g.proc,
     }));
+    const synergyProfile = WEAPON_SYNERGY_PROFILES[id];
+    const synergyHooks = (WEAPON_SYNERGY_HOOKS[id] ?? synergyProfile?.hooks ?? []).map(h => ({
+      id: h.id,
+      attr: h.attr,
+      role: h.role,
+      step: h.step,
+      cap: h.cap,
+      baseDamagePerStep: h.baseDamagePerStep,
+      liveSource: h.liveSource,
+      modPerStep: h.modPerStep,
+      crossEdgeRule: h.crossEdgeRule,
+    }));
     weapons[id] = hashMechanical({
       id,
       effects: base.effects,
@@ -166,17 +178,28 @@ export const computeItemFingerprints = (): BalanceFingerprintsSnapshot['items'] 
       rules: base.rules,
       modifiers: base.modifiers,
       growth,
-      powerPer: powerPer(id),
-      powerWatches: powerWatches(id),
+      synergy: {
+        produces: synergyProfile ? [...synergyProfile.produces].sort() : [],
+        consumes: synergyProfile ? [...synergyProfile.consumes].sort() : [],
+        amplifies: synergyProfile?.amplifies ? [...synergyProfile.amplifies].sort() : [],
+        hooks: synergyHooks,
+      },
     });
   }
 
   const evolutions: Record<string, string> = {};
-  for (const recipe of [...EVOLUTION_RECIPES].sort((a, b) => a.id.localeCompare(b.id))) {
-    evolutions[recipe.id] = hashMechanical({
-      id: recipe.id,
-      families: recipe.families.map(f => [...f].sort()),
-      source: recipe.source,
+  for (const evo of [...WEAPON_EVOLUTIONS].sort((a, b) => a.id.localeCompare(b.id))) {
+    evolutions[evo.id] = hashMechanical({
+      id: evo.id,
+      weaponId: evo.weaponId,
+      slotIndex: evo.slotIndex,
+      condition: evo.condition,
+      durationMs: evo.durationMs,
+      cooldownMs: evo.cooldownMs ?? EVOLUTION_CHASSIS.defaultCooldownMs,
+      source: evo.source,
+      openingEffects: evo.openingEffects ?? [],
+      finaleEffects: evo.finaleEffects ?? [],
+      synergyTags: [...evo.synergyTags].sort(),
     });
   }
 
@@ -240,10 +263,12 @@ export const computeEngineFileHashes = (repoRoot: string): Record<string, string
     DEFAULT_COMBO_WINDOW_MS,
     COMBO_MS_PER_EXTRA_TRAIT,
     HINTED_SET_MS,
-    POWER_KNEE,
-    POWER_TAIL,
-    POWER_SHARE,
-    POWER_LEVEL_FLOOR,
+    BASE_RULES,
+    SURGE_RULES,
+    TRICK_RULES,
+    PARRY_RULES,
+    EVOLUTION_CHASSIS,
+    SYNERGY_ATTR_IDS,
     CAMPAIGN_STARS,
     TREE_BUDGET,
     SEALED_AT,

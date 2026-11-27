@@ -27,8 +27,8 @@ describe('features accumulate along the map', () => {
 });
 
 describe('run reducer', () => {
-  it('a Set deals its points and counts as a match', () => {
-    let s = startFight({ level: testLevel({ foes: [{ name: 'Dummy', hp: 15 }] }), features: ['hearts'] });
+  it('a Set deals its elevated base points (6) and counts as a match', () => {
+    let s = startFight({ level: testLevel({ foes: [{ name: 'Dummy', hp: 18 }] }), features: ['hearts'] });
     s = playSet(s);
     expect(s.foeHp).toBe(12);
     expect(s.matches).toBe(1);
@@ -38,7 +38,7 @@ describe('run reducer', () => {
   });
 
   it.each([[0, 3], [1, 2], [2, 1], [5, 1]])('accuracy levels: %i mistakes → %i stars', (mistakes, stars) => {
-    const level = testLevel({ foes: [{ name: 'Dummy', hp: 15 }], starRule: { kind: 'accuracy', threeStarMax: 0, twoStarMax: 1 } });
+    const level = testLevel({ foes: [{ name: 'Dummy', hp: 18 }], starRule: { kind: 'accuracy', threeStarMax: 0, twoStarMax: 1 } });
     let s = startFight({ level, features: [] });
     for (let i = 0; i < mistakes; i++) s = miss(s);
     expect(s.status).toBe('playing');
@@ -71,13 +71,13 @@ describe('run reducer', () => {
   });
 
   it('waves advance through an intermission', () => {
-    const level = testLevel({ foes: [{ name: 'A', hp: 6 }, { name: 'B', hp: 9 }] });
+    const level = testLevel({ foes: [{ name: 'A', hp: 12 }, { name: 'B', hp: 18 }] });
     let s = startFight({ level, features: ['hearts'] });
     while (s.status === 'playing') s = playSet(s);
     expect(s.status).toBe('intermission');
     s = runReducer(s, { type: 'NEXT_WAVE' });
     expect(s.wave).toBe(1);
-    expect(s.foeHp).toBe(9);
+    expect(s.foeHp).toBe(18);
     expect(s.setsThisWave).toBe(0);
   });
 
@@ -103,7 +103,7 @@ describe('run reducer', () => {
   it('cards waiting to be replaced are left alone until REPLACE', () => {
     let s = startFight();
     const set = findSet(s)!;
-    s = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 1 })) });
+    s = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 2 })) });
     expect(s.replacing).toEqual(set.map(c => c.id));
     s = runReducer(s, { type: 'REPLACE', ids: set.map(c => c.id) });
     expect(s.replacing).toEqual([]);
@@ -113,23 +113,26 @@ describe('run reducer', () => {
   it('tracks the biggest hit and total damage', () => {
     let s = startFight({ features: ['hearts'] });
     s = playSet(s);
-    expect(s.biggestHit).toBe(3);
-    expect(s.totalDamage).toBe(3);
+    expect(s.biggestHit).toBe(6);
+    expect(s.totalDamage).toBe(6);
   });
 });
 
 describe('loadout', () => {
   const armory = ['blast-powder', 'mending-charm', 'flint-spark', 'war-drum', 'pinata'];
 
-  it('fighters bring no gear: charms are the whole weapon loadout, capped at the slots', () => {
+  it('fighters bring no gear: charms are the whole weapon loadout, capped at 3 base -> 4 (W1) -> 5 (W2) -> 6 (+Belt)', () => {
     const level = testLevel();
     const bare = startingLoadout(level, { ...createNewSave(), armory });
     expect(bare.weapons).toHaveLength(0);
     const save = { ...createNewSave(), armory, charms: [...armory, 'not-owned'] };
     expect(startingLoadout(level, save).weapons.map(w => w.id)).toEqual(armory.slice(0, 3));
-    const belted = { ...save, upgrades: { charm_belt: 2 } };
-    expect(startingLoadout(level, belted).weapons.map(w => w.id)).toEqual(armory);
-    expect(startingLoadout(level, { ...save, upgrades: { charm_belt: 9 } }).charmSlots).toBe(6);
+    const afterW1 = { ...save, stars: { '1-10': 1 } };
+    expect(startingLoadout(level, afterW1).weapons.map(w => w.id)).toEqual(armory.slice(0, 4));
+    const afterW2 = { ...save, stars: { '1-10': 1, '2-10': 1 } };
+    expect(startingLoadout(level, afterW2).weapons.map(w => w.id)).toEqual(armory);
+    expect(startingLoadout(level, { ...afterW2, upgrades: { charm_belt: 1 } }).charmSlots).toBe(6);
+    expect(startingLoadout(level, { ...afterW2, upgrades: { charm_belt: 9 } }).charmSlots).toBe(6);
   });
 
   it('duplicate and unowned charms are dropped', () => {
@@ -175,18 +178,18 @@ describe('loadout', () => {
         hit?.do === 'damage' ? hit.amount : NaN,
       ];
     };
-    // Window stays tight (14-16s); power scales cleanly without dead levels; slam scales cleanly too
+    // Elevated base damage tuning: window 14-16s, board power 2-4, drumbeat slam 10-22
     expect([1, 2, 3, 4, 5].map(l => drum(l))).toEqual([
-      [14000, 1, 5],
-      [14500, 1.3, 6.5],
-      [15000, 1.5, 8],
-      [15500, 1.8, 9.5],
-      [16000, 2, 11],
+      [14000, 2, 10],
+      [14500, 2.5, 13],
+      [15000, 3, 16],
+      [15500, 3.5, 19],
+      [16000, 4, 22],
     ]);
-    // ×1.5 on tunable slam at level 5 (window & power stay tight and untunable, zero rounding traps)
-    expect(drum(5, { slam: 4 })).toEqual([16000, 2, 16.5]);
+    // ×1.5 on tunable slam at level 5 (22 * 1.5 = 33)
+    expect(drum(5, { slam: 4 })).toEqual([16000, 4, 33]);
     expect(getArmoryWeapon('war-drum', { 'war-drum': { level: 3, tuning: {} } })!.shortDescription)
-      .toBe('3 Sets in 15s: +8 dmg & board +1.5');
+      .toBe('3 Sets in 15s: +16 dmg & board +3');
   });
 
   it('every adventure weapon has numbers that grow with level and wording built from them', () => {
@@ -202,11 +205,11 @@ describe('loadout', () => {
     const blast = (level: number, tuning: Record<string, number> = {}) =>
       getArmoryWeapon('blast-powder', { 'blast-powder': { level, tuning } })!.effects;
     expect([1, 2, 3, 4, 5].map(l => blast(l).explosionChance)).toEqual([18, 22, 26, 30, 34]);
-    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionDamage)).toEqual([0.5, 0.75, 1, 1.25, 1.5]);
+    expect([1, 2, 3, 4, 5].map(l => blast(l).explosionDamage)).toEqual([1, 1.5, 2, 2.5, 3]);
     expect(blast(5, { explosionChance: 4 }).explosionChance).toBe(51);
-    expect(blast(5, { explosionChance: 4 }).explosionDamage).toBe(1.5);
+    expect(blast(5, { explosionChance: 4 }).explosionDamage).toBe(3);
     expect(getArmoryWeapon('blast-powder', { 'blast-powder': { level: 3, tuning: { explosionChance: 2 } } })!.shortDescription)
-      .toBe('31.2% blast, 2 dmg per card');
+      .toContain('31.2%');
   });
 });
 
@@ -216,12 +219,10 @@ describe('fighter passives', () => {
 
   it('Orange Tabby — Nine Lives grants a Wave-1 Pounce Shield and survives one knockout', () => {
     let s = fight('Orange Tabby', { level: testLevel({ rules: { hearts: 3 } }) });
-    // [GP-14] Wave-1 Pounce Shield absorbs the first hit cleanly
     expect(s.waveShieldLeft).toBe(1);
     s = miss(s);
     expect(s.hearts).toBe(3);
     expect(s.waveShieldLeft).toBe(0);
-    // Next 3 mistakes drain 3 -> 0 and trigger Nine Lives (leaves 1 heart)
     for (let i = 0; i < 3; i++) s = miss(s);
     expect(s.status).toBe('playing');
     expect(s.hearts).toBe(1);
@@ -230,22 +231,22 @@ describe('fighter passives', () => {
     expect(s.status).toBe('lost');
   });
 
-  it('Orange Tabby — Scrappy adds +1 base claw damage plus +1.5 per missing heart', () => {
+  it('Orange Tabby — Scrappy adds +2 base claw damage plus +3 per missing heart', () => {
     let s = fight('Orange Tabby', { features: ['hearts', 'gear'] });
     const fullBefore = s.foeHp;
     s = playSet(s);
-    // At full hearts: 3 card base + 1 Scrappy base = 4
-    expect(fullBefore - s.foeHp).toBe(4);
+    // At full hearts: 6 card base + 2 Scrappy base = 8
+    expect(fullBefore - s.foeHp).toBe(8);
     // Consume Wave-1 Pounce Shield, then lose 2 real hearts
     s = miss(miss(miss(s)));
     expect(s.hearts).toBe(s.maxHearts! - 2);
     const before = s.foeHp;
     s = playSet(s);
-    // [GP-14] Scrappy: +1 base + 1.5 per missing heart (2 missing hearts -> +4 dmg on 3-dmg base Set = 7)
-    expect(before - s.foeHp).toBe(3 + 1 + 3);
+    // Scrappy: 6 base + 2 base claw + 2 * 3 missing hearts = 14
+    expect(before - s.foeHp).toBe(6 + 2 + 6);
   });
 
-  it('Sly Fox — quick Sets chain a combo, a mistake breaks it, max combo arms Hot Streak', () => {
+  it('Sly Fox — quick Sets chain a combo (+2/step), a mistake breaks it, max combo arms Hot Streak (+10 & ×1.35)', () => {
     let s = fight('Sly Fox', { features: ['hearts', 'gear'] });
     const hit = (st: RunState) => {
       const before = st.foeHp;
@@ -254,15 +255,16 @@ describe('fighter passives', () => {
     };
     let r = hit(s);
     expect(r.next.combo).toBe(1);
-    expect(r.dmg).toBe(3);
+    expect(r.dmg).toBe(6);
     r = hit(r.next);
     expect(r.next.combo).toBe(2);
-    expect(r.dmg).toBe(4);
+    expect(r.dmg).toBe(8);
     r = hit(hit(hit(r.next).next).next); // combo 5 = 4 steps = max
     expect(r.next.combo).toBe(5);
     expect(r.next.passive.hotStreak).toBe(true);
     r = hit(r.next);
-    expect(r.dmg).toBe((3 + 4) * 2);
+    // (6 base + 8 combo + 10 hotStreak flat) × 1.35 = 32.4 → 32
+    expect(r.dmg).toBe(Math.round((6 + 8 + 10) * 1.35));
     s = miss(r.next);
     expect(s.combo).toBe(0);
     expect(s.passive.hotStreak).toBe(false);
@@ -278,7 +280,7 @@ describe('fighter passives', () => {
     expect(s.combo).toBe(0);
   });
 
-  it('Badger — Grudge stores mistakes for the next Set; Thick Hide spares the first heart each wave', () => {
+  it('Badger — Grudge stores mistakes (+6 each) for the next Set; Thick Hide spares the first heart each wave', () => {
     let s = fight('Badger', { features: ['hearts', 'gear'] });
     const hearts = s.hearts!;
     s = miss(s);
@@ -289,20 +291,19 @@ describe('fighter passives', () => {
     expect(s.passive.grudge).toBe(2);
     const before = s.foeHp;
     s = playSet(s);
-    expect(before - s.foeHp).toBe(3 + 6);
+    expect(before - s.foeHp).toBe(6 + 12);
     expect(s.passive.grudge).toBe(0);
   });
 
-  it('Emperor Penguin — Patience rewards slow Sets; Deep Freeze stops the clock on Rainbows', () => {
+  it('Emperor Penguin — Patience rewards slow Sets (+5); Deep Freeze stops the clock on Rainbows', () => {
     let s = fight('Emperor Penguin', { level: testLevel({ rules: { timer: 120 } }), features: ['hearts', 'gear'] });
-    // The window is 2.5s per active trait
     s = tick(s, 2500 * s.attributes.length, 500);
     let before = s.foeHp;
     s = playSet(s);
-    expect(before - s.foeHp).toBe(3 + 2);
+    expect(before - s.foeHp).toBe(6 + 5);
     before = s.foeHp;
     s = playSet(tick(s, 1000));
-    expect(before - s.foeHp).toBe(3);
+    expect(before - s.foeHp).toBe(6);
 
     let r = fight('Emperor Penguin', { level: testLevel({ rules: { timer: 120 } }), features: ['hearts', 'gear', 'rainbow'], seed: 3 });
     for (let i = 0; i < 40 && !findSet(r, set => isRainbow(set, r.attributes)); i++) r = playSet(r);
@@ -337,7 +338,7 @@ describe('fighter passives', () => {
     const ids = new Set(set.map(c => c.id));
     const powerOthers = (st: RunState) => st.board.filter(c => (c.bonusPoints ?? 0) > 0 && !ids.has(c.id)).length;
     const before = powerOthers(s);
-    s = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 1 + (c.bonusPoints ?? 0) })) });
+    s = runReducer(s, { type: 'MATCH', cards: set, rewards: set.map(c => ({ cardId: c.id, points: 2 + (c.bonusPoints ?? 0) })) });
     expect(eventsOf(s, 'fetch').length).toBeGreaterThan(0);
     expect(powerOthers(s)).toBe(before + 1);
   });

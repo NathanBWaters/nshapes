@@ -1,5 +1,5 @@
 /**
- * Every weapon is a member of the band, and every evolution is a duet.
+ * Every weapon is a member of the band, and every evolution amplifies its voice.
  *
  * A weapon's VOICE is an instrument plus a one-bar riff. Riffs are written in
  * steps above the root of whatever chord is playing (0 root, 2 third, 4 fifth,
@@ -8,12 +8,13 @@
  * the music; the weapon firing plays its STING (the riff's notes as one quick
  * run) and turns its riff up for the next bars. A build you can hear.
  *
- * An evolution's THEME is made from its two weapons: both stings as one
- * fanfare, both riffs together an octave up on the power instrument, a key
- * lift and a brighter mode. 208 recipes, 208 themes, nothing hand-recorded.
+ * An evolution's THEME is anchored to its owning weapon's voice plus one of
+ * three variant harmonic companions & grooves (0 = Core/Kinetic, 1 = Tactical/
+ * Tempo, 2 = Wild/Escalation): 64 weapons × 3 variants = 192 unique themes,
+ * nothing hand-recorded.
  *
- * Pure data and pure functions. __tests__/audioVoices.test.ts checks every
- * Armory weapon has a voice and no two weapons or recipes sound the same.
+ * Pure data and pure functions. __tests__/audioScore.test.ts checks every
+ * Armory weapon has a voice and no two weapons or evolutions sound the same.
  */
 import type { DrumId, InstrumentId } from './instruments';
 import { hashOf, type ModeName } from './theory';
@@ -145,16 +146,18 @@ const fallbackVoice = (id: string): WeaponVoice => {
   return { inst: FALLBACK_INSTS[next(FALLBACK_INSTS.length)], octave: 4 + next(2), riff: riff.replace(/^\./, '0'), pan: seatOf(id), why: 'A voice made from its name.' };
 };
 
-/** Base id of a weapon held in a run ("blast-powder", also from a rule key like "w2:blast-powder#0"). */
+/** Base id of a weapon held in a run ("blast-powder", from rule keys like "w2:blast-powder#0" or "weapon:blast-powder"). */
 export const weaponIdOf = (source: string): string | null => {
-  const m = /^w\d*:([a-z0-9-]+?)(#\d+)?$/.exec(source);
+  const m = /^(?:w\d*|weapon):([a-z0-9-]+?)(#\d+)?$/.exec(source);
   return m ? m[1] : null;
 };
-/** Recipe id from an evolution's rule key ("evo:phoenix-pyre#1"). */
-export const recipeIdOf = (source: string): string | null => {
-  const m = /^evo:([a-z0-9-]+?)(#\d+)?$/.exec(source);
+/** Evolution id from an evolution's rule key ("evo:blast-powder:cluster-charge#0" or legacy "evo:phoenix-pyre#1"). */
+export const evolutionIdOf = (source: string): string | null => {
+  const m = /^evo:([a-z0-9-]+(?::[a-z0-9-]+)?)(#\d+)?$/.exec(source);
   return m ? m[1] : null;
 };
+/** Back-compat alias for `evolutionIdOf`. */
+export const recipeIdOf = evolutionIdOf;
 
 export const hasWeaponVoice = (id: string): boolean => id in WEAPON_VOICES;
 const made = new Map<string, WeaponVoice>();
@@ -193,46 +196,129 @@ export const voiceSignature = (v: WeaponVoice): string => `${v.inst}|${v.octave}
 // ─── Evolutions ─────────────────────────────────────────────────────────────
 
 export type EvolutionGroove = 'fourFloor' | 'gallop' | 'breakbeat' | 'march';
+export type EvolutionVariantIndex = 0 | 1 | 2;
 
 export interface EvolutionTheme {
-  /** The two ingredient weapons whose voices it is made of */
-  weapons: [string, string];
-  /** Scale steps above the tonic of the opening fanfare: weapon one's sting, weapon two's, then the octave */
+  /** Owning Armory weapon whose voice anchors this evolution's lead & riff */
+  weaponId: string;
+  /** Variant slot on the weapon: 0 = Core/Kinetic, 1 = Tactical/Tempo, 2 = Wild/Escalation */
+  variantIndex: EvolutionVariantIndex;
+  /** Single-element weapon list for band spotlight exclusion */
+  weapons: [string];
+  /** Scale steps above the tonic of the opening fanfare: weapon sting + variant companion answer + climax */
   fanfare: number[];
-  /** Semitones the whole band rises while it is active */
+  /** Semitones the whole band rises while it is active (2..7) */
   lift: number;
   /** Steps brighter the mode becomes (the tune turns sunnier) */
   brighten: number;
   groove: EvolutionGroove;
-  /** The two instruments that carry the fanfare */
+  /** [lead (weapon voice), harmonic companion (variant timbre)] that carry the fanfare & active layer */
   insts: [InstrumentId, InstrumentId];
 }
 
-const LIFTS = [2, 3, 4, 5, 7];
-const GROOVES: EvolutionGroove[] = ['fourFloor', 'gallop', 'breakbeat', 'march'];
+const LIFTS = [2, 3, 4, 5, 7] as const;
 /** A fanfare needs instruments that speak quickly: slow swells borrow the brass. */
 const SLOW: InstrumentId[] = ['strings', 'choir', 'glass', 'theremin', 'sub', 'horn'];
 const fanfareInst = (inst: InstrumentId): InstrumentId => (SLOW.includes(inst) ? 'brass' : inst);
 
-/** The theme of a recipe, from its id and the first weapon of each of its two families. */
-export const evolutionTheme = (recipeId: string, families: readonly [readonly string[], readonly string[]]): EvolutionTheme => {
-  const a = families[0][0] ?? recipeId;
-  const b = families[1][0] ?? recipeId;
-  const h = hashOf(recipeId);
-  const va = weaponVoice(a);
-  const vb = weaponVoice(b);
-  const second = stingOf(vb).map(s => s + 2); // answered a third higher: a duet, not an echo
+/** Disjoint companion timbres per variant so Evo A / B / C of every weapon sound unmistakably distinct. */
+const VARIANT_COMPANIONS: Record<EvolutionVariantIndex, readonly InstrumentId[]> = {
+  0: ['brass', 'glock', 'bell', 'marimba'],       // Core / Kinetic: bright octave brass/chime
+  1: ['vibes', 'flute', 'harp', 'kalimba'],       // Tactical / Tempo: perfect-fifth counter-melody
+  2: ['celesta', 'saw', 'steel', 'musicbox'],     // Wild / Escalation: triad arpeggio synth/bell
+};
+
+/** Variant-shaped melodic answer patterns (scale steps above chord root) so every weapon × variant has a bespoke cadence. */
+const VARIANT_ANSWERS: Record<EvolutionVariantIndex, readonly (readonly number[])[]> = {
+  // Variant 0 (Core / Kinetic): bright octave lifts & sunlit triadic leaps
+  0: [
+    [4, 7],
+    [2, 7],
+    [4, 9],
+    [7, 9],
+    [2, 4, 7],
+    [0, 4, 7],
+  ],
+  // Variant 1 (Tactical / Tempo): fifth-anchored counter-melodies & syncopated turns
+  1: [
+    [4, 6, 7],
+    [5, 4, 7],
+    [4, 7, 6],
+    [2, 6, 4],
+    [4, 5, 9],
+    [6, 4, 9],
+  ],
+  // Variant 2 (Wild / Escalation): soaring triad arpeggios & heroic climbs
+  2: [
+    [0, 2, 4, 7],
+    [2, 4, 7, 9],
+    [0, 4, 7, 9],
+    [4, 7, 9, 11],
+    [2, 7, 4, 9],
+    [0, 4, 2, 7],
+  ],
+};
+
+/** Pick a companion instrument distinct from the weapon's lead voice so the harmony always pops. */
+const pickCompanion = (variantIndex: EvolutionVariantIndex, lead: InstrumentId, h: number): InstrumentId => {
+  const pool = VARIANT_COMPANIONS[variantIndex];
+  const start = (h >>> 5) % pool.length;
+  for (let i = 0; i < pool.length; i++) {
+    const candidate = pool[(start + i) % pool.length];
+    if (candidate !== lead) return candidate;
+  }
+  return pool[start];
+};
+
+/**
+ * Deterministic per-weapon evolution theme from its id, owning weapon, and variant index (0 | 1 | 2).
+ *
+ * - Lead is ALWAYS `weaponVoice(weaponId)` so players recognize which weapon evolved.
+ * - Variant 0 (Core / Kinetic): bright octave brass/chime companion, `fourFloor` groove, major/Lydian lift.
+ * - Variant 1 (Tactical / Tempo): perfect-fifth counter-melody companion, `gallop` groove, tempo drive.
+ * - Variant 2 (Wild / Escalation): triad arpeggio synth/bell companion, `breakbeat`/`march` groove, heroic climb.
+ */
+export const evolutionTheme = (
+  evoId: string,
+  weaponId: string,
+  variantIndex: EvolutionVariantIndex = 0
+): EvolutionTheme => {
+  const h = hashOf(evoId);
+  const v = weaponVoice(weaponId);
+  const leadInst = fanfareInst(v.inst);
+  const companionInst = pickCompanion(variantIndex, leadInst, h);
+  const baseSting = stingOf(v);
+
+  const patterns = VARIANT_ANSWERS[variantIndex];
+  const pattern = patterns[(h >>> 9) % patterns.length];
+  const anchor = variantIndex === 1 ? baseSting[baseSting.length - 1] % 3 : variantIndex === 2 ? baseSting[0] % 2 : 0;
+  const answer = pattern.map(step => step + anchor);
+
+  const preClimax = [...baseSting, ...answer];
+  if (preClimax.length < 4) preClimax.push(4);
+  const peak = Math.max(...preClimax);
+  const baseClimax = 7 + ((h >>> 13) % 3) * 2;
+  const climax = baseClimax >= peak ? baseClimax : peak + 2;
+
+  const groove: EvolutionGroove =
+    variantIndex === 0 ? 'fourFloor' : variantIndex === 1 ? 'gallop' : ((h >>> 2) & 1) === 0 ? 'breakbeat' : 'march';
+  const brighten = variantIndex === 0 ? 1 : variantIndex === 1 ? 1 + ((h >>> 3) % 2) : 2;
+  const lift = LIFTS[(h + variantIndex) % LIFTS.length];
+
   return {
-    weapons: [a, b],
-    fanfare: [...stingOf(va), ...second, 7 + (h % 3) * 2],
-    lift: LIFTS[h % LIFTS.length],
-    brighten: 1 + ((h >>> 4) % 2),
-    groove: GROOVES[(h >>> 7) % GROOVES.length],
-    insts: [fanfareInst(va.inst), fanfareInst(vb.inst)],
+    weaponId,
+    variantIndex,
+    weapons: [weaponId],
+    fanfare: [...preClimax, climax],
+    lift,
+    brighten,
+    groove,
+    insts: [leadInst, companionInst],
   };
 };
 
-export const themeSignature = (t: EvolutionTheme): string => `${t.fanfare.join(',')}|${t.lift}|${t.brighten}|${t.groove}|${t.insts.join('+')}`;
+export const themeSignature = (t: EvolutionTheme): string =>
+  `${t.fanfare.join(',')}|${t.lift}|${t.brighten}|${t.groove}|${t.insts.join('+')}`;
 
 /** How an evolution re-colours the mode it lands on. */
 export const brightened = (mode: ModeName, theme: EvolutionTheme, shadeFn: (m: ModeName, steps: number) => ModeName): ModeName =>

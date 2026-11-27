@@ -106,9 +106,9 @@ export interface SummitDailyMutator {
 export const SUMMIT_DAILY_MUTATORS: readonly SummitDailyMutator[] = [
   {
     id: 'catalyst_surge',
-    name: 'Catalyst Surge',
-    tagline: 'Evolutions ignite fast and stack tall.',
-    description: '+12% Catalyst chance & +1 extra Evolution per fight across the climb.',
+    name: 'Evolution Surge',
+    tagline: 'Weapon evolutions awaken faster and last longer.',
+    description: '+1 head-start progress tick & +4s duration on all Weapon Evolutions across the climb.',
     icon: 'lorc/crystal-shine',
     accentColor: '#7C3AED',
   },

@@ -4,7 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AdventureMode from '@/adventure/AdventureMode';
 import LevelResults from '@/adventure/components/LevelResults';
 import { MAIN_LEVELS, PRACTICE_LEVELS, getLevel } from '@/adventure/data/levels';
-import { applyLevelResult, armableRecipesFromArmory, createMaxedSave, createNewSave, createSaveBefore, equipCharm } from '@/adventure/progress';
+import { applyLevelResult, createMaxedSave, createNewSave, createSaveBefore, equipCharm } from '@/adventure/progress';
 import { baseCardReward, createRun, runReducer, computeStars } from '@/adventure/engine/run';
 import { explainStarBreakdown } from '@/adventure/engine/challenges';
 import {
@@ -381,12 +381,12 @@ describe('Adventure first minutes: show, then say', () => {
     const tabby = companionVoice('Orange Tabby');
     expect(keys(run)).toEqual([]);
     expect(fightRemarks({ ...run, foeHp: run.foeMaxHp / 2 }, false)).toEqual([{ key: 'half-0', text: tabby.halfway }]);
-    expect(fightRemarks({ ...run, foeHp: 5 }, false)).toEqual([{ key: 'wobble-0', text: tabby.wobble.replace('{foe}', run.foeName) }]);
+    expect(fightRemarks({ ...run, foeHp: 12 }, false)).toEqual([{ key: 'wobble-0', text: tabby.wobble.replace('{foe}', run.foeName) }]);
     // (one plain Set from the end, the "one more Set" line takes over instead)
-    expect(keys({ ...run, foeHp: 3 })).toEqual(['half-0']);
+    expect(keys({ ...run, foeHp: 5 })).toEqual(['half-0']);
     expect(keys({ ...run, combo: 3 })).toEqual(['roll']);
     // The last heart outranks everything; the goal being met comes next
-    expect(keys({ ...run, hearts: 1, foeHp: 5, combo: 4 }, true)).toEqual(['last-heart', 'goal', 'wobble-0', 'roll']);
+    expect(keys({ ...run, hearts: 1, foeHp: 12, combo: 4 }, true)).toEqual(['last-heart', 'goal', 'wobble-0', 'roll']);
     // A second wave gets its own "halfway"
     expect(keys({ ...run, wave: 1, foeHp: run.foeMaxHp / 2 })).toEqual(['half-1']);
     // The walk-through level and practice have their own voice: no remarks there
@@ -394,7 +394,7 @@ describe('Adventure first minutes: show, then say', () => {
     expect(keys({ ...first, foeHp: 6, combo: 3 })).toEqual([]);
     const dummy = createRun(PRACTICE_LEVELS[0], createSaveBefore('1-5'), { seed: 1 });
     expect(keys({ ...dummy, combo: 5 })).toEqual([]);
-    for (const r of fightRemarks({ ...run, hearts: 1, foeHp: 5, combo: 4 }, true)) expect(r.text.length).toBeLessThanOrEqual(64);
+    for (const r of fightRemarks({ ...run, hearts: 1, foeHp: 12, combo: 4 }, true)) expect(r.text.length).toBeLessThanOrEqual(64);
   });
 
   it('gives every fighter a voice of their own and explains ★, ★★ and ★★★', () => {
@@ -434,7 +434,7 @@ describe('Adventure first minutes: show, then say', () => {
       endReason: 'survived' as const,
       movesLeft: 0,
       foeHp: 6,
-      biggestHit: 8,
+      biggestHit: 14,
     };
     const rows17 = explainStarBreakdown(lvl17, run17, computeStars(run17));
     expect(rows17[0]).toMatchObject({ star: 1, earned: true, reason: 'Cleared!' });
@@ -452,7 +452,7 @@ describe('Adventure first minutes: show, then say', () => {
     const rowsLoss = explainStarBreakdown(lvl17, run17Loss, computeStars(run17Loss));
     expect(rowsLoss[0]).toMatchObject({ star: 1, earned: false, reason: 'Out of moves' });
     expect(rowsLoss[1]).toMatchObject({ star: 2, earned: false, reason: '18 HP left' });
-    expect(rowsLoss[2]).toMatchObject({ star: 3, earned: false, reason: 'Best hit 3 (need 7+)' });
+    expect(rowsLoss[2]).toMatchObject({ star: 3, earned: false, reason: 'Best hit 3 (need 12+)' });
   });
 
   it('shows damage numbers and passives only once the game has introduced them', () => {
@@ -761,29 +761,31 @@ describe('Adventure first minutes: the screens', () => {
     expect(onSwapCharm).toHaveBeenCalledWith(fullSave.charms[0], extraId);
   });
 
-  it('renders evolution one-tap arm button and fighter trial nudge on LevelPreview, and Camp return bar', () => {
+  it('renders per-weapon evolutions and fighter trial nudge on LevelPreview, and Camp return bar', () => {
     const maxed = createMaxedSave();
-    const armable = armableRecipesFromArmory(maxed);
-    expect(armable.length).toBeGreaterThan(0);
-    const noArmedSave = { ...maxed, charms: [] };
-    const onArmRecipe = jest.fn();
+    const armedSave = {
+      ...maxed,
+      charms: ['blast-powder'],
+      equippedEvolutions: { 'blast-powder': 'blast-powder:cluster-charge' },
+    };
+    const onSelectEvolution = jest.fn();
     const noop = () => {};
 
     const evoPreview = render(wrap(
       <LevelPreview
         level={getLevel('2-2')}
-        save={noArmedSave}
+        save={armedSave}
         onClose={noop}
         onPlay={noop}
         onSelectFighter={noop}
         onSelectCharm={noop}
-        onArmRecipe={onArmRecipe}
+        onSelectEvolution={onSelectEvolution}
         onShowMechanic={noop}
       />
     ));
-    expect(evoPreview.getByText('No evolution armed')).toBeTruthy();
-    fireEvent.press(evoPreview.getByTestId('preview-arm-recipe'));
-    expect(onArmRecipe).toHaveBeenCalledWith(armable[0].recipe.id);
+    fireEvent.press(evoPreview.getByTestId('preview-tab-loadout'));
+    expect(evoPreview.getByTestId('preview-evolutions')).toBeTruthy();
+    expect(evoPreview.getByTestId('preview-evo-blast-powder:cluster-charge')).toBeTruthy();
     evoPreview.unmount();
 
     const trialLevel = getLevel('1-5F');

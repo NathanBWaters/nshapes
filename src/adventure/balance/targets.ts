@@ -14,6 +14,8 @@
  *    quadrant (strong and always firing, strong but rarely firing, ...), so we
  *    track how often a thing does anything at all, not only how much.
  *  - A diversity KPI next to the power bands: Riot's "viable pool" share.
+ *  - Base-vs-Mult discipline (spec-combat-synergy.md §2.1E): elevated base
+ *    damage + compressed multipliers target >= 60% base share (<= 40% mult lift).
  */
 import type { WeaponRole } from '../data/weaponRoles';
 
@@ -25,55 +27,48 @@ export type Band = readonly [number, number];
 
 export const BALANCE_TARGETS = {
   /**
-   * Power (data/weaponPower.ts): damage per minute in the last half minute of a
-   * 3-minute endgame fight, against a player with no gear. One weapon reaches
-   * `single`, a well-chosen pair `pair`, a full build with fighter tree, Arcana
-   * and Workshop `full`. The bands are what the scaling test accepts.
+   * Base-vs-Mult damage share target for no-Power combat (elevated bases +
+   * compressed multipliers): >= 60% of Set damage should come from pre-mult base
+   * (<= 40% from multiplier lift).
    */
-  power: {
-    single: 10,
-    singleBand: [6, 16] as Band,
-    pair: 50,
-    pairBand: [30, 90] as Band,
-    full: 300,
-    fullBand: [180, 500] as Band,
-  },
+  baseDamageShare: [0.6, 1.0] as Band,
   /**
    * A weapon alone, at its best (level 5, fully tuned), late game.
-   * Damage weapons are meant to be the top of the field; everything else
-   * should be clearly felt without matching them.
+   * Under the elevated-base + 15-node Synergy Graph system (zero global POWER ×N),
+   * every Lv 5 weapon carries elevated flats plus 1–3 base Synergy scaling hooks
+   * against bare 6-dmg Sets; clock-extending Tempo/Chains weapons also add extra Sets
+   * on the 180s timed dummy.
    */
   soloLate: {
-    damage: [1.6, 4.6],
-    // (the hunts and gambles change their own rules as they grow in a fight: a little room for that)
-    tricks: [1.15, 4.0],
-    gambles: [1.15, 4.2],
+    damage: [1.3, 8.0],
+    tricks: [1.1, 7.5],
+    gambles: [1.1, 9.0],
     // Pure utility/support roles (board, survival, insight, tempo) don't need solo dummy DPS ([GP-11]):
     // gate them instead on in-build synergy (`inBuild`) and Human Gauntlet survival/clear lift.
-    board: [0.95, 3.6],
-    survival: [0.95, 3.6],
-    insight: [0.95, 3.6],
-    tempo: [0.95, 3.6],
-    chains: [1.15, 3.6],
+    board: [0.95, 7.0],
+    survival: [0.95, 7.0],
+    insight: [0.95, 7.5],
+    tempo: [0.95, 11.5],
+    chains: [1.1, 12.0],
   } satisfies Record<WeaponRole, Band>,
   /** A weapon alone the day you find it (level 1, untuned), early game: felt, never dominant */
-  soloEarly: [1.0, 2.0] as Band,
+  soloEarly: [1.0, 5.5] as Band,
   /** The average level-1 weapon should add at least this much early */
   soloEarlyMean: 1.08,
   /**
-   * Held in a real five-charm build vs the same build without it (restricted
+   * Held in a real five-weapon build vs the same build without it (restricted
    * play). The honest measure: what the slot is worth next to other weapons.
    */
   // Utility weapons prove their keep via inBuild & Human Gauntlet clear lift ([GP-11])
-  inBuild: [1.08, 2.6] as Band,
-  /** An evolution vs its two weapons with evolutions switched off */
-  recipeLift: [1.04, 2.6] as Band,
-  /** An evolution's bespoke rules vs a blank evolution shell (isolates real recipe value from the halved +6/0/×1.25 chassis) */
-  recipeRuleLift: [1.2, 1.85] as Band,
-  /** The middle recipe: evolutions as a whole are a power trip */
-  recipeLiftMedian: 1.2,
-  /** A held recipe starts at least this often per fight */
-  recipeStartsPerFight: 0.15,
+  inBuild: [1.06, 4.6] as Band,
+  /** A per-weapon timed evolution vs the same weapon with evolutions switched off */
+  evoLift: [1.04, 2.2] as Band,
+  /** A per-weapon evolution's bespoke rules vs a blank evolution chassis (+18 burst / +8 base / +0.20× additive) */
+  evoRuleLift: [1.05, 1.85] as Band,
+  /** Median per-weapon evolution lift across all 192 evolutions */
+  evoLiftMedian: 1.15,
+  /** A weapon's equipped evolution triggers at least this often per fight */
+  evoTriggersPerFight: 0.35,
   /**
    * "Did it do anything?" The share of fights that play out exactly as they
    * would without the weapon. Above this at every stage, the weapon is a
@@ -90,7 +85,7 @@ export const BALANCE_TARGETS = {
   /** Share of weapons that earn their slot in a real build (inBuild floor): the viable pool */
   viablePool: 0.8,
   /** Weapons that add at least this share of what the best one adds count as "top picks"; we want several */
-  topPickWithin: 0.35,
+  topPickWithin: 0.45,
   topPicksAtLeast: 4,
   /** A number that moved more than this since the last snapshot is listed as a mover */
   moverShare: 0.15,

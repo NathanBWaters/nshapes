@@ -357,8 +357,8 @@ describe('[GP-24] & [TP-19] Daily Seeds, Free Play Score Attack, Share Cards & U
         expect(run.dailyDate).toBe('2026-11-26');
         expect(run.dailyMutatorId).toBe(mut.id);
         if (mut.id === 'catalyst_surge') {
-          expect(run.extraEvolutionCap).toBe(1);
-          expect(run.extraEvolutionLikelihood).toBe(18);
+          expect(run.extraEvolutionDurationMs).toBe(4000);
+          expect(run.extraEvolutionChargeBonus).toBe(1);
         }
         if (mut.id === 'gamble_mastery') {
           expect(run.themePacks).toContain('board_gambles');

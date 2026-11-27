@@ -36,18 +36,16 @@ import {
   triggerParryHaptic,
 } from '@/utils/haptics';
 import { formatCardTraitValue, formatChallengeText, getColorblindMode, useColorblind } from '@/utils/cardColors';
-import { ACCESSIBLE, EASE, MS, OVERLAP, SPRING, STAYS, exitMs } from '@/utils/motion';
+import { ACCESSIBLE, EASE, MS, OVERLAP, SPRING, STAYS } from '@/utils/motion';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
 import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import { getAdjacentIndices, type WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
+import type { AdventureSave, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { activeEnemyCounters, computeStars, createRun, isSacrificeUnlocked, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
-import { formatPowerGain } from '../data/weaponPower';
-import { nextCatalystRecipe } from '../engine/fight';
 import { boardHasCounterSet } from '../engine/parry';
 import { randomSeed } from '../engine/rng';
 import { FightRecorder, type FightTape } from '../engine/replay';
@@ -62,15 +60,17 @@ import { MAIN_LEVELS } from '../data/levels';
 import { STORY_RAIDER_TAUNTS } from '../data/story';
 import { comboWindowFor, getPassive, DEFAULT_COMBO_WINDOW_MS, PASSIVE_TUNING } from '../data/passives';
 import { arcanaShortName, getArcana } from '../data/arcana';
-import { EVOLUTION_RECIPES } from '../data/evolutions';
+import { getWeaponEvolution } from '../data/evolutions';
 import { SURGE_RULES } from '../data/rules';
 import { weaponLevelSuffix } from '../data/armory';
 import { consecutiveLossesFor } from '../data/relief';
 import { COACH_KEYS, type ResultApplication } from '../progress';
 import {
+  EVO_ALMOST_COACH_KEY,
   checksOfSet,
   computeLiveGuidance,
   describeSingleCardTraits,
+  evoAlmostOnboardingCallout,
   explainInvalidPick,
   fightRemarks,
   foeMidFightBark,
@@ -85,21 +85,21 @@ import {
 import StageBackdrop from './StageBackdrop';
 import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
-import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
-import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FX_TIMING, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, recipeIdOfEvent, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import { EVOLUTION_CHASSIS, activeWeaponEvolutions } from '../engine/sources';
+import { Anchor, AnchorsProvider, EVENT_FX, EvolutionCutIn, FX_TIMING, FxStage, GearBelt, KillCamOverlay, MultiplierIgnition, SLOWMO_HOLD_MS, SLOWMO_IMPACT_DELAY_MS, SLOWMO_REDUCED_TOTAL_MS, SLOWMO_RELEASE_MS, SLOWMO_SETTLE_PAD_MS, fxClock, scriptFor, useAnchors, useFightFx, type Beat } from '../fx';
+import type { EvolutionCutInEntry } from '../fx/EvolutionCutIn';
 import { combatShakeKindOf, hitKindOf } from '../fx/catalog';
 import { SLOWMO_BOSS_EXTRA_HOLD_MS, SLOWMO_BRISK_TOTAL_MS, resolveKillCamMode } from '../fx/KillCamOverlay';
-import { flightFor } from '../fx/script';
+import { evolutionIdOfEvent, flightFor } from '../fx/script';
 import { counterForWeapon } from '../fx/GearBelt';
+import { buildAllLiveEvolutions } from '../ui/evolutionViewModel';
+import { beltSynergyAttrSet } from '../ui/synergyMeta';
 import { Banner } from '../fx/visuals';
 import { Btn, CoinPill, DARK, Eyebrow, Heart, INK, PopIn, TONE } from './ui';
-import { EvolutionBanner, EvolutionRing, MegaFlash } from './RunFx';
-import EvolutionPickOverlay from './EvolutionPickOverlay';
+import { EvolutionBanner, MegaFlash, type EvolutionBannerEntry } from './RunFx';
 import DefeatFreezeOverlay, { resolveFatalSource } from './DefeatFreezeOverlay';
 import DefeatOverlay from './DefeatOverlay';
 import WeaponExplainer from './WeaponExplainer';
-import PowerMeter from './PowerMeter';
-import PowerExplainer from './PowerExplainer';
 import HudInspector, { type HudInspectTarget } from './HudInspector';
 import ParryIntentBar from './ParryIntentBar';
 import { WeaponOfferRow } from './SharedCards';
@@ -221,9 +221,9 @@ interface Props {
   /** [OB-13] Open full LevelResults breakdown from DefeatOverlay without re-recording telemetry */
   onShowDefeatBreakdown?: (run: RunState, recorded: RecordedDefeat) => void;
   /** [OB-13] Commit staged defeat telemetry and return fresh save/relief for `<250ms` in-place retry */
-  onDefeatRetryStart?: (opts?: { armRecipeId?: string }) => { save: AdventureSave; relief: RunReliefOptions };
-  /** [OB-13] Jump from DefeatOverlay directly into Camp (optionally to Skill Tree or Workshop) */
-  onDefeatCamp?: (tab?: 'fighters' | 'workshop') => void;
+  onDefeatRetryStart?: () => { save: AdventureSave; relief: RunReliefOptions };
+  /** [OB-13] Jump from DefeatOverlay directly into Camp (optionally to Skill Tree, Workshop, Armory, or Bounties) */
+  onDefeatCamp?: (tab?: 'fighters' | 'workshop' | 'armory' | 'bounties') => void;
   /** [OB-13] Return to the World Map from DefeatOverlay */
   onDefeatMap?: () => void;
   /** [OB-13] Toggle Friendly Tailwind directly from DefeatOverlay */
@@ -247,10 +247,6 @@ const parryCounterForDummyMode = (mode?: DummyMode): ParryRequirement => {
       return { kind: 'any' };
   }
 };
-
-/** The recipe an evolution event is about (the engine names it by id or by name). */
-const recipeFor = (key: string | undefined): EvolutionRecipe | undefined =>
-  key ? EVOLUTION_RECIPES.find(r => r.id === key || r.name === key) : undefined;
 
 /** A tip the player has to accept. The fight is paused while one is showing. */
 interface Tip {
@@ -365,13 +361,11 @@ const AdventureRun: React.FC<Props> = ({
   stageWidthRef.current = stage.w > 0 ? stage.w : 375;
   /** A weapon on the belt the player tapped to read about (the fight waits) */
   const [inspect, setInspect] = useState<Weapon | null>(null);
-  /** The Power meter in the header was tapped to read about Power (the fight waits) */
-  const [powerInfo, setPowerInfo] = useState(false);
   /** Another HUD chip/bar/goal was tapped to inspect (the fight waits) */
   const [hudInspect, setHudInspect] = useState<HudInspectTarget | null>(null);
   /** [UI-15] 1-time subtle tip teaching hold-to-inspect mid-Set on portrait touchscreens */
   const [showInspectGuardTip, setShowInspectGuardTip] = useState(false);
-  /** The first evolution ever: its cut-in also points at the countdown ring */
+  /** The first evolution ever: its cut-in also points at the belt timer */
   const [evolutionHint, setEvolutionHint] = useState(false);
   const [boardSelectedCount, setBoardSelectedCount] = useState(0);
   const [boardSelectedCards, setBoardSelectedCards] = useState<Card[]>([]);
@@ -386,10 +380,8 @@ const AdventureRun: React.FC<Props> = ({
   const tip = tips[0] ?? null;
   const pushTip = useCallback((t: Tip) => setTips(q => (q.some(x => x.id === t.id) ? q : [...q, t])), []);
   const seenCoach = useRef(new Set(save.seenCoachMarks));
-  /** [OB-08] Recipes that already showed their cut-in once (repeat triggers use non-blocking banner) */
-  const seenCutInRecipesRef = useRef<Set<string>>(new Set(save.discoveredEvolutions));
-  /** [OB-08] Recipe just chosen in EvolutionPickOverlay (skip double-pause cut-in, use banner!) */
-  const justPickedEvoIdRef = useRef<string | null>(null);
+  /** [OB-08] Evolutions that already showed their cut-in once (repeat awakenings use non-blocking banner) */
+  const seenCutInEvosRef = useRef<Set<string>>(new Set(save.discoveredEvolutions));
   const timeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
   const biome = getBiome(effectiveLevel.biome);
   const ended = run.status === 'won' || run.status === 'lost';
@@ -399,9 +391,22 @@ const AdventureRun: React.FC<Props> = ({
   const [devOverrides, setDevOverrides] = useState<DevOverrides>(() => getDevOverrides());
   useEffect(() => (isDevBuild ? subscribeDevOverrides(setDevOverrides) : undefined), [isDevBuild]);
   const [dummyMode, setDummyMode] = useState<DummyMode>('immortal');
+  const activeEvoCount = useMemo(
+    () => activeWeaponEvolutions(run.weaponEvolutions).length,
+    [run.weaponEvolutions]
+  );
+  const liveEvolutions = useMemo(
+    () => buildAllLiveEvolutions(run.weaponEvolutions, { colorblind }),
+    [run.weaponEvolutions, colorblind]
+  );
+  const liveEvoByWeapon = useMemo(
+    () => new Map(liveEvolutions.map(e => [e.weaponId, e])),
+    [liveEvolutions]
+  );
+  const beltWeaponIds = useMemo(() => run.weapons.map(w => w.id), [run.weapons]);
   const buildTheme = useMemo(
-    () => deriveBuildTheme(run.weapons.map(w => w.id), run.activeEvolutions.length, run.arcana.length),
-    [run.weapons, run.activeEvolutions.length, run.arcana.length]
+    () => deriveBuildTheme(run.weapons.map(w => w.id), activeEvoCount, run.arcana.length),
+    [run.weapons, activeEvoCount, run.arcana.length]
   );
 
   useEffect(() => () => timeouts.current.forEach(clearTimeout), []);
@@ -492,10 +497,10 @@ const AdventureRun: React.FC<Props> = ({
   }, [arrangement]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (run.status === 'won' || run.status === 'lost') return;
-    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip) || Boolean(inspect) || powerInfo || Boolean(hudInspect)));
-  }, [run, paused, tip, inspect, powerInfo, hudInspect]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (band.inFight) band.setMood(moodNow(run, paused || Boolean(tip) || Boolean(inspect) || Boolean(hudInspect)));
+  }, [run, paused, tip, inspect, hudInspect]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const halted = paused || Boolean(tip) || Boolean(inspect) || powerInfo || Boolean(hudInspect);
+  const halted = paused || Boolean(tip) || Boolean(inspect) || Boolean(hudInspect);
   const playing = run.status === 'playing' && !halted;
 
   // Auto-pause active timed fights whenever the user leaves the app/tab
@@ -556,7 +561,6 @@ const AdventureRun: React.FC<Props> = ({
     triggerMatch,
     triggerMistake,
     triggerHint,
-    triggerPowerup,
     setSelectedCount,
     setIsBoardIdle,
   } = conductor;
@@ -703,15 +707,15 @@ const AdventureRun: React.FC<Props> = ({
         : e
     );
     const fightEnded = run.status === 'won' || run.status === 'lost';
-    // [OB-08] Repeat evolutions & recipes just chosen in EvolutionPickOverlay use non-blocking EvolutionBanner
-    const bannerOnlyRecipes = new Set(seenCutInRecipesRef.current);
-    if (justPickedEvoIdRef.current) bannerOnlyRecipes.add(justPickedEvoIdRef.current);
+    // [OB-08] Repeat awakenings use non-blocking EvolutionBanner (first awakening plays full Cut-In)
+    const bannerOnlyEvolutions = new Set(seenCutInEvosRef.current);
     const nextScript = scriptFor(staged, {
       weapons: run.weapons,
       gridMs: band.gridMs,
       reduced: !effects,
       skipCutIn: fightEnded,
-      bannerOnlyRecipes,
+      bannerOnlyEvolutions,
+      bannerOnlyRecipes: bannerOnlyEvolutions,
     });
     const addedDamage = nextScript.segments.reduce(
       (sum, seg) => sum + (seg.kind === 'beats' ? seg.beats.reduce((d, b) => d + b.damage, 0) : 0),
@@ -721,24 +725,25 @@ const AdventureRun: React.FC<Props> = ({
     fx.play(nextScript);
     for (const e of fresh) {
       if (e.type === 'evolution_start') {
-        const rid = recipeIdOfEvent(e);
-        if (rid) {
-          seenCutInRecipesRef.current.add(rid);
-          if (justPickedEvoIdRef.current === rid) justPickedEvoIdRef.current = null;
+        const eid = evolutionIdOfEvent(e);
+        if (eid) {
+          seenCutInEvosRef.current.add(eid);
         }
       }
       if (!fightEnded && e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
         seenCoach.current.add(COACH_KEYS.evolution);
         onCoachMarkSeen(COACH_KEYS.evolution);
-        const recipe = recipeFor(e.text);
+        const eid = evolutionIdOfEvent(e);
+        const evoDef = eid ? getWeaponEvolution(eid) : undefined;
+        const durSec = Math.max(1, Math.round((evoDef?.durationMs ?? 18_000) / 1000));
         // With effects on, the cut-in itself explains the evolution
         if (effects) setEvolutionHint(true);
         else {
           pushTip({
             id: COACH_KEYS.evolution,
-            title: `${recipe?.name ?? 'Evolution'} is live!`,
-            text: `For ${EVOLUTION_RULES.durationMs / 1000} seconds: ${recipe?.activeText ?? 'your evolved rules are on.'} Every Set also deals ×${EVOLUTION_RULES.setMultiplier} and +${EVOLUTION_RULES.setDamage}. The ring by the HP bar shows the time left.`,
-            icon: recipe?.icon ?? 'lorc/crystal-shine',
+            title: `${evoDef?.name ?? 'Evolution'} awakened!`,
+            text: `For ${durSec} seconds: ${evoDef?.tagline ?? 'your evolved weapon is live.'} Every Set also deals +${EVOLUTION_CHASSIS.setFlatDamage} base and +${EVOLUTION_CHASSIS.setAdditiveMult}× mult. Watch the gold timer bar on your weapon belt.`,
+            icon: evoDef?.icon ?? 'lorc/crystal-shine',
             anchor: 'top',
             label: 'Evolution',
           });
@@ -768,7 +773,7 @@ const AdventureRun: React.FC<Props> = ({
   // Where everything is on screen can change with the board, the belt and the chips
   useEffect(() => {
     anchors.measure();
-  }, [anchors, run.board.length, run.weapons.length, run.activeEvolutions.length, run.status, stage.w, stage.h, hudHeight]);
+  }, [anchors, run.board.length, run.weapons.length, activeEvoCount, run.status, stage.w, stage.h, hudHeight]);
   const slotRef = useCallback((index: number) => anchors.ref(`slot:${index}`), [anchors]);
 
   // End of run → [FX-08] Stakes-split KillCamOverlay (victory) or 300 ms DefeatFreezeOverlay → DefeatOverlay (defeat)
@@ -931,8 +936,8 @@ const AdventureRun: React.FC<Props> = ({
 
   // [OB-13] `<250ms` in-place retry: fresh seed, fresh recorder, skips ScreenTransition, FIGHT! banner, and foe taunt
   const handleInstantRetry = useCallback(
-    (opts?: { armRecipeId?: string }) => {
-      const refreshed = onDefeatRetryStart?.(opts);
+    () => {
+      const refreshed = onDefeatRetryStart?.();
       const nextSave = refreshed?.save ?? save;
       const nextRelief = refreshed?.relief ?? activeRelief;
       const nextSeed = randomSeed();
@@ -964,7 +969,6 @@ const AdventureRun: React.FC<Props> = ({
       pendingDamageRef.current = 0;
       saidRemarks.current.clear();
       saidFoeBarks.current.clear();
-      prevPowerRef.current = 0;
       timeTotal.current = nextRun.timeLeft;
       runRef.current = nextRun;
       setStartSave(nextSave);
@@ -1084,22 +1088,6 @@ const AdventureRun: React.FC<Props> = ({
     band.cue('hint');
   }, [dispatch, triggerHint]);
 
-  const handlePickEvolution = useCallback((recipeId: string) => {
-    sfx('confirm');
-    triggerPowerup();
-    justPickedEvoIdRef.current = recipeId;
-    dispatch({ type: 'PICK_EVOLUTION', recipeId });
-  }, [dispatch, triggerPowerup]);
-
-  useEffect(() => {
-    if (!autoPlayer || run.status !== 'pick_evolution' || fx.busy) return;
-    const options = run.evolutionPickOptions ?? [];
-    if (options.length === 0) return;
-    const chosen = options.find(id => !run.forgedRecipes.includes(id)) ?? options[0];
-    const t = setTimeout(() => handlePickEvolution(chosen), 350);
-    return () => clearTimeout(t);
-  }, [autoPlayer, run.status, fx.busy, run.evolutionPickOptions, run.forgedRecipes, handlePickEvolution]);
-
   const screenStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: shakeValues.translateX.value },
@@ -1116,36 +1104,10 @@ const AdventureRun: React.FC<Props> = ({
   const xpNeed = xpForLevel(run.xpLevel);
   const comboLive = run.elapsedMs - run.lastMatchAtMs <= comboWindowMs(run);
   const purityLive = run.features.has('purity') && run.purityChain > 0;
-  const evolutionsOn = run.features.has('evolutions') && (run.armedRecipes.length > 0 || run.activeEvolutions.length > 0);
-  const catalystOnBoard = run.board.some(c => c.hasEvolutionItem);
-  const evolutionsLeft = run.evolutionCap - run.evolutionsTriggered;
-  /** "2/3", or just the count where there is no limit (practice) */
-  const evolutionsUsed = Number.isFinite(run.evolutionCap) ? `${run.evolutionsTriggered}/${run.evolutionCap}` : `${run.evolutionsTriggered} so far`;
-  /** Armed recipes a Catalyst could still start: one that is running cannot be triggered again until it ends */
-  const idleArmed = run.armedRecipes.filter(id => !run.activeEvolutions.some(a => a.id === id)).length;
-  const evoChoiceCount = Math.min(3, idleArmed);
-  const evoDurationSec = Math.max(1, Math.round((EVOLUTION_RULES.durationMs + (gearMods.evolutionDurationMs ?? 0)) / 1000));
-  const knownForgedEvos = useMemo(
-    () => new Set([...startSave.discoveredEvolutions, ...run.forgedRecipes]),
-    [startSave.discoveredEvolutions, run.forgedRecipes]
-  );
   const enemyCounters = useMemo(
     () => activeEnemyCounters({ foe: run.foe, stats: run.stats, baseChances: run.baseChances }),
     [run.foe, run.stats, run.baseChances]
   );
-  const nextEvoId = useMemo(() => {
-    if (idleArmed !== 1) return null;
-    const fallback = nextCatalystRecipe({
-      armedRecipes: run.armedRecipes,
-      activeEvolutions: run.activeEvolutions,
-      forgedRecipes: run.forgedRecipes,
-    });
-    return catalystOnBoard ? (run.catalystRecipeId ?? fallback) : fallback;
-  }, [idleArmed, catalystOnBoard, run.catalystRecipeId, run.armedRecipes, run.activeEvolutions, run.forgedRecipes]);
-  const nextEvoRecipe = nextEvoId ? getRecipe(nextEvoId) : undefined;
-  const catalystTargetName = catalystOnBoard
-    ? (idleArmed > 1 ? 'Pick Evo' : (nextEvoRecipe?.name ?? null))
-    : null;
 
   const mirrorActive = (gearMods.mirrorDamage ?? 0) > 0;
   const mirrorDepth = Math.round(gearMods.mirrorDepth ?? 0);
@@ -1193,11 +1155,10 @@ const AdventureRun: React.FC<Props> = ({
     () => ({
       mirrorCardIds,
       tightropeCardIds,
-      catalystRecipeName: catalystTargetName,
       potatoAtMs,
       backgroundAttributeActive: hasBackgroundAttribute,
     }),
-    [mirrorCardIds, tightropeCardIds, catalystTargetName, potatoAtMs, hasBackgroundAttribute]
+    [mirrorCardIds, tightropeCardIds, potatoAtMs, hasBackgroundAttribute]
   );
   const leavePractice = useCallback(() => {
     music.stop();
@@ -1213,7 +1174,8 @@ const AdventureRun: React.FC<Props> = ({
       onSwapFighter: fighter => dispatch({ type: 'DEV_SWAP_LOADOUT', fighter }),
       onToggleWeapon: weaponId => dispatch({ type: 'DEV_SWAP_LOADOUT', toggleWeaponId: weaponId }),
       onToggleArcana: arcanaId => dispatch({ type: 'DEV_SWAP_LOADOUT', toggleArcanaId: arcanaId }),
-      onSpawnCatalyst: () => dispatch({ type: 'DEV_SPAWN_CATALYST' }),
+      onTriggerEvo: () => dispatch({ type: 'DEV_TRIGGER_EVO' }),
+      onAdvanceEvo: () => dispatch({ type: 'DEV_ADVANCE_EVO' }),
       onTriggerParry: mode =>
         dispatch({ type: 'DEV_TRIGGER_PARRY', window: 'windup', counter: parryCounterForDummyMode(mode ?? dummyMode) }),
       onToggleSurge: () => dispatch({ type: 'DEV_TOGGLE_SURGE' }),
@@ -1240,7 +1202,8 @@ const AdventureRun: React.FC<Props> = ({
     () => ({
       onSetFoeHp: hp => dispatch({ type: 'DEV_SET_FOE_HP', hp }),
       onToggleFreezeClock: () => dispatch({ type: 'DEV_FREEZE_CLOCK' }),
-      onSpawnCatalyst: () => dispatch({ type: 'DEV_SPAWN_CATALYST' }),
+      onTriggerEvo: () => dispatch({ type: 'DEV_TRIGGER_EVO' }),
+      onAdvanceEvo: () => dispatch({ type: 'DEV_ADVANCE_EVO' }),
       onForceParry: window => dispatch({ type: 'DEV_TRIGGER_PARRY', window }),
       onForceSurge: () => dispatch({ type: 'DEV_TOGGLE_SURGE' }),
       onHotSwapWeapon: (weaponId, lv) => dispatch({ type: 'DEV_SWAP_LOADOUT', weaponId, weaponLevel: lv }),
@@ -1279,30 +1242,20 @@ const AdventureRun: React.FC<Props> = ({
     later(() => setEventBannerNote(prev => (prev === callout.text ? null : prev)), 4500);
   }, [run.parry?.phase, run.parry?.warned, run.parry?.msLeft, ended, practice, colorblind]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Explain the POWER meter once the first time the player builds Charge in battle
+  // Non-blocking StageBubble callout the first time any equipped weapon hits Almost-Ready
+  const hasAlmostReadyEvo = run.weaponEvolutions.some(e => e.phase === 'charging' && e.almostReady);
   useEffect(() => {
-    if (!showDamageHud || run.power < 1) return;
-    if (seenCoach.current.has(COACH_KEYS.powerMeter)) return;
-    seenCoach.current.add(COACH_KEYS.powerMeter);
-    onCoachMarkSeen(COACH_KEYS.powerMeter);
-    const msg = 'POWER × boosts all damage! Tap POWER above to see how.';
-    setEventBannerNote(msg);
-    later(() => setEventBannerNote(prev => (prev === msg ? null : prev)), 4500);
-  }, [showDamageHud, run.power]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Lightweight live `power_gain` delta pill beside PowerMeter ([GP-01])
-  const prevPowerRef = useRef(run.power);
-  const [powerDelta, setPowerDelta] = useState<{ key: number; text: string } | null>(null);
-  useEffect(() => {
-    const prev = prevPowerRef.current;
-    prevPowerRef.current = run.power;
-    const diff = run.power - prev;
-    if (diff > 0.005) {
-      const next = { key: run.eventSeq + Math.round(run.power * 1000), text: formatPowerGain(diff) };
-      setPowerDelta(next);
-      later(() => setPowerDelta(cur => (cur?.key === next.key ? null : cur)), 1100);
-    }
-  }, [run.power, run.eventSeq, later]);
+    if (ended || practice || !hasAlmostReadyEvo) return;
+    const callout = evoAlmostOnboardingCallout(run, {
+      seenEvoAlmost: seenCoach.current.has(EVO_ALMOST_COACH_KEY),
+      colorblind,
+    });
+    if (!callout) return;
+    seenCoach.current.add(callout.key);
+    onCoachMarkSeen(callout.key);
+    setEventBannerNote(callout.text);
+    later(() => setEventBannerNote(prev => (prev === callout.text ? null : prev)), 4500);
+  }, [hasAlmostReadyEvo, ended, practice, colorblind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tactical Sacrifice / Redraw ([GP-05]): unlocked from 2-6 onward (and practice) when hearts > 1
   const sacrificeUnlocked = isSacrificeUnlocked(level) && run.hearts !== null && run.maxHearts !== null;
@@ -1329,7 +1282,7 @@ const AdventureRun: React.FC<Props> = ({
   // [UI-23] Desktop web keyboard controls on the shared z-priority stack:
   // SettingsSheet (MODAL, mounted last) > Pause / HUD inspectors (MODAL) > board (SCREEN).
   // Board keys never fire beneath Pause, inspectors, tips, evolution picks, level-up/shop, cut-ins or defeat.
-  const inspectorOpen = Boolean(inspect) || powerInfo || Boolean(hudInspect);
+  const inspectorOpen = Boolean(inspect) || Boolean(hudInspect);
   const keyboardBoardBlocked =
     ended ||
     Boolean(defeatOverlay) ||
@@ -1337,7 +1290,6 @@ const AdventureRun: React.FC<Props> = ({
     Boolean(tip) ||
     Boolean(fx.cutIn) ||
     run.status === 'pick' ||
-    run.status === 'pick_evolution' ||
     run.status === 'intermission';
   useKeyboardNav({
     enabled: !keyboardBoardBlocked && !paused && !inspectorOpen,
@@ -1361,7 +1313,6 @@ const AdventureRun: React.FC<Props> = ({
     priority: KEY_PRIORITY.MODAL,
     onCancel: () => {
       setInspect(null);
-      setPowerInfo(false);
       setHudInspect(null);
     },
   });
@@ -1581,20 +1532,18 @@ const AdventureRun: React.FC<Props> = ({
     secondsLeft !== null ||
     hasRichResources;
   const hasBeltDock =
-    run.weapons.length > 0 || run.arcana.length > 0 || run.activeEvolutions.length > 0;
+    run.weapons.length > 0 || run.arcana.length > 0;
   // In sparse early fights (e.g. 1-2..1-4: moves + 1-3 weapons, no passives/coins/hints), merge moves + belt into ONE row
   const useSingleSparseRow = !hasRichResources && (hasResourceRow || run.weapons.length > 0);
-  // Flow synergy chips right beside a small weapon belt (<= 3 weapons, no Arcana/active Evos, e.g. Summit Act 1!) to kill empty right-side voids
+  // Flow synergy chips right beside a small weapon belt (<= 3 weapons, no Arcana, e.g. Summit Act 1!) to kill empty right-side voids
   const inlineSynergyOnBelt =
     !useSingleSparseRow &&
     hasBeltDock &&
     run.weapons.length > 0 &&
     run.weapons.length <= 3 &&
-    run.arcana.length === 0 &&
-    run.activeEvolutions.length === 0;
+    run.arcana.length === 0;
   const hasAnySynergyItems =
     purityLive ||
-    evolutionsOn ||
     Boolean(run.simplified) ||
     run.doubleNext > 0 ||
     run.nextSetMultiplier > 1 ||
@@ -1634,7 +1583,6 @@ const AdventureRun: React.FC<Props> = ({
 
   const beltReservedRightPx =
     run.arcana.length * 64 +
-    run.activeEvolutions.length * 54 +
     (useSingleSparseRow && (run.movesLeft !== null || practice || secondsLeft !== null) ? 84 : 0);
   const dualThreat = Boolean(run.parry && run.surge) && !isWide;
   const boardMaxWidth = isWide ? Math.min(760, Math.max(480, Math.round((stage.h - 20) * 0.94))) : undefined;
@@ -1723,50 +1671,6 @@ const AdventureRun: React.FC<Props> = ({
           <Icon name="lorc/third-eye" size={12} color={TONE.upside} />
           <Text style={[st.purityChipText, { fontSize: scaleText(11, textScale) }]} numberOfLines={1}>
             All {run.simplified.attribute} {formatCardTraitValue(run.simplified.attribute, run.simplified.value, colorblind)}{run.simplified.also ? ` + ${run.simplified.also.attribute} ${formatCardTraitValue(run.simplified.also.attribute, run.simplified.also.value, colorblind)}` : ''} · {Math.ceil(run.simplified.remainingMs / 1000)}s
-          </Text>
-        </TouchableOpacity>
-      )}
-      {evolutionsOn && (
-        <TouchableOpacity
-          testID="run-evo-chip"
-          onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'evolutions' })}
-          onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'evolutions' }) : undefined}
-          delayLongPress={250}
-          hitSlop={railHitSlop}
-          activeOpacity={thumbZoneGuarded ? 1 : 0.75}
-          accessibilityRole="button"
-          accessibilityLabel={
-            catalystOnBoard
-              ? idleArmed > 1
-                ? `Catalyst on board. Match it to pick 1 of ${evoChoiceCount} evolutions.`
-                : catalystTargetName
-                  ? `Catalyst on board for ${catalystTargetName}. Match it to evolve.`
-                  : 'Catalyst on board. Match it to evolve.'
-              : idleArmed === 0
-                ? `Evolving, ${evolutionsUsed} used. No Catalyst until an evolution ends`
-                : idleArmed > 1
-                  ? `${idleArmed} evolutions armed, pick 1 of ${evoChoiceCount} on Catalyst, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
-                  : `${idleArmed} evolution armed${nextEvoRecipe ? `, next ${nextEvoRecipe.name}` : ''}, ${evolutionsUsed} used, ${Math.round(run.evolutionLikelihood)} percent catalyst chance`
-          }
-          style={[st.evoChip, catalystOnBoard && st.evoChipReady, evolutionsLeft <= 0 && { opacity: 0.55 }]}
-        >
-          <Icon name="lorc/crystal-shine" size={12} color={catalystOnBoard ? INK : TONE.arcana} />
-          <Text style={[st.evoChipText, { fontSize: scaleText(11, textScale) }]} numberOfLines={1}>
-            {evolutionsLeft <= 0
-              ? `Evos ${evolutionsUsed}`
-              : catalystOnBoard
-                ? (idleArmed > 1
-                  ? `CATALYST: Pick 1 of ${evoChoiceCount}`
-                  : catalystTargetName
-                    ? `CATALYST: ${catalystTargetName}`
-                    : 'CATALYST! Match to evolve')
-                : idleArmed === 0
-                  ? `Evolving · ${evolutionsUsed}`
-                  : idleArmed > 1
-                    ? `Pick 1 of ${evoChoiceCount} · ${Math.round(run.evolutionLikelihood)}%`
-                    : nextEvoRecipe
-                      ? `Next: ${nextEvoRecipe.name} · ${Math.round(run.evolutionLikelihood)}%`
-                      : `Evo ${Math.round(run.evolutionLikelihood)}%`}
           </Text>
         </TouchableOpacity>
       )}
@@ -1976,14 +1880,8 @@ const AdventureRun: React.FC<Props> = ({
             <View style={[st.stageMiddle, compactStage && st.stageMiddleCompact]}>
               {compactStage && coachBubble ? (
                 <View style={st.compactBubbleSlot} pointerEvents="box-none">{coachBubble}</View>
-              ) : ((showDamageHud && run.power > 0) || (run.combo > 1 && comboLive) || (practice && run.matches > 0)) ? (
+              ) : ((run.combo > 1 && comboLive) || (practice && run.matches > 0)) ? (
                 <View style={st.counters}>
-                  {showDamageHud && run.power > 0 && (
-                    <View style={st.powerWrap}>
-                      <PowerMeter points={run.power} onPress={() => { sfx('click'); setPowerInfo(true); }} />
-                      {powerDelta && <PowerDeltaBadge key={powerDelta.key} text={powerDelta.text} animate={effects && !reducedMotion} />}
-                    </View>
-                  )}
                   {run.combo > 1 && comboLive && (
                     <Anchor name="combo">
                       <View testID="run-combo" style={st.comboPill} accessibilityLabel={`Combo ×${run.combo}`}>
@@ -2058,9 +1956,12 @@ const AdventureRun: React.FC<Props> = ({
             )}
             <GearBelt
               weapons={run.weapons}
+              evolutions={liveEvolutions}
               growth={run.growth}
               ignition={run.lastSetIgnition}
               counters={enemyCounters}
+              active={ticking}
+              effects={effects}
               reduced={!effects}
               width={hudPanelW}
               reservedRightPx={beltReservedRightPx}
@@ -2184,9 +2085,12 @@ const AdventureRun: React.FC<Props> = ({
               <View style={[st.beltDockRow, inlineSynergyOnBelt && st.beltDockRowWrap]}>
                 <GearBelt
                   weapons={run.weapons}
+                  evolutions={liveEvolutions}
                   growth={run.growth}
                   ignition={run.lastSetIgnition}
                   counters={enemyCounters}
+                  active={ticking}
+                  effects={effects}
                   reduced={!effects}
                   width={hudPanelW}
                   reservedRightPx={beltReservedRightPx}
@@ -2196,7 +2100,7 @@ const AdventureRun: React.FC<Props> = ({
                 />
                 {inlineSynergyOnBelt && hasAnySynergyItems ? (
                   <View style={st.inlineSynergyDock}>{renderSynergyItems()}</View>
-                ) : (run.arcana.length > 0 || run.activeEvolutions.length > 0) ? (
+                ) : run.arcana.length > 0 ? (
                   <View style={st.rightDock}>
                     {run.arcana.map(id => {
                       const arc = getArcana(id);
@@ -2217,32 +2121,6 @@ const AdventureRun: React.FC<Props> = ({
                           <Icon name={arc.icon} size={12} color={TONE.arcana} />
                           <Text style={st.arcanaChipText} numberOfLines={1}>{short}</Text>
                         </TouchableOpacity>
-                      );
-                    })}
-                    {run.activeEvolutions.map(a => {
-                      const recipe = recipeFor(a.id);
-                      return (
-                        <Anchor key={a.id} name={`evo:${a.id}`}>
-                          <TouchableOpacity
-                            onPress={thumbZoneGuarded ? NOOP : () => openHudInspect({ kind: 'evolutions' })}
-                            onLongPress={thumbZoneGuarded ? () => openHudInspect({ kind: 'evolutions' }) : undefined}
-                            delayLongPress={250}
-                            hitSlop={railHitSlop}
-                            activeOpacity={thumbZoneGuarded ? 1 : 0.75}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Inspect ${recipe?.name ?? a.id} evolution`}
-                          >
-                            <EvolutionRing
-                              icon={recipe?.icon ?? 'lorc/crystal-shine'}
-                              name={recipe?.name ?? a.id}
-                              remainingMs={a.remainingMs}
-                              durationMs={a.durationMs}
-                              active={ticking}
-                              effects={effects}
-                              compact
-                            />
-                          </TouchableOpacity>
-                        </Anchor>
                       );
                     })}
                   </View>
@@ -2319,21 +2197,90 @@ const AdventureRun: React.FC<Props> = ({
                     const lv = run.weaponBuilds[w.id]?.level ?? 1;
                     const stacks = run.growth ? growthStacks(run.growth, w.id) : 0;
                     const ctr = counterForWeapon(w, enemyCounters);
+                    const evo = liveEvoByWeapon.get(w.id);
+                    const evoActive = evo?.phase === 'active';
+                    const evoCooldown = evo?.phase === 'cooldown';
+                    const evoAlmost = Boolean(evo?.phase === 'charging' && evo.almostReady);
+                    const evoSecs = evoActive ? Math.max(0, Math.ceil(evo!.activeRemainingMs / 1000)) : 0;
+                    const evoCdSecs = evoCooldown ? Math.max(1, Math.ceil(evo!.cooldownRemainingMs / 1000)) : 0;
+                    const evoPct = evo
+                      ? evoActive
+                        ? Math.max(0, Math.min(1, evo.activeRemainingMs / Math.max(1, evo.activeDurationMs)))
+                        : evoCooldown
+                          ? Math.max(0, Math.min(1, evo.cooldownRemainingMs / Math.max(1, EVOLUTION_CHASSIS.defaultCooldownMs)))
+                          : Math.max(0, Math.min(1, evo.progress / Math.max(1, evo.target)))
+                      : 0;
+                    const evoUrgent = evoActive && evoSecs <= 5;
                     return (
                       <TouchableOpacity
                         key={w.id}
-                        style={[st.wideWeaponRow, ctr && st.wideWeaponRowCountered]}
+                        testID={`wide-weapon-${w.id}`}
+                        style={[
+                          st.wideWeaponRow,
+                          evoAlmost && st.wideWeaponRowAlmost,
+                          evoActive && st.wideWeaponRowEvolved,
+                          evoCooldown && st.wideWeaponRowCooldown,
+                          ctr && !evoActive && st.wideWeaponRowCountered,
+                        ]}
                         onPress={() => openWeaponInspect(w)}
                         activeOpacity={0.75}
                         accessibilityRole="button"
                         accessibilityLabel={`Inspect ${w.name}`}
                       >
-                        <WeaponAvatar weapon={w} size={20} />
-                        <Text style={st.wideWeaponName} numberOfLines={1}>
-                          {w.name}{weaponLevelSuffix(lv)}
-                        </Text>
-                        {ctr && <Text style={st.wideWeaponCounter}>−{ctr.reduction}%</Text>}
-                        {stacks > 0 && <Text style={st.wideWeaponStack}>+{Math.round(stacks)}</Text>}
+                        <View style={st.wideWeaponHead}>
+                          <WeaponAvatar weapon={w} size={20} />
+                          <Text style={st.wideWeaponName} numberOfLines={1}>
+                            {w.name}{weaponLevelSuffix(lv)}
+                          </Text>
+                          {ctr && <Text style={st.wideWeaponCounter}>−{ctr.reduction}%</Text>}
+                          {stacks > 0 && <Text style={st.wideWeaponStack}>+{Math.round(stacks)}</Text>}
+                        </View>
+                        {evo && (
+                          <View style={st.wideEvoBlock}>
+                            <View style={st.wideEvoLine}>
+                              <Icon
+                                name={evoActive ? evo.icon : evoCooldown ? 'lorc/hourglass' : 'lorc/crystal-shine'}
+                                size={10}
+                                color={evoUrgent ? COLORS.impactRed : evoAlmost ? '#B45309' : evoCooldown ? '#6B7280' : '#6D28D9'}
+                                noShadow
+                              />
+                              <Text
+                                style={[
+                                  st.wideEvoText,
+                                  evoAlmost && st.wideEvoTextAlmost,
+                                  evoUrgent && st.wideEvoTextUrgent,
+                                  evoCooldown && st.wideEvoTextCooldown,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {evoActive
+                                  ? `${evo.evolutionName} · ${evoSecs}s`
+                                  : evoCooldown
+                                    ? `Cooldown · ${evoCdSecs}s`
+                                    : evoAlmost
+                                      ? `${evo.conditionShort} · ${Math.max(1, evo.target - evo.progress)} LEFT!`
+                                      : `${evo.conditionShort} · ${evo.progress}/${evo.target}`}
+                              </Text>
+                            </View>
+                            <View style={st.wideEvoTrack}>
+                              <View
+                                style={[
+                                  st.wideEvoFill,
+                                  {
+                                    transform: [{ scaleX: evoPct }],
+                                    backgroundColor: evoUrgent
+                                      ? COLORS.impactRed
+                                      : evoAlmost
+                                        ? '#D97706'
+                                        : evoCooldown
+                                          ? '#6B7280'
+                                          : '#7C3AED',
+                                  },
+                                ]}
+                              />
+                            </View>
+                          </View>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -2376,7 +2323,7 @@ const AdventureRun: React.FC<Props> = ({
       >
         <View style={[st.boardInner, !isWide && st.boardInnerPortraitClip, boardMaxWidth ? { maxWidth: boardMaxWidth } : null, isDevBuild && devOverrides.layers.dimBoard && { opacity: 0.35 }]}>
           {/* Evolution pulse: a glow behind the cards, never a card border */}
-          {run.activeEvolutions.length > 0 && <EvolutionGlow active={playing && appActive} effects={effects} />}
+          {activeEvoCount > 0 && <EvolutionGlow active={playing && appActive} effects={effects} />}
           {run.surge?.active && <SurgeGlow active={playing && appActive} effects={effects} />}
           {run.frozenMs > 0 && (
             <View style={st.frozen} pointerEvents="none">
@@ -2469,34 +2416,44 @@ const AdventureRun: React.FC<Props> = ({
           <Banner rect={anchors.rect('board')!} text={`WAVE ${run.wave + 2}!`} color={COLORS.deepOnyx} delay={0} />
         </View>
       )}
-      {!ended && fx.cutIn && (
-        <EvolutionCutIn
-          key={fx.cutIn.key}
-          recipes={fx.cutIn.recipes.map(recipeFor).filter((r): r is EvolutionRecipe => !!r)}
-          weapons={run.weapons}
-          seconds={Math.round((run.activeEvolutions.find(a => a.id === fx.cutIn?.recipes[0])?.durationMs ?? EVOLUTION_RULES.durationMs) / 1000)}
-          size={stage}
-          onDone={() => { setEvolutionHint(false); fx.dismissCutIn(); }}
-          autoDismissMs={autoPlayer ? 1600 : undefined}
-          hint={evolutionHint ? 'The ring by the HP bar counts down the time left.' : undefined}
-        />
-      )}
-      {/* Repeat, post-pick, or effects-off evolutions get a crisp non-blocking banner ([OB-08] + [AU-13]) */}
-      {!ended && fx.banner && (() => {
-        const recipe = recipeFor(fx.banner.recipes[0]);
-        const secs = Math.round(
-          (run.activeEvolutions.find(a => a.id === fx.banner?.recipes[0])?.durationMs ?? EVOLUTION_RULES.durationMs) / 1000
+      {!ended && fx.cutIn && (() => {
+        const entries: EvolutionCutInEntry[] = [];
+        for (const id of fx.cutIn.recipes) {
+          const def = getWeaponEvolution(id);
+          if (!def) continue;
+          const rt = run.weaponEvolutions.find(e => e.evoId === id);
+          const weapon = run.weapons.find(w => w.id === def.weaponId);
+          const durationSec = Math.max(1, Math.round((rt?.durationMs ?? def.durationMs) / 1000));
+          entries.push({ evolution: def, weapon, durationSec });
+        }
+        if (entries.length === 0) return null;
+        return (
+          <EvolutionCutIn
+            key={fx.cutIn.key}
+            evolutions={entries}
+            weapons={run.weapons}
+            size={stage}
+            onDone={() => { setEvolutionHint(false); fx.dismissCutIn(); }}
+            autoDismissMs={autoPlayer ? 1600 : undefined}
+            hint={evolutionHint ? 'Watch the gold timer bar right on your weapon belt!' : undefined}
+          />
         );
+      })()}
+      {/* Repeat or effects-off awakenings get a crisp non-blocking banner ([OB-08] + [AU-13]) */}
+      {!ended && fx.banner && (() => {
+        const entries: EvolutionBannerEntry[] = [];
+        for (const id of fx.banner.recipes) {
+          const def = getWeaponEvolution(id);
+          if (!def) continue;
+          const rt = run.weaponEvolutions.find(e => e.evoId === id);
+          const weapon = run.weapons.find(w => w.id === def.weaponId);
+          const secs = Math.max(1, Math.round((rt?.durationMs ?? def.durationMs) / 1000));
+          entries.push({ id: def.id, name: def.name, icon: def.icon, text: def.tagline, seconds: secs, weapon });
+        }
+        if (entries.length === 0) return null;
         return (
           <View style={[st.bannerWrap, { top: insets.top + hudHeight / 2 }]} pointerEvents="none">
-            <EvolutionBanner
-              recipeId={fx.banner.recipes[0]}
-              name={recipe?.name ?? 'Evolution'}
-              icon={recipe?.icon ?? 'lorc/crystal-shine'}
-              text={recipe?.activeText ?? ''}
-              seconds={secs}
-              seq={fx.banner.key}
-            />
+            <EvolutionBanner entries={entries} seq={fx.banner.key} />
           </View>
         );
       })()}
@@ -2533,17 +2490,6 @@ const AdventureRun: React.FC<Props> = ({
         );
       })()}
 
-      {/* Evolution choice (2+ idle armed recipes) opens before any level-up pick */}
-      {run.status === 'pick_evolution' && !fx.busy && (run.evolutionPickOptions?.length ?? 0) > 0 && (
-        <EvolutionPickOverlay
-          optionIds={run.evolutionPickOptions!}
-          totalIdle={Math.max(idleArmed, run.evolutionPickOptions!.length)}
-          knownIds={knownForgedEvos}
-          durationSec={evoDurationSec}
-          onPick={handlePickEvolution}
-        />
-      )}
-
       {/* Level-up and shop wait for the cascade that earned them */}
       {run.status === 'pick' && !fx.busy && (
         <WeaponPick
@@ -2568,7 +2514,6 @@ const AdventureRun: React.FC<Props> = ({
           run={defeatOverlay.run}
           result={defeatOverlay.recorded.result}
           onRetry={() => handleInstantRetry()}
-          onArmRecipeAndRetry={recipeId => handleInstantRetry({ armRecipeId: recipeId })}
           onFullBreakdown={() => {
             const cur = defeatOverlay;
             setDefeatOverlay(null);
@@ -2692,6 +2637,12 @@ const AdventureRun: React.FC<Props> = ({
                   build={run.weaponBuilds[inspect.id]}
                   growth={run.growth}
                   counter={counterForWeapon(liveWeapon, enemyCounters)}
+                  evolutionMode="live"
+                  liveEvolution={liveEvoByWeapon.get(liveWeapon.id) ?? null}
+                  equippedEvolutionId={run.equippedEvolutions?.[liveWeapon.id] ?? null}
+                  unlockedEvolutionIds={run.unlockedWeaponEvolutions}
+                  beltSynergyIds={beltSynergyAttrSet(beltWeaponIds, liveWeapon.id)}
+                  evolutionLabTier={startSave.upgrades?.evolution_lab ?? 0}
                   defaultOpen
                 />
               );
@@ -2703,17 +2654,6 @@ const AdventureRun: React.FC<Props> = ({
               </View>
             )}
             <Btn testID="inspect-close" label="Back to the fight" onPress={() => setInspect(null)} />
-          </PopIn>
-        </View>
-      </Modal>
-
-      {/* Power meter, explained (the fight waits; 1-tap dimmed backdrop dismiss per [UI-15]) */}
-      <Modal visible={powerInfo} transparent animationType="fade" onRequestClose={() => setPowerInfo(false)}>
-        <View style={st.overlay} testID="power-info-modal">
-          <TouchableOpacity testID="power-info-backdrop" style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPowerInfo(false)} accessibilityLabel="Close Power details" />
-          <PopIn style={[st.panel, { padding: 12 }]}>
-            <PowerExplainer points={run.power} weapons={run.weapons} evolutionsTriggered={run.evolutionsTriggered} />
-            <Btn testID="power-info-close" label="Back to the fight" onPress={() => setPowerInfo(false)} />
           </PopIn>
         </View>
       </Modal>
@@ -2733,50 +2673,12 @@ const AdventureRun: React.FC<Props> = ({
         run={run}
         shownHp={shownHp}
         challenge={challenge}
-        knownEvolutions={new Set([...startSave.unlockedEvolutions, ...startSave.discoveredEvolutions, ...run.forgedRecipes])}
+        knownEvolutions={new Set([...startSave.discoveredEvolutions, ...(run.forgedEvolutions ?? [])])}
         showGuardTip={showInspectGuardTip}
         onClose={() => setHudInspect(null)}
       />
     </Animated.View>
     </AnchorsProvider>
-  );
-};
-
-/** Transient floating `+0.25` Power gain badge beside PowerMeter ([GP-01]). */
-const PowerDeltaBadge: React.FC<{ text: string; animate: boolean }> = ({ text, animate }) => {
-  const op = useSharedValue(0);
-  const y = useSharedValue(animate ? 4 : 0);
-  const scale = useSharedValue(animate ? 0.88 : 1);
-  useEffect(() => {
-    if (!animate) {
-      y.value = 0;
-      scale.value = 1;
-      op.value = withSequence(
-        withTiming(1, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS }),
-        withDelay(640, withTiming(0, { duration: ACCESSIBLE.fadeMs, easing: EASE.exitSoft, ...STAYS }), STAYS.reduceMotion)
-      );
-      return () => cancelAnimation(op);
-    }
-    op.value = withSequence(
-      withTiming(1, { duration: MS.feedback, easing: EASE.ui }),
-      withDelay(620, withTiming(0, { duration: exitMs(MS.move), easing: EASE.exitSoft }))
-    );
-    scale.value = withTiming(1, { duration: MS.quick, easing: EASE.popSoft });
-    y.value = withTiming(-6, { duration: 920, easing: EASE.enterSoft });
-    return () => {
-      cancelAnimation(op);
-      cancelAnimation(y);
-      cancelAnimation(scale);
-    };
-  }, [animate, op, y, scale]);
-  const animStyle = useAnimatedStyle(() => ({
-    opacity: op.value,
-    transform: [{ translateY: y.value }, { scale: scale.value }],
-  }));
-  return (
-    <Animated.View testID="run-power-delta" pointerEvents="none" style={[st.powerDelta, animStyle]}>
-      <Text style={st.powerDeltaText}>{text}</Text>
-    </Animated.View>
   );
 };
 
@@ -3326,9 +3228,6 @@ const st = StyleSheet.create({
   idleTrack: { height: 4, borderRadius: 2, backgroundColor: '#EEE', overflow: 'hidden', position: 'relative' },
   idleFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: COLORS.impactOrange, transformOrigin: 'left center' },
   counters: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', columnGap: 5, rowGap: 1, paddingHorizontal: 4 },
-  powerWrap: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  powerDelta: { backgroundColor: COLORS.actionYellow, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 5, paddingVertical: 0.5 },
-  powerDeltaText: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counter: { fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   counterHot: { color: COLORS.orangeSurface },
   comboPill: { backgroundColor: COLORS.orangeSurface, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
@@ -3376,11 +3275,23 @@ const st = StyleSheet.create({
   wideConsoleBlock: { gap: 5 },
   wideConsoleEyebrow: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: TONE.spent },
   wideWeaponGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  wideWeaponRow: { width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 5, minHeight: 34 },
+  wideWeaponRow: { width: '48.5%', flexDirection: 'column', gap: 4, backgroundColor: COLORS.canvasWhite, borderRadius: 7, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 5, minHeight: 38 },
+  wideWeaponRowAlmost: { backgroundColor: '#FEF3C7', borderColor: '#D97706' },
+  wideWeaponRowEvolved: { backgroundColor: COLORS.actionYellow, borderColor: INK },
+  wideWeaponRowCooldown: { backgroundColor: '#E5E7EB', borderColor: '#9CA3AF' },
   wideWeaponRowCountered: { backgroundColor: '#FEE2E2', borderColor: '#DC2626' },
+  wideWeaponHead: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   wideWeaponName: { flex: 1, minWidth: 0, fontSize: 11, fontWeight: '800', color: INK },
   wideWeaponCounter: { fontSize: 11, fontWeight: '900', color: '#B91C1C', fontVariant: ['tabular-nums'] },
   wideWeaponStack: { fontSize: 11, fontWeight: '900', color: INK, backgroundColor: COLORS.actionYellow, borderRadius: 4, paddingHorizontal: 3.5, overflow: 'hidden', fontVariant: ['tabular-nums'] },
+  wideEvoBlock: { gap: 2 },
+  wideEvoLine: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  wideEvoText: { flex: 1, flexShrink: 1, fontSize: 9.5, fontWeight: '800', color: '#4C1D95', fontVariant: ['tabular-nums'] },
+  wideEvoTextAlmost: { color: '#92400E', fontWeight: '900' },
+  wideEvoTextUrgent: { color: '#B91C1C', fontWeight: '900' },
+  wideEvoTextCooldown: { color: '#4B5563' },
+  wideEvoTrack: { height: 3, borderRadius: 1.5, backgroundColor: 'rgba(18, 18, 18, 0.14)', overflow: 'hidden' },
+  wideEvoFill: { width: '100%', height: '100%', borderRadius: 1.5, transformOrigin: 'left center' },
   wideArcanaList: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
   wideArcanaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.arcanaPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.arcana, paddingHorizontal: 8, paddingVertical: 4 },
   wideArcanaName: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: TONE.arcana },

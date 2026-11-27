@@ -195,6 +195,10 @@ export default {
           run.coins = 245;
           run.weapons = ['blast-powder', 'mending-charm', 'snowball', 'war-drum'];
           run.weaponLevels = { 'blast-powder': 4, 'mending-charm': 3, snowball: 3, 'war-drum': 2 };
+          run.equippedEvolutions = {
+            'blast-powder': 'blast-powder:cluster-charge',
+            'mending-charm': 'mending-charm:heart-bloom',
+          };
           run.skillNodes = ['tabby-0-1', 'tabby-0-2'];
           run.arcana = ['tempo_surge'];
           run.stats = {
@@ -209,7 +213,7 @@ export default {
             parries: 14,
             perfectParries: 6,
             evolutionsForged: 4,
-            forgedRecipeIds: [],
+            forgedEvolutionIds: ['blast-powder:cluster-charge'],
             coinsSpent: 480,
             eventsResolved: 3,
           };

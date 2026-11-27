@@ -51,6 +51,10 @@ export interface Card {
   bonusPoints?: number;
   /** Extra damage from a board-wide boost (War Drum, Corgi). Not a power card: power-card effects ignore it. */
   charge?: number;
+  /** Adventure Holographic card: +4 base damage & +0.20× additive mult when matched, feeds `holo` Synergy node */
+  holo?: boolean;
+  /** Generic Synergy mark placed by weapons, evolutions, or rules (feeds `marks` Synergy node) */
+  marked?: boolean;
   bomb?: boolean;
   bombTimer?: number;
   healing?: boolean;

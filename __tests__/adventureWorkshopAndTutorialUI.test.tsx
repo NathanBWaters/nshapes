@@ -14,12 +14,17 @@ import AdventureMode from '@/adventure/AdventureMode';
 import { createNewSave, equippedCharms, toggleCharm, toggleArcana } from '@/adventure/progress';
 import { LEVELS, MAIN_LEVELS, mainIndexOf } from '@/adventure/data/levels';
 import { ARCANA } from '@/adventure/data/arcana';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import {
+  WEAPON_EVOLUTIONS,
+  evolutionConditionText,
+  evolutionsForWeapon,
+  getWeaponEvolution,
+} from '@/adventure/data/evolutions';
 import { getPassive } from '@/adventure/data/passives';
 import { getFighter } from '@/adventure/data/fighters';
 import { skillTreeOf } from '@/adventure/data/skillTrees';
 import { starRewards } from '@/adventure/data/rewards';
-import { UPGRADES } from '@/adventure/data/upgrades';
+import { UPGRADES, getUpgrade } from '@/adventure/data/upgrades';
 import type { AdventureSave } from '@/adventure/types';
 
 jest.mock('react-native-svg', () => ({
@@ -145,13 +150,18 @@ describe('Camp', () => {
     expect(camp.current().skillNodes[fighter]).toBeUndefined();
   });
 
-  it('Workshop is locked until unlocked, then sells loadout items, met mechanics and Armory weapon upgrades, all refundable', () => {
+  it('Workshop is locked until unlocked, sells 1-tier Charm Belt, Evolution Lab (+2s/tier) & Armory upgrades, all refundable', () => {
     const weapon = CAMPAIGN_WEAPONS[0];
-    // Charm Belt is sold once charm slots have been taught
+    // Charm Belt is sold once charm slots have been taught (1-tier Workshop 6th slot at 1200¢)
+    const charmBeltDef = getUpgrade('charm_belt');
+    expect(charmBeltDef.costs).toEqual([1200]);
+    const evoLabDef = getUpgrade('evolution_lab');
+    expect(evoLabDef.description(1)).toMatch(/\+2s duration/);
+
     const charmSlotsLevel = LEVELS.find(l => l.introduces === UPGRADES.find(u => u.id === 'charm_belt')!.mechanic);
     const locked: AdventureSave = {
       ...createNewSave(),
-      coins: 1000,
+      coins: 1500,
       coinsUnlocked: true,
       stars: { [MAIN_LEVELS[0].id]: 2, ...(charmSlotsLevel ? { [charmSlotsLevel.id]: 1 } : {}) },
       armory: [weapon],
@@ -170,16 +180,32 @@ describe('Camp', () => {
 
     fireEvent.press(camp.getByTestId('camp-buy-upgrade-charm_belt'));
     expect(camp.current().upgrades.charm_belt).toBe(1);
-    expect(camp.current().coins).toBe(700);
+    expect(camp.current().coins).toBe(300);
     camp.sync();
     fireEvent.press(camp.getByTestId('camp-refund-upgrade-charm_belt'));
     expect(camp.current().upgrades.charm_belt).toBeUndefined();
-    expect(camp.current().coins).toBe(1000);
+    expect(camp.current().coins).toBe(1500);
+    camp.unmount();
+
+    // Once evolutions mechanic is seen, Evolution Lab appears with +2s/tier description
+    const withEvo = renderCamp(
+      { ...locked, workshopUnlocked: true, seenMechanics: [...locked.seenMechanics, 'evolutions'] },
+      'workshop'
+    );
+    expect(withEvo.getByTestId('camp-upgrade-evolution_lab')).toBeTruthy();
+    expect(withEvo.getByText(/\+2s duration on all weapon evolutions/i)).toBeTruthy();
   });
 
-  it('Armory fills charm slots, refuses a 4th charm with a note, and takes one off on tap', () => {
+  it('Armory fills 3 base charm slots, shows W1/W2 locked ghost slots with tooltips, refuses a 4th charm until 1-10 cleared, and takes one off on tap', () => {
     const armory = CAMPAIGN_WEAPONS.slice(0, 4);
     const camp = renderCamp({ ...createNewSave(), coinsUnlocked: true, armory }, 'armory');
+
+    // Locked ghost belt slots for W1 (4th) & W2 (5th) render cleanly with milestone tooltip on tap
+    expect(camp.getByTestId('camp-slot-locked-4')).toBeTruthy();
+    expect(camp.getByTestId('camp-slot-locked-5')).toBeTruthy();
+    fireEvent.press(camp.getByTestId('camp-slot-locked-4'));
+    expect(camp.getByTestId('camp-slot-milestone-tip')).toHaveTextContent(/1-10|4th weapon slot/i);
+
     for (const id of armory.slice(0, 3)) {
       fireEvent.press(camp.getByTestId(`camp-armory-${id}`));
       camp.sync();
@@ -190,6 +216,17 @@ describe('Camp', () => {
     expect(equippedCharms(camp.current())).toEqual(armory.slice(0, 3));
     fireEvent.press(camp.getByTestId(`camp-armory-${armory[0]}`));
     expect(equippedCharms(camp.current())).toEqual(armory.slice(1, 3));
+    camp.unmount();
+
+    // Clearing World 1 Boss (1-10) unlocks slot 4, and World 2 Boss (2-10) unlocks slot 5
+    const postBoss = renderCamp(
+      { ...createNewSave(), coinsUnlocked: true, armory, stars: { '1-10': 1, '2-10': 1 } },
+      'armory'
+    );
+    expect(postBoss.getByTestId('camp-slot-3')).toBeTruthy();
+    expect(postBoss.getByTestId('camp-slot-4')).toBeTruthy();
+    expect(postBoss.queryByTestId('camp-slot-locked-4')).toBeNull();
+    expect(postBoss.queryByTestId('camp-slot-locked-5')).toBeNull();
   });
 
   it('Arcana tab equips into the available slots', () => {
@@ -204,18 +241,20 @@ describe('Camp', () => {
 });
 
 describe('Level preview loadout', () => {
-  it('shows charm slots, the fighter passives, armed evolutions and Arcana slots', () => {
+  it('shows charm slots, W1/W2 locked ghost slots, fighter passives, per-weapon evolutions, and Arcana slots', () => {
     // A level from after charms (1-4) and passives (1-5) have been introduced: the sheet shows both
     const level = MAIN_LEVELS.find(l => l.id === '1-5')!;
-    const recipe = EVOLUTION_RECIPES[0];
-    const armory = recipe.families.map(f => f[0]);
+    const armory = ['blast-powder', 'flint-spark'];
+    const [blastEvoA] = evolutionsForWeapon('blast-powder');
+    const [flintEvoA] = evolutionsForWeapon('flint-spark');
     let save: AdventureSave = {
       ...createNewSave(),
       coinsUnlocked: true,
       stars: { [MAIN_LEVELS[0].id]: 3 },
-      seenMechanics: ['charm'],
+      seenMechanics: ['charm', 'evolutions'],
       armory,
-      unlockedEvolutions: [recipe.id],
+      unlockedWeaponEvolutions: [blastEvoA.id, flintEvoA.id],
+      equippedEvolutions: { 'blast-powder': blastEvoA.id, 'flint-spark': flintEvoA.id },
       unlockedArcana: [ARCANA[0].id],
     };
     const onCharm = jest.fn((id: string) => { save = toggleCharm(save, id); });
@@ -226,17 +265,17 @@ describe('Level preview loadout', () => {
     expect(view.getByTestId('preview-charm-slots')).toBeTruthy();
     expect(view.getByTestId('preview-slot-2')).toBeTruthy();
     expect(view.queryByTestId('preview-slot-3')).toBeNull();
+    expect(view.getByTestId('preview-slot-locked-4')).toBeTruthy();
     expect(view.getByTestId('preview-passives')).toBeTruthy();
-    expect(view.getByText(/No evolution armed/)).toBeTruthy();
 
     fireEvent.press(view.getByTestId('preview-tab-loadout'));
     fireEvent.press(view.getByTestId(`charm-${armory[0]}`));
     fireEvent.press(view.getByTestId(`charm-${armory[1]}`));
     expect(onCharm).toHaveBeenCalledTimes(2);
     view.rerender(wrap(<LevelPreview {...props} save={save} />));
-    expect(view.getByText(/1 evolution armed/)).toBeTruthy();
-    expect(view.getByText(`${recipe.name} · ARMED`)).toBeTruthy();
-    expect(view.getByTestId('preview-evo-likelihood')).toBeTruthy();
+    expect(view.getByTestId('preview-evolutions')).toBeTruthy();
+    expect(view.getByTestId(`preview-evo-${blastEvoA.id}`)).toBeTruthy();
+    expect(view.getByTestId(`preview-evo-${flintEvoA.id}`)).toBeTruthy();
 
     fireEvent.press(view.getByTestId(`preview-arcana-${ARCANA[0].id}`));
     expect(save.equippedArcana).toEqual([ARCANA[0].id]);
@@ -253,26 +292,36 @@ describe('Level preview loadout', () => {
 });
 
 describe('Field Guide', () => {
-  it('Recipe Guide shows locked, unlocked, armed and evolved recipes with their families and effects', () => {
-    const [armedR, forgedR, lockedR] = EVOLUTION_RECIPES;
-    const charms = armedR.families.map(f => f[0]);
+  it('Evolutions Guide (`guide-tab-evolutions`) shows locked, unlocked, equipped, and forged per-weapon evolutions with filter tabs', () => {
+    const [armedEvo, forgedEvo, lockedEvo] = evolutionsForWeapon('blast-powder');
     const save: AdventureSave = {
       ...createNewSave(),
-      armory: charms,
-      charms,
-      unlockedEvolutions: [armedR.id, forgedR.id],
-      discoveredEvolutions: [forgedR.id],
+      armory: ['blast-powder'],
+      charms: ['blast-powder'],
+      unlockedWeaponEvolutions: [armedEvo.id, forgedEvo.id],
+      equippedEvolutions: { 'blast-powder': armedEvo.id },
+      discoveredEvolutions: [forgedEvo.id],
     };
     const view = render(wrap(<FieldGuide save={save} onClose={() => {}} />));
-    fireEvent.press(view.getByTestId('guide-tab-recipes'));
-    expect(view.getByText(`RECIPES (2/${EVOLUTION_RECIPES.length})`)).toBeTruthy();
-    expect(view.getByText(armedR.name)).toBeTruthy();
-    expect(view.getByText('ARMED BY YOUR CHARMS')).toBeTruthy();
-    expect(view.getByText(armedR.activeText)).toBeTruthy();
-    expect(view.getByText(forgedR.name)).toBeTruthy();
-    expect(view.getByText('EVOLVED BEFORE')).toBeTruthy();
-    expect(view.getByTestId(`recipe-${lockedR.id}`)).toBeTruthy();
-    expect(view.queryByText(lockedR.name)).toBeNull();
+    fireEvent.press(view.getByTestId('guide-tab-evolutions'));
+    expect(view.getByTestId('guide-evolutions-how')).toBeTruthy();
+    expect(view.getByText(`EVOS (2/${WEAPON_EVOLUTIONS.length})`)).toBeTruthy();
+
+    // Filter to Unlocked: shows equipped + triggered evos and hides the locked 3rd evolution
+    fireEvent.press(view.getByTestId('guide-evo-filter-unlocked'));
+    expect(view.getByTestId('guide-evo-weapon-blast-powder')).toBeTruthy();
+    expect(view.getByTestId(`guide-evo-${armedEvo.id}`)).toBeTruthy();
+    expect(view.getByText(armedEvo.name)).toBeTruthy();
+    expect(view.getByText('EQUIPPED')).toBeTruthy();
+    expect(view.getByTestId(`guide-evo-${forgedEvo.id}`)).toBeTruthy();
+    expect(view.getByText(forgedEvo.name)).toBeTruthy();
+    expect(view.getByText('TRIGGERED')).toBeTruthy();
+    expect(view.queryByTestId(`guide-evo-${lockedEvo.id}`)).toBeNull();
+
+    // Switch to All + search "Blast Powder": all 3 evolutions (including the locked 3rd with unlock hint) render
+    fireEvent.press(view.getByTestId('guide-evo-filter-all'));
+    fireEvent.changeText(view.getByTestId('guide-evo-search'), 'Blast Powder');
+    expect(view.getByTestId(`guide-evo-${lockedEvo.id}`)).toBeTruthy();
   });
 
   it('Fighters page explains passives and skill trees', () => {
@@ -285,7 +334,7 @@ describe('Field Guide', () => {
 });
 
 describe('Unlock reveals', () => {
-  it('reveals the Workshop (and opens it) and a first evolution with how it works', () => {
+  it('reveals the Workshop, a per-weapon Evolution (with trigger & duration), and a Boss 4th Weapon Slot unlock', () => {
     jest.useFakeTimers();
     let opened = false;
     const view = render(
@@ -299,28 +348,41 @@ describe('Unlock reveals', () => {
       />
     );
     expect(view.getByText('The Workshop unlocked!')).toBeTruthy();
-    // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
     fireEvent.press(view.getByTestId('unlock-reveal'));
     act(() => { jest.advanceTimersByTime(1000); });
     fireEvent.press(view.getByTestId('unlock-primary'));
     expect(opened).toBe(true);
 
-    const recipe = EVOLUTION_RECIPES[0];
+    const evo = evolutionsForWeapon('blast-powder')[0];
     view.rerender(
       <UnlockReveal
-        unlocks={[{ kind: 'evolution', id: recipe.id, star: 1, firstEvolution: true }]}
-        save={createNewSave()}
+        unlocks={[{ kind: 'evolution', id: evo.id, star: 1, firstEvolution: true }]}
+        save={{ ...createNewSave(), armory: ['blast-powder'] }}
         onUseFighter={() => {}}
         onEquipCharm={() => {}}
         onDone={() => {}}
       />
     );
     expect(view.getByText('New evolution unlocked!')).toBeTruthy();
-    // The reward turns into view (UnlockReveal: about 0.8 s from the tap to the buttons)
     fireEvent.press(view.getByTestId('unlock-reveal'));
     act(() => { jest.advanceTimersByTime(1000); });
-    expect(view.getByText(recipe.name)).toBeTruthy();
-    expect(view.getByText(`Armed by: ${recipe.familyText}`)).toBeTruthy();
+    expect(view.getByTestId('unlock-revealed-evolution')).toBeTruthy();
+    expect(view.getByText(evo.name)).toBeTruthy();
+    expect(view.getByText(`Trigger: ${evolutionConditionText(evo)}`)).toBeTruthy();
+
+    // Boss 4th weapon slot expansion reveal
+    view.rerender(
+      <UnlockReveal
+        unlocks={[{ kind: 'weapon_slot', slotNumber: 4, levelId: '1-10', star: 1 }]}
+        save={{ ...createNewSave(), stars: { '1-10': 1 } }}
+        onUseFighter={() => {}}
+        onEquipCharm={() => {}}
+        onDone={() => {}}
+      />
+    );
+    fireEvent.press(view.getByTestId('unlock-reveal'));
+    act(() => { jest.advanceTimersByTime(1000); });
+    expect(view.getByTestId('unlock-slot-strip-4')).toBeTruthy();
   });
 
   it('a new fighter names its passives and points at its trial; once the trial is played the reveal explains them', () => {
@@ -348,7 +410,7 @@ describe('Unlock reveals', () => {
 });
 
 describe('First-evolution lesson', () => {
-  it('the level that grants the first recipe starts straight from its preview, and the next fight teaches evolutions', () => {
+  it('the level that grants the first weapon evolution starts straight from its preview, and the next fight teaches evolutions', () => {
     const first = MAIN_LEVELS.find(l => starRewards(l).some(r => r.evolution))!;
     const before = MAIN_LEVELS.slice(0, mainIndexOf(first));
     const save: AdventureSave = {
@@ -360,26 +422,29 @@ describe('First-evolution lesson', () => {
     };
     const view = render(wrap(<AdventureMode initialSave={save} onExit={() => {}} />));
     fireEvent.press(view.getByTestId(`map-node-${first.id}`));
-    // The recipe is teased on the sheet as a secret reward; no page of text stands between the player and the boss
+    // The evolution is teased on the sheet as a reward; no page of text stands between the player and the boss
     fireEvent.press(view.getByTestId('preview-play'));
     expect(view.queryByTestId('lesson-modal')).toBeNull();
     expect(view.getByTestId('run-stage')).toBeTruthy();
     view.unmount();
 
     const next = MAIN_LEVELS[mainIndexOf(first) + 1];
-    const recipeId = starRewards(first).find(r => r.evolution)!.evolution!;
+    const evoId = starRewards(first).find(r => r.evolution)!.evolution!;
+    const evo = getWeaponEvolution(evoId)!;
     const after: AdventureSave = {
       ...save,
       stars: { ...save.stars, [first.id]: 3 },
-      seenMechanics: [...save.seenMechanics, first.introduces, 'combo_hunt_intro'],
-      unlockedEvolutions: [recipeId],
+      seenMechanics: [...save.seenMechanics, first.introduces],
+      armory: [...new Set([...save.armory, evo.weaponId])],
+      charms: [evo.weaponId],
+      unlockedWeaponEvolutions: [evoId],
+      equippedEvolutions: { [evo.weaponId]: evoId },
     };
     const second = render(wrap(<AdventureMode initialSave={after} onExit={() => {}} />));
     fireEvent.press(second.getByTestId(`map-node-${next.id}`));
     fireEvent.press(second.getByTestId('preview-play'));
-    const recipe = EVOLUTION_RECIPES.find(r => r.id === recipeId)!;
     // Either the level's own lesson comes first (and names the evolution lesson next), or the evolution lesson itself
-    const evolutionLessonShown = second.queryAllByText(new RegExp(recipe.name)).length > 0 || second.queryByText(/^Next: /) !== null;
+    const evolutionLessonShown = second.queryAllByText(new RegExp(evo.name)).length > 0 || second.queryByText(/^Next: /) !== null;
     expect(evolutionLessonShown).toBe(true);
   });
 });

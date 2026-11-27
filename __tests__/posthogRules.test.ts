@@ -255,6 +255,42 @@ describe('posthogRules filtering, hygiene & audit ledger', () => {
     expect(sig.evolutions['weak-evo'].adjustedWinDelta!).toBeLessThan(0);
   });
 
+  it('tracks equipped_evolutions, peak_base_damage, synergy_score_total, and per-weapon evolution triggerRate', () => {
+    const events: Record<string, unknown>[] = [];
+    for (let i = 0; i < 10; i++) {
+      const triggered = i < 6;
+      events.push(
+        makeEvent(
+          {
+            fight_id: `evo-rate-${i}`,
+            weapons: ['blast-powder', 'flint-spark'],
+            equipped_evolutions: ['blast-powder:cluster-charge', 'flint-spark:cinder-trail'],
+            evolutions: triggered ? 1 : 0,
+            weapon_evos_triggered: triggered ? 1 : 0,
+            evolutions_forged: triggered ? ['blast-powder:cluster-charge'] : [],
+            peak_base_damage: 42 + i * 3,
+            synergy_score_total: 120 + i * 10,
+            outcome: triggered ? 'won' : 'lost',
+          },
+          { distinct_id: `evo-p-${i}` }
+        )
+      );
+    }
+
+    const { fights } = filterFightEvents(events, { mode: 'adventure', eraId: 'current' });
+    expect(fights).toHaveLength(10);
+    expect(fights[0].equippedEvolutions).toEqual({
+      'blast-powder': 'blast-powder:cluster-charge',
+      'flint-spark': 'flint-spark:cinder-trail',
+    });
+    expect(fights[0].peakBaseDamage).toBe(42);
+    expect(fights[0].synergyScoreTotal).toBe(120);
+
+    const sig = analyzePostHogForBalance(events, { mode: 'adventure', eraId: 'current' });
+    expect(sig.evolutions['blast-powder:cluster-charge']?.fights).toBe(6);
+    expect(sig.evolutions['blast-powder:cluster-charge']?.triggerRate).toBeCloseTo(0.6, 2);
+  });
+
   it('builds safe HogQL numeric semver and balance hygiene SQL clauses', () => {
     const verSql = buildHogqlVersionClause('0.1.164');
     expect(verSql).toContain('>= 1164');

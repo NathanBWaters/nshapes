@@ -11,17 +11,20 @@ import { useColorblind } from '@/utils/cardColors';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { WeaponAvatar } from '@/components/weapons';
 import { COLORS } from '@/utils/colors';
 import { triggerRankSealHaptic, triggerStarStampHaptic } from '@/utils/haptics';
 import { band, sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import { isLevelUnlocked, type ResultApplication } from '../progress';
 import { damagePerMinute } from '../history';
-import { formatPower, powerMultiplier } from '../data/weaponPower';
+import { getArmoryWeapon } from '../data/armory';
+import { getArcana } from '../data/arcana';
 import { getBiome } from '../data/biomes';
+import { getWeaponEvolution } from '../data/evolutions';
 import { levelFoe } from '../data/foes';
 import { getMechanic } from '../data/mechanics';
-import { BOUNTIES } from '../data/bounties';
+import { BOUNTIES, getWeaponBounties, isBountyUnlocked } from '../data/bounties';
 import { MAIN_LEVELS, mainIndexOf, getLevel } from '../data/levels';
 import { STORY_BOSS_CALLBACKS } from '../data/story';
 import { shouldShowDamageNumbers, companionResultsLine, diagnoseResultTip } from '../coach';
@@ -35,7 +38,6 @@ import RoundFunPrompt from '@/components/RoundFunPrompt';
 import { buildDamageStory } from '../engine/damageStory';
 import BattleDamageStory from './BattleDamageStory';
 import FightReplay from './FightReplay';
-import PowerExplainer from './PowerExplainer';
 import { resolveVictoryCallout } from '../victoryCallout';
 
 interface Props {
@@ -56,9 +58,7 @@ interface Props {
   onRetry: () => void;
   onNext: () => void;
   onMap: () => void;
-  onCamp: (tab?: 'fighters' | 'workshop') => void;
-  /** Optional 1-tap "Arm <Recipe> & Retry" handler from context-aware defeat diagnostic ([OB-17]) */
-  onArmRecipeAndRetry?: (recipeId: string) => void;
+  onCamp: (tab?: 'fighters' | 'workshop' | 'armory' | 'bounties') => void;
   /** Optional replay trigger for the 5-5 Hydra ending ceremony ([OB-20]) */
   onWatchEnding?: () => void;
 }
@@ -80,13 +80,11 @@ const LevelResults: React.FC<Props> = ({
   onNext,
   onMap,
   onCamp,
-  onArmRecipeAndRetry,
   onWatchEnding,
 }) => {
   const insets = useSafeAreaInsets();
   const colorblind = useColorblind();
   const [replayOpen, setReplayOpen] = useState(false);
-  const [powerInfoOpen, setPowerInfoOpen] = useState(false);
   const biome = getBiome(level.biome);
   /** A practice fight has no result: the player simply left */
   const practice = !!level.rules.sandbox;
@@ -99,7 +97,6 @@ const LevelResults: React.FC<Props> = ({
       return first ? isLevelUnlocked(result.save, first) : false;
     }) ?? (won && nextLevel && nextUnlocked && nextLevel.biome !== level.biome ? nextLevel.biome : undefined);
 
-  // The battle's score: damage per minute of fight clock, against the best on this level so far
   const dpm = damagePerMinute(run);
   const newBest = bestDpm !== null && dpm > bestDpm;
   const callout = resolveVictoryCallout({
@@ -116,15 +113,11 @@ const LevelResults: React.FC<Props> = ({
     newBest,
   });
   const title = callout.headline;
-  /** Earned victory performance seal stamped onto the hero crest after the stars lock in */
   const rankSeal = callout.rankSeal;
 
   const reduced = useReducedMotion();
   const revealedFirst = React.useRef(unlocksRevealed);
   useEffect(() => {
-    // Angry Birds–style star sequence: brisk rising swoosh as each giant star launches across
-    // the screen, then heavy stamp thwack + ascending triad chime on the exact landing frame.
-    // Reduced motion shows every star at once: one unified chord, no swoosh.
     if (reduced) {
       if (stars > 0) {
         band.cue('star', { amount: stars });
@@ -156,12 +149,8 @@ const LevelResults: React.FC<Props> = ({
   const totalCoins = result.starCoins + result.coinsBanked + result.bountyCoins;
   const showBank = result.save.coinsUnlocked && totalCoins > 0;
   const coinsCount = showBank && !practice && !reduced;
-  // A bigger payout rolls longer (5 ticks for a handful of coins, 16 at most: 0.7 s)
   const rollAmount = coinRollAmount(totalCoins);
 
-  // The fighter cheers last, when the payout is done (on the coin bell, or after the stars when no
-  // coins count): the leap answers the stars and coins, it never competes with them
-  // (When an unlock reveal is coming, not before it closes: the reveal would cover the leap mid-air.)
   const [cheer, setCheer] = useState(reduced || stars === 0);
   const firstRevealed = React.useRef(unlocksRevealed);
   useEffect(() => {
@@ -171,8 +160,6 @@ const LevelResults: React.FC<Props> = ({
   }, [unlocksRevealed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rollTicks = coinRollTicks(rollAmount);
-  // The payout starts once the player can see it: after the stars, or, when an unlock
-  // reveal covers the screen, just after the last reveal is closed
   const [paying, setPaying] = useState(false);
   const revealedAtStart = React.useRef(unlocksRevealed);
   useEffect(() => {
@@ -190,7 +177,6 @@ const LevelResults: React.FC<Props> = ({
   );
   const companionText = [companionResultsLine(level, run, stars, result.save.coinsUnlocked), diagnostic?.text].filter(Boolean).join(' ');
 
-  // A weapon the player already owned came back as a free level: name the level it reached
   const levelOf = (star: number, name: string) => {
     const u = result.unlocks.find(x => x.kind === 'weapon' && x.star === star && x.level !== undefined && describeUnlock(x).name === name);
     return u ? describeUnlock(u).revealed : null;
@@ -201,22 +187,50 @@ const LevelResults: React.FC<Props> = ({
       return { star: g.star, unlock: levelled ? { ...unlock, revealed: levelled, secret: levelled } : unlock };
     })
   );
-  // Secret paths this result opened: named only once their reveal has played
   const newPaths = result.unlocks.filter(u => u.kind === 'path').map(describeUnlock);
-  /** Rows that turn over when the reveals close (only when there were reveals to close) */
+  const slotUnlocks = result.unlocks.filter(u => u.kind === 'weapon_slot');
+  const newlyUnlockedWeapons = useMemo(
+    () =>
+      result.unlocks
+        .filter((u): u is Extract<typeof u, { kind: 'weapon' }> => u.kind === 'weapon' && u.level === undefined)
+        .map(u => getArmoryWeapon(u.id))
+        .filter((w): w is NonNullable<typeof w> => Boolean(w)),
+    [result.unlocks]
+  );
+  const newlyOpenedBountyTotal = useMemo(
+    () => newlyUnlockedWeapons.reduce((sum, w) => sum + getWeaponBounties(w.id).length, 0),
+    [newlyUnlockedWeapons]
+  );
   const handoffRows = unlocksRevealed && revealedFirst.current ? 0 : starUnlocks.length + newPaths.length;
-  const activeBountyHooks = result.save.bountiesUnlocked && !practice
-    ? BOUNTIES
-        .filter(b => !result.save.completedBounties.includes(b.id) && b.progress(result.save) > 0)
-        .sort((a, b) => b.progress(result.save) / b.target - a.progress(result.save) / a.target)
-        .slice(0, 2)
-    : [];
+
+  // Equipped-weapon prioritized cross-run bounty progress (up to 3 rows)
+  const activeBountyHooks = useMemo(() => {
+    if (!result.save.bountiesUnlocked || practice) return [];
+    const heldIds = new Set(run.weapons.map(w => w.id));
+    return BOUNTIES
+      .filter(
+        b =>
+          isBountyUnlocked(result.save, b) &&
+          !result.save.completedBounties.includes(b.id) &&
+          (b.progress(result.save) > 0 || (b.requiresWeapon !== undefined && heldIds.has(b.requiresWeapon)))
+      )
+      .sort((a, b) => {
+        const aHeld = a.requiresWeapon !== undefined && heldIds.has(a.requiresWeapon) ? 1 : 0;
+        const bHeld = b.requiresWeapon !== undefined && heldIds.has(b.requiresWeapon) ? 1 : 0;
+        if (bHeld !== aHeld) return bHeld - aHeld;
+        const aPct = a.progress(result.save) / a.target;
+        const bPct = b.progress(result.save) / b.target;
+        return bPct - aPct || a.tier - b.tier;
+      })
+      .slice(0, 3);
+  }, [result.save, practice, run.weapons]);
+
   const showNumbers = shouldShowDamageNumbers(level, result.save);
+  const peakBase = Math.round(run.fightMetrics?.maxBaseDamage ?? 0);
   const damageStory = useMemo(() => buildDamageStory(run), [run]);
   const showDamageStory =
     damageStory.totalDamage > 0 &&
     (showNumbers || practice || run.weapons.length > 0 || damageStory.sources.length >= 2);
-  // Start the 3-second battle damage story crescendo cleanly after stars & coins settle
   const storyStartDelayMs = revealedAtStart.current
     ? showBank && !practice
       ? coinStartMs(stars) + rollTicks * COIN_TICK_MS + 260
@@ -241,7 +255,6 @@ const LevelResults: React.FC<Props> = ({
               <View style={[st.heroAccentBar, !won && st.heroAccentDefeat]} />
             </View>
 
-            {/* Top meta bar: level ribbon + stamped Victory Rank Seal */}
             <View style={st.heroTopRow}>
               <View style={st.levelPill}>
                 <Text style={st.levelId} numberOfLines={1}>
@@ -258,7 +271,6 @@ const LevelResults: React.FC<Props> = ({
               )}
             </View>
 
-            {/* Champion Fighter vs Vanquished Foe */}
             <View style={st.matchupRow}>
               <View style={[st.championRing, won && !practice && st.championRingGold]}>
                 <FighterAvatar
@@ -296,7 +308,6 @@ const LevelResults: React.FC<Props> = ({
               </View>
             </View>
 
-            {/* Monumental Gold Victory Title */}
             <Text
               testID="results-title"
               style={[
@@ -310,12 +321,9 @@ const LevelResults: React.FC<Props> = ({
               {title}
             </Text>
 
-            {/* Giant Arched Angry Birds–style SVG Trophy Stars */}
             {!practice && <ResultStars stars={stars} size={65} reduced={reduced} darkSocket />}
 
-            {/* The stars are the shards of the fallen star this foe was holding (data/story.ts) */}
             {!practice && (
-              // The caption of the stars: it would spoil them if it came first
               <FadeAt at={missesShownMs(stars)} reduced={reduced}>
                 <Text style={st.shards} testID="results-shards">
                   {stars >= 3 ? 'All 3 star shards won back!' : stars > 0 ? `${stars} of 3 star shards won back` : 'No shards this time'}
@@ -324,7 +332,6 @@ const LevelResults: React.FC<Props> = ({
             )}
           </View>
 
-          {/* Clean Tactile Paper Body */}
           <View style={st.body}>
           <CompanionBubble
             testID="results-companion-bubble"
@@ -341,7 +348,7 @@ const LevelResults: React.FC<Props> = ({
               small
               variant="primary"
               icon={
-                diagnostic.quickAction.kind === 'arm_recipe'
+                diagnostic.quickAction.kind === 'open_armory'
                   ? 'lorc/crystal-shine'
                   : diagnostic.quickAction.kind === 'open_tree'
                     ? 'lorc/flat-star'
@@ -350,8 +357,8 @@ const LevelResults: React.FC<Props> = ({
               label={diagnostic.quickAction.label}
               onPress={() => {
                 const qa = diagnostic.quickAction!;
-                if (qa.kind === 'arm_recipe' && qa.payload && onArmRecipeAndRetry) {
-                  onArmRecipeAndRetry(qa.payload);
+                if (qa.kind === 'open_armory') {
+                  onCamp('armory');
                 } else if (qa.kind === 'open_tree') {
                   onCamp('fighters');
                 } else if (qa.kind === 'open_workshop') {
@@ -364,7 +371,6 @@ const LevelResults: React.FC<Props> = ({
 
           {!practice && (
             <View style={st.breakdownBox} testID="results-star-breakdown">
-              {/* The goals are there from the start; each ✓ lands just behind its star, the misses once the stars are done */}
               {explainStarBreakdown(level, run, stars).map(row => {
                 const lands = row.earned && row.star <= stars ? starLandMs(row.star - 1) + TICK_LAG_MS : missesShownMs(stars);
                 return (
@@ -386,7 +392,6 @@ const LevelResults: React.FC<Props> = ({
             </View>
           )}
 
-          {/* The payout sits right under the goals, where it is on screen without scrolling */}
           {showBank && (
             <View style={st.bank} testID="results-bank">
               <View style={{ flex: 1, gap: 2 }}>
@@ -397,12 +402,32 @@ const LevelResults: React.FC<Props> = ({
                 {result.coinsBanked > 0 && <Text style={st.bankLine}>Coin drops  +{result.coinsBanked}</Text>}
                 {result.bountyCoins > 0 && <Text style={st.bankLine}>Bounties  +{result.bountyCoins}</Text>}
               </View>
-              {/* Counts up tick for tick with the coinRoll cue, and bumps on its closing bell */}
               <CountingCoinPill total={totalCoins} running={paying} ticks={rollTicks} reduced={reduced || practice} onBell={() => setCheer(true)} />
             </View>
           )}
 
-          {/* What was won, right under the payout so it is on screen: each row turns over once its reveal has played */}
+          {slotUnlocks.map(su => (
+            <View key={su.slotNumber} style={st.slotBanner} testID={`results-slot-unlock-${su.slotNumber}`}>
+              <Icon name="lorc/belt-buckles" size={20} color={INK} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={st.slotBannerTitle} numberOfLines={1}>
+                  {su.slotNumber === 4 ? '4TH' : '5TH'} WEAPON SLOT UNLOCKED!
+                </Text>
+                <Text style={st.slotBannerSub} numberOfLines={2}>
+                  Carry {su.slotNumber} weapons into every fight for deeper Synergies.
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => { sfx('click'); onCamp('armory'); }}
+                style={st.slotBannerBtn}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+              >
+                <Text style={st.slotBannerBtnText}>Armory</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+
           {starUnlocks.length > 0 && (
             <View style={{ gap: 6, alignSelf: 'stretch' }}>
               <Text style={st.section}>UNLOCKED</Text>
@@ -422,7 +447,7 @@ const LevelResults: React.FC<Props> = ({
                       ) : (
                         <Silhouette icon={unlock.icon} size={16} />
                       )}
-                      <Text style={st.rewardText}>{shown ? unlock.revealed : unlock.secret}</Text>
+                      <Text style={st.rewardText} numberOfLines={1}>{shown ? unlock.revealed : unlock.secret}</Text>
                     </>
                   )}
                 />
@@ -464,70 +489,126 @@ const LevelResults: React.FC<Props> = ({
               />
             </View>
           )}
-          {(showNumbers || practice || run.evolutionsTriggered > 0 || run.armedRecipes.length > 0) && <View style={st.statsRow}>
-            {(showNumbers || practice) && <Stat testID="results-sets" icon="lorc/checked-shield" label="Matches" value={`${run.matches}`} />}
-            {(showNumbers || practice) && <Stat testID="results-mistakes" icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />}
-            {run.power > 0 && (showNumbers || practice) && (
-              <Stat
-                testID="results-power"
-                icon="lorc/power-lightning"
-                label="Power reached"
-                value={formatPower(run.power)}
-                hot={powerMultiplier(run.power) >= 5}
-                note={powerInfoOpen ? 'HIDE INFO' : 'TAP TO EXPLAIN'}
-                onPress={() => { sfx('click'); setPowerInfoOpen(v => !v); }}
-              />
-            )}
-            {practice && run.matches > 0 && (
-              <Stat testID="results-per-set" icon="lorc/target-dummy" label="Per Set" value={`${Math.round(run.totalDamage / run.matches)}`} />
-            )}
-            {(run.evolutionsTriggered > 0 || run.armedRecipes.length > 0) && (
-              <Stat testID="results-evolutions" icon="lorc/crystal-shine" label="Evolutions" value={`${run.evolutionsTriggered}`} />
-            )}
-          </View>}
-
-          {powerInfoOpen && run.power > 0 && (showNumbers || practice) && (
-            <PowerExplainer
-              points={run.power}
-              weapons={run.weapons}
-              evolutionsTriggered={run.evolutionsTriggered}
-              subtitle={`Finished the fight at ${formatPower(run.power)}`}
-              compact
-            />
+          {(showNumbers || practice || run.evolutionsTriggered > 0 || run.weaponEvolutions.length > 0) && (
+            <View style={st.statsRow}>
+              {(showNumbers || practice) && <Stat testID="results-sets" icon="lorc/checked-shield" label="Matches" value={`${run.matches}`} />}
+              {(showNumbers || practice) && <Stat testID="results-mistakes" icon="lorc/cross-mark" label="Mistakes" value={`${run.mistakes}`} />}
+              {peakBase > 0 && (showNumbers || practice) && (
+                <Stat testID="results-peak-base" icon="lorc/fist" label="Peak base" value={`${peakBase}`} hot={peakBase >= 20} />
+              )}
+              {practice && run.matches > 0 && (
+                <Stat testID="results-per-set" icon="lorc/target-dummy" label="Per Set" value={`${Math.round(run.totalDamage / run.matches)}`} />
+              )}
+              {(run.evolutionsTriggered > 0 || run.weaponEvolutions.length > 0) && (
+                <Stat
+                  testID="results-evolutions"
+                  icon="lorc/crystal-shine"
+                  label="Evolutions"
+                  value={`${run.evolutionsTriggered}`}
+                  hot={run.evolutionsTriggered >= 2}
+                />
+              )}
+            </View>
           )}
 
           {showDamageStory && (
             <BattleDamageStory
               story={damageStory}
               weaponBuilds={run.weaponBuilds}
+              equippedEvolutions={run.equippedEvolutions}
               startDelayMs={storyStartDelayMs}
               active={unlocksRevealed}
               reduced={reduced}
             />
           )}
 
-
           {result.completedBounties.length > 0 && (
-            <View style={st.bountyDoneBox}>
+            <View style={st.bountyDoneBox} testID="results-bounties-completed">
               <Text style={st.section}>BOUNTIES COMPLETED</Text>
-              {result.completedBounties.map(b => (
-                <View key={b.id} style={st.bountyDoneRow}>
-                  <Icon name={b.icon} size={18} color={COLORS.actionYellow} />
-                  <Text style={st.rewardText}>{b.name}</Text>
-                  <Text style={st.bountyCoinTag}>+{b.reward.coins}¢</Text>
-                </View>
-              ))}
+              {result.completedBounties.map(b => {
+                const reqW = b.requiresWeapon ? getArmoryWeapon(b.requiresWeapon) : undefined;
+                const rewardW = b.rewardWeaponId ? getArmoryWeapon(b.rewardWeaponId) : undefined;
+                const rewardEvo = b.rewardEvolutionId ? getWeaponEvolution(b.rewardEvolutionId) : undefined;
+                const evoParentW = rewardEvo ? getArmoryWeapon(rewardEvo.weaponId) : undefined;
+                const rewardArc = b.rewardArcanaId ? getArcana(b.rewardArcanaId) : undefined;
+                return (
+                  <View key={b.id} style={st.bountyDoneCard}>
+                    <View style={st.bountyDoneRow}>
+                      {reqW ? (
+                        <WeaponAvatar weapon={reqW} size={22} />
+                      ) : (
+                        <Icon name={b.icon} size={18} color={COLORS.actionYellow} />
+                      )}
+                      <Text style={st.rewardText} numberOfLines={1}>{b.name}</Text>
+                      <Text style={st.bountyCoinTag}>+{b.reward.coins}¢</Text>
+                    </View>
+                    {(rewardW || rewardEvo || rewardArc) && (
+                      <View style={st.bountyRewardPills}>
+                        {rewardW && (
+                          <View style={st.bountyWeaponPill}>
+                            <Icon name="lorc/gems" size={11} color={INK} />
+                            <Text style={st.bountyWeaponPillText} numberOfLines={1}>
+                              NEW WEAPON: {rewardW.name}
+                            </Text>
+                          </View>
+                        )}
+                        {rewardEvo && (
+                          <View style={st.bountyEvoPill}>
+                            <Icon name="lorc/crystal-shine" size={11} color="#F3E8FF" />
+                            <Text style={st.bountyEvoPillText} numberOfLines={1}>
+                              NEW EVO: {rewardEvo.name}{evoParentW ? ` (${evoParentW.name})` : ''}
+                            </Text>
+                          </View>
+                        )}
+                        {rewardArc && (
+                          <View style={st.bountyEvoPill}>
+                            <Icon name="lorc/crystal-wand" size={11} color="#F3E8FF" />
+                            <Text style={st.bountyEvoPillText} numberOfLines={1}>
+                              ARCANA: {rewardArc.name}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           )}
 
-          {activeBountyHooks.length > 0 && result.completedBounties.length === 0 && (
-            <View style={st.bountyHookBox}>
+          {result.save.bountiesUnlocked && newlyOpenedBountyTotal > 0 && !practice && (
+            <TouchableOpacity
+              testID="results-new-bounties-banner"
+              onPress={() => { sfx('click'); onCamp('bounties'); }}
+              style={st.newBountiesBanner}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+            >
+              <Icon name="lorc/trophy" size={18} color={COLORS.canvasWhite} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={st.newBountiesTitle} numberOfLines={1}>
+                  +{newlyOpenedBountyTotal} new Bounties opened for {newlyUnlockedWeapons.map(w => w.name).join(', ')}!
+                </Text>
+                <Text style={st.newBountiesSub} numberOfLines={1}>
+                  Tap to view in Camp Bounties
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {activeBountyHooks.length > 0 && (
+            <View style={st.bountyHookBox} testID="results-bounty-progress">
               <Text style={st.bountyHookHeader}>CROSS-RUN BOUNTY PROGRESS</Text>
               {activeBountyHooks.map(b => {
                 const cur = Math.min(b.target, b.progress(result.save));
+                const reqW = b.requiresWeapon ? getArmoryWeapon(b.requiresWeapon) : undefined;
                 return (
                   <View key={b.id} style={st.bountyHookRow}>
-                    <Icon name={b.icon} size={14} color={INK} />
+                    {reqW ? (
+                      <WeaponAvatar weapon={reqW} size={18} />
+                    ) : (
+                      <Icon name={b.icon} size={14} color={INK} />
+                    )}
                     <Text style={st.bountyHookName} numberOfLines={1}>{b.name}</Text>
                     <Text style={st.bountyHookFrac}>{cur}/{b.target}</Text>
                   </View>
@@ -586,7 +667,6 @@ const LevelResults: React.FC<Props> = ({
         </ResultsCard>
       </ScrollView>
 
-      {/* What next: always in reach, never below the fold */}
       <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 12) }]} testID="results-actions">
         {canGoOn && nextLevel && nextFoe ? (
           <TouchableOpacity testID="results-next" onPress={onNext} activeOpacity={0.85} style={st.nextBtn} accessibilityRole="button" accessibilityLabel={`Next: ${nextLevel.id} ${nextLevel.name}, against ${nextFoe.name}`}>
@@ -670,28 +750,10 @@ const st = StyleSheet.create({
     borderTopRightRadius: 14,
     overflow: 'hidden',
   },
-  heroBgDefeat: {
-    backgroundColor: '#25191A',
-  },
-  heroAccentBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 4,
-    backgroundColor: '#F5B800',
-  },
-  heroAccentDefeat: {
-    backgroundColor: COLORS.impactRed,
-  },
-  heroTopRow: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    minWidth: 0,
-  },
+  heroBgDefeat: { backgroundColor: '#25191A' },
+  heroAccentBar: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 4, backgroundColor: '#F5B800' },
+  heroAccentDefeat: { backgroundColor: COLORS.impactRed },
+  heroTopRow: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 },
   levelPill: {
     flexShrink: 1,
     minWidth: 0,
@@ -703,39 +765,12 @@ const st = StyleSheet.create({
     paddingVertical: 3,
   },
   levelId: { fontWeight: '900', letterSpacing: 1.2, fontSize: 11, color: '#F5EFE6', flexShrink: 1 },
-  matchupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 2,
-  },
-  championRing: {
-    borderRadius: 16,
-    padding: 2,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 253, 245, 0.25)',
-  },
-  championRingGold: {
-    borderColor: '#F5B800',
-    backgroundColor: 'rgba(255, 222, 0, 0.12)',
-  },
-  vsBadge: {
-    fontWeight: '900',
-    fontSize: 12,
-    letterSpacing: 1.5,
-    color: '#D6CFC5',
-    opacity: 0.8,
-  },
-  foeWrap: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  foeBeaten: {
-    opacity: 0.72,
-    transform: [{ rotate: '6deg' }],
-  },
+  matchupRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 2 },
+  championRing: { borderRadius: 16, padding: 2, borderWidth: 2, borderColor: 'rgba(255, 253, 245, 0.25)' },
+  championRingGold: { borderColor: '#F5B800', backgroundColor: 'rgba(255, 222, 0, 0.12)' },
+  vsBadge: { fontWeight: '900', fontSize: 12, letterSpacing: 1.5, color: '#D6CFC5', opacity: 0.8 },
+  foeWrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  foeBeaten: { opacity: 0.72, transform: [{ rotate: '6deg' }] },
   koTag: {
     position: 'absolute',
     bottom: -5,
@@ -748,12 +783,7 @@ const st = StyleSheet.create({
     paddingVertical: 1,
     transform: [{ rotate: '-6deg' }],
   },
-  koTagText: {
-    color: COLORS.canvasWhite,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
+  koTagText: { color: COLORS.canvasWhite, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   title: {
     fontWeight: '900',
     fontSize: 28,
@@ -764,19 +794,9 @@ const st = StyleSheet.create({
     textAlign: 'center',
     marginTop: 0,
   },
-  titleCompact: {
-    fontSize: 22,
-    letterSpacing: 1.5,
-  },
-  titleDefeat: {
-    color: '#FF7B73',
-  },
-  body: {
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    alignItems: 'center',
-    gap: 7,
-  },
+  titleCompact: { fontSize: 22, letterSpacing: 1.5 },
+  titleDefeat: { color: '#FF7B73' },
+  body: { paddingHorizontal: 12, paddingVertical: 9, alignItems: 'center', gap: 7 },
   sub: { textAlign: 'center', color: INK, fontSize: 14 },
   breakdownBox: { alignSelf: 'stretch', gap: 4, backgroundColor: '#FAF7F0', borderRadius: 10, borderWidth: 1.5, borderColor: INK, padding: 7 },
   breakdownRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0, gap: 6, paddingVertical: 2.5, paddingHorizontal: 6, borderRadius: 6 },
@@ -801,35 +821,87 @@ const st = StyleSheet.create({
   bank: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: TONE.coinPale, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 6 },
   bankLabel: { fontWeight: '900', color: INK },
   bankLine: { fontSize: 12, color: INK, opacity: 0.8, fontVariant: ['tabular-nums'] },
+  slotBanner: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: INK,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  slotBannerTitle: { fontWeight: '900', fontSize: 12.5, letterSpacing: 0.8, color: INK, flexShrink: 1 },
+  slotBannerSub: { fontSize: 11.5, fontWeight: '700', color: INK, opacity: 0.85, flexShrink: 1 },
+  slotBannerBtn: {
+    backgroundColor: COLORS.deepOnyx,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexShrink: 0,
+  },
+  slotBannerBtnText: { color: COLORS.actionYellow, fontWeight: '900', fontSize: 11, letterSpacing: 0.5 },
   section: { fontWeight: '900', letterSpacing: 2, fontSize: 12, color: INK },
   reward: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 8 },
-  rewardText: { flex: 1, fontWeight: '900', color: COLORS.actionYellow, fontSize: 14 },
+  rewardText: { flex: 1, flexShrink: 1, fontWeight: '900', color: COLORS.actionYellow, fontSize: 14 },
   bountyDoneBox: { alignSelf: 'stretch', gap: 6 },
-  bountyDoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 8 },
-  bountyCoinTag: { fontWeight: '900', color: '#FDE68A', fontSize: 12 },
-  bountyHookBox: { alignSelf: 'stretch', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 8, gap: 4 },
+  bountyDoneCard: { backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 8, gap: 6 },
+  bountyDoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  bountyCoinTag: { fontWeight: '900', color: '#FDE68A', fontSize: 12, flexShrink: 0 },
+  bountyRewardPills: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  bountyWeaponPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.actionYellow,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    maxWidth: '100%',
+  },
+  bountyWeaponPillText: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: INK },
+  bountyEvoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#6D28D9',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    maxWidth: '100%',
+  },
+  bountyEvoPillText: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: '#F3E8FF' },
+  newBountiesBanner: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.tealSurface,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: INK,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  newBountiesTitle: { flexShrink: 1, fontSize: 12, fontWeight: '900', color: COLORS.canvasWhite },
+  newBountiesSub: { flexShrink: 1, fontSize: 10.5, fontWeight: '700', color: '#CCFBF1' },
+  bountyHookBox: { alignSelf: 'stretch', backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 10, paddingVertical: 8, gap: 5 },
   bountyHookHeader: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5, color: INK, opacity: 0.7 },
-  bountyHookRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  bountyHookName: { flex: 1, fontSize: 12, fontWeight: '800', color: INK },
-  bountyHookFrac: { fontSize: 12, fontWeight: '900', color: TONE.upside, fontVariant: ['tabular-nums'] },
+  bountyHookRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  bountyHookName: { flex: 1, flexShrink: 1, fontSize: 12, fontWeight: '800', color: INK },
+  bountyHookFrac: { fontSize: 12, fontWeight: '900', color: TONE.upside, fontVariant: ['tabular-nums'], flexShrink: 0 },
   biomeOpen: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: INK, borderRadius: 8, padding: 10 },
   biomeOpenText: { flex: 1, flexShrink: 1, color: COLORS.canvasWhite, fontWeight: '800' },
   bossClear: { flexDirection: 'row', alignItems: 'center', gap: 10, alignSelf: 'stretch', backgroundColor: COLORS.actionYellow, borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 10 },
   bossClearTitle: { fontWeight: '900', fontSize: 13, letterSpacing: 1, color: INK, flexShrink: 1 },
   bossClearSub: { fontSize: 12, fontWeight: '700', color: INK, flexShrink: 1 },
-  endingBtn: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    backgroundColor: COLORS.deepOnyx,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
+  endingBtn: { alignSelf: 'flex-start', marginTop: 4, backgroundColor: COLORS.deepOnyx, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 5 },
   endingBtnText: { color: COLORS.actionYellow, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
   pathFound: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.deepOnyx, borderRadius: 8, padding: 10 },
   pathFoundTitle: { color: COLORS.actionYellow, fontWeight: '900', letterSpacing: 2, fontSize: 11 },
   pathFoundText: { color: COLORS.canvasWhite, fontWeight: '700', fontSize: 13 },
-  tip: { fontSize: 13, color: INK, fontStyle: 'italic', textAlign: 'center', opacity: 0.85 },
   shards: { fontSize: 12, fontWeight: '800', color: '#E9DFD2', opacity: 0.9, marginTop: -2 },
   footer: { backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderTopColor: INK, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12, gap: 8, alignItems: 'center' },
   footerRow: { flexDirection: 'row', gap: 8, alignSelf: 'stretch', maxWidth: 440, width: '100%' },

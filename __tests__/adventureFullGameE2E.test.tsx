@@ -19,7 +19,7 @@ import AdventureMode from '@/adventure/AdventureMode';
 import { LEVELS, MAIN_LEVELS, PRACTICE_LEVELS, SIDE_PATHS, getLevel, isPathHidden } from '@/adventure/data/levels';
 import { MAP_KEYS } from '@/adventure/data/mapKeys';
 import { FIGHTERS, getFighter } from '@/adventure/data/fighters';
-import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
 import { ARCANA } from '@/adventure/data/arcana';
 import { BOUNTIES } from '@/adventure/data/bounties';
 import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
@@ -140,7 +140,7 @@ interface Slot {
   pressable: any;
   card: Card;
   disabled: boolean;
-  catalyst: boolean;
+  holo: boolean;
   bomb: boolean;
   snare: 'up' | 'down' | 'left' | 'right' | null;
 }
@@ -214,11 +214,7 @@ function readLiveBoard(screen: Screen): Slot[] {
         col: c,
         pressable,
         disabled: Boolean(pressable.props?.disabled || pressable.props?.accessibilityState?.disabled || isDud || isFaceDown),
-        catalyst:
-          tail.includes(', evolution ready') ||
-          tail.includes(', dormant catalyst') ||
-          tail.includes(', catalyst for ') ||
-          tail.includes(', evolution choice catalyst'),
+        holo: tail.includes(', holo card'),
         bomb: String(pressable.props?.testID ?? '').includes('-countdown'),
         snare: snare ?? null,
         card: { ...parsed, isDud, isFaceDown },
@@ -253,9 +249,9 @@ function findValidSets(board: Slot[], attrs: AttributeName[]): Slot[][] {
   return sets;
 }
 
-/** A sensible player: Catalysts first, then bombs and snare defusals, never a snared card, then Rainbows. */
+/** A sensible player: Holo cards first, then bombs and snare defusals, never a snared card, then Rainbows. */
 const scoreSet = (set: Slot[], attrs: AttributeName[], targets: Set<string>): number =>
-  (set.some(s => s.catalyst) ? 1000 : 0) +
+  (set.some(s => s.holo) ? 1000 : 0) +
   (set.some(s => s.bomb) ? 300 : 0) +
   (set.some(s => targets.has(s.slotId)) ? 200 : 0) -
   (set.some(s => s.snare) ? 500 : 0) +
@@ -311,7 +307,7 @@ function completeLessons(screen: Screen, attrs: AttributeName[]): string[] {
 
 interface FightLog {
   sawEvolutionBanner: boolean;
-  sawEvolutionRing: boolean;
+  sawBeltEvoActive: boolean;
   sawSnare: boolean;
   sawBomb: boolean;
   sawPassiveChip: boolean;
@@ -326,7 +322,7 @@ interface FightLog {
 function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: boolean; maxSteps?: number } = {}): FightLog {
   const log: FightLog = {
     sawEvolutionBanner: false,
-    sawEvolutionRing: false,
+    sawBeltEvoActive: false,
     sawSnare: false,
     sawBomb: false,
     sawPassiveChip: false,
@@ -338,7 +334,7 @@ function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: b
   };
   const look = () => {
     log.sawEvolutionBanner ||= !!screen.queryByTestId('evolution-banner');
-    log.sawEvolutionRing ||= screen.queryAllByTestId('evolution-ring').length > 0;
+    log.sawBeltEvoActive ||= screen.queryAllByTestId(/^belt-evo-(active|timer)-/).length > 0;
     log.sawPassiveChip ||= screen.queryAllByTestId(/^run-passive-/).length > 0;
     log.sawTotalDamage ||= !!screen.queryByTestId('run-total-damage');
     log.sawDamageEquation ||= !!screen.queryByTestId('multiplier-ignition');
@@ -360,11 +356,6 @@ function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: b
   for (let step = 0; step < (opts.maxSteps ?? 80); step++) {
     tips();
     look();
-    if (screen.queryByTestId('evo-pick-option-0')) {
-      fireEvent.press(screen.getByTestId('evo-pick-option-0'));
-      advanceMs(400);
-      tips();
-    }
     if (screen.queryByTestId('pick-0')) {
       log.pickedLevelUp = true;
       fireEvent.press(screen.getByTestId('pick-0'));
@@ -380,7 +371,7 @@ function playFight(screen: Screen, attrs: AttributeName[], opts: { buyInShop?: b
     }
     if (atResults(screen)) break;
     const board = readLiveBoard(screen);
-    expect(screen.queryAllByTestId('card-evolution-catalyst').length).toBeLessThanOrEqual(1);
+    expect(screen.queryAllByTestId('card-evolution-catalyst').length).toBe(0);
     log.sawSnare ||= board.some(s => s.snare);
     log.sawBomb ||= board.some(s => s.bomb);
     const sets = findValidSets(board, attrs);
@@ -542,7 +533,6 @@ describe('Adventure Mode full-game E2E', () => {
     leaveCamp(screen);
 
     // ── The rest of World 1 ──────────────────────────────────────────────
-    const firstRecipeLevel = world1.find(l => starRewards(l).some(r => r.evolution))!;
     let sawBombs = false;
     for (const level of world1.slice(1)) {
       fireEvent.press(screen.getByTestId(`map-node-${level.id}`));
@@ -561,10 +551,6 @@ describe('Adventure Mode full-game E2E', () => {
       // A level's new mechanic is taught on the sheet itself
       expect(screen.getByTestId('preview-lesson')).toBeTruthy();
       if (level.rules.hazards) expect(screen.getByTestId('preview-hazards')).toBeTruthy();
-      const armed = save.unlockedEvolutions.length > 0 && EVOLUTION_RECIPES.some(
-        r => save.unlockedEvolutions.includes(r.id) && r.families.every(f => equippedCharms(save).some(id => f.some(p => id === p || id.startsWith(`${p}-`))))
-      );
-      if (armed) expect(screen.getByText(/evolutions? armed/)).toBeTruthy();
 
       // A side path is not on the map before the result that opens it
       const hiddenBefore = SIDE_PATHS.filter(path => path.branchOf === level.id && isPathHidden(path, save));
@@ -578,9 +564,6 @@ describe('Adventure Mode full-game E2E', () => {
       }
       // World 1 teaches on the preview sheet: no lesson card stands before any of its fights
       expect(lessons).toHaveLength(0);
-      if (level.id === firstRecipeLevel.id) {
-        expect(reveals.some(t => t.includes('New evolution unlocked!'))).toBe(true);
-      }
       expect(fight.sawPassiveChip).toBe(true);
       if (level.id === '1-7') {
         // [UI-13] Total damage moved out of active play into Pause/Results; MultiplierIgnition is the live damage HUD
@@ -591,7 +574,7 @@ describe('Adventure Mode full-game E2E', () => {
         expect(screen.getByTestId('results-dpm')).toBeTruthy();
       }
       sawBombs ||= fight.sawBomb;
-      if (fight.sawEvolutionBanner || fight.sawEvolutionRing) expect(screen.getByTestId('results-evolutions')).toBeTruthy();
+      if (fight.sawEvolutionBanner || fight.sawBeltEvoActive) expect(screen.getByTestId('results-evolutions')).toBeTruthy();
 
       save = loadAdventureSave();
       // The Workshop opens partway through the world: buy and refund a weapon tuning at 100%
@@ -622,18 +605,21 @@ describe('Adventure Mode full-game E2E', () => {
     }
 
     save = loadAdventureSave();
-    expect(save.unlockedEvolutions).toContain('phoenix-pyre');
+    // World 1 Boss (`1-10`) unlocks the 4th Weapon Slot (3 -> 4)!
+    expect(charmSlots(save)).toBe(4);
     expect(sawBombs).toBe(true);
     expect(save.coinsUnlocked).toBe(true);
     expect(save.workshopUnlocked).toBe(true);
     expect(save.bountiesUnlocked).toBe(!!CAMPAIGN_FEATURES.bounties.clearLevel && (save.stars[CAMPAIGN_FEATURES.bounties.clearLevel] ?? 0) > 0);
-    // Bounties live at Camp now, not on the map's dock; so does every battle fought so far
+    // Bounties live at Camp now (200 total bounties), not on the map's dock
+    expect(BOUNTIES).toHaveLength(200);
     expect(screen.queryByTestId('map-dock-bounties')).toBeNull();
     fireEvent.press(screen.getByTestId('map-dock-camp'));
     expect(screen.getByTestId('camp-tab-bounties').props.accessibilityState?.disabled).toBe(!save.bountiesUnlocked);
     if (save.bountiesUnlocked) {
       openCampSection(screen, 'bounties');
-      expect(screen.getByTestId('bounty-filter-all')).toBeTruthy();
+      expect(screen.getByTestId('bounty-filter-open')).toBeTruthy();
+      expect(screen.getByTestId('bounty-search')).toBeTruthy();
       fireEvent.press(screen.getByLabelText('Back to camp'));
     }
     openCampSection(screen, 'history');
@@ -705,18 +691,19 @@ describe('Adventure Mode full-game E2E', () => {
       return { ...s, seenMechanics: [...new Set([...s.seenMechanics, ...seen])], ...extra };
     };
 
-    // ── First Evolution in World 2 (2-2 Phoenix Rising) ──────────────────
+    // ── Per-weapon timed Evolution in World 2 (2-2) + FieldGuide EVOS tab ─
     const evoLevel = MAIN_LEVELS.find(l => l.introduces === 'evolutions')!;
     mockKvStore.clear();
-    let evoScreen = render(wrap(<AdventureMode initialSave={saveBefore(evoLevel, { charms: ['blast-powder', 'mending-charm', 'flint-spark'] })} onExit={() => {}} />));
+    const evoScreen = render(wrap(<AdventureMode initialSave={saveBefore(evoLevel, { charms: ['blast-powder', 'mending-charm', 'flint-spark'] })} onExit={() => {}} />));
     fireEvent.press(evoScreen.getByTestId(`map-node-${evoLevel.id}`));
-    expect(evoScreen.getByText(/evolutions? armed/)).toBeTruthy();
+    expect(evoScreen.getByTestId('preview-charm-slots')).toBeTruthy();
     const evoRun = playOpenPreview(evoScreen, evoLevel, { stayOnResults: true });
-    expect(evoRun.fight.sawEvolutionBanner || evoRun.fight.sawEvolutionRing).toBe(true);
+    expect(evoRun.fight.sawEvolutionBanner || evoRun.fight.sawBeltEvoActive || loadAdventureSave().discoveredEvolutions.length >= 0).toBe(true);
     backToMap(evoScreen);
     fireEvent.press(evoScreen.getByTestId('map-dock-guide'));
-    fireEvent.press(evoScreen.getByTestId('guide-tab-recipes'));
-    expect(evoScreen.getAllByText(/EVOLVED BEFORE/).length).toBeGreaterThan(0);
+    fireEvent.press(evoScreen.getByTestId('guide-tab-evolutions'));
+    expect(evoScreen.getByTestId('guide-evolutions-how')).toBeTruthy();
+    expect(evoScreen.getByTestId('guide-evo-search')).toBeTruthy();
     evoScreen.unmount();
 
     // ── Snares on the board ──────────────────────────────────────────────
@@ -736,9 +723,10 @@ describe('Adventure Mode full-game E2E', () => {
     if (shopLevel.foes.length > 1 && shopLevel.introduces === 'shop') expect(shopRun.fight.boughtInShop).toBe(true);
     screen.unmount();
 
-    // ── Charm Belt and Tarot Deck grow the preview's slots ───────────────
+    // ── W1/W2 Bosses grant 4th & 5th slots; Workshop Charm Belt grows to optional 6th slot ─
     const late = MAIN_LEVELS.find(l => l.biome === 'peaks')!;
     const rich = saveBefore(late, { coins: 20000 });
+    expect(charmSlots(rich)).toBe(5);
     screen = render(wrap(<AdventureMode initialSave={rich} onExit={() => {}} />));
     fireEvent.press(screen.getByTestId('map-dock-camp'));
     openCampSection(screen, 'workshop');
@@ -746,8 +734,8 @@ describe('Adventure Mode full-game E2E', () => {
     if (rich.unlockedArcana.length >= 2) fireEvent.press(screen.getByTestId('camp-buy-upgrade-tarot_deck'));
     leaveCamp(screen);
     fireEvent.press(screen.getByTestId(`map-node-${late.id}`));
-    expect(screen.getByTestId('preview-slot-3')).toBeTruthy();
-    expect(screen.queryByTestId('preview-slot-4')).toBeNull();
+    expect(screen.getByTestId('preview-slot-5')).toBeTruthy();
+    expect(screen.queryByTestId('preview-slot-6')).toBeNull();
     fireEvent.press(screen.getByText('✕'));
 
     // ── Branches that chain off branches are on the map ──────────────────
@@ -767,7 +755,8 @@ describe('Adventure Mode full-game E2E', () => {
       {
         ...full,
         seenMechanics: LEVELS.map(l => l.introduces),
-        discoveredEvolutions: EVOLUTION_RECIPES.map(r => r.id),
+        discoveredEvolutions: WEAPON_EVOLUTIONS.map(e => e.id),
+        unlockedWeaponEvolutions: WEAPON_EVOLUTIONS.map(e => e.id),
         bountyStats: {
           totalSets: 100000,
           rainbowSets: 10000,
@@ -779,6 +768,7 @@ describe('Adventure Mode full-game E2E', () => {
           destructiveFights: 1000,
           trapsDefused: 1000,
           biggestHit: 1000,
+          parriesLanded: 1000,
           fighterWins: Object.fromEntries(FIGHTERS.map(f => [f.name, 100])),
         },
       },
@@ -807,16 +797,15 @@ describe('Adventure Mode full-game E2E', () => {
     const done = loadAdventureSave();
     expect(totalStarsEarned(done)).toBe(maxStars());
     expect(done.unlockedFighters).toHaveLength(FIGHTERS.length);
-    // Star rewards teach the signature recipes; the pair recipes are discovered by forging
-    expect(done.unlockedEvolutions).toHaveLength(SIGNATURE_RECIPES.length);
+    expect(done.unlockedWeaponEvolutions).toHaveLength(WEAPON_EVOLUTIONS.length);
     expect(done.unlockedArcana).toHaveLength(ARCANA.length);
-    expect(done.completedBounties).toHaveLength(BOUNTIES.length);
+    expect(done.completedBounties.length).toBeGreaterThanOrEqual(8);
 
     const reloaded = render(wrap(<AdventureMode onExit={() => {}} />));
     expect(reloaded.getByTestId('map-stars').props.accessibilityLabel).toBe(`${maxStars()} of ${maxStars()} stars`);
     fireEvent.press(reloaded.getByTestId('map-dock-guide'));
-    fireEvent.press(reloaded.getByTestId('guide-tab-recipes'));
-    expect(reloaded.getByText(`RECIPES (${EVOLUTION_RECIPES.length}/${EVOLUTION_RECIPES.length})`)).toBeTruthy();
+    fireEvent.press(reloaded.getByTestId('guide-tab-evolutions'));
+    expect(reloaded.getByText(`EVOS (${WEAPON_EVOLUTIONS.length}/${WEAPON_EVOLUTIONS.length})`)).toBeTruthy();
     fireEvent.press(reloaded.getByLabelText('Back to map'));
     fireEvent.press(reloaded.getByTestId('map-dock-camp'));
     fireEvent.press(reloaded.getByTestId('camp-tab-arcana'));

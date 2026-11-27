@@ -32,11 +32,21 @@ import { COLORS } from '@/utils/colors';
 import { cascadeDelay, EASE, MS, SCALE, SPRING, STAGGER } from '@/utils/motion';
 import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import { arcanaRules, getArcana } from '../data/arcana';
+import { getWeaponEvolution } from '../data/evolutions';
 import { PARRY_RULES } from '../data/parry';
 import { BASE_RULES, SURGE_RULES } from '../data/rules';
+import { evaluateWeaponSynergyDamage } from '../data/synergy';
 import { growthModifiers } from '../data/weaponGrowth';
-import { damageMultiplier } from '../data/weaponPower';
-import { EVOLUTION_RULES, getRecipe, getSkillNode, liveRules, liveSources } from '../engine/sources';
+import { synergyCtxOf } from '../engine/fight';
+import {
+  EVOLUTION_CHASSIS,
+  activeWeaponEvolutions,
+  effectiveWeaponIdAt,
+  effectiveWeaponLevelAt,
+  getSkillNode,
+  liveRules,
+  liveSources,
+} from '../engine/sources';
 import { PASSIVE_TUNING } from '../data/passives';
 import type { Condition, Scale, Trigger } from '../rules/types';
 import type { RunState, SetIgnition } from '../types';
@@ -110,7 +120,9 @@ const shortLabel = (label: string): string => {
   if (lower.includes('perfect parry')) return 'Perfect Parry';
   if (lower.includes('counter parry')) return 'Parry';
   if (lower.includes('stagger')) return 'Stagger';
-  if (lower.includes('active evolution')) return 'Evolved';
+  if (lower.includes('holo')) return 'Holo';
+  if (lower.includes('synergy')) return 'Synergy';
+  if (lower.includes('active evolution') || lower.includes('evolved')) return 'Evolved';
   if (lower.includes('hot streak')) return 'Hot Streak';
   if (lower.includes('next-set')) return 'Charged';
   if (lower.includes('surge')) return 'Surge';
@@ -150,6 +162,8 @@ export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
     }
   }
 
+  let sawHolo = false;
+  let sawEvo = false;
   for (let i = 0; i < (m.multItems?.length ?? 0); i++) {
     const item = m.multItems![i];
     if (Math.abs(item.amount - 1) < 0.01) continue;
@@ -158,22 +172,26 @@ export const buildIgnitionPlan = (ignition: SetIgnition): IgnitionPlan => {
     let bg = '#EA580C';
     let color = '#FFFFFF';
     if (lower.includes('surge')) { short = 'SURGE'; bg = '#DB2777'; }
+    else if (lower.includes('holo')) { short = 'HOLO'; bg = '#7C3AED'; sawHolo = true; }
     else if (lower.includes('rainbow')) { short = 'RAINBOW'; bg = '#D97706'; }
     else if (lower.includes('perfect parry')) { short = 'PERFECT PARRY'; bg = COLORS.actionYellow; color = INK; }
     else if (lower.includes('parry')) { short = 'PARRY'; bg = '#0F766E'; }
     else if (lower.includes('stagger')) { short = 'STAGGER'; bg = '#0D9488'; }
-    else if (lower.includes('evolution')) { short = 'EVOLVED'; bg = '#C2410C'; }
+    else if (lower.includes('evolution') || lower.includes('evolved')) { short = 'EVOLVED'; bg = '#C2410C'; sawEvo = true; }
     else if (lower.includes('hot streak')) { short = 'STREAK'; bg = '#EA580C'; }
     else if (lower.length > 12) short = item.label.slice(0, 10).toUpperCase();
     steps.push({ key: `m-${i}`, label: short, value: `×${fmt(item.amount)}`, color, bg, kind: 'mult' });
   }
 
-  if (m.extra > 0) {
-    steps.push({ key: 'extra', label: 'BONUS', value: `+${fmt(m.extra)}`, color: '#FFFFFF', bg: '#0D9488', kind: 'extra' });
+  if (!sawHolo && m.holoMultiplier && m.holoMultiplier > 1.01) {
+    steps.push({ key: 'holo', label: 'HOLO', value: `×${fmt(m.holoMultiplier)}`, color: '#FFFFFF', bg: '#7C3AED', kind: 'mult' });
+  }
+  if (!sawEvo && m.activeEvoMultiplier && m.activeEvoMultiplier > 1.01) {
+    steps.push({ key: 'evo', label: 'EVOLVED', value: `×${fmt(m.activeEvoMultiplier)}`, color: '#FFFFFF', bg: '#C2410C', kind: 'mult' });
   }
 
-  if (m.powerMultiplier && m.powerMultiplier > 1.04) {
-    steps.push({ key: 'power', label: 'POWER', value: `×${fmt(m.powerMultiplier)}`, color: '#FFFFFF', bg: '#DC2626', kind: 'mult' });
+  if (m.extra > 0) {
+    steps.push({ key: 'extra', label: 'BONUS', value: `+${fmt(m.extra)}`, color: '#FFFFFF', bg: '#0D9488', kind: 'extra' });
   }
 
   const total = Math.round(ignition.turnDamage ?? m.hit);
@@ -193,18 +211,17 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
   // legacy saved logs applied surgeMultiplier only to cards + collateral before flatBonus.
   const surgeInMult = (m.multItems ?? []).some(it => it.label.toLowerCase().includes('surge'));
   const legacyPreSurge = !surgeInMult && surge > 1 ? surge : 1;
-  const power = m.powerMultiplier && m.powerMultiplier > 1.01 ? m.powerMultiplier : 1;
 
   const steps: TallyStep[] = [];
   let base = m.cards * legacyPreSurge;
   let mult = 1;
   let bonus = 0;
 
-  // 1. Opening Set Cards (including Power/Charged card points, or legacy pre-flat Surge)
+  // 1. Opening Set Cards (including Power/Charged/Holo card points, or legacy pre-flat Surge)
   const cardLabel = legacyPreSurge > 1
     ? `Cards ${fmt(m.cards)} ×${fmt(legacyPreSurge)} Surge`
     : (m.cardBonus ?? 0) > 0
-      ? `Cards ${m.baseCards ?? 3} (+${fmt(m.cardBonus!)})`
+      ? `Cards ${m.baseCards ?? (m.cardCount ?? 3) * BASE_RULES.cardBasePoints} (+${fmt(m.cardBonus!)})`
       : `${m.cardCount ?? 3} Cards`;
   steps.push({
     key: 'cards',
@@ -272,10 +289,15 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
     });
   }
 
-  // 4. Every itemized multiplier (Rainbow, Evolved, Parry, Stagger, Hot Streak, Arcana, etc.)
+  // 4. Every itemized multiplier (Holo, Active Evolution, Rainbow, Parry, Stagger, Hot Streak, Arcana, etc.)
+  let sawHoloMult = false;
+  let sawEvoMult = false;
   for (let i = 0; i < (m.multItems?.length ?? 0); i++) {
     const item = m.multItems![i];
     if (Math.abs(item.amount - 1) < 0.01) continue;
+    const lower = item.label.toLowerCase();
+    if (lower.includes('holo')) sawHoloMult = true;
+    if (lower.includes('evolution') || lower.includes('evolved')) sawEvoMult = true;
     mult *= item.amount;
     steps.push({
       key: `mult-${i}`,
@@ -289,32 +311,44 @@ export const buildBalatroBreakdown = (ignition: SetIgnition): BalatroBreakdown =
     });
   }
 
-  // 5. Fight Power multiplier (applies to the Set hit & extras)
-  if (power > 1.01) {
-    mult *= power;
-    const pts = Math.round((m.powerPoints ?? 0) * 100) / 100;
+  // Fallback for direct holoMultiplier / activeEvoMultiplier fields if not itemized in multItems
+  if (!sawHoloMult && m.holoMultiplier && m.holoMultiplier > 1.01) {
+    mult *= m.holoMultiplier;
     steps.push({
-      key: 'power',
-      label: 'Power',
-      value: `×${fmt(power)}`,
+      key: 'mult-holo',
+      label: 'Holo',
+      value: `×${fmt(m.holoMultiplier)}`,
       kind: 'mult',
       baseAfter: base,
       multAfter: mult,
       bonusAfter: bonus,
-      note: `${pts} Power`,
+      note: 'Holo card multiplier (+0.2× each)',
+    });
+  }
+  if (!sawEvoMult && m.activeEvoMultiplier && m.activeEvoMultiplier > 1.01) {
+    mult *= m.activeEvoMultiplier;
+    steps.push({
+      key: 'mult-evo',
+      label: 'Evolved',
+      value: `×${fmt(m.activeEvoMultiplier)}`,
+      kind: 'mult',
+      baseAfter: base,
+      multAfter: mult,
+      bonusAfter: bonus,
+      note: 'Active Evolution additive multiplier',
     });
   }
 
-  // 6. Post-mult extra Set damage (Purity chain, Traps defused — scaled by Power just like dealDamage)
+  // 5. Post-mult extra Set damage (Purity chain, Traps defused, Ignition Bursts)
   for (let i = 0; i < (m.extraItems?.length ?? 0); i++) {
     const item = m.extraItems![i];
     if (item.amount === 0) continue;
-    const scaled = Math.round(item.amount * power * 10) / 10;
-    bonus += scaled;
+    const amt = Math.round(item.amount * 10) / 10;
+    bonus += amt;
     steps.push({
       key: `extra-${i}`,
       label: shortLabel(item.label),
-      value: `+${fmt(scaled)}`,
+      value: `+${fmt(amt)}`,
       kind: 'bonus',
       baseAfter: base,
       multAfter: mult,
@@ -376,27 +410,38 @@ const scaleCountForState = (run: RunState, per: Scale): number => {
     case 'grace': return run.stats.graces;
     case 'link': return run.connections.length;
     case 'combo': return run.combo;
-    case 'bonusCard': return run.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0).length;
+    case 'bonusCard': return run.board.filter(c => (c.bonusPoints ?? 0) > 0 || (c.bonusMoney ?? 0) > 0 || !!c.holo).length;
     case 'burning': return run.board.filter(c => c.onFire).length;
-    case 'evolution': return run.activeEvolutions.length;
+    case 'evolution':
+    case 'activeEvos': return activeWeaponEvolutions(run.weaponEvolutions ?? []).length;
     case 'grudgeReleased': return run.passive.grudge;
+    default:
+      return run.synergy ? (run.synergy[per as keyof typeof run.synergy] ?? 0) : 0;
   }
 };
 
 const primedConditionsHold = (run: RunState, when: Condition[] | undefined): boolean => {
   if (!when?.length) return true;
+  const activeEvos = activeWeaponEvolutions(run.weaponEvolutions ?? []);
   return when.every(c => {
     switch (c.kind) {
       case 'heartsAtMost': return run.hearts !== null && run.hearts <= c.n;
       case 'heartsFull': return run.hearts !== null && run.maxHearts !== null && run.hearts >= run.maxHearts;
       case 'comboAtLeast': return run.combo >= c.n;
       case 'noMistakesThisFight': return run.mistakes === 0;
-      case 'evolutionActive': return run.activeEvolutions.length > 0;
+      case 'evolutionActive': return activeEvos.length > 0;
+      case 'activeEvosAtLeast': return activeEvos.length >= c.n;
+      case 'weaponEvolved':
+        return c.weaponId
+          ? activeEvos.some(e => e.weaponId === c.weaponId)
+          : activeEvos.length > 0;
+      case 'synergyAtLeast':
+        return (run.synergy?.[c.attr] ?? 0) >= c.n;
       case 'boardAtLeast': return run.board.length >= c.n;
       case 'foeHpBelow': return run.foeMaxHp > 0 && run.foeHp > 0 && run.foeHp / run.foeMaxHp < c.fraction;
       case 'grudgeAtLeast': return run.passive.grudge >= c.n;
       case 'frozen': return run.frozenMs > 0;
-      // Chance, Rainbow, Hinted, diffCount, and timing depend on the exact Set played — don't promise them in NEXT
+      // Chance, Rainbow, Hinted, HoloInSet, diffCount, and timing depend on the exact Set played — don't promise them in NEXT
       default: return false;
     }
   });
@@ -417,7 +462,7 @@ const primedTriggerNote = (run: RunState, key: string, t: Trigger): string | nul
 const primedRuleLabel = (run: RunState, key: string, callout?: string): string => {
   const base = key.split('#')[0];
   if (base.startsWith('node:')) return getSkillNode(base.slice(5))?.name ?? callout?.replace(/!$/, '') ?? 'Skill';
-  if (base.startsWith('evo:')) return getRecipe(base.slice(4))?.name ?? callout?.replace(/!$/, '') ?? 'Evolution';
+  if (base.startsWith('evo:')) return getWeaponEvolution(base.slice(4))?.name ?? callout?.replace(/!$/, '') ?? 'Evolution';
   const slot = /^w(\d+):(.*)$/.exec(base);
   if (slot) return run.weapons[Number(slot[1])]?.name ?? slot[2];
   return callout?.replace(/!$/, '') ?? 'Bonus';
@@ -425,30 +470,52 @@ const primedRuleLabel = (run: RunState, key: string, callout?: string): string =
 
 /**
  * Pure primed Next-Set preview: tells players & Twitch viewers what a plain
- * 3-card Set is primed to hit for RIGHT NOW before they tap anything.
+ * 3-card Set is primed to hit for RIGHT NOW before they tap anything (plus any
+ * currently selected Holo cards).
  */
 export const computePrimedEquation = (run: RunState): PrimedEquation => {
   const surge = run.surge?.active ? SURGE_RULES.multiplier : 1;
+  const activeEvos = activeWeaponEvolutions(run.weaponEvolutions ?? []);
+  const selectedHolo = run.board.filter(c => c.selected && c.holo).length;
   const items: PrimedEquation['items'] = [];
-  let base = 3;
+  let base = 3 * BASE_RULES.cardBasePoints;
   items.push({
     label: '3 cards',
     value: fmt(base),
     kind: 'base',
-    note: 'Base 1 damage per card',
+    note: `Base ${BASE_RULES.cardBasePoints} damage per card`,
   });
+
+  if (selectedHolo > 0) {
+    const holoFlat = selectedHolo * BASE_RULES.holoCardBonus;
+    base += holoFlat;
+    items.push({
+      label: selectedHolo === 1 ? 'Holo card' : `${selectedHolo} Holo cards`,
+      value: `+${fmt(holoFlat)}`,
+      kind: 'base',
+      note: `+${BASE_RULES.holoCardBonus} base per selected Holo card`,
+    });
+  }
 
   if (run.bonusDamagePerMatch !== 0) {
     base += run.bonusDamagePerMatch;
     items.push({ label: 'Heavy Hitter', value: `+${fmt(run.bonusDamagePerMatch)}`, kind: 'base', note: 'Workshop upgrade' });
   }
 
+  if ((run.fightBaseDamageBonus ?? 0) !== 0) {
+    base += run.fightBaseDamageBonus;
+    items.push({ label: 'Forged Base', value: `+${fmt(run.fightBaseDamageBonus)}`, kind: 'base', note: 'Permanent fight base damage' });
+  }
+
+  const synergyCtx = run.synergy ? synergyCtxOf(run) : undefined;
   const sourceInput = {
     skillNodes: run.skillNodes,
     weapons: run.weapons,
-    activeEvolutions: run.activeEvolutions,
+    weaponEvolutions: run.weaponEvolutions ?? [],
+    weaponBuilds: run.weaponBuilds,
+    synergy: run.synergy,
+    synergyCtx,
     growth: growthModifiers(run.growth ?? {}),
-    blankEvolutionRules: run.blankEvolutionRules,
   };
   const sources = liveSources(sourceInput);
   let gearFlat = 0;
@@ -464,6 +531,20 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
   if (hintFlat > 0) {
     base += hintFlat;
     items.push({ label: 'Hints held', value: `+${fmt(hintFlat)}`, kind: 'base', note: `${run.stats.hints} hints held` });
+  }
+
+  // Live 15-Node Synergy Graph weapon damage hooks
+  if (run.synergy && synergyCtx) {
+    let synergyFlat = 0;
+    for (let i = 0; i < run.weapons.length; i++) {
+      const effId = effectiveWeaponIdAt(run.weapons, i);
+      const effLv = effectiveWeaponLevelAt(run.weapons, i, run.weaponBuilds);
+      synergyFlat += evaluateWeaponSynergyDamage(effId, effLv, run.synergy, synergyCtx).total;
+    }
+    if (synergyFlat > 0) {
+      base += synergyFlat;
+      items.push({ label: 'Synergy', value: `+${fmt(synergyFlat)}`, kind: 'base', note: 'Live Synergy Graph scaling' });
+    }
   }
 
   // Missing-heart / baseline Scrappy passive (Orange Tabby) & stored Grudge (Badger)
@@ -503,13 +584,22 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
     items.push({ label: 'Glass Sword', value: `+${fmt(glassDmg)}`, kind: 'base', note: 'Unbroken window active' });
   }
 
-  // Active Evolution flat bonus (skip when setDamage is 0)
-  const evoFlatPerActive: number = EVOLUTION_RULES.setDamage;
-  if (run.activeEvolutions.length > 0 && evoFlatPerActive !== 0) {
-    const evoFlat = run.activeEvolutions.length * evoFlatPerActive;
+  // Active Shading Surge & Stagger flat bonuses
+  if (run.surge?.active && SURGE_RULES.flatBonus > 0) {
+    base += SURGE_RULES.flatBonus;
+    items.push({ label: 'Shading Surge', value: `+${fmt(SURGE_RULES.flatBonus)}`, kind: 'base', note: 'Active Surge flat bonus' });
+  }
+  if (run.parry?.phase === 'staggered' && PARRY_RULES.staggerFlatBonus > 0) {
+    base += PARRY_RULES.staggerFlatBonus;
+    items.push({ label: 'Staggered', value: `+${fmt(PARRY_RULES.staggerFlatBonus)}`, kind: 'base', note: 'Foe staggered by Parry' });
+  }
+
+  // Active per-weapon Evolution flat bonus (+8 base per active evolution)
+  if (activeEvos.length > 0) {
+    const evoFlat = activeEvos.length * EVOLUTION_CHASSIS.setFlatDamage;
     base += evoFlat;
-    const names = run.activeEvolutions.map(e => getRecipe(e.id)?.name ?? 'Evolution').join(', ');
-    items.push({ label: names, value: `+${fmt(evoFlat)}`, kind: 'base', note: 'Active Evolution bonus' });
+    const names = activeEvos.map(e => getWeaponEvolution(e.evoId)?.name ?? 'Evolution').join(', ');
+    items.push({ label: names, value: `+${fmt(evoFlat)}`, kind: 'base', note: `+${EVOLUTION_CHASSIS.setFlatDamage} per active Evolution` });
   }
 
   // Primed deterministic Set-triggered flat damage rules (Rally Horn, Clarity Lens, Revenge Linker, War Drum, etc.)
@@ -539,6 +629,16 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
   base = Math.max(0, Math.round(base * 10) / 10);
 
   let mult = 1;
+  if (selectedHolo > 0) {
+    const holoMult = Math.round((1 + selectedHolo * BASE_RULES.holoCardMult) * 100) / 100;
+    mult *= holoMult;
+    items.push({
+      label: 'Holo',
+      value: `×${fmt(holoMult)}`,
+      kind: 'mult',
+      note: `+${BASE_RULES.holoCardMult}× per Holo card in Set`,
+    });
+  }
   if (surge > 1) {
     mult *= surge;
     items.push({
@@ -548,24 +648,23 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
       note: '4-trait Shading Surge multiplier',
     });
   }
-  if (run.activeEvolutions.length > 0) {
-    if (run.stackEvolutionMultipliers !== false) {
-      for (const evo of run.activeEvolutions) {
-        mult *= EVOLUTION_RULES.setMultiplier;
-        items.push({
-          label: getRecipe(evo.id)?.name ?? 'Evolved',
-          value: `×${fmt(EVOLUTION_RULES.setMultiplier)}`,
-          kind: 'mult',
-          note: 'Active Evolution multiplier',
-        });
-      }
-    } else {
-      mult *= EVOLUTION_RULES.setMultiplier;
+  // Active per-weapon Evolution additive multiplier (+0.2× per active evolution)
+  if (activeEvos.length > 0) {
+    const extraPerEvo = sources.reduce((s, x) => s + (x.source.modifiers?.evoAdditiveMultBonus ?? 0), 0);
+    const perEvoStep = EVOLUTION_CHASSIS.setAdditiveMult + extraPerEvo;
+    const evoMult = Math.round((1 + activeEvos.length * perEvoStep) * 100) / 100;
+    if (evoMult > 1.005) {
+      mult *= evoMult;
       const evoLabel =
-        run.activeEvolutions.length === 1
-          ? (getRecipe(run.activeEvolutions[0].id)?.name ?? 'Evolved')
-          : 'Evolved';
-      items.push({ label: evoLabel, value: `×${fmt(EVOLUTION_RULES.setMultiplier)}`, kind: 'mult', note: 'Active Evolution multiplier' });
+        activeEvos.length === 1
+          ? (getWeaponEvolution(activeEvos[0].evoId)?.name ?? 'Evolved')
+          : `${activeEvos.length}× Evolved`;
+      items.push({
+        label: evoLabel,
+        value: `×${fmt(evoMult)}`,
+        kind: 'mult',
+        note: `+${fmt(perEvoStep)}× additive per active Evolution`,
+      });
     }
   }
   for (const { key, source } of sources) {
@@ -587,6 +686,11 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
     mult *= a.damageScale!;
     items.push({ label: arc?.name ?? 'Arcana', value: `×${fmt(a.damageScale!)}`, kind: 'mult', note: 'Arcana Set multiplier' });
   }
+  if (activeEvos.length === 0 && (a.nonEvolvedDamageScale ?? 1) !== 1) {
+    const arc = run.arcana.map(getArcana).find(x => x.rules.nonEvolvedDamageScale !== undefined);
+    mult *= a.nonEvolvedDamageScale!;
+    items.push({ label: arc?.name ?? 'Arcana', value: `×${fmt(a.nonEvolvedDamageScale!)}`, kind: 'mult', note: 'Non-evolved Arcana boost' });
+  }
   const hotMult = run.passive.hotStreak
     ? PASSIVE_TUNING.hot_streak['hotStreak.multiplier'] +
       sources.reduce((s, x) => s + (x.source.modifiers?.passiveTuning?.['hotStreak.multiplier'] ?? 0), 0)
@@ -604,12 +708,6 @@ export const computePrimedEquation = (run: RunState): PrimedEquation => {
   if (run.parry?.phase === 'staggered') {
     mult *= PARRY_RULES.staggerDamageMult;
     items.push({ label: 'Staggered', value: `×${fmt(PARRY_RULES.staggerDamageMult)}`, kind: 'mult', note: 'Foe staggered by Parry' });
-  }
-  const power = damageMultiplier(run.power ?? 0);
-  if (power > 1.01) {
-    mult *= power;
-    const pts = Math.round((run.power ?? 0) * 100) / 100;
-    items.push({ label: 'Power', value: `×${fmt(power)}`, kind: 'mult', note: `${pts} Power` });
   }
 
   mult = Math.round(mult * 100) / 100;

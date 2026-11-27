@@ -1,26 +1,30 @@
 /**
  * Adventure progression: save migration, per-fighter star pools, skill trees,
- * charm and Arcana slots, the Workshop, rewards and bounties. Pure logic, no UI.
+ * boss-unlocked weapon slots (3 -> 4 -> 5 + optional 6th Workshop Charm Belt),
+ * Arcana slots, per-weapon evolutions, Workshop tuning, rewards, and 200 bounties.
  */
 import { LEVELS, MAIN_LEVELS, getLevel } from '@/adventure/data/levels';
 import { FIGHTERS } from '@/adventure/data/fighters';
 import { ARCANA, getArcana } from '@/adventure/data/arcana';
-import { BOUNTIES } from '@/adventure/data/bounties';
+import { BOUNTIES, BOUNTY_EXCLUSIVE_WEAPON_IDS, isBountyExclusiveWeapon } from '@/adventure/data/bounties';
 import { BIOMES } from '@/adventure/data/biomes';
 import { CAMPAIGN_FEATURES } from '@/adventure/data/features';
-import { EVOLUTION_RECIPES, SIGNATURE_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS, defaultEvolutionForWeapon, evolutionsForWeapon } from '@/adventure/data/evolutions';
 import { CAMPAIGN_STARS, SEALED_AT, SKILL_NODES, TREE_BUDGET, TREE_SLACK, getSkillNode, scaleCosts, skillTreeOf, skillTreeRoots } from '@/adventure/data/skillTrees';
 import { UPGRADES } from '@/adventure/data/upgrades';
-import { getArmoryWeapon } from '@/adventure/data/armory';
+import { ALL_ARMORY_WEAPON_IDS, getArmoryWeapon } from '@/adventure/data/armory';
 import { starRewards } from '@/adventure/data/rewards';
 import {
   LEGACY_FIGHTER_LEVEL_COSTS,
   MAX_ARCANA_SLOTS,
   MAX_CHARM_SLOTS,
+  SLOT_4_UNLOCK_LEVEL,
+  SLOT_5_UNLOCK_LEVEL,
+  STARTER_EVOLUTION_ID,
   applyLevelResult,
   arcanaSlots,
-  armedRecipes,
   availableStars,
+  bossUnlockedCharmSlots,
   buyNode,
   buyUpgrade,
   buyTuning,
@@ -32,8 +36,10 @@ import {
   createNewSave,
   equipArcana,
   equipCharm,
+  equipWeaponEvolution,
   equippedArcanaOf,
   equippedCharms,
+  equippedEvolutionOf,
   getLockReason,
   getUnlockedUpgrades,
   isBiomeOpen,
@@ -41,7 +47,6 @@ import {
   migrateSave,
   nodeStatus,
   reconcileUnlocks,
-  recipesArmedBy,
   refundAllCamp,
   refundBlockers,
   refundNode,
@@ -55,6 +60,7 @@ import {
   totalStarsEarned,
   unequipArcana,
   unequipCharm,
+  unlockedEvolutionsForWeapon,
   upgradeSpentCoins,
   upgradeTier,
   tuningSpent,
@@ -143,13 +149,11 @@ describe('Save migration from the v1 shape', () => {
   it('loadAdventureSave migrates a stored v1 save, refunds old Workshop weapon levels, and writes it back once', () => {
     mockKvStore.clear();
     const stored: Record<string, unknown> = { ...v1(), weaponUpgrades: { [CAMPAIGN_WEAPONS[0]]: 2 } };
-    // A real v1 save has none of the new fields
     delete stored.charms;
     delete stored.equippedArcana;
     delete stored.skillNodes;
     mockKvStore.set('adventure_v2_save', JSON.stringify(stored));
     const loaded = loadAdventureSave();
-    // Workshop weapon levels are found in the world now: the 2 bought ones come back as coins (common prices)
     expect(loaded.coins).toBe(100 + REFUND + 80 + 180);
     expect(loaded.charms).toEqual([CAMPAIGN_WEAPONS[1]]);
     expect(loaded.equippedArcana).toEqual([ARCANA[0].id]);
@@ -175,7 +179,6 @@ describe('Star pools', () => {
     save = buyNode(buyNode(save, n1.id), n2.id);
     expect(fighterStarsSpent(save, fighter)).toBe(n1.cost + n2.cost);
     expect(availableStars(save, fighter)).toBe(30 - n1.cost - n2.cost);
-    // The Fox still has all 30 and can grow at the same time
     expect(availableStars(save, other)).toBe(30);
     const fox = rootAdjacent(other)[0];
     save = buyNode(save, fox.id);
@@ -183,7 +186,6 @@ describe('Star pools', () => {
     expect(availableStars(save, fighter)).toBe(30 - n1.cost - n2.cost);
     expect(totalStarsEarned(save)).toBe(30);
 
-    // Spending never re-locks a world
     for (const b of BIOMES.filter(x => x.starGate <= 30)) expect(isBiomeOpen(save, b.id)).toBe(true);
   });
 });
@@ -201,10 +203,8 @@ describe('Skill trees', () => {
       expect(nodes.length).toBeGreaterThanOrEqual(22);
       expect(nodes.length).toBeLessThanOrEqual(26);
 
-      // Every old two-branch node is still there, so saves keep what they own
       for (const b of [0, 1]) for (let d = 1; d <= 10; d++) expect(ids.has(`${SLUGS[f.name]}-${b}-${d}`)).toBe(true);
 
-      // One node per cell (the passive roots included), all inside the 7-column grid
       const roots = skillTreeRoots(f.name);
       expect(roots.map(r => r.passive)).toEqual(f.passives);
       const cells = [...nodes.map(n => n.pos), ...roots.map(r => r.pos)].map(p => `${p.col},${p.row}`);
@@ -214,7 +214,6 @@ describe('Skill trees', () => {
         expect(n.pos.col).toBeLessThanOrEqual(6);
       }
 
-      // Links are symmetric, stay inside the tree and never point at themselves
       let edges = 0;
       for (const n of nodes) {
         for (const other of n.links) {
@@ -227,14 +226,12 @@ describe('Skill trees', () => {
       }
       edges /= 2;
 
-      // Both passives grow something, and every node can be reached from them
       for (const p of f.passives) expect(nodes.some(n => n.roots.includes(p))).toBe(true);
       const seen = new Set(nodes.filter(n => n.roots.length > 0).map(n => n.id));
       const queue = [...seen];
       while (queue.length) for (const next of getSkillNode(queue.shift()!)!.links) if (!seen.has(next)) { seen.add(next); queue.push(next); }
       expect(seen.size).toBe(nodes.length);
 
-      // Branches fork and rejoin: more links than a plain tree would need
       const rootLinks = nodes.reduce((sum, n) => sum + n.roots.length, 0);
       expect(edges + rootLinks).toBeGreaterThan(nodes.length + 2);
     }
@@ -244,13 +241,11 @@ describe('Skill trees', () => {
     for (const f of FIGHTERS) {
       const nodes = skillTreeOf(f.name);
       const cheapest = Math.min(...nodes.map(n => n.cost));
-      // Every passive has a way in at the cheapest price, and a tip costs several entries
       for (const p of f.passives) expect(nodes.some(n => n.roots.includes(p) && n.cost === cheapest)).toBe(true);
       expect(Math.max(...nodes.map(n => n.cost))).toBeGreaterThanOrEqual(cheapest * 5);
       const sealed = nodes.filter(n => n.requires);
       expect(sealed).toHaveLength(1);
       expect(sealed[0].requires).toEqual({ starsEarned: SEALED_AT });
-      // Sealed at World 4's star gate
       expect(BIOMES.some(b => b.starGate === SEALED_AT)).toBe(true);
     }
   });
@@ -265,7 +260,6 @@ describe('Skill trees', () => {
 
   it('buys by adjacency: a node opens once anything it links to (or its passive) is owned', () => {
     let save = withStars(createNewSave(), 30);
-    // Purr Punch hangs off Nine Lives; Lick Wounds and Catnip hang off Purr Punch
     expect(tabby('0-1').roots).toEqual(['nine_lives']);
     expect(nodeStatus(save, tabby('0-1').id)).toBe('buyable');
     expect(nodeStatus(save, tabby('1-2').id)).toBe('needsLink');
@@ -274,11 +268,9 @@ describe('Skill trees', () => {
 
     save = buyNode(save, tabby('0-1').id);
     expect(nodeStatus(save, tabby('0-1').id)).toBe('owned');
-    // Buying an owned node again changes nothing
     expect(buyNode(save, tabby('0-1').id)).toBe(save);
     expect(nodeStatus(save, tabby('1-2').id)).toBe('buyable');
     expect(nodeStatus(save, tabby('0-5').id)).toBe('buyable');
-    // Scrappy's side needs only its own passive
     expect(nodeStatus(save, tabby('1-1').id)).toBe('buyable');
   });
 
@@ -287,13 +279,11 @@ describe('Skill trees', () => {
     const x = tabby('x-1');
     expect(nodeStatus(base, x.id)).toBe('needsLink');
 
-    // Nine Lives side: Warm Lap → Hot-Blooded → crossroads
     let left = buyNode(buyNode(base, tabby('0-2').id), tabby('1-3').id);
     expect(nodeStatus(left, x.id)).toBe('buyable');
     left = buyNode(left, x.id);
     expect(left.skillNodes['Orange Tabby']).toContain(x.id);
 
-    // Scrappy side: Street Smarts → Last Breath → crossroads
     const right = buyNode(buyNode(base, tabby('1-4').id), tabby('0-6').id);
     expect(right.skillNodes['Orange Tabby']).toEqual([tabby('1-4').id, tabby('0-6').id]);
     expect(nodeStatus(right, x.id)).toBe('buyable');
@@ -306,7 +296,6 @@ describe('Skill trees', () => {
     expect(availableStars(save, 'Orange Tabby')).toBe(0);
     expect(nodeStatus(save, tabby('0-3').id)).toBe('needsStars');
 
-    // The claw tip is sealed until World 4's star gate, even with a path to it
     const cap = tabby('cap-1');
     expect(cap.requires?.starsEarned).toBe(SEALED_AT);
     const path = { 'Orange Tabby': [tabby('0-2').id, tabby('1-5').id, tabby('1-6').id] };
@@ -328,18 +317,15 @@ describe('Skill trees', () => {
     const spent = ['0-1', '0-5', '1-2', '0-3'].reduce((sum, k) => sum + tabby(k).cost, 0);
     expect(fighterStarsSpent(save, fighter)).toBe(spent);
 
-    // Catnip hangs only off Purr Punch: Purr Punch can't go first
     expect(refundBlockers(save, tabby('0-1').id).map(n => n.id)).toEqual([tabby('0-5').id]);
     expect(canRefundNode(save, tabby('0-1').id)).toBe(false);
     expect(refundNode(save, tabby('0-1').id)).toBe(save);
 
-    // Lick Wounds sits in a loop (Purr Punch and Spare Life both touch Nine Lives): free to go
     expect(canRefundNode(save, tabby('1-2').id)).toBe(true);
     save = refundNode(save, tabby('0-5').id);
     expect(availableStars(save, fighter)).toBe(90 - spent + tabby('0-5').cost);
     save = refundNode(save, tabby('0-1').id);
     expect(save.skillNodes[fighter]).toEqual([tabby('1-2').id, tabby('0-3').id]);
-    // Not owned: nothing to refund
     expect(refundNode(save, tabby('0-1').id)).toBe(save);
 
     const afterFighter = refundFighter(save, fighter);
@@ -351,12 +337,10 @@ describe('Skill trees', () => {
     const fighter: CharacterName = 'Orange Tabby';
     const broken: AdventureSave = {
       ...withStars(createNewSave(), 30),
-      // Sunbeam's only way in is Catnip (not owned); a Fox node filed under Tabby; a removed node
       skillNodes: { [fighter]: [tabby('0-1').id, tabby('0-9').id, 'fox-0-1', 'no-such-node'] },
     };
     expect(reconcileUnlocks(broken).skillNodes).toEqual({ [fighter]: [tabby('0-1').id] });
 
-    // Only the fighter whose tree now costs more than the stars earned gets its stars back
     const fox = rootAdjacent('Sly Fox')[0];
     const overspent: AdventureSave = {
       ...withStars(createNewSave(), fox.cost),
@@ -374,10 +358,8 @@ describe('Skill trees', () => {
       const nodes = skillTreeOf(f.name);
       expect(nodes.reduce((sum, n) => sum + n.cost, 0)).toBe(TREE_BUDGET);
       for (const n of nodes) expect(n.cost).toBeGreaterThanOrEqual(1);
-      // Sealed capstones open before the stars to finish the tree are in
       expect(SEALED_AT).toBeLessThan(TREE_BUDGET);
     }
-    // More levels → more stars → the same weights cost proportionally more, and still sum exactly
     const weights = [1, 1, 2, 3, 5, 6];
     expect(scaleCosts(weights, 160).reduce((a, b) => a + b, 0)).toBe(160);
     expect(scaleCosts(weights, 200).reduce((a, b) => a + b, 0)).toBe(200);
@@ -385,19 +367,34 @@ describe('Skill trees', () => {
   });
 });
 
-describe('Charm slots', () => {
+describe('Charm slots (3 base -> 4th on W1 Boss 1-10 -> 5th on W2 Boss 2-10 -> optional 6th Workshop Charm Belt)', () => {
   const armory = CAMPAIGN_WEAPONS.slice(0, 7);
-  const base = (): AdventureSave => ({ ...createNewSave(), armory, workshopUnlocked: true, coins: 10000, stars: ALL_MAIN_STARS });
+  const base = (): AdventureSave => ({ ...createNewSave(), armory, workshopUnlocked: true, coins: 10000, seenMechanics: ['charm_slots'] });
 
-  it('start at 3; Charm Belt adds one per tier up to 6', () => {
+  it('starts at 3; W1 (1-10) grants 4th, W2 (2-10) grants 5th, and 1-tier Workshop Charm Belt adds the 6th', () => {
     let save = base();
     expect(charmSlots(save)).toBe(3);
+    expect(bossUnlockedCharmSlots(save)).toBe(0);
+
+    // Clearing World 1 Boss (1-10) unlocks the 4th slot + STARTER_EVOLUTION_ID
+    const rW1 = applyLevelResult(save, getLevel(SLOT_4_UNLOCK_LEVEL), 1, 0);
+    save = rW1.save;
+    expect(charmSlots(save)).toBe(4);
+    expect(bossUnlockedCharmSlots(save)).toBe(1);
+    expect(rW1.unlocks).toContainEqual(expect.objectContaining({ kind: 'weapon_slot', slotNumber: 4, levelId: SLOT_4_UNLOCK_LEVEL }));
+    expect(save.unlockedWeaponEvolutions).toContain(STARTER_EVOLUTION_ID);
+
+    // Clearing World 2 Boss (2-10) unlocks the 5th slot
+    const rW2 = applyLevelResult(save, getLevel(SLOT_5_UNLOCK_LEVEL), 1, 0);
+    save = rW2.save;
+    expect(charmSlots(save)).toBe(5);
+    expect(bossUnlockedCharmSlots(save)).toBe(2);
+    expect(rW2.unlocks).toContainEqual(expect.objectContaining({ kind: 'weapon_slot', slotNumber: 5, levelId: SLOT_5_UNLOCK_LEVEL }));
+
+    // Workshop Charm Belt is now a 1-tier purchase ([1200]) for the optional 6th slot
     const belt = UPGRADES.find(u => u.id === 'charm_belt')!;
-    expect(belt.costs).toEqual([300, 900, 2000]);
-    for (let t = 1; t <= belt.costs.length; t++) {
-      save = buyUpgrade(save, 'charm_belt');
-      expect(charmSlots(save)).toBe(3 + t);
-    }
+    expect(belt.costs).toEqual([1200]);
+    save = buyUpgrade(save, 'charm_belt');
     expect(charmSlots(save)).toBe(MAX_CHARM_SLOTS);
     expect(charmSlots({ ...save, upgrades: { charm_belt: 9 } })).toBe(MAX_CHARM_SLOTS);
   });
@@ -480,7 +477,7 @@ describe('Workshop', () => {
       workshopUnlocked: true,
       armory,
       unlockedArcana: ARCANA.slice(0, 2).map(a => a.id),
-      unlockedEvolutions: EVOLUTION_RECIPES.slice(0, 1).map(r => r.id),
+      unlockedWeaponEvolutions: [STARTER_EVOLUTION_ID],
       stars: ALL_MAIN_STARS,
     };
     expect(refundableCoins(save)).toBe(0);
@@ -492,7 +489,7 @@ describe('Workshop', () => {
     expect(spent).toBeGreaterThan(0);
     expect(refundableCoins(save)).toBe(spent);
     expect(upgradeTier(save, 'charm_belt')).toBe(1);
-    expect(upgradeSpentCoins(save, 'charm_belt')).toBe(300);
+    expect(upgradeSpentCoins(save, 'charm_belt')).toBe(1200);
     expect(tuningSpent(save, armory[0])).toBe(60);
 
     const respec = refundAllCamp(save);
@@ -516,27 +513,31 @@ describe('Workshop', () => {
 });
 
 describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
-  /** Main-path levels whose star rewards name this weapon, in campaign order. */
   const sourcesOf = (id: string) =>
     MAIN_LEVELS.flatMap(l => starRewards(l).flatMap((r, i) => ((r.weapons ?? []).includes(id) ? [{ level: l, star: i + 1 }] : [])));
 
-  /** Earn the given star on a level (and every star before it) with a save that has stars up to there. */
   const earn = (save: AdventureSave, levelId: string, star: number) =>
     applyLevelResult({ ...save, stars: { ...save.stars, [levelId]: star - 1 } }, getLevel(levelId), star, 0);
 
-  it('no reward names a merged copy, a Mastery weapon or a bundle; every weapon reaches Lv 2+ and at most 5 copies', () => {
+  it('no reward names a merged copy, a Mastery weapon or a bundle; Campaign weapons have 2–5 copies and Bounty-Exclusives unlock cleanly', () => {
     const named = [...LEVELS.flatMap(l => starRewards(l)), ...BOUNTIES.map(b => b.reward)].flatMap(r => r.weapons ?? []);
     for (const id of named) expect(getArmoryWeapon(id)?.id).toBe(id);
     expect(named.filter(id => /-(common|rare|legendary)$/.test(id))).toEqual([]);
     expect(named.filter(id => id.includes('mastery'))).toEqual([]);
     const counts = new Map<string, number>();
     for (const id of named) counts.set(id, (counts.get(id) ?? 0) + 1);
-    for (const [, n] of counts) {
-      expect(n).toBeGreaterThanOrEqual(2);
-      expect(n).toBeLessThanOrEqual(5);
+    for (const [id, n] of counts) {
+      if (isBountyExclusiveWeapon(id)) {
+        // Bounty-Exclusive weapons unlock via bounty and level Lv 1->5 via their own 3 bounties + 5-5 clear
+        expect(n).toBeGreaterThanOrEqual(1);
+      } else {
+        expect(n).toBeGreaterThanOrEqual(2);
+        expect(n).toBeLessThanOrEqual(5);
+      }
     }
-    for (const id of ['understudy', 'devils-bargain', 'thorn-bush', 'tar-pit', 'long-fuse', 'fortunes-blessing', 'wisdom-chain']) {
-      expect(counts.get(id)).toBeGreaterThanOrEqual(3);
+    expect(BOUNTY_EXCLUSIVE_WEAPON_IDS).toHaveLength(16);
+    for (const id of ALL_ARMORY_WEAPON_IDS) {
+      expect(counts.get(id)).toBeGreaterThanOrEqual(1);
     }
   });
 
@@ -552,10 +553,8 @@ describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
     expect(weaponLevel(b.save, 'blast-powder')).toBe(2);
     expect(b.unlocks.find(u => u.kind === 'weapon')).toMatchObject({ id: 'blast-powder', level: 2 });
     expect(getArmoryWeapon('blast-powder', weaponBuilds(b.save))!.effects.explosionChance).toBe(22);
-    // Levels are not purchases: nothing to refund
     expect(refundableCoins(b.save)).toBe(0);
 
-    // Loading the save again (which re-grants every earned reward) never stacks the level twice
     const reloaded = reconcileUnlocks(reconcileUnlocks(b.save));
     expect(weaponLevel(reloaded, 'blast-powder')).toBe(2);
     expect(reloaded.coins).toBe(b.save.coins);
@@ -569,10 +568,9 @@ describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
     expect(5000 - save.coins).toBe(60 + 150 + 320 + 600);
     expect(canTune(save, 'blast-powder', 'explosionChance')).toBe(false);
     const w = getArmoryWeapon('blast-powder', weaponBuilds(save))!;
-    // Level 2: 22% blast ×1.5; damage per card untouched (+0.75)
+    // Level 2: 22% blast ×1.5 = 33; damage per card untouched (1 + 0.5 = 1.5)
     expect(w.effects.explosionChance).toBe(33);
-    expect(w.effects.explosionDamage).toBe(0.75);
-    // A later copy found raises the base; the multiplier keeps applying
+    expect(w.effects.explosionDamage).toBe(1.5);
     const third = sourcesOf('blast-powder')[2];
     const leveled = earn(save, third.level.id, third.star).save;
     expect(getArmoryWeapon('blast-powder', weaponBuilds(leveled))!.effects.explosionChance).toBe(39);
@@ -593,7 +591,6 @@ describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
     expect(m.charms).toEqual(['blast-powder']);
     expect(m.legacyWeaponTiers).toEqual({ 'blast-powder': 2, 'war-drum': 1, 'oracle-eye': 2, 'chaos-shard': 2 });
     expect(m.weaponUpgrades).toEqual({});
-    // Blast Powder (common) tier 1, Inferno Charge (epic) tiers 1-2 and Explosion Mastery (rare) tier 1, at the prices paid
     expect(m.coins).toBe(1000 + 80 + 180 + 380 + 120);
     expect(migrateSave(m)).toEqual(m);
 
@@ -614,51 +611,59 @@ describe('Weapon levels (found in the world) and tuning (Workshop)', () => {
   });
 });
 
-describe('Evolutions armed by charms', () => {
-  it('a recipe is armed when the weapons hold one of each family, and only once it is unlocked', () => {
-    for (const r of EVOLUTION_RECIPES) {
-      expect(r.families).toHaveLength(2);
-      const a = r.families[0][0];
-      const b = r.families[1][0];
-      expect(recipesArmedBy([a, b], [r.id]).map(x => x.id)).toEqual([r.id]);
-      expect(recipesArmedBy([a], [r.id])).toEqual([]);
-      expect(recipesArmedBy([a, b], [])).toEqual([]);
-    }
-  });
+describe('Per-weapon evolutions equipping', () => {
+  it('equips 1 of 3 unlocked evolutions per weapon and ignores locked or mismatched IDs', () => {
+    const bpEvos = evolutionsForWeapon('blast-powder');
+    expect(bpEvos).toHaveLength(3);
+    const fsEvo = defaultEvolutionForWeapon('flint-spark')!;
 
-  it('armedRecipes reads the equipped charms of a save', () => {
-    const recipe = EVOLUTION_RECIPES.find(r =>
-      r.families.every(f => CAMPAIGN_WEAPONS.some(id => f.some(p => id === p || id.startsWith(`${p}-`))))
-    )!;
-    expect(recipe).toBeDefined();
-    const ids = recipe.families.map(f => CAMPAIGN_WEAPONS.find(id => f.some(p => id === p || id.startsWith(`${p}-`)))!);
-    const save: AdventureSave = { ...createNewSave(), armory: ids, charms: ids, unlockedEvolutions: [recipe.id] };
-    expect(armedRecipes(save).map(x => x.id)).toEqual([recipe.id]);
-    expect(armedRecipes({ ...save, charms: [ids[0]] })).toEqual([]);
+    let save: AdventureSave = {
+      ...createNewSave(),
+      armory: ['blast-powder'],
+      charms: ['blast-powder'],
+      unlockedWeaponEvolutions: [bpEvos[0].id, bpEvos[1].id],
+      equippedEvolutions: {},
+    };
+    expect(unlockedEvolutionsForWeapon(save, 'blast-powder')).toEqual([bpEvos[0].id, bpEvos[1].id]);
+    // Falls back to first unlocked when not explicitly equipped
+    expect(equippedEvolutionOf(save, 'blast-powder')).toBe(bpEvos[0].id);
+
+    // Switch to slot 1 evolution
+    save = equipWeaponEvolution(save, 'blast-powder', bpEvos[1].id);
+    expect(equippedEvolutionOf(save, 'blast-powder')).toBe(bpEvos[1].id);
+
+    // Locked slot 2 evolution is rejected
+    expect(equipWeaponEvolution(save, 'blast-powder', bpEvos[2].id)).toBe(save);
+    // Evolution belonging to another weapon is rejected
+    expect(equipWeaponEvolution(save, 'blast-powder', fsEvo.id)).toBe(save);
   });
 });
 
 describe('Rewards & unlocks', () => {
-  it('every reward points at a real weapon, fighter, Arcana and recipe; all of them can be won', () => {
+  it('every reward points at a real weapon, fighter, Arcana and per-weapon evolution; all 64 weapons, 8 Arcana & 192 evolutions can be won', () => {
     const arcana = new Set<string>();
-    const recipes = new Set<string>();
+    const evolutions = new Set<string>();
+    const weapons = new Set<string>();
     const check = (r: { weapons?: string[]; character?: string; arcana?: ArcanaId; evolution?: string }) => {
-      for (const id of r.weapons ?? []) expect(getArmoryWeapon(id)).toBeDefined();
+      for (const id of r.weapons ?? []) {
+        expect(getArmoryWeapon(id)).toBeDefined();
+        weapons.add(id);
+      }
       if (r.character) expect(FIGHTERS.find(f => f.name === r.character)).toBeDefined();
       if (r.arcana) {
         expect(getArcana(r.arcana)).toBeDefined();
         arcana.add(r.arcana);
       }
       if (r.evolution) {
-        expect(EVOLUTION_RECIPES.find(x => x.id === r.evolution)).toBeDefined();
-        recipes.add(r.evolution);
+        expect(WEAPON_EVOLUTIONS.find(x => x.id === r.evolution)).toBeDefined();
+        evolutions.add(r.evolution);
       }
     };
     LEVELS.forEach(l => starRewards(l).forEach(check));
     BOUNTIES.forEach(b => check(b.reward));
     expect(arcana.size).toBe(ARCANA.length);
-    // Every signature recipe is a reward; the pair recipes are discovered by forging them
-    expect(recipes.size).toBe(SIGNATURE_RECIPES.length);
+    expect(weapons.size).toBe(ALL_ARMORY_WEAPON_IDS.length);
+    expect(evolutions.size).toBe(WEAPON_EVOLUTIONS.length);
   });
 
   it('branches open at ★★ on their parent, even when the parent is itself a branch', () => {
@@ -672,11 +677,13 @@ describe('Rewards & unlocks', () => {
     }
   });
 
-  it('createMaxedSave unlocks everything, maxes the Workshop and leaves every star unspent', () => {
+  it('createMaxedSave unlocks everything (64 weapons, 192 evos, 200 bounties), maxes the Workshop and leaves every star unspent', () => {
     const maxed = createMaxedSave();
     expect(maxed.unlockedFighters).toHaveLength(FIGHTERS.length);
     expect(maxed.unlockedArcana).toHaveLength(ARCANA.length);
-    expect(maxed.unlockedEvolutions).toHaveLength(EVOLUTION_RECIPES.length);
+    expect(maxed.armory).toHaveLength(64);
+    expect(maxed.unlockedWeaponEvolutions).toHaveLength(WEAPON_EVOLUTIONS.length);
+    expect(maxed.completedBounties).toHaveLength(BOUNTIES.length);
     expect(maxed.skillNodes).toEqual({});
     for (const f of FIGHTERS) expect(availableStars(maxed, f.name)).toBe(LEVELS.length * 3);
     expect(charmSlots(maxed)).toBe(MAX_CHARM_SLOTS);
@@ -710,8 +717,8 @@ describe('Cross-run bounties', () => {
     expect(save.bountiesUnlocked).toBe(true);
     expect(r.unlocks.some(u => u.kind === 'feature' && u.feature === 'bounties')).toBe(true);
 
-    const boosted = { ...save, bountyStats: { ...save.bountyStats, totalSets: 100000 } };
-    const bounty = BOUNTIES.find(b => !save.completedBounties.includes(b.id) && b.progress(save) < b.target && b.progress(boosted) >= b.target);
+    const boosted = { ...save, bountyStats: { ...save.bountyStats, purityChains: 100 } };
+    const bounty = BOUNTIES.find(b => !b.requiresWeapon && !save.completedBounties.includes(b.id) && b.progress(save) < b.target && b.progress(boosted) >= b.target);
     expect(bounty).toBeDefined();
     const done = applyLevelResult(boosted, unlockLevel, 1, 0);
     expect(done.completedBounties.map(b => b.id)).toContain(bounty!.id);

@@ -5,25 +5,30 @@
  */
 import type { Card } from '@/types';
 import type { FightLogMathItem } from '../types';
-import { SKILL_FEAT_POWER } from '../data/weaponPower';
-import { addPower, emit, enqueue, hurt, mods, placeSnare, placeTimeBomb, recycle, snareTarget, SNARE_DEFUSE_DAMAGE, updateCards, type Draft } from './fight';
+import {
+  bumpSynergy, emit, enqueue, hurt, mods, notifyEvoEvent, placeSnare, placeTimeBomb,
+  recycle, snareTarget, SNARE_DEFUSE_DAMAGE, updateCards, type Draft,
+} from './fight';
 
-export const BOMB_DEFUSE_BASE_DAMAGE = 4;
-export const BOMB_DEFUSE_HOT_DAMAGE = 8;
-export const BOMB_DEFUSE_CLUTCH_DAMAGE = 14;
+export const BOMB_DEFUSE_BASE_DAMAGE = 8;
+export const BOMB_DEFUSE_HOT_DAMAGE = 14;
+export const BOMB_DEFUSE_CLUTCH_DAMAGE = 24;
 export const BOMB_HOT_THRESHOLD_SEC = 8;
 export const BOMB_CLUTCH_THRESHOLD_SEC = 5;
 
-const defused = (d: Draft, kind: 'bomb' | 'snare', bonus?: number, slot?: number) => {
+const defused = (d: Draft, kind: 'bomb' | 'snare', bonus?: number, slot?: number, clutch = false) => {
   d.trapsDefused += 1;
+  d.fightMetrics.trapsDefused += 1;
+  bumpSynergy(d, 'hazards', clutch ? 2 : 1);
   emit(d, 'trap_defused', bonus, kind, slot === undefined ? undefined : { slots: [slot] });
   enqueue(d, 'trapDefused');
+  notifyEvoEvent(d, { on: 'hazard', hazardKind: kind });
 };
 
 /**
  * Traps touched by the Set being scored. Defusing a Time Bomb hurls it at the foe
- * for fuse-proximity bonus damage (+4 / +8 hot / +14 clutch + +0.25 Power); a Set
- * that includes the card a snare points at defuses it for +4 damage.
+ * for elevated fuse-proximity bonus damage (+8 / +14 hot / +24 clutch); a Set
+ * that includes the card a snare points at defuses it for +8 damage.
  */
 export const resolveTrapsOnSet = (
   d: Draft,
@@ -36,7 +41,6 @@ export const resolveTrapsOnSet = (
 
   const bombs = d.timeBombIds.filter(id => ids.has(id));
   if (bombs.length) {
-    // Capture remaining fuse timers BEFORE clearing countdown fields on the board
     const bombInfo = bombs.map(id => {
       const slot = d.board.findIndex(c => c.id === id);
       const live = slot >= 0 ? d.board[slot] : matched.find(c => c.id === id);
@@ -52,11 +56,12 @@ export const resolveTrapsOnSet = (
       let dmg = BOMB_DEFUSE_BASE_DAMAGE;
       let label = 'Bomb Throw';
       let note = 'defused bomb hurled at foe';
+      let clutch = false;
       if (b.remaining < BOMB_CLUTCH_THRESHOLD_SEC) {
         dmg = BOMB_DEFUSE_CLUTCH_DAMAGE;
         label = 'Clutch Defuse!';
-        note = 'bomb thrown with <5s left (+0.25 Power)';
-        addPower(d, SKILL_FEAT_POWER.clutchBomb);
+        note = 'bomb thrown with <5s left (+2 Hazards)';
+        clutch = true;
       } else if (b.remaining < BOMB_HOT_THRESHOLD_SEC) {
         dmg = BOMB_DEFUSE_HOT_DAMAGE;
         label = 'Hot Defuse!';
@@ -64,7 +69,7 @@ export const resolveTrapsOnSet = (
       }
       bonus += dmg;
       items.push({ label, amount: dmg, note });
-      defused(d, 'bomb', dmg, b.slot >= 0 ? b.slot : undefined);
+      defused(d, 'bomb', dmg, b.slot >= 0 ? b.slot : undefined, clutch);
     }
   }
 
@@ -126,14 +131,17 @@ export const placeOpeningTraps = (d: Draft) => {
   if (d.level.rules.hazards?.snares) placeSnare(d, all);
 };
 
-/** Defuse every trap on the board and turn every face-down card up (an evolution's Cleanse). */
+/** Defuse every trap on the board and turn every face-down card up (Cleanse effect). */
 export const cleanseBoard = (d: Draft) => {
+  const m = mods(d);
   const bombIds = new Set(d.timeBombIds);
   const idx: number[] = [];
   let liftedFog = 0;
+  let flippedFaceDown = 0;
   d.board.forEach((c, i) => {
     if (c.snare || c.isFaceDown || bombIds.has(c.id)) idx.push(i);
     if (c.isFaceDown && (c.fogBonus ?? 0) > 0) liftedFog += 1;
+    else if (c.isFaceDown) flippedFaceDown += 1;
   });
   d.board.forEach((c, i) => {
     if (c.snare) defused(d, 'snare', undefined, i);
@@ -147,9 +155,17 @@ export const cleanseBoard = (d: Draft) => {
       ...rest,
       snare: undefined,
       isFaceDown: false,
-      ...(hadFog ? { bonusPoints: (c.bonusPoints ?? 0) + Math.round(fogBonus ?? 0) } : {}),
+      ...(hadFog ? { bonusPoints: (c.bonusPoints ?? 0) + Math.round(fogBonus ?? 0), ...(m.fogHolo ? { holo: true } : {}) } : {}),
       ...(bombIds.has(c.id) ? { hasCountdown: false, countdownTimer: undefined } : {}),
     };
   });
-  if (liftedFog > 0) enqueue(d, 'trick', undefined, 'fog');
+  for (let k = 0; k < flippedFaceDown; k++) {
+    bumpSynergy(d, 'hazards', 1);
+    notifyEvoEvent(d, { on: 'hazard', hazardKind: 'face_down' });
+  }
+  if (liftedFog > 0) {
+    bumpSynergy(d, 'hazards', liftedFog);
+    if (m.fogHolo) bumpSynergy(d, 'holo', liftedFog);
+    enqueue(d, 'trick', undefined, 'fog');
+  }
 };

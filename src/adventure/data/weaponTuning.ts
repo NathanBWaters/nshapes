@@ -41,7 +41,7 @@ const dmg = (label: string, base: number, perLevel: number): WeaponStatDef => ({
 
 /** Re-exported from `weapons/schema.ts` WEAPON_CADENCE so callers keep stable imports. */
 export const ORACLE_WAIT_S = WEAPON_CADENCE.ORACLE_WAIT_S;
-export const SEEKER_DAMAGE_PER_HINT = WEAPON_CADENCE.SEEKER_DAMAGE_PER_HINT;
+export const SEEKER_DAMAGE_PER_HINT = 3;
 export const MYSTIC_EVERY = WEAPON_CADENCE.MYSTIC_EVERY;
 export const LIFE_LINK_PULSE_EVERY = WEAPON_CADENCE.LIFE_LINK_PULSE_EVERY;
 export const WISDOM_XP_EVERY = WEAPON_CADENCE.WISDOM_XP_EVERY;
@@ -49,18 +49,18 @@ export const WISDOM_COIN_PCT = WEAPON_CADENCE.WISDOM_COIN_PCT;
 
 export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   // ── Damage ────────────────────────────────────────────────────────────────
-  'blast-powder': { effects: { explosionChance: 18, explosionDamage: 0.5 }, perLevel: { explosionChance: 4, explosionDamage: 0.25 } },
-  'flint-spark': { effects: { fireSpreadChance: 14, burnDamage: 0.5 }, perLevel: { fireSpreadChance: 2.5, burnDamage: 0.15 } },
-  'prismatic-ray': { effects: { laserChance: 10, laserDamage: 0.5 }, perLevel: { laserChance: 2.5, laserDamage: 0.75 } },
+  'blast-powder': { effects: { explosionChance: 18, explosionDamage: 1 }, perLevel: { explosionChance: 4, explosionDamage: 0.5 } },
+  'flint-spark': { effects: { fireSpreadChance: 14, burnDamage: 1 }, perLevel: { fireSpreadChance: 2.5, burnDamage: 0.4 } },
+  'prismatic-ray': { effects: { laserChance: 10, laserDamage: 1.5 }, perLevel: { laserChance: 2.5, laserDamage: 1 } },
   'chaos-shard': {
-    effects: { ricochetChance: 18, ricochetChainChance: 22, ricochetDamage: 0.5 },
-    perLevel: { ricochetChance: 4.5, ricochetChainChance: 5.5, ricochetDamage: 0.5 },
+    effects: { ricochetChance: 18, ricochetChainChance: 22, ricochetDamage: 1 },
+    perLevel: { ricochetChance: 4.5, ricochetChainChance: 5.5, ricochetDamage: 0.7 },
   },
   // Reliable single echo
   'echo-stone': {
     effects: { echoChance: 14 },
     perLevel: { echoChance: 2 },
-    extra: { strike: dmg('Echo damage', 3, 1.75) },
+    extra: { strike: dmg('Echo damage', 6, 3) },
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'echo' }, v.strike)] }),
   },
   // Active Weaver: high link rate, links persist across waves at Lv 3+
@@ -83,23 +83,23 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   'growth-seed': {
     effects: { boardGrowthChance: 14 },
     perLevel: { boardGrowthChance: 3.5 },
-    rider: () => ({ rules: [{ trigger: { on: 'weapon', kind: 'growth' }, effects: [{ do: 'empowerBoard', amount: 1 }], callout: 'Bloom!' }] }),
+    rider: () => ({ rules: [{ trigger: { on: 'weapon', kind: 'growth' }, effects: [{ do: 'empowerBoard', amount: 2 }], callout: 'Bloom!' }] }),
   },
-  // Pure board expansion: clean integer +2..+6 cards + overflow Catalyst & Power-card boost (no flat opening charge)
+  // Pure board expansion: clean integer +2..+6 cards + Holo card odds & overflow Holo/Power spawns
   'field-stone': {
     effects: { fieldSize: 2 },
     perLevel: { fieldSize: 1 },
     byLevel: { fieldSize: [2, 3, 4, 5, 6] },
     extra: {
-      catalystBoost: { label: 'Overflow Catalyst chance', unit: '%', base: 4, perLevel: 2 },
+      holoChance: { label: 'Holo card chance', unit: '%', base: 4, perLevel: 2 },
     },
     rider: v => ({
-      modifiers: { evolutionLikelihood: v.catalystBoost },
+      modifiers: { holoChance: v.holoChance },
       rules: [
         {
           trigger: { on: 'waveStart' },
-          when: [{ kind: 'boardAtLeast', n: WEAPON_CADENCE.FIELD_OVERFLOW_BOARD }],
-          effects: [{ do: 'convert', to: 'power', count: 1 }],
+          when: [{ kind: 'boardAtLeast', n: 15 }],
+          effects: [{ do: 'convert', to: 'holo', count: 1 }],
           callout: 'Fertile Field!',
         },
         {
@@ -140,9 +140,9 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     }),
   },
   'soul-harvest': {
-    effects: { ricochetChance: 16, ricochetDamage: 0.5, bridgeChance: 24 },
-    perLevel: { ricochetChance: 3.5, ricochetDamage: 0.25, bridgeChance: 6 },
-    extra: { strike: dmg('Soul heal damage', 2, 0.75) },
+    effects: { ricochetChance: 16, ricochetDamage: 1, bridgeChance: 24 },
+    perLevel: { ricochetChance: 3.5, ricochetDamage: 0.5, bridgeChance: 6 },
+    extra: { strike: dmg('Soul heal damage', 5, 2) },
     rider: v => ({ rules: [strike({ on: 'healed' }, v.strike, 'Soul Harvest!')] }),
   },
   // Clean integer hearts [1,1,2,2,3]; tunes blast, bridge, and pulse damage
@@ -151,7 +151,7 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
     perLevel: { maxHealth: 0.5, health: 0.5, explosionChance: 2.5, bridgeChance: 6 },
     byLevel: { maxHealth: [1, 1, 2, 2, 3], health: [1, 1, 2, 2, 3] },
     untunable: ['maxHealth'],
-    extra: { strike: dmg('Full-heart pulse damage', 5, 2) },
+    extra: { strike: dmg('Full-heart pulse damage', 10, 4) },
     rider: v => ({
       rules: [
         { trigger: { on: 'waveStart' }, effects: [{ do: 'shield', count: 1 }], callout: 'Life Ward!' },
@@ -201,18 +201,18 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   },
   // Defensive Retaliator: clean integer graces [1,1,2,2,3], 50%→90% laser retaliation on Grace save
   'grace-conduit': {
-    effects: { graces: 1, laserDamage: 0.75, bridgeChance: 50 },
-    perLevel: { graces: 0.5, laserDamage: 0.5, bridgeChance: 10 },
+    effects: { graces: 1, laserDamage: 2, bridgeChance: 50 },
+    perLevel: { graces: 0.5, laserDamage: 1, bridgeChance: 10 },
     byLevel: { graces: [1, 1, 2, 2, 3] },
     untunable: ['graces', 'bridgeChance'],
   },
 
   // ── Hints (Insight) ───────────────────────────────────────────────────────
-  // Hint Hoarder: generates hints + +1.5→+3 dmg per unspent hint held (rewards hoarding!)
+  // Hint Hoarder: generates hints + +3→+6 dmg per unspent hint held (rewards hoarding!)
   'seeker-lens': {
     effects: { hintGainChance: 15 },
     perLevel: { hintGainChance: 4 },
-    extra: { perHint: dmg('Set damage per unspent hint', SEEKER_DAMAGE_PER_HINT, 0.375) },
+    extra: { perHint: dmg('Set damage per unspent hint', SEEKER_DAMAGE_PER_HINT, 0.75) },
     rider: v => ({ modifiers: { hintHeldDamage: v.perHint } }),
   },
   // Active Hint Bank: +2..+5 filled hint slots; using a hint freezes the clock for 2s→4s (zero raw DPS)
@@ -238,11 +238,11 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
       rules: [{ trigger: { on: 'set' }, when: [{ kind: 'hintedSet' }], effects: [{ do: 'time', seconds: v.refund }], callout: 'Foreseen!' }],
     }),
   },
-  // 2-Card Precision Sniper: 2-card auto-hints + hinted Sets snipe & every 3rd hinted Set primes ×1.5
+  // 2-Card Precision Sniper: 2-card auto-hints + hinted Sets snipe (+10→+22) & every 3rd hinted Set primes ×1.25
   'mystic-sight': {
     effects: { enhancedHintChance: 30, autoHintChance: 20, autoHintInterval: 2000 },
     perLevel: { enhancedHintChance: 4, autoHintChance: 4 },
-    extra: { snipe: dmg('Hinted Set sniper damage', 5, 2) },
+    extra: { snipe: dmg('Hinted Set sniper damage', 10, 3) },
     rider: v => ({
       rules: [
         {
@@ -254,7 +254,7 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
         {
           trigger: { on: 'everyNthSet', n: MYSTIC_EVERY },
           when: [{ kind: 'hintedSet' }],
-          effects: [{ do: 'nextSetMultiplier', times: 1.5 }],
+          effects: [{ do: 'nextSetMultiplier', times: 1.25 }],
           callout: 'Precision!',
         },
       ],
@@ -297,16 +297,16 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
       rules: [{ trigger: { on: 'everyNthSet', n: WEAPON_CADENCE.SCHOLAR_XP_EVERY }, effects: [{ do: 'xp', amount: 2 }], callout: 'Study!' }],
     }),
   },
-  // XP-to-Gold Dividend Loop: XP spawns coins, wave openers prime ×1.1→×1.3 Set multiplier
+  // XP-to-Gold Dividend Loop: XP spawns coins, wave openers deal +8 base & prime ×1.15→×1.25 Set multiplier
   'wisdom-chain': {
     effects: { xpGainChance: 18, bridgeChance: 30 },
     perLevel: { xpGainChance: 4, bridgeChance: 7 },
-    extra: { openerMult: { label: 'Wave opener boost', unit: '×', base: 1.1, perLevel: 0.05, tunable: false } },
+    extra: { openerMult: { label: 'Wave opener boost', unit: '×', base: 1.15, perLevel: 0.025, tunable: false } },
     rider: v => ({
       modifiers: { coinPercent: WISDOM_COIN_PCT },
       rules: [
         { trigger: { on: 'everyNthSet', n: WISDOM_XP_EVERY }, effects: [{ do: 'xp', amount: 2 }], callout: 'Insight!' },
-        { trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'nextSetMultiplier', times: v.openerMult }], callout: 'Dividend!' },
+        { trigger: { on: 'firstSetOfWave' }, effects: [{ do: 'damage', amount: 8 }, { do: 'nextSetMultiplier', times: v.openerMult }], callout: 'Dividend!' },
       ],
     }),
   },
@@ -332,11 +332,11 @@ export const ADVENTURE_TUNING: Record<string, AdventureTuning> = {
   'chain-reaction': {
     effects: { echoChance: 8, chainReactionChance: 28 },
     perLevel: { echoChance: 2, chainReactionChance: 9 },
-    extra: { strike: dmg('Echo damage', 2, 1) },
+    extra: { strike: dmg('Echo damage', 5, 2) },
     rider: v => ({ rules: [strike({ on: 'weapon', kind: 'echo' }, v.strike)] }),
   },
   // Echo-to-fire bridge
-  'cascade-core': { effects: { echoChance: 9, burnDamage: 1, bridgeChance: 38 }, perLevel: { echoChance: 2.5, burnDamage: 0.5, bridgeChance: 6 } },
+  'cascade-core': { effects: { echoChance: 9, burnDamage: 1.5, bridgeChance: 38 }, perLevel: { echoChance: 2.5, burnDamage: 0.75, bridgeChance: 6 } },
   // Branching Mesh: links fork into chains of 3
   'neural-network': { effects: { connectionChance: 14, bonusConnectionChance: 30 }, perLevel: { connectionChance: 3, bonusConnectionChance: 9 } },
   // Chrono-Link Conduit: clean integer starting links [1,2,2,3,4], +0.8s→+2.0s per linked card destroyed

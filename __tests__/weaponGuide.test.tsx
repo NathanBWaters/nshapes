@@ -1,15 +1,16 @@
 /**
  * The weapon guide is the one place a weapon is explained (before a fight in
- * the level preview, after it in the replay). These tests are the guard: a
- * new Armory weapon with no guide row, no description or no voice fails here,
- * and the explainer card is rendered for every weapon there is.
+ * the level preview, in Camp Armory, after a fight in the replay, and across
+ * Starfall Summit). These tests are the guard: a new Armory weapon with no
+ * guide row, no description, no synergy hooks, no voice, or fewer than 3
+ * evolutions fails here, and the single WeaponExplainer card is rendered for
+ * every weapon there is.
  */
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import WeaponExplainer from '@/adventure/components/WeaponExplainer';
-import EvolutionPickOverlay from '@/adventure/components/EvolutionPickOverlay';
-import { EVOLUTION_RECIPES, evolutionShortVerb } from '@/adventure/data/evolutions';
-import { PAIR_RECIPES } from '@/adventure/data/evolutionPairs';
+import { WEAPON_EVOLUTIONS, evolutionsForWeapon, evolutionShortVerb } from '@/adventure/data/evolutions';
+import { getWeaponSynergyProfile } from '@/adventure/data/synergy';
 import { describeLines, fightSummary, gearStatText, gearStats, weaponOfLine } from '@/adventure/components/fightReplayText';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { WEAPON_GUIDE, WEAPON_KINDS, hasWeaponGuide, ownerOfEvent, weaponGuide } from '@/adventure/data/weaponGuide';
@@ -20,7 +21,7 @@ import type { FightLogEntry, FightLogLine } from '@/adventure/types';
 import { playSet, startFight, withWeapons } from './testUtils/adventureFight';
 
 jest.mock('@/audio', () => {
-  const band = { audition: jest.fn(), inFight: false };
+  const band = { audition: jest.fn(), auditionEvolution: jest.fn(), inFight: false };
   return { band, music: band, sfx: jest.fn() };
 });
 
@@ -35,12 +36,33 @@ const save = createMaxedSave();
 const armory = save.armory;
 
 describe('the weapon guide covers every weapon', () => {
-  it('every Armory weapon has a guide row, a role, a voice and a real description', () => {
-    expect(armory.length).toBeGreaterThanOrEqual(60);
+  it('every Armory weapon has a guide row, a role, a voice, synergy hooks, 3 evolutions, and clean description (zero Catalyst/Power leaks)', () => {
+    expect(armory).toHaveLength(64);
+    expect(WEAPON_EVOLUTIONS).toHaveLength(192);
     for (const id of armory) {
       const w = getArmoryWeapon(id, weaponBuilds(save));
-      expect({ id, guide: hasWeaponGuide(id), role: hasWeaponRole(id), voice: hasWeaponVoice(id) }).toEqual({ id, guide: true, role: true, voice: true });
-      expect({ id, described: (w?.description ?? '').length >= 20 }).toEqual({ id, described: true });
+      const profile = getWeaponSynergyProfile(id);
+      const evos = evolutionsForWeapon(id);
+      expect({
+        id,
+        guide: hasWeaponGuide(id),
+        role: hasWeaponRole(id),
+        voice: hasWeaponVoice(id),
+        synergyHooks: profile.hooks.length >= 1,
+        evoCount: evos.length,
+      }).toEqual({
+        id,
+        guide: true,
+        role: true,
+        voice: true,
+        synergyHooks: true,
+        evoCount: 3,
+      });
+      const desc = w?.description ?? '';
+      expect({ id, described: desc.length >= 20 }).toEqual({ id, described: true });
+      // Ensure zero stale Catalyst card or global Power-meter copy leaks
+      expect(desc).not.toMatch(/Catalyst card|\+\d+(\.\d+)? Power/i);
+      expect(weaponGuide(id).tip).not.toMatch(/Catalyst card|\+\d+(\.\d+)? Power/i);
     }
   });
 
@@ -79,11 +101,13 @@ describe('the weapon guide covers every weapon', () => {
 });
 
 describe('the explainer card', () => {
-  it('renders for every weapon in the game, closed and open', () => {
+  it('renders for every weapon in the game, closed and open, with Synergy chips and Evolutions', () => {
     for (const id of armory) {
       const w = getArmoryWeapon(id, weaponBuilds(save))!;
       const view = render(<WeaponExplainer weapon={w} build={weaponBuilds(save)[id]} />);
       expect(view.getByTestId(`weapon-explainer-what-${id}`).props.children).toBe(w.description);
+      expect(view.getByTestId(`weapon-explainer-synergy-${id}`)).toBeTruthy();
+      expect(view.getByTestId(`weapon-explainer-evo-summary-${id}`)).toBeTruthy();
       expect(view.queryByTestId(`weapon-explainer-more-${id}`)).toBeNull();
       fireEvent.press(view.getByTestId(`weapon-explainer-toggle-${id}`));
       expect(view.getByTestId(`weapon-explainer-more-${id}`)).toBeTruthy();
@@ -114,44 +138,80 @@ describe('the explainer card', () => {
     expect(view.getByText('T2')).toBeTruthy();
   });
 
-  it('[TP-10] + [GP-01] displays clean [Parameter] stats alongside transparent per-trigger Power yield at current level', () => {
+  it('[TP-10] displays clean [Parameter] stats alongside Synergy Scaling hooks (zero Power scaling text)', () => {
     const build = { level: 3, tuning: {} };
     const w = getArmoryWeapon('blast-powder', { 'blast-powder': build })!;
     const view = render(<WeaponExplainer weapon={w} build={build} defaultOpen />);
     expect(view.getByLabelText('[Blast chance] 26%')).toBeTruthy();
     expect(view.getByTestId('weapon-explainer-scaling-blast-powder')).toBeTruthy();
-    expect(view.getByText(/Every explosion adds \+0\.15 Power \(Lv 3\)/)).toBeTruthy();
+    expect(view.getByText('SYNERGY SCALING')).toBeTruthy();
+    expect(view.queryByText(/Power \(Lv/i)).toBeNull();
   });
-});
 
-describe('[GP-12] EvolutionPickOverlay streamlined mid-fight scan', () => {
-  it('shows name, ★ SIGNATURE, NEW!, and <=55-char shortVerb without familyText or flavor', () => {
-    const sig = EVOLUTION_RECIPES.find(r => r.id === 'phoenix-pyre')!;
-    const pair = PAIR_RECIPES[0];
-    const onPick = jest.fn();
-    const view = render(
-      <EvolutionPickOverlay
-        optionIds={[sig.id, pair.id]}
-        totalIdle={4}
-        knownIds={new Set([pair.id])}
-        onPick={onPick}
+  it('supports 1-of-3 Evolution selection (1-tap equip, audition motif, locked bounty jump) and read-only live inspect', () => {
+    const { band } = jest.requireMock('@/audio');
+    band.auditionEvolution.mockClear();
+
+    const w = getArmoryWeapon('blast-powder')!;
+    const [evoA, evoB, evoC] = evolutionsForWeapon('blast-powder');
+    const onSelectEvolution = jest.fn();
+    const onJumpToBounty = jest.fn();
+
+    // Every evolution shortVerb fits compact HUD copy budget
+    for (const evo of WEAPON_EVOLUTIONS) {
+      expect(evolutionShortVerb(evo).length).toBeLessThanOrEqual(58);
+    }
+
+    const selectView = render(
+      <WeaponExplainer
+        weapon={w}
+        evolutionMode="select"
+        showEvolutionsWhenClosed
+        equippedEvolutionId={evoA.id}
+        unlockedEvolutionIds={[evoA.id, evoB.id]}
+        onSelectEvolution={onSelectEvolution}
+        onJumpToBounty={onJumpToBounty}
       />
     );
-    expect(view.getByTestId('evo-pick-sig-0')).toBeTruthy();
-    expect(view.getByTestId('evo-pick-new-0')).toBeTruthy();
-    expect(view.queryByTestId('evo-pick-sig-1')).toBeNull();
-    expect(view.queryByTestId('evo-pick-new-1')).toBeNull();
+    expect(selectView.getByTestId('weapon-explainer-evo-selector-blast-powder')).toBeTruthy();
+    expect(selectView.getByTestId(`evo-active-${evoA.id}`)).toBeTruthy();
+    fireEvent.press(selectView.getByTestId(`evo-option-${evoB.id}`));
+    expect(onSelectEvolution).toHaveBeenCalledWith('blast-powder', evoB.id);
+    expect(band.auditionEvolution).toHaveBeenCalledWith(evoB.id);
 
-    expect(view.getByTestId('evo-pick-desc-0').props.children).toBe(evolutionShortVerb(sig));
-    expect(view.getByTestId('evo-pick-desc-1').props.children).toBe(evolutionShortVerb(pair));
+    fireEvent.press(selectView.getByTestId(`evo-bounty-jump-${evoC.id}`));
+    expect(onJumpToBounty).toHaveBeenCalledTimes(1);
+    selectView.unmount();
 
-    // Streamlined mid-fight scan hides verbose familyText and italic flavor
-    expect(view.queryByText(sig.flavor)).toBeNull();
-    expect(view.queryByText(sig.familyText)).toBeNull();
-    expect(view.queryByText(pair.flavor)).toBeNull();
-
-    fireEvent.press(view.getByTestId('evo-pick-option-0'));
-    expect(onPick).toHaveBeenCalledWith(sig.id);
+    // Read-only live inspect mode shows live progress without interactive switcher
+    const liveView = render(
+      <WeaponExplainer
+        weapon={w}
+        evolutionMode="live"
+        liveEvolution={{
+          weaponId: 'blast-powder',
+          evolutionId: evoA.id,
+          evolutionName: evoA.name,
+          icon: evoA.icon,
+          accent: evoA.accent,
+          phase: 'charging',
+          conditionShort: '3 Blasts',
+          conditionFull: evoA.conditionText,
+          effectText: evolutionShortVerb(evoA),
+          progress: 2,
+          target: 3,
+          almostReady: true,
+          activeRemainingMs: 0,
+          activeDurationMs: evoA.durationMs,
+          cooldownRemainingMs: 0,
+          triggersThisFight: 0,
+        }}
+      />
+    );
+    expect(liveView.getByTestId('weapon-explainer-live-evo-blast-powder')).toBeTruthy();
+    expect(liveView.getByText('ALMOST! 2/3')).toBeTruthy();
+    expect(liveView.queryByTestId('weapon-explainer-evo-selector-blast-powder')).toBeNull();
+    liveView.unmount();
   });
 });
 
@@ -165,7 +225,7 @@ describe('what each weapon did in a fight', () => {
     expect(weaponOfLine(line({ type: 'hit', sourceRef: 'weapon:war-drum' }), held)).toBe('war-drum');
     expect(weaponOfLine(line({ type: 'blast', amount: 4 }), held)).toBe('blast-powder');
     expect(weaponOfLine(line({ text: 'Magnet!', amount: 5 }), held)).toBe('magnet');
-    expect(weaponOfLine(line({ type: 'hit', sourceRef: 'evo:phoenix-pyre' }), held)).toBeNull();
+    expect(weaponOfLine(line({ type: 'hit', sourceRef: 'evo:blast-powder:cluster-charge' }), held)).toBeNull();
     expect(weaponOfLine(line({ type: 'heal' }), held)).toBeNull();
   });
 
@@ -173,12 +233,12 @@ describe('what each weapon did in a fight', () => {
     const held = ['blast-powder', 'magnet', 'cursed-idol'];
     const stats = gearStats([
       entry([line({ type: 'blast', amount: 4 }), line({ type: 'blast', amount: 2 }), line({ text: 'Magnet!', amount: 5 })]),
-      entry([line({ type: 'blast', amount: 3 }), line({ type: 'hit', amount: 7, source: 'Phoenix Pyre', sourceRef: 'evo:phoenix-pyre' })]),
-      entry([line({ text: 'Curse broken ×2', amount: 2 })]),
+      entry([line({ type: 'blast', amount: 3 }), line({ type: 'hit', amount: 7, source: 'Cluster Charge', sourceRef: 'evo:blast-powder:cluster-charge' })]),
+      entry([line({ text: 'Curse broken ×1.35', amount: 1.35 })]),
     ], held);
     expect(stats['weapon:blast-powder']).toEqual({ fired: 2, damage: 9 });
     expect(stats['weapon:magnet']).toEqual({ fired: 1, damage: 5 });
-    expect(stats['evo:phoenix-pyre']).toEqual({ fired: 1, damage: 7 });
+    expect(stats['evo:blast-powder:cluster-charge']).toEqual({ fired: 1, damage: 7 });
     // A multiplier is not damage
     expect(stats['weapon:cursed-idol']).toEqual({ fired: 1, damage: 0 });
   });

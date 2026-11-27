@@ -1,11 +1,30 @@
 /**
- * The rule vocabulary shared by fighter passives, skill-tree nodes, evolutions,
- * adventure weapons and Arcana. Content is written as data in these shapes; the
- * engine (rules/engine.ts) is the only thing that interprets them.
+ * The rule vocabulary shared by fighter passives, skill-tree nodes, per-weapon
+ * timed evolutions, Synergy Graph cross-edges, adventure weapons and Arcana.
+ * Content is written as data in these shapes; the engine (rules/engine.ts) is
+ * the only thing that interprets them.
  *
  * A Rule is "when TRIGGER happens (and every CONDITION holds), do EFFECTS".
  * A Modifier is a standing change to how the fight works while it is active.
  */
+
+/** 15 first-class Synergy Graph scaling attributes (locked across combat, content, UI, and bounties). */
+export type SynergyAttrId =
+  | 'field_size'
+  | 'destruction'
+  | 'marks'
+  | 'coins'
+  | 'burn'
+  | 'links'
+  | 'holo'
+  | 'graces'
+  | 'hints'
+  | 'vitality'
+  | 'streaks'
+  | 'hazards'
+  | 'parries'
+  | 'prism'
+  | 'echoes';
 
 /** Weapon effects the board can produce. Rules can listen for them or cause them. */
 export type WeaponTriggerKind =
@@ -40,24 +59,36 @@ export type Trigger =
   | { on: 'idle'; ms: number }
   | { on: 'fightStart' }
   | { on: 'waveStart' }
+  /** Any weapon evolution ignited */
   | { on: 'evolutionStart' }
+  /** Any weapon evolution expired */
   | { on: 'evolutionEnd' }
+  /** Specific (or any) weapon evolution ignited */
+  | { on: 'weaponEvolutionStart'; weaponId?: string }
+  /** Specific (or any) weapon evolution expired */
+  | { on: 'weaponEvolutionEnd'; weaponId?: string }
   | { on: 'trapDefused' }
-  /** A Set included a power or gold card */
+  /** A Set included a power, gold, or holo card */
   | { on: 'bonusCardMatched' }
+  /** A Set included at least one Holo card */
+  | { on: 'holoMatched' }
+  /** A Set included at least one marked card (generic mark or magnet/bounty/chain/etc.) */
+  | { on: 'markedMatched' }
+  /** A Parry (or specifically a Perfect Parry when `perfect: true`) landed */
+  | { on: 'parry'; perfect?: boolean }
   /** A multi-hit card was broken */
   | { on: 'cardBroken' }
   /** Foe HP fell below this fraction of its max (fires once per foe) */
   | { on: 'foeBelow'; fraction: number }
   /** The player spent a hint (button or auto-hint) */
   | { on: 'hintUsed' }
-  /** A grace turned a near-miss into a Set */
+  /** A grace turned a near-miss into a Set or saved a heart */
   | { on: 'graceUsed' }
   /** A burning card burned out */
   | { on: 'cardBurned' }
   /** A card was destroyed because it was linked to a destroyed card */
   | { on: 'linkDestroyed' }
-  /** This evolution's 30 seconds ran out (only an evolution's own rules hear it) */
+  /** This evolution's timed window ran out (only an evolution's own rules hear it) */
   | { on: 'finale' }
   /** Badger landed a valid Set while holding 1+ Grudges (detonating stored Grudges) */
   | { on: 'grudgeRelease' };
@@ -84,6 +115,10 @@ export type Condition =
   | { kind: 'hintedSet' }
   | { kind: 'noMistakesThisFight' }
   | { kind: 'evolutionActive' }
+  | { kind: 'activeEvosAtLeast'; n: number }
+  | { kind: 'weaponEvolved'; weaponId?: string }
+  | { kind: 'synergyAtLeast'; attr: SynergyAttrId; n: number }
+  | { kind: 'holoInSet'; min?: number }
   | { kind: 'timeSinceLastSetAtLeast'; ms: number }
   /** A Patience Set: Emperor Penguin's per-trait window (engine/passives.ts patienceMs) has passed since the last Set */
   | { kind: 'patient' }
@@ -92,8 +127,10 @@ export type Condition =
   /** The foe is below this fraction of its max HP */
   | { kind: 'foeHpBelow'; fraction: number };
 
-/** What a scaling effect counts (damage `per` one of these). */
+/** What a scaling effect counts (damage `per` one of these). Supports all 15 Synergy attributes plus direct live counters. */
 export type Scale =
+  | SynergyAttrId
+  | 'activeEvos'
   | 'boardCard' | 'missingHeart' | 'hint' | 'grace' | 'link' | 'combo'
   | 'bonusCard' | 'burning' | 'evolution' | 'heart' | 'grudgeReleased';
 
@@ -105,12 +142,18 @@ export type Area =
   | { shape: 'random'; count: number };
 
 export type Effect =
-  /** Hit the foe; with `per`, the amount is multiplied by that count (e.g. 1 per card on the board) */
+  /** Hit the foe; with `per`, the amount is multiplied by that count (e.g. 1 per Synergy stack) */
   | { do: 'damage'; amount: number; per?: Scale }
   /** Spend every hint or grace you hold: `damageEach` per one spent */
   | { do: 'cashIn'; resource: 'hints' | 'graces'; damageEach: number }
-  /** Turn random plain cards into power cards (+2 damage) or gold cards (+3 coins) */
-  | { do: 'convert'; to: 'power' | 'gold'; count: number }
+  /** Turn random plain cards into Power (+5 dmg), Gold (+3¢), or Holo (+4 dmg & ×1.2) cards */
+  | { do: 'convert'; to: 'power' | 'gold' | 'holo'; count: number }
+  /** Place generic Synergy marks on `count` selectable board cards (feeds `marks`) */
+  | { do: 'markCard'; count: number }
+  /** Advance equipped weapons' timed evolution progress by `amount` ticks */
+  | { do: 'chargeEvolution'; target: 'all' | 'other' | 'self'; amount: number }
+  /** Permanently add `amount` flat base damage to every Set for the rest of the fight */
+  | { do: 'addFightBaseDamage'; amount: number }
   /** The next `count` mistakes cost no heart */
   | { do: 'shield'; count: number }
   /** Defuse every trap and turn every face-down card up */
@@ -141,30 +184,26 @@ export type Effect =
   | { do: 'redeal' }
   /** Match a Set for the player */
   | { do: 'autoSet' }
-  /** Add Combo steps (Sly Fox style; only meaningful with a combo passive) */
+  /** Add Combo steps (Sly Fox style; grants +1 base Set dmg per step for all fighters) */
   | { do: 'comboStep'; amount: number }
-  /** Put an Evolution Catalyst on the board now (if a recipe is armed and idle) */
-  | { do: 'spawnCatalyst' }
-  /** Put an Evolution Catalyst on the board even when armed recipes are already running (respects cap & one-catalyst limit) */
-  | { do: 'spawnCatalystForce' }
-  /** Extend every active evolution */
-  | { do: 'extendEvolutions'; ms: number }
-  /** Next Set deals this many times damage */
+  /** Extend active weapon evolutions by `ms` (`target: 'self'` extends only the owning weapon's evolution) */
+  | { do: 'extendEvolutions'; ms: number; target?: 'all' | 'self' }
+  /** Next Set deals this many times damage (stacks additively, capped at BASE_RULES.maxNextSetMultiplier) */
   | { do: 'nextSetMultiplier'; times: number }
   /** Fire a weapon trigger of this kind as if a weapon had rolled it (heals 1, coins 1, etc.) */
   | { do: 'trigger'; kind: WeaponTriggerKind }
-  /** Destroy random cards, 1 damage each (emits a ricochet trigger) */
+  /** Destroy random cards, collateral damage each (emits a ricochet trigger) */
   | { do: 'ricochet'; count: number }
   /** Link random pairs of board positions (a destroyed linked card takes its partner with it) */
   | { do: 'link'; count: number }
   /** Raise max hearts; the new hearts arrive empty */
   | { do: 'emptyHeart'; amount: number }
-  // ── Trick-state mutation verbs (for Trick+Trick evolutions & synergies) ──
+  // ── Trick-state mutation verbs ──
   /** Repair a shattered Glass Sword and reset its timer */
   | { do: 'repairGlass' }
   /** Add `amount` directly to Greedy Chest's stored payout (or queue for the next chest) */
   | { do: 'feedChest'; amount: number }
-  /** Fast-forward beneficial trick timers (Ice thaw, Rust aging, Fog lift, Curse→×2, Fuse→hot) without penalizing lethal timers */
+  /** Fast-forward beneficial trick timers (Ice thaw, Rust aging, Fog lift, Curse→reward, Fuse→hot) without penalizing lethal timers */
   | { do: 'advanceTricks'; ms: number }
   /** Fill 1 random unfilled Collector's Album page (triggering page bonus or Album completion) */
   | { do: 'stampAlbum' }
@@ -188,17 +227,19 @@ export interface Modifiers {
   setDamage?: number;
   /** Extra flat damage on Sets meeting a condition */
   conditionalDamage?: { when: Condition[]; amount: number }[];
-  /** Extra multiplier on Sets meeting a condition (e.g. Corgi Stampede ×1.5 at 18+ board) */
+  /** Extra multiplier on Sets meeting a condition (e.g. Corgi Stampede ×1.25 at 18+ board) */
   conditionalMultiplier?: { when: Condition[]; multiplier: number }[];
   rainbowMultiplierBonus?: number;
   /** Scales a weapon effect's chance to fire */
   weaponChanceScale?: Partial<Record<WeaponTriggerKind, number>>;
-  /** Percentage points added to the Catalyst spawn chance on each refill */
-  evolutionLikelihood?: number;
-  /** Extra Catalyst spawn chance on refills caused by a Rainbow Strike */
-  rainbowEvolutionLikelihood?: number;
+  /** Extra % chance that a dealt card arrives as a Holo card (+4 base & ×1.2 mult) */
+  holoChance?: number;
+  /** Extra duration (ms) added to weapon evolutions when they ignite */
   evolutionDurationMs?: number;
-  extraEvolutionsPerFight?: number;
+  /** Extra progress ticks added whenever any equipped weapon advances its evolution condition */
+  evolutionChargeBonus?: number;
+  /** Extra additive multiplier per active weapon evolution (on top of EVOLUTION_CHASSIS.setAdditiveMult) */
+  evoAdditiveMultBonus?: number;
   maxHearts?: number;
   startingHints?: number;
   startingGraces?: number;
@@ -209,6 +250,14 @@ export interface Modifiers {
   freeMistakes?: number;
   /** Traps: matching the trapped card itself does no harm */
   trapImmunity?: boolean;
+  /** Tightrope: remove off-rope penalty while active */
+  noOffRopePenalty?: boolean;
+  /** Glass Sword: cannot shatter while active */
+  unbreakableGlass?: boolean;
+  /** Extra flat damage added to every burning card that burns out */
+  burnBonusDamage?: number;
+  /** Multiplier applied to burn damage */
+  burnDamageScale?: number;
   /** Tuning for the fighter's own passives, keyed by tuning name (see data/passives.ts) */
   passiveTuning?: Record<string, number>;
 
@@ -239,8 +288,10 @@ export interface Modifiers {
   potatoFasterMs?: number;
   /** Ice Block: it thaws this many Sets sooner */
   iceSetsLess?: number;
-  /** Cursed Idol: added to what a ×2 card multiplies by */
+  /** Cursed Idol: added to what a lifted-curse card multiplies by */
   curseMultiplierBonus?: number;
+  /** Cursed Idol: flat base damage added when matching a lifted-curse card */
+  curseFlatDamage?: number;
   /** Rust: cards turn golden this many Sets sooner */
   rustSetsLess?: number;
   /** Tar Pit: extra sticky rows */
@@ -281,9 +332,13 @@ export interface Modifiers {
   /** Fog Lantern: % chance a dealt card starts face-down, and the damage it gains when it flips */
   fogChance?: number;
   fogBonus?: number;
+  /** Fog Lantern: if > 0, lifted fog cards also arrive Holo */
+  fogHolo?: number;
   /** Encore Mask: damage when an evolution ends (its opening rules also fire again) */
   encoreDamage?: number;
-  /** Cursed Idol: % chance a dealt card is cursed (unmatchable for a while; then ×2 or the curse moves to a neighbour) */
+  /** Encore Mask: head-start charge ticks granted when an evolution finishes cooldown */
+  encoreHeadStart?: number;
+  /** Cursed Idol: % chance a dealt card is cursed (unmatchable for a while; then lifted bonus or curse spreads) */
   curseChance?: number;
   /** Chain Gang: damage for matching both chained cards in one Set */
   chainDamage?: number;
@@ -305,7 +360,7 @@ export interface Modifiers {
   /** Greedy Chest: the floor a new chest starts at (before opened chests raise it) and how much it grows per Set that leaves it alone */
   chestStart?: number;
   chestGrowth?: number;
-  /** Tightrope: damage for a Set that touches your last one (others deal half) */
+  /** Tightrope: damage for a Set that touches your last one (others suffer off-rope multiplier) */
   tightropeDamage?: number;
   /** Hot Potato: damage for matching the hot card (mistakes cost an extra heart while it is out) */
   potatoDamage?: number;

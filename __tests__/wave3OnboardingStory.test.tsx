@@ -24,24 +24,26 @@ import DefeatOverlay from '@/adventure/components/DefeatOverlay';
 import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import LevelResults from '@/adventure/components/LevelResults';
 import AdventureRun from '@/adventure/components/AdventureRun';
-import EvolutionPickOverlay from '@/adventure/components/EvolutionPickOverlay';
 import { EvolutionCutIn, scriptFor, useAnchors, useFightFx } from '@/adventure/fx';
 import { starsLandedMs } from '@/adventure/components/ui';
 import { STORY, STORY_BOSS_CALLBACKS, STORY_CAPTIVE_FRIENDS, STORY_RAIDER_TAUNTS } from '@/adventure/data/story';
 import { MECHANICS } from '@/adventure/data/mechanics';
-import { EVOLUTION_RECIPES } from '@/adventure/data/evolutions';
+import { WEAPON_EVOLUTIONS } from '@/adventure/data/evolutions';
+import { BOUNTIES } from '@/adventure/data/bounties';
+import { getArmoryWeapon } from '@/adventure/data/armory';
 import { getLevel, LEVELS, PRACTICE_LEVELS } from '@/adventure/data/levels';
 import { getParryArchetype, resolveParrySpec } from '@/adventure/data/parry';
 import { SURGE_RULES } from '@/adventure/data/rules';
-import { lessonsDueBefore, taughtOnPreview } from '@/adventure/lessons';
+import { buildAdaptiveEvolutionMechanic, lessonsDueBefore, taughtOnPreview } from '@/adventure/lessons';
+import { bossUnlockedCharmSlots, charmSlotsOf } from '@/adventure/loadout';
 import {
   applyLevelResult,
-  armableRecipesFromArmory,
   COACH_KEYS,
   createMaxedSave,
   createNewSave,
   createSaveBefore,
   markEndingSeen,
+  STARTER_EVOLUTION_ID,
 } from '@/adventure/progress';
 import { createRun, runReducer } from '@/adventure/engine/run';
 import {
@@ -49,6 +51,8 @@ import {
   companionVoice,
   computeLiveGuidance,
   diagnoseResultTip,
+  EVO_ALMOST_COACH_KEY,
+  evoAlmostOnboardingCallout,
   fightRemarks,
   foeMidFightBark,
   parryOnboardingCallout,
@@ -56,6 +60,8 @@ import {
   resolvePracticeLevel,
   shouldShowDamageNumbers,
   THIRD_WORLD_INTRO_ASSIST_STEPS,
+  WEAPON_SLOT_UNLOCK_COACH_KEY,
+  weaponSlotUnlockCoachLine,
 } from '@/adventure/coach';
 import type { RunEvent, RunState } from '@/adventure/types';
 
@@ -251,13 +257,14 @@ describe('Wave 3B: [OB-06] UnlockReveal immediate CTA responsiveness & Claim All
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('renders Claim All on multi-unlock queues and finishes immediately on tap', () => {
+  it('renders Claim All on multi-unlock queues (including per-weapon evolution & boss weapon slot) and finishes immediately on tap', () => {
     const onDone = jest.fn();
     const save = createSaveBefore('1-10');
     const screen = render(wrap(
       <UnlockReveal
         unlocks={[
-          { kind: 'evolution', id: 'phoenix-pyre', star: 1, firstEvolution: true },
+          { kind: 'evolution', id: STARTER_EVOLUTION_ID, weaponId: 'blast-powder', star: 1, firstEvolution: true },
+          { kind: 'weapon_slot', slotNumber: 4, levelId: '1-10', star: 1 },
           { kind: 'weapon', id: 'war-drum', star: 2, firstWeapon: false },
           { kind: 'summit', star: 1 },
         ]}
@@ -269,13 +276,13 @@ describe('Wave 3B: [OB-06] UnlockReveal immediate CTA responsiveness & Claim All
     ));
 
     const claimAll = screen.getByTestId('unlock-claim-all');
-    expect(screen.getByText('Claim All (3)')).toBeTruthy();
+    expect(screen.getByText('Claim All (4)')).toBeTruthy();
     fireEvent.press(claimAll);
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('Wave 3B: [OB-08] + [AU-13] Repeat/post-pick EvolutionBanner, 200ms guard & mount audio', () => {
+describe('Wave 3B: [OB-08] + [AU-13] Repeat EvolutionBanner, 200ms guard & mount audio', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     mockBandCue.mockClear();
@@ -286,14 +293,14 @@ describe('Wave 3B: [OB-08] + [AU-13] Repeat/post-pick EvolutionBanner, 200ms gua
     jest.useRealTimers();
   });
 
-  it('emits non-blocking banner segment for repeat/post-pick evolutions while keeping first-time cutIn blocking', () => {
-    const recipe = EVOLUTION_RECIPES[0];
-    const ev: RunEvent = { id: 1, type: 'evolution_start', text: recipe.name };
+  it('emits non-blocking banner segment for repeat per-weapon evolutions while keeping first-time cutIn blocking', () => {
+    const evo = WEAPON_EVOLUTIONS[0];
+    const ev: RunEvent = { id: 1, type: 'evolution_start', text: evo.id, source: `weapon:${evo.weaponId}` };
 
     const firstScript = scriptFor([ev], { weapons: [] });
     expect(firstScript.segments.some(s => s.kind === 'cutIn')).toBe(true);
 
-    const repeatScript = scriptFor([ev], { weapons: [], bannerOnlyRecipes: new Set([recipe.id]) });
+    const repeatScript = scriptFor([ev], { weapons: [], bannerOnlyRecipes: new Set([evo.id]) });
     expect(repeatScript.segments.some(s => s.kind === 'banner')).toBe(true);
     expect(repeatScript.segments.some(s => s.kind === 'cutIn')).toBe(false);
 
@@ -303,18 +310,24 @@ describe('Wave 3B: [OB-08] + [AU-13] Repeat/post-pick EvolutionBanner, 200ms gua
       return useFightFx({ anchors });
     });
     act(() => result.current.play(repeatScript));
-    expect(result.current.banner?.recipes).toEqual([recipe.id]);
+    expect(result.current.banner?.recipes).toEqual([evo.id]);
     expect(result.current.cutIn).toBeNull();
     expect(result.current.busy).toBe(false);
   });
 
-  it('tightens EvolutionCutIn guard to 200ms and fires mount audio cues on CutIn & EvolutionPickOverlay', () => {
-    const recipe = EVOLUTION_RECIPES[0];
+  it('tightens single-weapon EvolutionCutIn guard to 200ms and fires mount audio fanfare', () => {
+    const evo = WEAPON_EVOLUTIONS[0];
+    const weapon = getArmoryWeapon(evo.weaponId);
     const onDone = jest.fn();
     const view = render(
-      <EvolutionCutIn recipes={[recipe]} weapons={[]} seconds={30} size={{ w: 375, h: 700 }} onDone={onDone} />
+      <EvolutionCutIn
+        evolutions={[{ evolution: evo, weapon, durationSec: Math.round(evo.durationMs / 1000) }]}
+        weapons={weapon ? [weapon] : []}
+        size={{ w: 375, h: 700 }}
+        onDone={onDone}
+      />
     );
-    expect(mockBandEvolve).toHaveBeenCalledWith(recipe.id);
+    expect(mockBandEvolve).toHaveBeenCalledWith(evo.id);
 
     // Tap at 0ms is ignored (< 200ms guard)
     fireEvent.press(view.getByTestId('evolution-cutin'));
@@ -326,28 +339,25 @@ describe('Wave 3B: [OB-08] + [AU-13] Repeat/post-pick EvolutionBanner, 200ms gua
     fireEvent.press(view.getByTestId('evolution-cutin'));
     act(() => { jest.advanceTimersByTime(120); });
     expect(onDone).toHaveBeenCalledTimes(1);
-
-    // EvolutionPickOverlay fires 3 staggered reelStop cues on mount
-    const pick = render(
-      <EvolutionPickOverlay
-        optionIds={[EVOLUTION_RECIPES[0].id, EVOLUTION_RECIPES[1].id]}
-        totalIdle={2}
-        onPick={() => {}}
-      />
-    );
-    act(() => { jest.advanceTimersByTime(200); });
-    expect(mockBandCue.mock.calls.filter(c => c[0] === 'reelStop')).toHaveLength(3);
-    pick.unmount();
   });
 });
 
-describe('Wave 3B: [OB-09] & [OB-12] 2-2 taughtOnPreview, MechanicIntro Skip & 3 stale mechanics.ts copy fixes', () => {
-  it('unifies 2-2 evolutions into taughtOnPreview so Fight launches with zero double-modal', () => {
+describe('Wave 3B: [OB-09] & [OB-12] 2-2 taughtOnPreview, MechanicIntro Skip & updated per-weapon evolution/slot/bounty copy', () => {
+  it('unifies 2-2 evolutions into taughtOnPreview and builds adaptive evolution lesson for player weapon', () => {
     const save22 = createSaveBefore('2-2');
     const lvl22 = getLevel('2-2');
     const due = lessonsDueBefore(lvl22, save22);
     expect(due.length).toBeGreaterThanOrEqual(1);
     expect(due.every(p => taughtOnPreview(p, lvl22))).toBe(true);
+
+    const adaptive = buildAdaptiveEvolutionMechanic({
+      ...save22,
+      charms: ['blast-powder'],
+      unlockedWeaponEvolutions: [STARTER_EVOLUTION_ID],
+      equippedEvolutions: { 'blast-powder': STARTER_EVOLUTION_ID },
+    });
+    expect(adaptive.tagline).toContain('Cluster Charge');
+    expect(adaptive.tagline).toContain('Blast Powder');
   });
 
   it('always renders Skip on MechanicIntro and Skip check on quiz steps', () => {
@@ -368,17 +378,56 @@ describe('Wave 3B: [OB-09] & [OB-12] 2-2 taughtOnPreview, MechanicIntro Skip & 3
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('fixes all 3 stale copy bugs in mechanics.ts', () => {
+  it('documents per-weapon timed evolutions, W1/W2 4th & 5th weapon slots, 200 weapon-linked bounties, and waves pause copy', () => {
     const evoDemo = MECHANICS.evolutions.demo;
     expect(evoDemo?.type).toBe('icons');
     if (evoDemo?.type === 'icons') {
-      expect(evoDemo.items.some(it => it.label === '30s of power')).toBe(true);
+      expect(evoDemo.items.some(it => it.label.includes('12–28s'))).toBe(true);
       expect(evoDemo.items.some(it => it.label === '20s of power')).toBe(false);
     }
-    expect(MECHANICS.bounty_board.body.join(' ')).toContain('Bounty Board at Camp');
+    expect(MECHANICS.evolutions.coachMark?.on).toBe('evo_almost');
+    expect(MECHANICS.evolutions.body.join(' ')).not.toMatch(/Catalyst|Power meter/i);
+
+    // W1 (1-10) 4th slot & W2 (2-10) 5th slot milestone copy & slot math
+    expect(MECHANICS.charm_slots.body.join(' ')).toContain('World 1 Boss (1-10)');
+    expect(MECHANICS.charm_slots.body.join(' ')).toContain('World 2 Boss (2-10)');
+    const freshSave = createNewSave();
+    expect(bossUnlockedCharmSlots(freshSave)).toBe(0);
+    expect(charmSlotsOf(freshSave)).toBe(3);
+    expect(charmSlotsOf({ ...freshSave, stars: { '1-10': 1 } })).toBe(4);
+    expect(charmSlotsOf({ ...freshSave, stars: { '1-10': 1, '2-10': 1 } })).toBe(5);
+    expect(charmSlotsOf({ ...freshSave, stars: { '1-10': 1, '2-10': 1 }, upgrades: { charm_belt: 1 } })).toBe(6);
+
+    // 200 weapon-linked bounties copy & waves pause copy
+    expect(BOUNTIES).toHaveLength(200);
+    expect(MECHANICS.bounty_board.body.join(' ')).toContain('200 Bounties');
     expect(MECHANICS.bounty_board.body.join(' ')).not.toContain('Bounty Board on the map');
     expect(MECHANICS.waves.fightTips?.[0]?.text).toContain('clock pauses briefly');
     expect(MECHANICS.waves.fightTips?.[0]?.text).not.toContain('clock keeps running');
+
+    // First-time evoAlmost & boss weapon-slot unlock coach callouts
+    const save22 = createSaveBefore('2-2');
+    const run22 = createRun(getLevel('2-2'), {
+      ...save22,
+      charms: ['blast-powder'],
+      unlockedWeaponEvolutions: [STARTER_EVOLUTION_ID],
+      equippedEvolutions: { 'blast-powder': STARTER_EVOLUTION_ID },
+    }, { seed: 22 });
+    const almostRun: RunState = {
+      ...run22,
+      weaponEvolutions: run22.weaponEvolutions.map((t, i) => (i === 0 ? { ...t, progress: t.target - 1, almostReady: true } : t)),
+    };
+    const almostCallout = evoAlmostOnboardingCallout(almostRun, { seenEvoAlmost: false });
+    expect(almostCallout?.key).toBe(EVO_ALMOST_COACH_KEY);
+    expect(almostCallout?.text).toContain('Blast Powder');
+    expect(evoAlmostOnboardingCallout(almostRun, { seenEvoAlmost: true })).toBeNull();
+
+    const slot4Line = weaponSlotUnlockCoachLine(4, 'Orange Tabby');
+    const slot5Line = weaponSlotUnlockCoachLine(5, 'Sly Fox');
+    expect(slot4Line.key).toBe(`${WEAPON_SLOT_UNLOCK_COACH_KEY}_4`);
+    expect(slot4Line.text).toContain('4th weapon slot');
+    expect(slot5Line.key).toBe(`${WEAPON_SLOT_UNLOCK_COACH_KEY}_5`);
+    expect(slot5Line.text).toContain('5th weapon slot');
   });
 });
 
@@ -432,8 +481,8 @@ describe('Wave 3B: [OB-10] & [OB-11] Parry onboarding, dynamic 1-4D & 3-1 Shadin
     expect(resolvedEarly.rules.boardSize).toBe(9);
     expect(resolvedEarly.rules.startingHints).toBe(0);
     expect(resolvedEarly.rules.startingGraces).toBe(0);
-    expect(resolvedEarly.rules.evolutionLikelihood).toBe(0);
     expect(resolvePracticeFeatures(practice, after14)?.has('hints')).toBe(false);
+    expect(resolvePracticeFeatures(practice, after14)?.has('evolutions')).toBe(false);
 
     const after28 = createSaveBefore('2-9');
     const resolvedLate = resolvePracticeLevel(practice, after28);
@@ -441,7 +490,7 @@ describe('Wave 3B: [OB-10] & [OB-11] Parry onboarding, dynamic 1-4D & 3-1 Shadin
     expect(resolvedLate.rules.boardSize).toBe(12);
     expect(resolvedLate.rules.startingHints).toBe(3);
     expect(resolvedLate.rules.startingGraces).toBe(2);
-    expect(resolvedLate.rules.evolutionLikelihood).toBe(15);
+    expect(resolvePracticeFeatures(practice, after28)?.has('evolutions')).toBe(true);
 
     // 1-4 unlocks Damage Numbers (splitting 1-7's 5-system dump)
     expect(shouldShowDamageNumbers(getLevel('1-3'), createNewSave())).toBe(false);
@@ -485,14 +534,13 @@ describe('Wave 3B: [OB-13] & [OB-17] DefeatOverlay instant retry, Closest Yet! b
     const survival12 = diagnoseResultTip(lvl12, { ...base12, mistakes: 0 }, 1, save12);
     expect(survival12?.text ?? '').not.toContain('Rainbow Charm');
 
-    // World 2+ defeat with unarmed evolution offers 1-tap "Arm <Recipe> & Retry"
+    // World 2+ defeat with unarmed evolution offers 1-tap "Tune Evolutions" Camp Armory CTA
     const maxed = { ...createMaxedSave(), charms: [] };
     const lvl22 = getLevel('2-2');
-    const run22 = { ...createRun(lvl22, maxed, { seed: 22 }), armedRecipes: [], mistakes: 0 };
+    const run22 = { ...createRun(lvl22, maxed, { seed: 22 }), weaponEvolutions: [], mistakes: 0 };
     const evoTip = diagnoseResultTip(lvl22, run22, 0, maxed);
-    expect(evoTip?.quickAction?.kind).toBe('arm_recipe');
-    expect(evoTip?.quickAction?.label).toMatch(/^Arm .+ & Retry$/);
-    expect(armableRecipesFromArmory(maxed).length).toBeGreaterThan(0);
+    expect(evoTip?.quickAction?.kind).toBe('open_armory');
+    expect(evoTip?.quickAction?.label).toBe('Tune Evolutions');
   });
 
   it('renders DefeatOverlay with Closest Yet! bar, hidden purse, 1-tap Arm & Retry, Tailwind toggle, and instant RETRY', () => {
