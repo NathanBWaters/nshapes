@@ -555,15 +555,17 @@ describe('Camp', () => {
     expect(view.queryByTestId('history-more')).toBeNull();
   });
 
-  it('holds the sound and effects switches', () => {
+  it('holds a Settings launcher (no mislabeled Sound toggle) and the effects switch', () => {
     const changed = jest.fn();
     const save = createNewSave();
     const view = campOf(save, [], { onChange: changed });
-    fireEvent.press(view.getByTestId('camp-toggle-sound'));
-    expect(changed).toHaveBeenLastCalledWith({ ...save, musicOn: false });
+    // The old "Sound: on/off" toggle only flipped save.musicOn; Settings owns Music/SFX/Haptics now
+    expect(view.queryByTestId('camp-toggle-sound')).toBeNull();
+    expect(view.queryByText(/^Sound: (on|off)$/)).toBeNull();
+    expect(view.getByTestId('camp-open-settings')).toBeTruthy();
+    expect(view.getByText('Settings')).toBeTruthy();
     fireEvent.press(view.getByTestId('camp-toggle-effects'));
     expect(changed).toHaveBeenLastCalledWith({ ...save, effectsOn: false });
-    expect(view.getByText('Sound: on')).toBeTruthy();
   });
 });
 

@@ -43,6 +43,12 @@ import { triggerHaptic } from '@/utils/haptics';
 import { HapticsStorage } from '@/utils/hapticsStorage';
 import { ScreenFlashStorage, ScreenShakeStorage } from '@/utils/fxSettingsStorage';
 import {
+  TEXT_SIZE_SCALES,
+  TextSizeStorage,
+  useTextSize,
+  type TextSizeMode,
+} from '@/utils/textSizeStorage';
+import {
   ColorblindStorage,
   MusicStorage,
   resetAllClassicStorage,
@@ -66,21 +72,19 @@ import KeybindingSheet from './KeybindingSheet';
 const CAN_RENDER_LIVE_SVG_CARD =
   typeof SvgDefault === 'function' || typeof SvgDefault === 'string';
 
-// ─── Global Fight Effects & Text Size MMKV Stores (zero storage.ts edits) ───
+// ─── Global Fight Effects MMKV Store (zero storage.ts edits) ────────────────
+// Text Size lives in ONE place: `src/utils/textSizeStorage.ts` ([UI-16]).
 
 export const FIGHT_EFFECTS_STORAGE_KEY = 'fight_effects_enabled';
-export const TEXT_SIZE_STORAGE_KEY = 'text_size_mode';
+export { TEXT_SIZE_STORAGE_KEY } from '@/utils/textSizeStorage';
 
-export type TextSizeSetting = 'normal' | 'large';
+export type TextSizeSetting = TextSizeMode;
 
 type BoolListener = (v: boolean) => void;
-type TextSizeListener = (v: TextSizeSetting) => void;
 
 const fightEffectsListeners = new Set<BoolListener>();
-const textSizeListeners = new Set<TextSizeListener>();
 
 let fightEffectsFallback = true;
-let textSizeFallback: TextSizeSetting = 'normal';
 
 const hasMmkv = (): boolean =>
   Boolean(
@@ -134,38 +138,18 @@ export const FightEffectsStorage = {
   },
 };
 
-/** Reactive MMKV preference for Text Size (`normal` = 1.0x, `large` = 1.15x). */
+/**
+ * Backward-compatible alias of the single reactive `TextSizeStorage` ([UI-16] + [UI-21]).
+ * Not a second store: every read/write/subscription goes through `src/utils/textSizeStorage.ts`,
+ * so `useTextScale()` consumers (AdventureRun, GearBelt, HudInspector, LevelPreview,
+ * WeaponExplainer) re-render the instant Text Size changes here.
+ */
 export const SettingsTextSizeStorage = {
-  get: (): TextSizeSetting => {
-    if (hasMmkv()) {
-      const raw = storage.getString(TEXT_SIZE_STORAGE_KEY);
-      if (raw === 'large' || raw === 'normal') return raw;
-    }
-    return textSizeFallback;
-  },
-
-  set: (size: TextSizeSetting): void => {
-    textSizeFallback = size;
-    if (hasMmkv()) {
-      storage.set(TEXT_SIZE_STORAGE_KEY, size);
-    }
-    textSizeListeners.forEach(fn => {
-      try {
-        fn(size);
-      } catch {
-        // ignore subscriber errors
-      }
-    });
-  },
-
-  scaleOf: (size: TextSizeSetting): number => (size === 'large' ? 1.15 : 1),
-
-  subscribe: (listener: TextSizeListener): (() => void) => {
-    textSizeListeners.add(listener);
-    return () => {
-      textSizeListeners.delete(listener);
-    };
-  },
+  get: (): TextSizeSetting => TextSizeStorage.get(),
+  set: (size: TextSizeSetting): void => TextSizeStorage.set(size),
+  scaleOf: (size: TextSizeSetting): number => TEXT_SIZE_SCALES[size],
+  subscribe: (listener: (size: TextSizeSetting) => void): (() => void) =>
+    TextSizeStorage.subscribe(listener),
 };
 
 // ─── Live 3-Card Preview Fixtures (White / Blueprint Mist / Charcoal) ───────
@@ -297,7 +281,8 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
 
   // Readability & Accessibility
   const [colorblindOn, setColorblindOn] = useState(readColorblindPref);
-  const [textSize, setTextSizeState] = useState<TextSizeSetting>(() => SettingsTextSizeStorage.get());
+  // Reactive read of the single global TextSizeStorage (no local copy to drift out of sync)
+  const textSize = useTextSize();
 
   // Sub-sheets & Data Controls
   const [showKeybindings, setShowKeybindings] = useState(false);
@@ -328,7 +313,6 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     setShakeEnabledState(ScreenShakeStorage.get());
     setFlashEnabledState(ScreenFlashStorage.get());
     setColorblindOn(readColorblindPref());
-    setTextSizeState(SettingsTextSizeStorage.get());
     setAnalyticsOn(!analyticsOptedOut());
     setCopiedCode(false);
     setBackupCode(null);
@@ -351,7 +335,6 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
       ScreenShakeStorage.subscribe(setShakeEnabledState),
       ScreenFlashStorage.subscribe(setFlashEnabledState),
       typeof ColorblindStorage?.subscribe === 'function' ? ColorblindStorage.subscribe(setColorblindOn) : undefined,
-      SettingsTextSizeStorage.subscribe(setTextSizeState),
     ];
     return () => {
       unsubs.forEach(u => u?.());
@@ -421,8 +404,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
   };
 
   const handleSelectTextSize = (size: TextSizeSetting) => {
-    setTextSizeState(size);
-    SettingsTextSizeStorage.set(size);
+    TextSizeStorage.set(size);
   };
 
   const handleToggleAnalytics = () => {
@@ -487,7 +469,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
     if (copied) setCopiedCode(true);
   };
 
-  const textScale = SettingsTextSizeStorage.scaleOf(textSize);
+  const textScale = TEXT_SIZE_SCALES[textSize];
 
   if (!visible && !showKeybindings) return null;
 

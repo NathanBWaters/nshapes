@@ -18,6 +18,7 @@ import { WeaponAvatar } from '@/components/weapons';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { EASE, exitMs, MS, SCALE } from '@/utils/motion';
+import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import { growthStacks, type GrowthState } from '../data/weaponGrowth';
 import type { ActiveWeaponCounter } from '../engine/fight';
 import type { BeltBadge, SetIgnition } from '../types';
@@ -83,6 +84,9 @@ const BeltItem: React.FC<{
   noBottomBleed = false,
   onPress,
 }) => {
+  const textScale = useTextScale();
+  // [UI-16] Badge text follows Settings → Text Size (1.0× / 1.15×) above the 11px floor
+  const badgeFont = { fontSize: scaleText(11, textScale), lineHeight: scaleText(13, textScale) };
   const [fired, setFired] = useState(0);
   const [shownBadge, setShownBadge] = useState<BeltBadge | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,13 +166,13 @@ const BeltItem: React.FC<{
         {/* Enemy counter debuff indicator when the active foe weakens this weapon's category */}
         {counter && (
           <View style={st.counterBadge} testID={`belt-counter-${weapon.id}`} pointerEvents="none">
-            <Text style={st.counterBadgeText} numberOfLines={1}>−{counter.reduction}%</Text>
+            <Text style={[st.counterBadgeText, badgeFont]} numberOfLines={1}>−{counter.reduction}%</Text>
           </View>
         )}
         {/* How far it has grown this fight */}
         {stacks > 0 && (
           <View style={st.stacks} testID={`belt-stacks-${weapon.id}`} pointerEvents="none">
-            <Text style={st.stacksText}>+{Math.round(stacks)}</Text>
+            <Text style={[st.stacksText, badgeFont]}>+{Math.round(stacks)}</Text>
           </View>
         )}
         {/* Balatro-style live value popup showing exact damage/mult/effect contributed */}
@@ -178,7 +182,7 @@ const BeltItem: React.FC<{
             testID={`belt-badge-${weapon.id}`}
             style={[st.triggerBadge, { backgroundColor: BADGE_BG[shownBadge.kind] }, badgeStyle]}
           >
-            <Text style={st.triggerBadgeText} numberOfLines={1}>{shownBadge.text}</Text>
+            <Text style={[st.triggerBadgeText, badgeFont]} numberOfLines={1}>{shownBadge.text}</Text>
           </Animated.View>
         )}
       </TouchableOpacity>

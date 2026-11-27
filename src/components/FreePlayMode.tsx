@@ -26,6 +26,7 @@ import { createInitialGameState } from '@/game/gameState';
 import type { GameState } from '@/game/types';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
 import { useParticles } from '@/hooks/useParticles';
 import type { AttributeName, Card, CardReward, FreePlayDifficulty } from '@/types';
@@ -251,21 +252,26 @@ const FreePlayMode: React.FC<FreePlayModeProps> = ({
     }
   }, [isPlayingBoard]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard shortcut for hints on web
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !isPlayingBoard || typeof window === 'undefined') return;
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'h' || e.key === 'H') {
-        if (hasActiveHint) {
-          setClearHintTrigger(t => t + 1);
-        } else if ((totalStats.hints ?? 0) > 0) {
-          setHintTrigger(t => t + 1);
-        }
+  // [UI-23] Web keyboard shortcuts on the shared z-priority stack (any SettingsSheet/modal preempts them):
+  // H toggles a hint, card-slot keys pick cards, Backspace clears the pick
+  const [keyCardSlot, setKeyCardSlot] = useState<{ index: number; seq: number } | null>(null);
+  const [clearSelectionTrigger, setClearSelectionTrigger] = useState(0);
+  useKeyboardNav({
+    enabled: isPlayingBoard,
+    priority: KEY_PRIORITY.SCREEN,
+    onHint: () => {
+      if (hasActiveHint) {
+        setClearHintTrigger(t => t + 1);
+      } else if ((totalStats.hints ?? 0) > 0) {
+        setHintTrigger(t => t + 1);
       }
-    };
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isPlayingBoard, hasActiveHint, totalStats.hints]);
+    },
+    onClear: () => setClearSelectionTrigger(t => t + 1),
+    onCardSlot: index => {
+      if (index >= state.board.length) return;
+      setKeyCardSlot(prev => ({ index, seq: (prev?.seq ?? 0) + 1 }));
+    },
+  });
 
   const startZenEndless = useCallback(
     (chosen: FreePlayDifficulty) => {
@@ -964,6 +970,8 @@ const FreePlayMode: React.FC<FreePlayModeProps> = ({
           lastMatchTime={lastMatchTime}
           autoPlayer={autoPlayer}
           connections={state.connections}
+          triggerCardSlot={keyCardSlot}
+          triggerClearSelection={clearSelectionTrigger}
         />
       </View>
 

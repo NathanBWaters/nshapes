@@ -603,7 +603,7 @@ Format per entry: where · sees · trigger · mechanism · params · class · re
 - reach: `camp-tab-arcana` → `camp-arcana-<id>`.
 
 #### camp-settings-toggles
-- where: `Camp.tsx:302-343` (`camp-toggle-sound`, `camp-toggle-effects`, `camp-toggle-analytics`).
+- where: `Camp.tsx` QUICK SETTINGS (`camp-open-settings` → global `SettingsSheet`, `camp-toggle-effects`, `camp-toggle-analytics`).
 - sees: label text swaps on/off.
 - class: text-swap; smells: NO-MOTION (minor).
 

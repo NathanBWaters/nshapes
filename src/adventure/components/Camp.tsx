@@ -13,6 +13,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon, { type IconName } from '@/components/Icon';
+import { FightEffectsStorage, SettingsSheet } from '@/components/SettingsSheet';
 import { FighterAvatar } from '@/components/fighters';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { WeaponAvatar } from '@/components/weapons';
@@ -123,6 +124,10 @@ interface Props {
   onReturnToLevel?: (level: LevelDef) => void;
   /** [TP-12] 1-tap jump into 1-4D Training Lab sandbox with current build */
   onTestLoadout?: (activeTab?: CampTab | null) => void;
+  /** [UI-21] Reload the save after a Backup Code restore from the Camp Settings sheet */
+  onSaveRestored?: () => void;
+  /** [UI-21] Replay the 1-1 walkthrough from the Camp Settings sheet */
+  onReplayWalkthrough?: () => void;
 }
 
 const NO_BATTLES: readonly BattleRecord[] = [];
@@ -158,11 +163,15 @@ const Camp: React.FC<Props> = ({
   returnLevel,
   onReturnToLevel,
   onTestLoadout,
+  onSaveRestored,
+  onReplayWalkthrough,
 }) => {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   /** The open section; null is the menu */
   const [tab, setTab] = useState<CampTab | null>(initialTab ?? null);
+  /** [UI-21] Global SettingsSheet (Music, SFX, Haptics, visuals, Text Size, keys, backup…) */
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [analyticsOn, setAnalyticsOn] = useState(() => !analyticsOptedOut());
   const [treeFighter, setTreeFighter] = useState<CharacterName | null>(null);
   const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
@@ -527,13 +536,13 @@ const Camp: React.FC<Props> = ({
             <Text style={st.sectionLabel}>QUICK SETTINGS</Text>
             <View style={st.settings}>
               <Btn
-                testID="camp-toggle-sound"
+                testID="camp-open-settings"
                 small
                 variant="secondary"
-                icon="delapouite/sound-on"
-                label={save.musicOn ? 'Sound: on' : 'Sound: off'}
-                onPress={() => onChange({ ...save, musicOn: !save.musicOn })}
-                style={{ flex: 1 }}
+                icon="lorc/gear-hammer"
+                label="Settings"
+                onPress={() => { sfx('click'); setSettingsOpen(true); }}
+                style={st.settingsBtn}
               />
               {/* A device that asks for reduced motion keeps effects off */}
               {!reducedMotion && (
@@ -543,7 +552,12 @@ const Camp: React.FC<Props> = ({
                   variant="secondary"
                   icon="lorc/bright-explosion"
                   label={save.effectsOn ? 'Effects: on' : 'Effects: off'}
-                  onPress={() => { sfx('click'); onChange({ ...save, effectsOn: !save.effectsOn }); }}
+                  onPress={() => {
+                    sfx('click');
+                    const next = !save.effectsOn;
+                    FightEffectsStorage.set(next);
+                    onChange({ ...save, effectsOn: next });
+                  }}
                   style={{ flex: 1 }}
                 />
               )}
@@ -1089,6 +1103,22 @@ const Camp: React.FC<Props> = ({
           />
         </View>
       )}
+
+      {/* [UI-21] Global SettingsSheet; save.musicOn / save.effectsOn stay mirrored for older saves */}
+      {settingsOpen && (
+        <SettingsSheet
+          visible
+          onClose={() => setSettingsOpen(false)}
+          showReset={false}
+          effectsOn={save.effectsOn}
+          onToggleEffects={() => onChange({ ...save, effectsOn: !save.effectsOn })}
+          onMusicChange={enabled => {
+            if (save.musicOn !== enabled) onChange({ ...save, musicOn: enabled });
+          }}
+          onReplayWalkthrough={onReplayWalkthrough}
+          onSaveRestored={onSaveRestored}
+        />
+      )}
     </View>
   );
 };
@@ -1110,6 +1140,7 @@ const st = StyleSheet.create({
   menuSub: { fontSize: 12, color: INK, opacity: 0.8 },
   menuChevron: { fontSize: 26, fontWeight: '900', color: INK, opacity: 0.5 },
   settings: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  settingsBtn: { flex: 1, minHeight: 44, minWidth: 44 },
   dock: { borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.walnutSurface, paddingTop: 8 },
   dockBody: { paddingHorizontal: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
   dockClose: { position: 'absolute', top: -14, right: 12, zIndex: 2, width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },

@@ -40,6 +40,8 @@ import { createRng } from '@/adventure/engine/rng';
 import { gearUp } from '@/adventure/engine/botBuilds';
 import { countDifferentAttributes } from '@/adventure/engine/sets';
 import { isValidCombination } from '@/utils/gameUtils';
+import { cardBgPatternMeta, cardColorLabel } from '@/utils/cardColors';
+import { formatShapeName } from '@/utils/cardVisuals';
 import type { AdventureSave, ArcanaId, LevelDef } from '@/adventure/types';
 import type { AttributeName, Background, Card, Color, Number as CardNumber, Shading, Shape } from '@/types';
 
@@ -143,8 +145,36 @@ interface Slot {
   snare: 'up' | 'down' | 'left' | 'right' | null;
 }
 
-const CARD_LABEL_RE =
-  /^(1|2|3) (red|green|purple) (solid|striped|open) (oval|squiggle|diamond)(?: on (white|beige|charcoal))?(.*)$/;
+// Cards are announced with their player-facing names (e.g. "1 orange solid triangle on mist"),
+// so the parser maps the spoken words back to the engine's attribute values through the same helpers Card uses.
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const spokenToCanonical = <T extends string>(values: readonly T[], speak: (v: T) => string[]): Record<string, T> =>
+  Object.fromEntries(values.flatMap(v => speak(v).map(word => [word, v]))) as Record<string, T>;
+const SPOKEN_COLOR = spokenToCanonical<Color>(['red', 'green', 'purple'], c => [cardColorLabel(c)]);
+const SPOKEN_SHAPE = spokenToCanonical<Shape>(['oval', 'diamond', 'squiggle'], s => [formatShapeName(s).toLowerCase()]);
+const SPOKEN_BG = spokenToCanonical<Background>(['white', 'beige', 'charcoal'], b => [
+  cardBgPatternMeta(b, false).a11yLabel,
+  cardBgPatternMeta(b, true).a11yLabel,
+]);
+const alt = (words: Record<string, string>) => Object.keys(words).map(escapeRe).join('|');
+const CARD_LABEL_RE = new RegExp(
+  `^(1|2|3) (${alt(SPOKEN_COLOR)}) (solid|striped|open) (${alt(SPOKEN_SHAPE)})(?: on (${alt(SPOKEN_BG)}))?(.*)$`
+);
+
+/** Parse a card's accessibility label back into engine attributes. */
+function parseCardLabel(label: string, id: string): Card & { tail: string } {
+  const m = CARD_LABEL_RE.exec(label)!;
+  return {
+    id,
+    number: Number(m[1]) as CardNumber,
+    color: SPOKEN_COLOR[m[2]],
+    shading: m[3] as Shading,
+    shape: SPOKEN_SHAPE[m[4]],
+    background: m[5] ? SPOKEN_BG[m[5]] : 'white',
+    selected: false,
+    tail: m[6] ?? '',
+  };
+}
 
 function collectTreeText(node: any): string {
   if (node == null) return '';
@@ -174,8 +204,7 @@ function readLiveBoard(screen: Screen): Slot[] {
         n => typeof n.props?.accessibilityLabel === 'string' && CARD_LABEL_RE.test(n.props.accessibilityLabel)
       )[0];
       if (!pressable) continue;
-      const m = CARD_LABEL_RE.exec(pressable.props.accessibilityLabel as string)!;
-      const tail = m[6] ?? '';
+      const { tail, ...parsed } = parseCardLabel(pressable.props.accessibilityLabel as string, `card-slot-${r}-${c}`);
       const isDud = tail.includes(', dud');
       const isFaceDown = tail.includes(', face down');
       const snare = /, snare pointing (up|down|left|right)/.exec(tail)?.[1] as Slot['snare'] | undefined;
@@ -192,17 +221,7 @@ function readLiveBoard(screen: Screen): Slot[] {
           tail.includes(', evolution choice catalyst'),
         bomb: String(pressable.props?.testID ?? '').includes('-countdown'),
         snare: snare ?? null,
-        card: {
-          id: `card-slot-${r}-${c}`,
-          number: Number(m[1]) as CardNumber,
-          color: m[2] as Color,
-          shading: m[3] as Shading,
-          shape: m[4] as Shape,
-          background: (m[5] as Background | undefined) ?? 'white',
-          selected: false,
-          isDud,
-          isFaceDown,
-        },
+        card: { ...parsed, isDud, isFaceDown },
       });
     }
   }
@@ -276,16 +295,8 @@ function completeLessons(screen: Screen, attrs: AttributeName[]): string[] {
       let yes = true;
       if (demo.length >= 3) {
         const cards: Card[] = demo.slice(-3).map((n, i) => {
-          const m = CARD_LABEL_RE.exec(n.props.accessibilityLabel)!;
-          return {
-            id: `q-${i}`,
-            number: Number(m[1]) as CardNumber,
-            color: m[2] as Color,
-            shading: m[3] as Shading,
-            shape: m[4] as Shape,
-            background: (m[5] as Background | undefined) ?? 'white',
-            selected: false,
-          };
+          const { tail: _tail, ...card } = parseCardLabel(n.props.accessibilityLabel, `q-${i}`);
+          return card;
         });
         yes = isValidCombination(cards, attrs).isValid;
       }
@@ -482,9 +493,8 @@ describe('Adventure Mode full-game E2E', () => {
 
     // Zero pre-fight modals on 1-1: jumps straight onto the guided board
     expect(screen.queryByTestId('lesson-modal')).toBeNull();
-    // (the foe taunts first; then the fighter says what to do)
-    expect(screen.getByTestId('run-foe-taunt')).toBeTruthy();
-    advanceMs(2500);
+    // [OB-15]/[OB-19] Coaching-first opening: no foe taunt on 1-1, the fighter says what to do straight away
+    expect(screen.queryByTestId('run-foe-taunt')).toBeNull();
     expect(screen.getByTestId('run-coach-banner')).toBeTruthy();
     // Bare level: no passives, no hint button, no evolution chip, no cluttering damage counters
     expect(screen.queryAllByTestId(/^run-passive-/)).toHaveLength(0);
@@ -843,6 +853,8 @@ describe('Adventure Mode full-game E2E', () => {
 
     fireEvent.press(screen.getByTestId(`map-node-${MAIN_LEVELS[3].id}`));
     expect(screen.getByTestId('preview-slot-0')).toBeTruthy();
+    // [UI-20] The briefing shows a compact summary; the armory picker lives on the Loadout tab
+    fireEvent.press(screen.getByTestId('preview-open-loadout'));
     expect(screen.getByTestId(`charm-${charm}`).props.accessibilityState?.selected).toBe(true);
   });
 });

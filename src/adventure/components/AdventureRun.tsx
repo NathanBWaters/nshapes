@@ -16,12 +16,14 @@ import { Svg, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { CardBoardProvider, type CardBoardOverlay } from '@/components/Card';
 import GameBoard from '@/components/GameBoard';
 import Icon, { type IconName } from '@/components/Icon';
+import { PauseAudioPills, SettingsSheet } from '@/components/SettingsSheet';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useCombatShake } from '@/hooks/useCombatShake';
+import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useEnemyConductor } from '@/hooks/useEnemyConductor';
 import { useFighterConductor } from '@/hooks/useFighterConductor';
@@ -349,6 +351,11 @@ const AdventureRun: React.FC<Props> = ({
     choices: recorder.current.choicesJSON(),
   }), [startSave]);
   const [paused, setPaused] = useState(false);
+  /** [UI-21] Global SettingsSheet opened from Pause → "All Settings" (the fight stays paused underneath) */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** [UI-23] Keyboard card-slot hotkey + Backspace clear, handed to GameBoard's tap path */
+  const [keyCardSlot, setKeyCardSlot] = useState<{ index: number; seq: number } | null>(null);
+  const [clearSelectionTrigger, setClearSelectionTrigger] = useState(0);
   const [hudHeight, setHudHeight] = useState(150);
   const [hintTrigger, setHintTrigger] = useState(0);
   const [lastMatchTime, setLastMatchTime] = useState(Date.now());
@@ -1300,6 +1307,51 @@ const AdventureRun: React.FC<Props> = ({
     setEventBannerNote(null);
     dispatch({ type: 'SACRIFICE', cardIds: boardSelectedCards.map(c => c.id) });
   }, [canSacrifice, dispatch, triggerMistake, boardSelectedCards]);
+
+  // [UI-23] Desktop web keyboard controls on the shared z-priority stack:
+  // SettingsSheet (MODAL, mounted last) > Pause / HUD inspectors (MODAL) > board (SCREEN).
+  // Board keys never fire beneath Pause, inspectors, tips, evolution picks, level-up/shop, cut-ins or defeat.
+  const inspectorOpen = Boolean(inspect) || powerInfo || Boolean(hudInspect);
+  const keyboardBoardBlocked =
+    ended ||
+    Boolean(defeatOverlay) ||
+    defeatFreezeActive ||
+    Boolean(tip) ||
+    Boolean(fx.cutIn) ||
+    run.status === 'pick' ||
+    run.status === 'pick_evolution' ||
+    run.status === 'intermission';
+  useKeyboardNav({
+    enabled: !keyboardBoardBlocked && !paused && !inspectorOpen,
+    priority: KEY_PRIORITY.SCREEN,
+    onCancel: () => setPaused(true),
+    onHint: run.features.has('hints')
+      ? () => {
+          if (playing && run.stats.hints > 0 && !ui.disableManualHint) setHintTrigger(t => t + 1);
+        }
+      : undefined,
+    // `S` is Sacrifice wherever Sacrifice exists; elsewhere it stays a card-slot key
+    onSacrifice: sacrificeUnlocked ? handleSacrifice : undefined,
+    onClear: () => setClearSelectionTrigger(t => t + 1),
+    onCardSlot: index => {
+      if (!playing || fx.cutIn || index >= run.board.length) return;
+      setKeyCardSlot(prev => ({ index, seq: (prev?.seq ?? 0) + 1 }));
+    },
+  });
+  useKeyboardNav({
+    enabled: inspectorOpen && !paused,
+    priority: KEY_PRIORITY.MODAL,
+    onCancel: () => {
+      setInspect(null);
+      setPowerInfo(false);
+      setHudInspect(null);
+    },
+  });
+  useKeyboardNav({
+    enabled: paused && !settingsOpen,
+    priority: KEY_PRIORITY.MODAL,
+    onCancel: () => setPaused(false),
+  });
   const effectiveMistakeNote =
     mistakeCards && mistakeCards.length === 3
       ? explainInvalidPick(mistakeCards, run.attributes, run.fighter, colorblind)
@@ -2343,6 +2395,8 @@ const AdventureRun: React.FC<Props> = ({
               onSlotLayout={anchors.measure}
               quietRewards
               effects={effects}
+              triggerCardSlot={keyCardSlot}
+              triggerClearSelection={clearSelectionTrigger}
             />
           </CardBoardProvider>
         </View>
@@ -2511,7 +2565,7 @@ const AdventureRun: React.FC<Props> = ({
         />
       )}
 
-      <Modal visible={paused} transparent animationType="fade" onRequestClose={() => setPaused(false)}>
+      <Modal visible={paused && !settingsOpen} transparent animationType="fade" onRequestClose={() => setPaused(false)}>
         <View style={st.overlay}>
           <TouchableOpacity testID="pause-backdrop" style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPaused(false)} accessibilityLabel="Resume fight" />
           <PopIn style={st.panel}>
@@ -2549,7 +2603,7 @@ const AdventureRun: React.FC<Props> = ({
                       accessibilityRole="button"
                       accessibilityLabel={`Inspect ${w.name}`}
                     >
-                      <WeaponAvatar weapon={w} size={20} interactive />
+                      <WeaponAvatar weapon={w} size={20} />
                       <Text style={st.gearText} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLv)}</Text>
                     </TouchableOpacity>
                   );
@@ -2557,6 +2611,8 @@ const AdventureRun: React.FC<Props> = ({
               </View>
             )}
             <Btn label="Resume" onPress={() => setPaused(false)} />
+            {/* [UI-21] 1-tap Music / SFX / Haptics + All Settings without leaving the fight */}
+            <PauseAudioPills onOpenAllSettings={() => setSettingsOpen(true)} />
             {onToggleEffects && (
               <Btn
                 testID="toggle-effects"
@@ -2590,6 +2646,17 @@ const AdventureRun: React.FC<Props> = ({
           </PopIn>
         </View>
       </Modal>
+
+      {/* [UI-21] Global SettingsSheet from Pause → All Settings; closing it returns to Pause (the fight waits) */}
+      {settingsOpen && (
+        <SettingsSheet
+          visible
+          onClose={() => setSettingsOpen(false)}
+          showReset={false}
+          effectsOn={onToggleEffects ? effects : undefined}
+          onToggleEffects={onToggleEffects}
+        />
+      )}
 
       {/* A weapon from the belt, explained (the fight waits; 1-tap dimmed backdrop dismiss per [UI-15]) */}
       <Modal visible={!!inspect} transparent animationType="fade" onRequestClose={() => setInspect(null)}>

@@ -281,13 +281,20 @@ const AdventureMode: React.FC<Props> = ({
   const prevSaveMusicOn = useRef(save.musicOn);
 
   useEffect(() => {
-    const unsubMusic = typeof MusicStorage?.subscribe === 'function' ? MusicStorage.subscribe(setMusicPref) : undefined;
+    // Music toggled anywhere (Settings, Pause pills, Camp) stays mirrored into the legacy `save.musicOn`
+    const unsubMusic = typeof MusicStorage?.subscribe === 'function'
+      ? MusicStorage.subscribe(enabled => {
+          setMusicPref(enabled);
+          prevSaveMusicOn.current = enabled;
+          setSave(s => (s.musicOn === enabled ? s : { ...s, musicOn: enabled }));
+        })
+      : undefined;
     const unsubSfx = typeof SoundStorage?.subscribe === 'function' ? SoundStorage.subscribe(setSfxPref) : undefined;
     return () => {
       unsubMusic?.();
       unsubSfx?.();
     };
-  }, []);
+  }, [setSave]);
 
   useEffect(() => {
     if (save.musicOn !== prevSaveMusicOn.current) {
@@ -794,6 +801,12 @@ const AdventureMode: React.FC<Props> = ({
           });
         }}
         onClose={() => setScreen({ kind: 'map' })}
+        onReplayWalkthrough={() => startRun(MAIN_LEVELS[0])}
+        onSaveRestored={() => {
+          const reloaded = loadAdventureSave();
+          setSaveState(reloaded);
+          saveRef.current = reloaded;
+        }}
       />
     );
   } else if (screen.kind === 'guide') {

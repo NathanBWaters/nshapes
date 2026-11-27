@@ -96,6 +96,10 @@ interface GameBoardProps {
   rng?: () => number;
   /** Optional Adventure damped-entropy pity-bag accumulator for low-proc (<= 35%) weapon channels */
   procAccum?: ProcAccumulatorState;
+  /** [UI-23] Keyboard card-slot hotkey: toggles the card at `index` each time `seq` changes */
+  triggerCardSlot?: { index: number; seq: number } | null;
+  /** [UI-23] Keyboard Clear Selection (Backspace): deselects every picked card when it increments */
+  triggerClearSelection?: number;
 }
 
 const GameBoard: React.FC<GameBoardProps> = ({
@@ -135,6 +139,8 @@ const GameBoard: React.FC<GameBoardProps> = ({
   effects = true,
   rng,
   procAccum,
+  triggerCardSlot,
+  triggerClearSelection,
 }) => {
   recordComponentRender('GameBoard');
   const rngRef = useRef<(() => number) | undefined>(rng);
@@ -656,6 +662,23 @@ const GameBoard: React.FC<GameBoardProps> = ({
   const stableHandleCardClick = useCallback((card: CardType) => {
     handleCardClickRef.current(card);
   }, []);
+
+  // [UI-23] Keyboard card-slot hotkeys run through the exact same tap path (all guards included)
+  useEffect(() => {
+    if (!triggerCardSlot) return;
+    const card = cards[triggerCardSlot.index];
+    if (card) handleCardClickRef.current(card);
+  }, [triggerCardSlot]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // [UI-23] Backspace clears the current pick (and cancels a not-yet-confirmed 3-card Set)
+  useEffect(() => {
+    if (!triggerClearSelection) return;
+    if (pendingConfirmRef.current) {
+      clearTimeout(pendingConfirmRef.current.timer);
+      pendingConfirmRef.current = null;
+    }
+    setSelectedCards(prev => (prev.length === 0 ? prev : []));
+  }, [triggerClearSelection]);
 
   // Auto-player - automatically finds and selects valid SETs (for testing/review)
   useAutoPlayer({

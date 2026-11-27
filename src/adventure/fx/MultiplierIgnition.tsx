@@ -904,6 +904,8 @@ const MultiplierIgnition: React.FC<Props> = ({
     const parts = primed.items.map((it, idx) => (idx === 0 ? it.label : `${it.value} ${it.label}`));
     return `Next: ${fitReceiptParts(parts, 50)}`;
   }, [primed, wide]);
+  /** Where the equation row sits inside the bar, so the `?` dot can float over its reserved slot */
+  const [eqRowBox, setEqRowBox] = useState<{ x: number; y: number; h: number } | null>(null);
 
   // If neither an ignition nor a live run is present, nothing to render
   if (!breakdown && !primed) return null;
@@ -954,7 +956,17 @@ const MultiplierIgnition: React.FC<Props> = ({
     : { top: 20, bottom: 0, left: 12, right: 12 };
 
   const eqRowContent = (
-    <View style={st.eqRow}>
+    <View
+      style={st.eqRow}
+      onLayout={
+        onPress
+          ? e => {
+              const { x, y, height } = e.nativeEvent.layout;
+              setEqRowBox(prev => (prev && prev.x === x && prev.y === y && prev.h === height ? prev : { x, y, h: height }));
+            }
+          : undefined
+      }
+    >
       <View style={[st.tagPill, phase === 'tally' && st.tagPillLive]}>
         <Text style={[st.tagText, phase === 'tally' && st.tagTextLive]}>{tagText}</Text>
       </View>
@@ -1013,21 +1025,9 @@ const MultiplierIgnition: React.FC<Props> = ({
         </Animated.View>
       </View>
 
-      {onPress ? (
-        <TouchableOpacity
-          testID="score-info-dot"
-          onPress={onPress}
-          hitSlop={infoDotHitSlop}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel="Inspect score breakdown"
-          style={st.infoDot}
-        >
-          <Text style={st.infoText}>?</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={{ width: 20 }} />
-      )}
+      {/* Reserved slot for the `?` dot: the real button floats over it as a SIBLING of the bar button
+          (a button inside a button is invalid HTML and React-DOM errors on it) */}
+      <View style={{ width: 20 }} />
     </View>
   );
 
@@ -1079,6 +1079,10 @@ const MultiplierIgnition: React.FC<Props> = ({
   ) : null;
 
   if (onPress) {
+    // Before the first layout pass, fall back to the bar's static border + padding geometry
+    const rowX = eqRowBox?.x ?? 7.5;
+    const rowY = eqRowBox?.y ?? (wide ? 4 : 3.5);
+    const rowH = eqRowBox?.h ?? 22;
     return (
       <View style={st.outerWrap}>
         <TouchableOpacity
@@ -1093,6 +1097,18 @@ const MultiplierIgnition: React.FC<Props> = ({
           style={st.wrap}
         >
           {inner}
+        </TouchableOpacity>
+        {/* Explicit `?` stays 1-tap instant even while the thumb-zone guard is on ([UI-15]) */}
+        <TouchableOpacity
+          testID="score-info-dot"
+          onPress={onPress}
+          hitSlop={infoDotHitSlop}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Inspect score breakdown"
+          style={[st.infoDot, st.infoDotFloat, { top: rowY + (rowH - 20) / 2, right: rowX }]}
+        >
+          <Text style={st.infoText}>?</Text>
         </TouchableOpacity>
         {floatingReceipt}
       </View>
@@ -1289,6 +1305,10 @@ const st = StyleSheet.create({
     backgroundColor: '#3A2F26',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  infoDotFloat: {
+    position: 'absolute',
+    zIndex: 2,
   },
   infoText: {
     fontSize: 11,

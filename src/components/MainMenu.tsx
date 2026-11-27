@@ -174,7 +174,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     return idx >= 0 ? idx : 0;
   }, [adventureSave]);
 
-  const [mascotIndex, setMascotIndex] = useState(initialMascotIdx);
+  const [mascotIndex] = useState(initialMascotIdx);
   const [otherModesExpanded, setOtherModesExpanded] = useState(false);
   const keyboardActive = useKeyboardActive();
 
@@ -416,15 +416,10 @@ const MainMenu: React.FC<MainMenuProps> = ({
             {/* Live Storybook Matchup Stage: Fighter vs Frontier Foe */}
             <View style={styles.heroStage}>
               <View style={styles.heroAvatarBadge}>
+                {/* Display-only inside the Hero CTA: a pettable avatar here would nest a <button> in a <button> */}
                 <FighterAvatar
                   character={mascotCharacter}
                   size={58}
-                  interactive
-                  onPet={type => {
-                    if (type === 'dizzy_joy') {
-                      setMascotIndex(i => (i + 1) % CHARACTERS.length);
-                    }
-                  }}
                   testID="main-menu-mascot"
                 />
               </View>

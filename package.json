@@ -1,6 +1,6 @@
 {
   "name": "nshapes",
-  "version": "0.1.177",
+  "version": "0.1.178",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -60,6 +60,7 @@
     "motion:sheet": "node scripts/motion/sheet.mjs",
     "motion:analyze": "node scripts/motion/analyze.mjs",
     "motion:flipbook": "node scripts/motion/flipbook.mjs",
+    "pr:clip": "node scripts/motion/capture.mjs --clip",
     "prebuild": "npm run typecheck"
   },
   "react-native-audio-api": {

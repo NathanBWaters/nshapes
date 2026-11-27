@@ -722,6 +722,7 @@ const Card: React.FC<CardProps> = ({
     <Pressable
       testID={`card-${shape}-${color}-${number}-${shading}${isDud ? '-dud' : ''}${isFaceDown ? '-facedown' : ''}${hasBomb ? '-bomb' : ''}${hasCountdown ? '-countdown' : ''}`}
       accessibilityLabel={`${number} ${spokenColor} ${shading} ${spokenShape}${spokenBg ? ` on ${spokenBg}` : ''}${isDud ? ', dud' : ''}${isFaceDown ? ', face down' : ''}${card.hasEvolutionItem ? (card.evolutionReady ? (resolvedCatalystLabel ? (resolvedCatalystLabel === 'Pick Evo' ? ', evolution choice catalyst' : `, catalyst for ${resolvedCatalystLabel}`) : ', evolution ready') : ', dormant catalyst') : ''}${isMirrorSlot ? ', mirror slot' : ''}${isTightropeSlot ? ', on tightrope' : ''}${card.snare ? `, snare pointing ${card.snare}` : ''}${card.bounty ? `, bounty ${card.bounty}` : ''}`}
+      accessibilityState={{ selected: Boolean(selected) }}
       style={[
         getCardStyle(),
         isHovered && !selected && !disabled && !isUnselectable && styles.hoveredCard,
