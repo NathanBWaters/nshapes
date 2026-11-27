@@ -29,12 +29,25 @@ import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
-import { EASE, MS, SPRING, STAYS } from '@/utils/motion';
+import {
+  ARC,
+  CREATURE_FX,
+  EASE,
+  HIT,
+  MS,
+  OVERLAP,
+  SPRING,
+  STAGGER,
+  STAYS,
+  reducedMs,
+  sampleJumpArcY,
+} from '@/utils/motion';
 import { band, sfx } from '@/audio';
 import type { Card as CardType, CharacterName } from '@/types';
 import { STORY, STORY_CAPTIVE_FRIENDS, STORY_RAIDER_LEVELS, type StoryBeat } from '../data/story';
 import { getLevel } from '../data/levels';
 import { levelFoe } from '../data/foes';
+import { LivingBreath } from './CompanionBubble';
 import { CageBarsSvg, CagePadlockSvg, GoldenKeyArt } from './RescueArt';
 import { INK } from './ui';
 
@@ -164,6 +177,30 @@ const StoryIntro: React.FC<Props> = ({ fighter, onDone }) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [paused, togglePause, next]);
 
+  // Smooth directional entrance on each beat swap (`MS.screen`, `EASE.enterSoft`, `STAYS` reduced-motion safe)
+  const beatO = useSharedValue(1);
+  const beatX = useSharedValue(0);
+  useEffect(() => {
+    if (i === 0) return;
+    beatO.value = 0;
+    if (reduced) {
+      beatX.value = 0;
+      beatO.value = withTiming(1, { duration: reducedMs(MS.screen), easing: EASE.ui, ...STAYS });
+    } else {
+      beatX.value = 26;
+      beatO.value = withTiming(1, { duration: MS.feedback, easing: EASE.ui, ...STAYS });
+      beatX.value = withTiming(0, { duration: MS.screen, easing: EASE.enterSoft });
+    }
+    return () => {
+      cancelAnimation(beatO);
+      cancelAnimation(beatX);
+    };
+  }, [i, reduced, beatO, beatX]);
+  const beatStageStyle = useAnimatedStyle(() => ({
+    opacity: beatO.value,
+    transform: [{ translateX: beatX.value }],
+  }));
+
   return (
     <View testID="story-intro" style={[st.root, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 16) }]}>
       <View style={st.topRow}>
@@ -206,45 +243,47 @@ const StoryIntro: React.FC<Props> = ({ fighter, onDone }) => {
       )}
 
       {/* Beat 3 keeps the interactive cards directly tappable without triggering body advance */}
-      {beat.scene === 'hero' ? (
-        <View style={st.body}>
-          <View style={[st.scene, { width, height: sceneH }]}>
-            <Hero
-              key={i}
-              width={width}
-              height={sceneH}
-              fighter={fighter}
-              settled={beatSettled}
-              paused={paused}
-              onCompleteSet={onDone}
-            />
+      <Animated.View style={[{ flex: 1, width: '100%' }, beatStageStyle]}>
+        {beat.scene === 'hero' ? (
+          <View style={st.body}>
+            <View style={[st.scene, { width, height: sceneH }]}>
+              <Hero
+                key={i}
+                width={width}
+                height={sceneH}
+                fighter={fighter}
+                settled={beatSettled}
+                paused={paused}
+                onCompleteSet={onDone}
+              />
+            </View>
+            <TouchableOpacity
+              testID="story-body"
+              activeOpacity={1}
+              onPress={handleBodyPress}
+              style={st.wordsTap}
+              accessibilityRole="button"
+              accessibilityLabel={`${beat.title} ${beat.body}`}
+            >
+              <Words key={`w${i}`} beat={beat} fighter={fighter} settled={beatSettled} />
+            </TouchableOpacity>
           </View>
+        ) : (
           <TouchableOpacity
             testID="story-body"
             activeOpacity={1}
             onPress={handleBodyPress}
-            style={st.wordsTap}
+            style={st.body}
             accessibilityRole="button"
-            accessibilityLabel={`${beat.title} ${beat.body}`}
+            accessibilityLabel={`${beat.title} ${beat.body} Tap to continue`}
           >
+            <View style={[st.scene, { width, height: sceneH }]}>
+              <Scene key={i} beat={beat} width={width} height={sceneH} fighter={fighter} settled={beatSettled} paused={paused} onCompleteSet={onDone} />
+            </View>
             <Words key={`w${i}`} beat={beat} fighter={fighter} settled={beatSettled} />
           </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity
-          testID="story-body"
-          activeOpacity={1}
-          onPress={handleBodyPress}
-          style={st.body}
-          accessibilityRole="button"
-          accessibilityLabel={`${beat.title} ${beat.body} Tap to continue`}
-        >
-          <View style={[st.scene, { width, height: sceneH }]}>
-            <Scene key={i} beat={beat} width={width} height={sceneH} fighter={fighter} settled={beatSettled} paused={paused} onCompleteSet={onDone} />
-          </View>
-          <Words key={`w${i}`} beat={beat} fighter={fighter} settled={beatSettled} />
-        </TouchableOpacity>
-      )}
+        )}
+      </Animated.View>
 
       <View style={st.footer}>
         <TouchableOpacity testID="story-next" onPress={next} style={st.cta} activeOpacity={0.85} accessibilityRole="button">
@@ -507,19 +546,19 @@ const DroppingCage: React.FC<{ size: number; delay: number; settled: boolean }> 
       sy.value = 1;
       return;
     }
-    o.value = withDelay(delay, withTiming(1, { duration: 48, easing: EASE.ui }));
+    o.value = withDelay(delay, withTiming(1, { duration: OVERLAP.uiContentMs, easing: EASE.ui }));
     y.value = withDelay(delay, withTiming(0, { duration: CAGE_DROP_MS, easing: EASE.impact }));
     sx.value = withDelay(
       delay + CAGE_DROP_MS,
       withSequence(
-        withTiming(1.09, { duration: 40, easing: EASE.ui }),
+        withTiming(1.09, { duration: STAGGER.card, easing: EASE.ui }),
         withSpring(1, SPRING.snappy)
       )
     );
     sy.value = withDelay(
       delay + CAGE_DROP_MS,
       withSequence(
-        withTiming(0.91, { duration: 40, easing: EASE.ui }),
+        withTiming(0.91, { duration: STAGGER.card, easing: EASE.ui }),
         withSpring(1, SPRING.snappy)
       )
     );
@@ -579,7 +618,7 @@ const ScatteredKey: React.FC<{
     y.value = withDelay(
       delay,
       withSequence(
-        withTiming(fromY - 14, { duration: 80, easing: EASE.enter }),
+        withTiming(fromY - 14, { duration: CREATURE_FX.fidgetFastMs, easing: EASE.enter }),
         withSpring(0, SPRING.snappy)
       )
     );
@@ -631,11 +670,12 @@ const KeysRoad: React.FC<SceneSize> = ({ width, height: h, settled, paused }) =>
       return;
     }
     if (paused) return;
-    keyO.value = withDelay(80, withTiming(1, { duration: MS.quick, easing: EASE.ui }));
-    keyScale.value = withDelay(80, withSpring(1, SPRING.playful));
-    barsSplit.value = withDelay(340, withTiming(1, { duration: MS.move, easing: EASE.enterSoft }));
-    friendPop.value = withDelay(360, withSpring(1, SPRING.playful));
-    const t = setTimeout(() => band.cue('keyFound'), 340);
+    const barsSplitAtMs = MS.move + STAGGER.item;
+    keyO.value = withDelay(CREATURE_FX.fidgetFastMs, withTiming(1, { duration: MS.quick, easing: EASE.ui }));
+    keyScale.value = withDelay(CREATURE_FX.fidgetFastMs, withSpring(1, SPRING.playful));
+    barsSplit.value = withDelay(barsSplitAtMs, withTiming(1, { duration: MS.move, easing: EASE.enterSoft }));
+    friendPop.value = withDelay(barsSplitAtMs + HIT.snapMs, withSpring(1, SPRING.playful));
+    const t = setTimeout(() => band.cue('keyFound'), barsSplitAtMs);
     return () => {
       clearTimeout(t);
       cancelAnimation(keyO);
@@ -649,14 +689,22 @@ const KeysRoad: React.FC<SceneSize> = ({ width, height: h, settled, paused }) =>
     opacity: keyO.value,
     transform: [{ scale: keyScale.value }],
   }));
-  const leftBarStyle = useAnimatedStyle(() => ({
-    opacity: 1 - barsSplit.value * 0.85,
-    transform: [{ translateX: -barsSplit.value * 26 }, { rotate: `${-barsSplit.value * 14}deg` }],
-  }));
-  const rightBarStyle = useAnimatedStyle(() => ({
-    opacity: 1 - barsSplit.value * 0.85,
-    transform: [{ translateX: barsSplit.value * 26 }, { rotate: `${barsSplit.value * 14}deg` }],
-  }));
+  const leftBarStyle = useAnimatedStyle(() => {
+    const t = barsSplit.value;
+    const arcY = sampleJumpArcY(t, 12, ARC.jumpApexT) + 20 * t * t;
+    return {
+      opacity: 1 - t * 0.85,
+      transform: [{ translateX: -t * 28 }, { translateY: arcY }, { rotate: `${-t * 16}deg` }],
+    };
+  });
+  const rightBarStyle = useAnimatedStyle(() => {
+    const t = barsSplit.value;
+    const arcY = sampleJumpArcY(t, 12, ARC.jumpApexT) + 20 * t * t;
+    return {
+      opacity: 1 - t * 0.85,
+      transform: [{ translateX: t * 28 }, { translateY: arcY }, { rotate: `${t * 16}deg` }],
+    };
+  });
   const friendStyle = useAnimatedStyle(() => ({
     transform: [{ scale: friendPop.value }],
   }));
@@ -696,7 +744,9 @@ const KeysRoad: React.FC<SceneSize> = ({ width, height: h, settled, paused }) =>
       <View style={[st.keysPreviewStage, { top: Math.max(12, Math.round(h * 0.1)) }]} pointerEvents="none">
         <View style={st.keysMedallion}>
           <Animated.View style={friendStyle}>
-            <FighterAvatar character="Corgi" size={76} mood="victory" animate={false} />
+            <LivingBreath seedKey="story-keys-corgi" size={76} active={!paused && !reduced}>
+              <FighterAvatar character="Corgi" size={76} mood="victory" animate={false} />
+            </LivingBreath>
           </Animated.View>
           <Animated.View style={[StyleSheet.absoluteFill, st.centerAbs, leftBarStyle]}>
             <CageBarsSvg width={94} height={94} side="left" />

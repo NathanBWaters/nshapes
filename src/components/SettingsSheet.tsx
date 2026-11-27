@@ -64,9 +64,11 @@ import SvgDefault from 'react-native-svg';
 import { version as BUILD_VERSION } from '../../package.json';
 import { cardBgPatternMeta, cardColorCode, cardColorHex } from '@/utils/cardColors';
 import { getCardStockBackground } from '@/utils/cardVisuals';
+import Animated from 'react-native-reanimated';
 import Card, { CardBoardProvider } from './Card';
 import Icon from './Icon';
 import KeybindingSheet from './KeybindingSheet';
+import { useModalMotion } from './ScreenTransition';
 
 /** True whenever `react-native-svg` default export is a valid React element type (always true at runtime; guards legacy Jest mocks). */
 const CAN_RENDER_LIVE_SVG_CARD =
@@ -256,7 +258,16 @@ const readSoundPref = (): boolean =>
 const readColorblindPref = (): boolean =>
   typeof ColorblindStorage?.get === 'function' ? ColorblindStorage.get() : false;
 
-export const SettingsSheet: React.FC<SettingsSheetProps> = ({
+export const SettingsSheet: React.FC<SettingsSheetProps> = (props) => {
+  const [mounted, setMounted] = useState(props.visible);
+  useEffect(() => {
+    if (props.visible && !mounted) setMounted(true);
+  }, [props.visible, mounted]);
+  if (!mounted && !props.visible) return null;
+  return <SettingsSheetBody {...props} />;
+};
+
+const SettingsSheetBody: React.FC<SettingsSheetProps> = ({
   visible,
   onClose,
   onResetGame,
@@ -470,19 +481,24 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
   };
 
   const textScale = TEXT_SIZE_SCALES[textSize];
+  const { rendered, closing, backdropStyle, panelStyle, contentStyle } = useModalMotion(visible, {
+    travelY: 32,
+    sheet: true,
+  });
 
-  if (!visible && !showKeybindings) return null;
+  if (!rendered && !showKeybindings) return null;
 
   return (
     <>
       <Modal
-        visible={visible}
+        visible={rendered}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={onClose}
       >
-        <View style={styles.overlay} testID="settings-sheet">
-          <View style={styles.container}>
+        <View style={styles.overlay} testID="settings-sheet" pointerEvents={closing ? 'none' : 'auto'}>
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayBackdrop, backdropStyle]} />
+          <Animated.View style={[styles.container, panelStyle]}>
             <View style={styles.header}>
               <View style={styles.headerTitleRow}>
                 <Icon name="lorc/gear-hammer" size={20} color={COLORS.canvasWhite} noShadow />
@@ -499,6 +515,7 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
               </TouchableOpacity>
             </View>
 
+            <Animated.View style={[{ flexShrink: 1 }, contentStyle]}>
             <ScrollView
               style={styles.scrollArea}
               contentContainerStyle={styles.content}
@@ -1110,7 +1127,8 @@ export const SettingsSheet: React.FC<SettingsSheetProps> = ({
             >
               <Text style={styles.doneButtonText}>DONE</Text>
             </TouchableOpacity>
-          </View>
+            </Animated.View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -1357,10 +1375,12 @@ const pillStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(18, 18, 18, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 10,
+  },
+  overlayBackdrop: {
+    backgroundColor: 'rgba(18, 18, 18, 0.72)',
   },
   container: {
     backgroundColor: COLORS.canvasWhite,

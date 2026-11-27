@@ -5,11 +5,14 @@
  * across all fights advances these milestones and cashes out coins, Armory
  * weapons, and Arcana wildcards.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { EASE, MS, STAGGER, staggerDelay } from '@/utils/motion';
 import { sfx } from '@/audio';
 import type { AdventureSave, BountyCategory } from '../types';
 import { BOUNTIES } from '../data/bounties';
@@ -18,7 +21,7 @@ import { Silhouette, UnlockableAvatar, describeRewardUnlocks } from './rewards';
 
 type Filter = 'all' | BountyCategory;
 
-const FILTERS: Array<{ id: Filter; label: string }> = [
+const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'ALL' },
   { id: 'mastery', label: 'MASTERY' },
   { id: 'chaos', label: 'CHAOS' },
@@ -35,6 +38,7 @@ interface Props {
 
 const BountyBoard: React.FC<Props> = ({ save, onClose, backLabel = 'Back to map' }) => {
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
   const [filter, setFilter] = useState<Filter>('all');
 
   const items = useMemo(() => {
@@ -82,14 +86,14 @@ const BountyBoard: React.FC<Props> = ({ save, onClose, backLabel = 'Back to map'
           Every fight — win, lose, or replay — advances your Bounties and automatically cashes out rewards at the end of a run.
         </Text>
 
-        {items.map(b => {
+        {items.map((b, idx) => {
           const done = save.completedBounties.includes(b.id);
           const raw = b.progress(save);
           const cur = done ? b.target : Math.min(b.target, raw);
           const pct = Math.min(1, cur / b.target);
 
           return (
-            <PopIn key={b.id} style={[st.card, done && st.cardDone]}>
+            <PopIn key={`${filter}-${b.id}`} delay={staggerDelay(idx, items.length, STAGGER.card)} style={[st.card, done && st.cardDone]}>
               <View style={st.head}>
                 <View style={[st.iconBox, done && { backgroundColor: COLORS.actionYellow }]}>
                   <Icon name={b.icon} size={24} color={INK} />
@@ -107,10 +111,12 @@ const BountyBoard: React.FC<Props> = ({ save, onClose, backLabel = 'Back to map'
                 </View>
               </View>
 
-              <View style={st.barTrack}>
-                <View style={[st.barFill, { width: `${pct * 100}%`, backgroundColor: done ? COLORS.logicTeal : COLORS.actionYellow }]} />
-                <Text style={st.barText}>{cur} / {b.target}</Text>
-              </View>
+              <BountyProgressBar
+                ratio={pct}
+                color={done ? COLORS.logicTeal : COLORS.actionYellow}
+                label={`${cur} / ${b.target}`}
+                reduced={reduced}
+              />
 
               <View style={st.rewardsRow}>
                 <View style={[st.coinChip, done && st.chipDone]}>
@@ -142,12 +148,42 @@ const BountyBoard: React.FC<Props> = ({ save, onClose, backLabel = 'Back to map'
   );
 };
 
+/** GPU-only scaleX bounty progress bar. */
+const BountyProgressBar: React.FC<{ ratio: number; color: string; label: string; reduced: boolean }> = ({
+  ratio,
+  color,
+  label,
+  reduced,
+}) => {
+  const clamped = Math.max(0, Math.min(1, ratio));
+  const fill = useSharedValue(reduced ? clamped : 0);
+  useEffect(() => {
+    if (reduced) {
+      fill.value = clamped;
+      return;
+    }
+    fill.value = withTiming(clamped, { duration: MS.move, easing: EASE.enterSoft });
+    return () => cancelAnimation(fill);
+  }, [clamped, reduced, fill]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: fill.value }],
+  }));
+
+  return (
+    <View style={st.barTrack}>
+      <Animated.View style={[st.barFill, { backgroundColor: color }, fillStyle]} />
+      <Text style={st.barText}>{label}</Text>
+    </View>
+  );
+};
+
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.walnutFrame },
   top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.ivoryCard, borderBottomWidth: 2, borderBottomColor: INK },
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 17 },
-  count: { fontWeight: '900', fontSize: 13, color: TONE.spent },
+  count: { fontWeight: '900', fontSize: 13, color: TONE.spent, fontVariant: ['tabular-nums'] },
   filters: { flexDirection: 'row', gap: 5, paddingHorizontal: 10, paddingTop: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
   filterBtn: { flex: 1, paddingVertical: 7, borderRadius: 6, borderWidth: 2, borderColor: COLORS.walnutBorder, alignItems: 'center' },
   filterBtnOn: { backgroundColor: COLORS.actionYellow, borderColor: INK },
@@ -163,11 +199,11 @@ const st = StyleSheet.create({
   claimedTag: { backgroundColor: COLORS.logicTeal, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   claimedText: { fontSize: 9, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 1 },
   barTrack: { height: 18, borderRadius: 5, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige, overflow: 'hidden', justifyContent: 'center' },
-  barFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
+  barFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, transformOrigin: 'left center' },
   barText: { textAlign: 'center', fontSize: 11, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
   rewardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   coinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: TONE.coinPale, borderRadius: 999, borderWidth: 1.5, borderColor: TONE.coin, paddingHorizontal: 8, paddingVertical: 2 },
-  coinText: { fontSize: 12, fontWeight: '900', color: '#7A5600' },
+  coinText: { fontSize: 12, fontWeight: '900', color: '#7A5600', fontVariant: ['tabular-nums'] },
   unlockChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.deepOnyx, borderRadius: 999, paddingLeft: 4, paddingRight: 10, paddingVertical: 2 },
   unlockText: { fontSize: 11, fontWeight: '800', color: COLORS.actionYellow },
   chipDone: { backgroundColor: '#EAE5DD', borderColor: TONE.spentEdge, paddingLeft: 8 },

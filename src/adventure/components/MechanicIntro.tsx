@@ -6,19 +6,30 @@
  *   story / lesson pages → the mechanic summary → "Is this a Set?" questions
  * Every step has to be accepted (Continue / Yes / No); nothing auto-dismisses.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, Platform, ScrollView, TouchableOpacity } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import Card from '@/components/Card';
 import Icon, { IconName } from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
+import { useModalMotion } from '@/components/ScreenTransition';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { EASE, MS, SCALE, SHAKE, SPRING, STAYS, geometricShakeKeyframes, reducedMs } from '@/utils/motion';
 import { isValidCombination } from '@/utils/gameUtils';
 import { sfx } from '@/audio';
 import type { Card as CardType, CharacterName } from '@/types';
 import type { DemoCard, LessonPage, MechanicDef, MechanicDemo, QuizQuestion } from '../types';
 import { FIGHTERS } from '../data/fighters';
 import { companionVoice } from '../coach';
+import { LivingBreath } from './CompanionBubble';
 import { DARK, INK } from './ui';
 
 const GOLD = COLORS.actionYellow;
@@ -122,38 +133,87 @@ interface LessonProps {
 }
 
 const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone, cta = 'Got it', dismissible }) => {
+  const reduced = useReducedMotion();
   const [i, setI] = useState(0);
   const [answer, setAnswer] = useState<boolean | null>(null);
-  const fade = useSharedValue(0);
-  const key = steps ? steps.length : 0;
+  const stepDirRef = useRef<1 | -1>(1);
+  const lastStepsRef = useRef<LessonStep[] | null>(steps);
+  if (steps) lastStepsRef.current = steps;
+
+  const isOpen = Boolean(steps && steps.length > 0);
+  const { rendered, closing, backdropStyle, panelStyle, contentStyle } = useModalMotion(isOpen, {
+    travelY: 28,
+  });
+
+  const stepO = useSharedValue(1);
+  const stepX = useSharedValue(0);
+  const verdictScale = useSharedValue(1);
+  const verdictShakeX = useSharedValue(0);
+
+  const activeSteps = steps ?? lastStepsRef.current;
+  const key = activeSteps ? activeSteps.length : 0;
 
   useEffect(() => {
+    if (!steps) return;
+    stepDirRef.current = 1;
     setI(0);
     setAnswer(null);
   }, [steps]);
 
   useEffect(() => {
-    fade.value = 0;
-    fade.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
-  }, [i, key, fade]);
+    const dir = stepDirRef.current;
+    stepO.value = 0;
+    if (reduced) {
+      stepX.value = 0;
+      stepO.value = withTiming(1, { duration: reducedMs(MS.quick), easing: EASE.ui, ...STAYS });
+    } else {
+      stepX.value = dir * 24;
+      stepO.value = withTiming(1, { duration: MS.feedback, easing: EASE.ui, ...STAYS });
+      stepX.value = withTiming(0, { duration: MS.quick, easing: EASE.enter });
+    }
+    return () => {
+      cancelAnimation(stepO);
+      cancelAnimation(stepX);
+    };
+  }, [i, key, reduced, stepO, stepX]);
 
-  const anim = useAnimatedStyle(() => ({ opacity: fade.value, transform: [{ translateY: (1 - fade.value) * 8 }] }));
+  useEffect(() => () => {
+    cancelAnimation(verdictScale);
+    cancelAnimation(verdictShakeX);
+  }, [verdictScale, verdictShakeX]);
 
-  const step = steps?.[i];
+  const anim = useAnimatedStyle(() => ({
+    opacity: stepO.value,
+    transform: [{ translateX: stepX.value }],
+  }));
+
+  const verdictAnim = useAnimatedStyle(() => ({
+    transform: [{ translateX: verdictShakeX.value }, { scale: verdictScale.value }],
+  }));
+
+  const step = activeSteps?.[Math.min(i, Math.max(0, (activeSteps?.length ?? 1) - 1))];
   const correctAnswer = useMemo(
     () => (step?.type === 'quiz' ? isValidCombination(step.question.cards.map(toCard), step.question.attributes).isValid : null),
     [step]
   );
 
-  const last = Boolean(steps && i === steps.length - 1);
+  const last = Boolean(activeSteps && i === activeSteps.length - 1);
   const next = useCallback(() => {
     sfx('click');
     if (last) onDone();
     else {
+      stepDirRef.current = 1;
       setAnswer(null);
       setI(cur => cur + 1);
     }
   }, [last, onDone]);
+
+  const back = useCallback(() => {
+    sfx('back');
+    stepDirRef.current = -1;
+    setAnswer(null);
+    setI(cur => Math.max(0, cur - 1));
+  }, []);
 
   const skipAll = useCallback(() => {
     sfx('click');
@@ -175,17 +235,40 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [steps, step, answer, next, skipAll]);
 
-  if (!steps || !step) return null;
+  if (!rendered || !activeSteps || !step) return null;
 
   const choose = (a: boolean) => {
+    const right = a === correctAnswer;
     setAnswer(a);
-    sfx(a === correctAnswer ? 'match' : 'invalid');
+    sfx(right ? 'match' : 'invalid');
+    if (!reduced) {
+      if (right) {
+        verdictShakeX.value = 0;
+        verdictScale.value = 0.92;
+        verdictScale.value = withSequence(
+          withTiming(SCALE.pop, { duration: MS.feedback, easing: EASE.enter }),
+          withSpring(1, SPRING.lively)
+        );
+      } else {
+        verdictScale.value = 1;
+        const legs = geometricShakeKeyframes(9, 4, SHAKE.decay, -1);
+        verdictShakeX.value = withSequence(
+          ...legs.map((v, idx) =>
+            withTiming(v, {
+              duration: idx === 0 ? SHAKE.firstLegMs : idx === legs.length - 1 ? SHAKE.settleMs : SHAKE.legMs,
+              easing: EASE.ui,
+            })
+          )
+        );
+      }
+    }
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={skipAll}>
-      <View style={st.overlay}>
-        <View testID="lesson-modal" style={st.panel}>
+    <Modal visible={rendered} transparent animationType="none" onRequestClose={skipAll}>
+      <View style={st.overlay} pointerEvents={closing ? 'none' : 'auto'}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, st.overlayBackdrop, backdropStyle]} />
+        <Animated.View testID="lesson-modal" style={[st.panel, panelStyle]}>
           <View style={st.goldRule} />
           <TouchableOpacity
             testID="mechanic-intro-skip"
@@ -197,91 +280,97 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
           >
             <Text style={st.skipPillText}>{dismissible ? 'Close' : 'Skip'}</Text>
           </TouchableOpacity>
-          <ScrollView contentContainerStyle={st.scroll} bounces={false}>
-            <Animated.View style={[{ gap: 14 }, anim]}>
-              {step.type === 'page' ? (
-                <>
-                  <Text style={st.eyebrow}>{speaker} · {step.eyebrow}</Text>
-                  <View style={st.titleRow}>
-                    <FighterAvatar character={speaker} size={48} mood="victory" framed />
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.title}>{step.title}</Text>
-                      {step.tagline && <Text style={st.tagline}>“{companionVoice(speaker).hello} {step.tagline}”</Text>}
-                    </View>
-                    {step.icon && (
-                      <View style={st.titleIcon}>
-                        <Icon name={step.icon} size={24} color={INK} />
+          <Animated.View style={[{ flexShrink: 1 }, contentStyle]}>
+            <ScrollView contentContainerStyle={st.scroll} bounces={false}>
+              <Animated.View style={[{ gap: 14 }, anim]}>
+                {step.type === 'page' ? (
+                  <>
+                    <Text style={st.eyebrow}>{speaker} · {step.eyebrow}</Text>
+                    <View style={st.titleRow}>
+                      <LivingBreath seedKey={`lesson-${speaker}`} size={48}>
+                        <FighterAvatar character={speaker} size={48} mood="victory" framed animate={false} />
+                      </LivingBreath>
+                      <View style={{ flex: 1 }}>
+                        <Text style={st.title}>{step.title}</Text>
+                        {step.tagline && <Text style={st.tagline}>“{companionVoice(speaker).hello} {step.tagline}”</Text>}
                       </View>
+                      {step.icon && (
+                        <View style={st.titleIcon}>
+                          <Icon name={step.icon} size={24} color={INK} />
+                        </View>
+                      )}
+                    </View>
+                    {step.demo && <View style={st.stage}><DemoView demo={step.demo} /></View>}
+                    <View style={st.speechBox}>
+                      {step.body.map((p, k) => <Text key={k} style={st.body}>{p}</Text>)}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={st.eyebrow}>{speaker} · Check {step.index + 1} of {step.total}</Text>
+                    <View style={st.titleRow}>
+                      <LivingBreath seedKey={`lesson-quiz-${speaker}`} size={44}>
+                        <FighterAvatar character={speaker} size={44} mood={answer === null ? 'curious' : answer === correctAnswer ? 'victory' : 'anticipation'} framed animate={false} />
+                      </LivingBreath>
+                      <View style={{ flex: 1 }}>
+                        <Text style={st.title}>Is this a Set?</Text>
+                        <Text style={st.tagline}>Each trait: all the same, or all different?</Text>
+                      </View>
+                    </View>
+                    <View style={st.stage}><CardRow cards={step.question.cards} /></View>
+                    {answer === null ? (
+                      <View style={st.quizBlock}>
+                        <View style={st.answers}>
+                          <TouchableOpacity testID="quiz-yes" onPress={() => choose(true)} style={[st.answer, { borderColor: COLORS.logicTeal }]} activeOpacity={0.85}>
+                            <Text style={[st.answerText, { color: COLORS.logicTeal }]}>✓  YES</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity testID="quiz-no" onPress={() => choose(false)} style={[st.answer, { borderColor: COLORS.impactRed }]} activeOpacity={0.85}>
+                            <Text style={[st.answerText, { color: COLORS.impactRed }]}>✗  NO</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity
+                          testID="quiz-skip"
+                          onPress={next}
+                          style={st.quizSkipBtn}
+                          activeOpacity={0.75}
+                          accessibilityRole="button"
+                          accessibilityLabel="Skip check"
+                        >
+                          <Text style={st.quizSkipText}>Skip check ›</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Animated.View style={[st.feedback, { borderColor: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }, verdictAnim]}>
+                        <Text style={[st.feedbackTitle, { color: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }]}>
+                          {answer === correctAnswer ? `${companionVoice(speaker).cheer} You got it.` : 'A sneaky one!'} {correctAnswer ? 'Every trait passes.' : 'Two alike and one odd breaks it.'}
+                        </Text>
+                        <Text style={st.body}>{step.question.explain}</Text>
+                      </Animated.View>
                     )}
-                  </View>
-                  {step.demo && <View style={st.stage}><DemoView demo={step.demo} /></View>}
-                  <View style={st.speechBox}>
-                    {step.body.map((p, k) => <Text key={k} style={st.body}>{p}</Text>)}
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Text style={st.eyebrow}>{speaker} · Check {step.index + 1} of {step.total}</Text>
-                  <View style={st.titleRow}>
-                    <FighterAvatar character={speaker} size={44} mood={answer === null ? 'curious' : answer === correctAnswer ? 'victory' : 'anticipation'} framed />
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.title}>Is this a Set?</Text>
-                      <Text style={st.tagline}>Each trait: all the same, or all different?</Text>
-                    </View>
-                  </View>
-                  <View style={st.stage}><CardRow cards={step.question.cards} /></View>
-                  {answer === null ? (
-                    <View style={st.quizBlock}>
-                      <View style={st.answers}>
-                        <TouchableOpacity testID="quiz-yes" onPress={() => choose(true)} style={[st.answer, { borderColor: COLORS.logicTeal }]} activeOpacity={0.85}>
-                          <Text style={[st.answerText, { color: COLORS.logicTeal }]}>✓  YES</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity testID="quiz-no" onPress={() => choose(false)} style={[st.answer, { borderColor: COLORS.impactRed }]} activeOpacity={0.85}>
-                          <Text style={[st.answerText, { color: COLORS.impactRed }]}>✗  NO</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <TouchableOpacity
-                        testID="quiz-skip"
-                        onPress={next}
-                        style={st.quizSkipBtn}
-                        activeOpacity={0.75}
-                        accessibilityRole="button"
-                        accessibilityLabel="Skip check"
-                      >
-                        <Text style={st.quizSkipText}>Skip check ›</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={[st.feedback, { borderColor: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }]}>
-                      <Text style={[st.feedbackTitle, { color: answer === correctAnswer ? COLORS.logicTeal : COLORS.impactOrange }]}>
-                        {answer === correctAnswer ? `${companionVoice(speaker).cheer} You got it.` : 'A sneaky one!'} {correctAnswer ? 'Every trait passes.' : 'Two alike and one odd breaks it.'}
-                      </Text>
-                      <Text style={st.body}>{step.question.explain}</Text>
-                    </View>
-                  )}
-                </>
-              )}
-            </Animated.View>
-          </ScrollView>
+                  </>
+                )}
+              </Animated.View>
+            </ScrollView>
 
-          <View style={st.footer}>
-            <View style={st.dots}>
-              {steps.length > 1 && steps.map((_, k) => <View key={k} style={[st.dot, k === i && st.dotOn, k < i && st.dotDone]} />)}
+            <View style={st.footer}>
+              <View style={st.dots}>
+                {activeSteps.length > 1 && activeSteps.map((_, k) => <View key={k} style={[st.dot, k === i && st.dotOn, k < i && st.dotDone]} />)}
+              </View>
+              <View style={st.footerButtons}>
+                {i > 0 && (
+                  <TouchableOpacity onPress={back} style={st.back} accessibilityLabel="Back">
+                    <Text style={st.backText}>Back</Text>
+                  </TouchableOpacity>
+                )}
+                {(step.type === 'page' || answer !== null) && (
+                  <TouchableOpacity testID="mechanic-intro-ok" onPress={next} style={st.cta} activeOpacity={0.85}>
+                    <Text style={st.ctaText}>{last ? cta : 'Continue'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-            <View style={st.footerButtons}>
-              {i > 0 && (
-                <TouchableOpacity onPress={() => { setAnswer(null); setI(i - 1); }} style={st.back} accessibilityLabel="Back">
-                  <Text style={st.backText}>Back</Text>
-                </TouchableOpacity>
-              )}
-              {(step.type === 'page' || answer !== null) && (
-                <TouchableOpacity testID="mechanic-intro-ok" onPress={next} style={st.cta} activeOpacity={0.85}>
-                  <Text style={st.ctaText}>{last ? cta : 'Continue'}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -308,7 +397,8 @@ const MechanicIntro: React.FC<{
 };
 
 const st = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(10,10,10,0.82)', alignItems: 'center', justifyContent: 'center', padding: 14 },
+  overlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 14 },
+  overlayBackdrop: { backgroundColor: 'rgba(10,10,10,0.82)' },
   panel: { width: '100%', maxWidth: 460, maxHeight: '94%', backgroundColor: PANEL, borderRadius: 16, borderWidth: 1, borderColor: DARK.goldEdge(0.35), overflow: 'hidden' },
   goldRule: { height: 4, backgroundColor: GOLD },
   skipPill: {

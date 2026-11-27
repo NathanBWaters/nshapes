@@ -8,9 +8,9 @@
  * A branch can lead on to further branches.
  */
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withSpring, withTiming, cancelAnimation, Easing } from 'react-native-reanimated';
-import { EASE, MS, SCALE, SPRING } from '@/utils/motion';
+import { View, Text, ScrollView, Pressable, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withSpring, withTiming, cancelAnimation } from 'react-native-reanimated';
+import { BTN_PRESS, EASE, MS, SCALE, SPRING, STAGGER, STAYS, reducedMs } from '@/utils/motion';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
@@ -34,9 +34,11 @@ import { isFighterTrial, starRewards, unlockablesOf } from '../data/rewards';
 import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, refundableCoins, totalStars, isBiomeOpen } from '../progress';
 import { companionMapGreeting } from '../coach';
 import { BiomeScenery } from './BiomeScenery';
-import CompanionBubble from './CompanionBubble';
+import CompanionBubble, { LivingBreath } from './CompanionBubble';
 import { GoldenKeyArt } from './RescueArt';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const ELITE = '#5B2333';
 /** Practice paths: straw, not blood */
@@ -250,18 +252,57 @@ const AdventureMap: React.FC<Props> = ({
     const ids = [...arrivals.keys()];
     const pops = [...arrivals.values()].map(a => a.popMs);
     const timers = pops.map(ms => setTimeout(() => sfx('unlock'), ms));
-    timers.push(setTimeout(() => onRevealedRef.current?.(ids), Math.max(...pops) + ARRIVE.popMs + ARRIVE.tagMs));
+    const revealDoneMs = reducedMotion
+      ? ARRIVE.tagMs
+      : Math.max(...pops) + ARRIVE.popMs + ARRIVE.tagMs;
+    timers.push(setTimeout(() => onRevealedRef.current?.(ids), revealDoneMs));
     return () => timers.forEach(clearTimeout);
   }, [arrivals, reducedMotion]);
 
-  // Scroll so a walking key, a path that just opened, else the level asked for, else the frontier is in view
+  // Scroll synchronously on first layout (zero 120ms teleport jump!) and smoothly when target shifts afterward
   const focusId = [...arrivals.keys()][0] ?? highlightLevelId ?? frontier.id;
+  const targetY = useMemo(
+    () => walkingKey?.y ?? [...nodes, ...branches].find(n => n.level.id === focusId)?.y,
+    [walkingKey, nodes, branches, focusId]
+  );
+  const focusTargetKey = `${focusId}:${walkingKey?.keyDef.id ?? ''}`;
+  const didInitialScrollRef = useRef(false);
+  const lastFocusKeyRef = useRef(focusTargetKey);
+
+  const handleContentSizeChange = useCallback(() => {
+    if (didInitialScrollRef.current || targetY === undefined) return;
+    didInitialScrollRef.current = true;
+    lastFocusKeyRef.current = focusTargetKey;
+    scrollRef.current?.scrollTo({ y: Math.max(0, targetY - 260), animated: false });
+  }, [targetY, focusTargetKey]);
+
   useEffect(() => {
-    const targetY = walkingKey?.y ?? [...nodes, ...branches].find(n => n.level.id === focusId)?.y;
     if (targetY === undefined) return;
-    const t = setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, targetY - 260), animated: true }), 120);
-    return () => clearTimeout(t);
-  }, [nodes, branches, focusId, walkingKey]);
+    if (!didInitialScrollRef.current) {
+      // Fallback for test environments where onContentSizeChange does not fire
+      didInitialScrollRef.current = true;
+      lastFocusKeyRef.current = focusTargetKey;
+      scrollRef.current?.scrollTo({ y: Math.max(0, targetY - 260), animated: false });
+      return;
+    }
+    if (lastFocusKeyRef.current === focusTargetKey) return;
+    lastFocusKeyRef.current = focusTargetKey;
+    scrollRef.current?.scrollTo({ y: Math.max(0, targetY - 260), animated: !reducedMotion });
+  }, [targetY, focusTargetKey, reducedMotion]);
+
+  // Tactile press feedback for the bottom Play Next CTA
+  const playPressed = useSharedValue(0);
+  useEffect(() => () => cancelAnimation(playPressed), [playPressed]);
+  const playNextAnimStyle = useAnimatedStyle(() =>
+    reducedMotion
+      ? { opacity: 1 - playPressed.value * (1 - BTN_PRESS.reducedOpacity) }
+      : {
+          transform: [
+            { translateY: playPressed.value * BTN_PRESS.translateY },
+            { scale: 1 - playPressed.value * (1 - BTN_PRESS.scale) },
+          ],
+        }
+  );
 
   const unlockedNodes = nodes.filter(n => getLockReason(save, n.level) === null);
   const lastUnlocked = unlockedNodes[unlockedNodes.length - 1];
@@ -299,13 +340,19 @@ const AdventureMap: React.FC<Props> = ({
         />
       </View>
 
-      <ScrollView ref={scrollRef} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ alignItems: 'center' }}
+        onContentSizeChange={handleContentSizeChange}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={{ width, height }}>
           {banners.map(b => {
             const biome = BIOMES[b.biomeIndex];
             const open = isBiomeOpen(save, biome.id);
             const here = MAIN_LEVELS.filter(l => l.biome === biome.id);
             const earned = here.reduce((sum, l) => sum + (save.stars[l.id] ?? 0), 0);
+            const totalBiomeStars = Math.max(1, here.length * 3);
             return (
               <View key={biome.id} style={[s.band, { top: b.y, height: b.height, backgroundColor: biome.colors.sky }]}>
                 <BiomeScenery biome={biome} width={width} height={b.height} />
@@ -314,11 +361,9 @@ const AdventureMap: React.FC<Props> = ({
                     <Text style={[s.bannerTitle, { color: biome.colors.ink }]}>{biome.name.toUpperCase()}</Text>
                     <Text style={[s.bannerSub, { color: biome.colors.ink }]}>{biome.subtitle}</Text>
                     {open ? (
-                      // How much of this region's star is back in one piece
+                      // How much of this region's star is back in one piece (GPU scaleX fill)
                       <View style={s.worldProgress} testID={`map-world-progress-${biome.id}`} accessibilityLabel={`${earned} of ${here.length * 3} stars in ${biome.name}`}>
-                        <View style={s.worldTrack}>
-                          <View style={[s.worldFill, { width: `${(earned / (here.length * 3)) * 100}%` }]} />
-                        </View>
+                        <WorldProgressBar ratio={earned / totalBiomeStars} reduced={reducedMotion} />
                         <Text style={[s.worldCount, { color: biome.colors.ink }]}>★ {earned}/{here.length * 3}</Text>
                       </View>
                     ) : (
@@ -424,13 +469,28 @@ const AdventureMap: React.FC<Props> = ({
 
       <View style={[s.dock, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8), justifyContent: stars === 0 && !campUnlocked ? 'center' : 'space-between' }]}>
         {stars > 0 && <DockButton testID="map-dock-guide" icon="lorc/open-book" label="Guide" onPress={onOpenGuide} />}
-        <TouchableOpacity testID="map-play-next" onPress={() => onSelectLevel(frontier)} style={s.playNext} activeOpacity={0.85}>
-          <FighterAvatar character={fighter.name} size={34} mood="anticipation" animate={isLive} />
+        <AnimatedPressable
+          testID="map-play-next"
+          onPress={() => onSelectLevel(frontier)}
+          onPressIn={() => {
+            playPressed.value = withTiming(1, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...(reducedMotion ? STAYS : {}) });
+          }}
+          onPressOut={() => {
+            playPressed.value = reducedMotion
+              ? withTiming(0, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...STAYS })
+              : withSpring(0, SPRING.snappy);
+          }}
+          accessibilityRole="button"
+          style={[s.playNext, playNextAnimStyle]}
+        >
+          <LivingBreath seedKey="map-play-next" size={34} active={isLive}>
+            <FighterAvatar character={fighter.name} size={34} mood="anticipation" animate={false} />
+          </LivingBreath>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.playNextLabel}>PLAY {frontier.id}</Text>
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
           </View>
-        </TouchableOpacity>
+        </AnimatedPressable>
         {(stars > 0 || campUnlocked) && (
           <DockButton
             testID="map-dock-camp"
@@ -452,19 +512,76 @@ const AdventureMap: React.FC<Props> = ({
   );
 };
 
-const DockButton: React.FC<{ testID?: string; icon: React.ComponentProps<typeof Icon>['name']; label: string; onPress: () => void; disabled?: boolean; badge?: boolean }> = ({ testID, icon, label, onPress, disabled, badge }) => (
-  <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled} accessibilityState={{ disabled: !!disabled }} style={[s.dockBtn, disabled && { opacity: 0.35 }]} accessibilityLabel={label}>
-    <Icon name={disabled ? 'lorc/padlock' : icon} size={26} color={INK} />
-    <Text style={s.dockLabel}>{label}</Text>
-    {badge && <View style={s.badgeDot} />}
-  </TouchableOpacity>
-);
+/** GPU-only scaleX region star progress fill (zero layout width animation). */
+const WorldProgressBar: React.FC<{ ratio: number; reduced: boolean }> = memo(function WorldProgressBar({ ratio, reduced }) {
+  const clamped = Math.max(0, Math.min(1, ratio));
+  const fill = useSharedValue(reduced ? clamped : 0);
+  useEffect(() => {
+    if (reduced) {
+      fill.value = clamped;
+      return;
+    }
+    fill.value = withTiming(clamped, { duration: MS.move, easing: EASE.enterSoft });
+    return () => cancelAnimation(fill);
+  }, [clamped, reduced, fill]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: fill.value }],
+  }));
+
+  return (
+    <View style={s.worldTrack}>
+      <Animated.View style={[s.worldFill, fillStyle]} />
+    </View>
+  );
+});
+
+const DockButton: React.FC<{ testID?: string; icon: React.ComponentProps<typeof Icon>['name']; label: string; onPress: () => void; disabled?: boolean; badge?: boolean }> = ({ testID, icon, label, onPress, disabled, badge }) => {
+  const reduced = useReducedMotion();
+  const pressed = useSharedValue(0);
+  useEffect(() => () => cancelAnimation(pressed), [pressed]);
+  const animStyle = useAnimatedStyle(() =>
+    reduced
+      ? { opacity: disabled ? 0.35 : 1 - pressed.value * (1 - BTN_PRESS.reducedOpacity) }
+      : {
+          opacity: disabled ? 0.35 : 1,
+          transform: [{ scale: 1 - pressed.value * (1 - BTN_PRESS.scale) }],
+        }
+  );
+  return (
+    <AnimatedPressable
+      testID={testID}
+      onPress={onPress}
+      disabled={disabled}
+      onPressIn={() => {
+        if (disabled) return;
+        pressed.value = withTiming(1, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...(reduced ? STAYS : {}) });
+      }}
+      onPressOut={() => {
+        pressed.value = reduced
+          ? withTiming(0, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...STAYS })
+          : withSpring(0, SPRING.snappy);
+      }}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      style={[s.dockBtn, animStyle]}
+      accessibilityLabel={label}
+    >
+      <Icon name={disabled ? 'lorc/padlock' : icon} size={26} color={INK} />
+      <Text style={s.dockLabel}>{label}</Text>
+      {badge && <View style={s.badgeDot} />}
+    </AnimatedPressable>
+  );
+};
 
 /** One dash of a side path, laid down as the path draws itself toward its node. */
 const TrailDash: React.FC<{ at: Point; angle: number; color: string; delay: number; still?: boolean }> = ({ at, angle, color, delay, still }) => {
   const t = useSharedValue(still ? 1 : 0);
   useEffect(() => {
-    if (!still) t.value = withDelay(delay, withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }));
+    if (!still) {
+      t.value = withDelay(delay, withTiming(1, { duration: MS.feedback + 30, easing: EASE.enter }));
+    }
+    return () => cancelAnimation(t);
   }, [delay, still, t]);
   const style = useAnimatedStyle(() => ({ opacity: t.value, transform: [{ rotate: `${angle}rad` }, { scale: 0.4 + 0.6 * t.value }] }));
   return <Animated.View pointerEvents="none" style={[s.dash, { left: at.x - 4, top: at.y - 2.5, backgroundColor: color }, style]} />;
@@ -472,26 +589,48 @@ const TrailDash: React.FC<{ at: Point; angle: number; color: string; delay: numb
 
 /**
  * A node that was not on the map a moment ago: it pops in, a ring bursts from it, and a tag names the surprise.
- * `still` (reduced motion): it is simply there, with its tag.
+ * `still` (reduced motion): node appears settled; tag gently crossfades in and clears cleanly via `STAYS`.
  */
 const Arrival: React.FC<{ delay: number; size: number; still?: boolean; children: React.ReactNode }> = ({ delay, size, still, children }) => {
   const pop = useSharedValue(still ? 1 : 0);
   const ring = useSharedValue(0);
-  const tag = useSharedValue(still ? 1 : 0);
+  const tag = useSharedValue(0);
   useEffect(() => {
-    if (still) return;
-    pop.value = withDelay(delay, withSequence(withTiming(1.2, { duration: 220, easing: Easing.out(Easing.cubic) }), withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) })));
-    ring.value = withDelay(delay, withTiming(1, { duration: 620, easing: Easing.out(Easing.quad) }));
-    tag.value = withDelay(delay + 120, withSequence(withTiming(1, { duration: 180 }), withDelay(ARRIVE.tagMs - 500, withTiming(0, { duration: 300 }))));
+    if (still) {
+      pop.value = 1;
+      ring.value = 0;
+      const fadeDur = reducedMs(MS.quick);
+      tag.value = withSequence(
+        STAYS.reduceMotion,
+        withTiming<number>(1, { duration: fadeDur, easing: EASE.ui, ...STAYS }),
+        withDelay(Math.max(400, ARRIVE.tagMs - 500), withTiming<number>(0, { duration: fadeDur, easing: EASE.exitSoft, ...STAYS }), STAYS.reduceMotion)
+      );
+      return () => {
+        cancelAnimation(pop);
+        cancelAnimation(ring);
+        cancelAnimation(tag);
+      };
+    }
+    pop.value = withDelay(delay, withSequence(withTiming(1.2, { duration: MS.screen, easing: EASE.enter }), withTiming(1, { duration: MS.quick - 20, easing: EASE.enterSoft })));
+    ring.value = withDelay(delay, withTiming(1, { duration: MS.hero - 80, easing: EASE.enterSoft }));
+    tag.value = withDelay(delay + MS.feedback, withSequence(withTiming(1, { duration: MS.quick, easing: EASE.ui }), withDelay(ARRIVE.tagMs - 500, withTiming(0, { duration: MS.move, easing: EASE.exitSoft }))));
+    return () => {
+      cancelAnimation(pop);
+      cancelAnimation(ring);
+      cancelAnimation(tag);
+    };
   }, [delay, still, pop, ring, tag]);
   const popStyle = useAnimatedStyle(() => ({ opacity: Math.min(1, pop.value * 4), transform: [{ scale: pop.value }] }));
   const ringStyle = useAnimatedStyle(() => ({ opacity: ring.value === 0 ? 0 : 1 - ring.value, transform: [{ scale: 0.6 + ring.value * 1.6 }] }));
-  const tagStyle = useAnimatedStyle(() => ({ opacity: tag.value, transform: [{ translateY: (1 - tag.value) * 6 }] }));
+  const tagStyle = useAnimatedStyle(() => ({
+    opacity: tag.value,
+    transform: [{ translateY: still ? 0 : (1 - tag.value) * 6 }],
+  }));
   return (
     <View style={s.arrival} pointerEvents="box-none">
       <Animated.View pointerEvents="none" style={[s.arrivalRing, { width: size, height: size, borderRadius: size / 2, top: 6 }, ringStyle]} />
       <Animated.View style={[s.arrival, popStyle]} pointerEvents="box-none">{children}</Animated.View>
-      <Animated.View pointerEvents="none" style={[s.secretTag, tagStyle]}>
+      <Animated.View testID="secret-path-reveal" pointerEvents="none" style={[s.secretTag, tagStyle]}>
         <Text style={s.secretTagText}>SECRET PATH!</Text>
       </Animated.View>
     </View>
@@ -530,7 +669,7 @@ const MapKeyNode: React.FC<{
       return;
     }
     halo.value = 0;
-    halo.value = withRepeat(withTiming(1, { duration: 1100, easing: EASE.enterSoft }), -1);
+    halo.value = withRepeat(withTiming(1, { duration: MS.hero + MS.panel, easing: EASE.enterSoft }), -1);
     return () => cancelAnimation(halo);
   }, [haloLive, halo]);
 
@@ -541,6 +680,7 @@ const MapKeyNode: React.FC<{
 
   // Press feedback matching MapNode
   const press = useSharedValue(1);
+  useEffect(() => () => cancelAnimation(press), [press]);
   const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.value }] }));
   const pressIn = () => {
     if (!still && ready) press.value = withTiming(SCALE.press, { duration: MS.feedback / 2, easing: EASE.ui });
@@ -598,7 +738,7 @@ const MapKeyNode: React.FC<{
   return (
     <View style={[s.keyWrap, { left: x - 54, top: y - (ready ? 25 : 20) }]} pointerEvents="box-none">
       {ready && <Animated.View pointerEvents="none" style={[s.keyHalo, haloStyle]} />}
-      {ready ? <Bob active={isLive} amount={3}>{circle}</Bob> : circle}
+      {ready ? <Bob active={isLive} amount={3} phase={Math.PI * 1.32} periodMs={1320}>{circle}</Bob> : circle}
       {ready ? (
         <View style={s.keyReadyTag} pointerEvents="none">
           <Text style={s.keyReadyText}>FREE FRIEND!</Text>
@@ -628,7 +768,7 @@ const KeyWalker: React.FC<{
 
   useEffect(() => {
     if (still) {
-      const t = setTimeout(() => onArrivedRef.current(), 60);
+      const t = setTimeout(() => onArrivedRef.current(), STAGGER.item);
       return () => clearTimeout(t);
     }
     dx.value = withTiming(0, { duration: KEY_WALK_MS, easing: EASE.enterSoft });
@@ -637,8 +777,13 @@ const KeyWalker: React.FC<{
       withTiming(1.12, { duration: KEY_WALK_MS / 2, easing: EASE.enter }),
       withTiming(1, { duration: KEY_WALK_MS / 2, easing: EASE.ui })
     );
-    const t = setTimeout(() => onArrivedRef.current(), KEY_WALK_MS + 60);
-    return () => clearTimeout(t);
+    const t = setTimeout(() => onArrivedRef.current(), KEY_WALK_MS + STAGGER.item);
+    return () => {
+      clearTimeout(t);
+      cancelAnimation(dx);
+      cancelAnimation(dy);
+      cancelAnimation(hop);
+    };
   }, [still, dx, dy, hop]);
 
   const style = useAnimatedStyle(() => ({
@@ -687,6 +832,7 @@ const MapNode: React.FC<{
 
   // The press: the node sinks to SCALE.press at once and springs back, even on a tap too quick to hold it down
   const press = useSharedValue(1);
+  useEffect(() => () => cancelAnimation(press), [press]);
   const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: press.value }] }));
   const pressIn = () => {
     if (!still) press.value = withTiming(SCALE.press, { duration: MS.feedback / 2, easing: EASE.ui });
@@ -746,7 +892,7 @@ const MapNode: React.FC<{
 
   const content = (
     <>
-      {isFrontier ? <Bob active={isLive}>{nodeButton}</Bob> : nodeButton}
+      {isFrontier ? <Bob active={isLive} phase={0} periodMs={1400}>{nodeButton}</Bob> : nodeButton}
       <View style={s.nodeMeta} pointerEvents="none">
         {/* Practice earns no stars */}
         {!locked && !practice && <StarRow stars={stars} size={15} />}
@@ -762,7 +908,8 @@ const MapNode: React.FC<{
       )}
       {isFrontier && !hideAvatar && (
         <View style={s.avatar} pointerEvents="none">
-          <Bob amount={3} active={isLive}>
+          {/* Phase + period offset against frontier node so marker and node never bob in lockstep */}
+          <Bob amount={3} active={isLive} phase={Math.PI * 0.78} periodMs={1540}>
             <View style={s.avatarBubble}>
               <FighterAvatar character={fighterName} size={30} mood="anticipation" animate={isLive} />
             </View>
@@ -794,7 +941,7 @@ const s = StyleSheet.create({
   },
   starPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.canvasWhite, borderColor: INK, borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   starGlyph: { color: '#E0A800', fontSize: 15 },
-  starCount: { fontWeight: '800', color: INK, fontSize: 14 },
+  starCount: { fontWeight: '800', color: INK, fontSize: 14, fontVariant: ['tabular-nums'] },
   iconBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   // The title gives way first on a narrow screen, so the stars and coins are never cut off
   title: { flex: 1, fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 16 },
@@ -810,7 +957,7 @@ const s = StyleSheet.create({
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
   worldProgress: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   worldTrack: { width: 96, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige, overflow: 'hidden' },
-  worldFill: { height: '100%', backgroundColor: '#F5B800' },
+  worldFill: { width: '100%', height: '100%', backgroundColor: '#F5B800', transformOrigin: 'left center' },
   worldCount: { fontSize: 11, fontWeight: '900', fontVariant: ['tabular-nums'] },
   comingUp: { opacity: 0.38 },
   lockBadge: { position: 'absolute', bottom: -4, right: -4, backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 1.5, borderColor: '#B8B0A4', padding: 2 },

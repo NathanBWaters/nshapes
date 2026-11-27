@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from 'react-native';
+import { PopIn } from '@/adventure/components/ui';
 import { usePWASafeAreaInsets } from '@/hooks/usePWASafeAreaInsets';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { FreePlayDifficultyStorage } from '@/utils/freePlayStorage';
 import { triggerHaptic } from '@/utils/haptics';
+import { SCALE, STAGGER, staggerDelay } from '@/utils/motion';
 import { playSound } from '@/utils/sounds';
 import { FreePlayDifficulty } from '@/types';
 import Icon, { IconName } from './Icon';
@@ -102,7 +104,7 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
         </View>
 
         <View style={styles.difficultyGrid}>
-          {DIFFICULTIES.map(difficulty => {
+          {DIFFICULTIES.map((difficulty, idx) => {
             const info = DIFFICULTY_INFO[difficulty];
             const isHighlighted = highlightedDifficulty === difficulty;
             const badgeLabel =
@@ -113,60 +115,65 @@ const DifficultySelection: React.FC<DifficultySelectionProps> = ({ onStart, onEx
                   : null;
 
             return (
-              <Pressable
+              <PopIn
                 key={difficulty}
-                testID={`freeplay-difficulty-${difficulty}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Start Free Play on ${info.label}: ${info.description}`}
-                onPress={() => launchDifficulty(difficulty)}
-                style={({ pressed }) => [
-                  styles.difficultyCard,
-                  isHighlighted && styles.difficultyCardHighlighted,
-                  pressed && styles.cardPressed,
-                  Platform.OS === 'web' && { cursor: 'pointer' as any },
-                ]}
+                delay={staggerDelay(idx, DIFFICULTIES.length, STAGGER.card)}
+                style={styles.difficultyCell}
               >
-                {badgeLabel && (
-                  <View
-                    testID={`freeplay-badge-${difficulty}`}
-                    style={[
-                      styles.pillBadge,
-                      isHighlighted ? styles.pillBadgeHighlighted : styles.pillBadgeDefault,
-                    ]}
-                  >
-                    <Text
+                <Pressable
+                  testID={`freeplay-difficulty-${difficulty}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Start Free Play on ${info.label}: ${info.description}`}
+                  onPress={() => launchDifficulty(difficulty)}
+                  style={({ pressed }) => [
+                    styles.difficultyCard,
+                    isHighlighted && styles.difficultyCardHighlighted,
+                    pressed && styles.cardPressed,
+                    Platform.OS === 'web' && { cursor: 'pointer' as any },
+                  ]}
+                >
+                  {badgeLabel && (
+                    <View
+                      testID={`freeplay-badge-${difficulty}`}
                       style={[
-                        styles.pillBadgeText,
-                        isHighlighted && styles.pillBadgeTextHighlighted,
+                        styles.pillBadge,
+                        isHighlighted ? styles.pillBadgeHighlighted : styles.pillBadgeDefault,
                       ]}
                     >
-                      {badgeLabel}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.pillBadgeText,
+                          isHighlighted && styles.pillBadgeTextHighlighted,
+                        ]}
+                      >
+                        {badgeLabel}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.difficultyIconContainer}>
+                    <Icon name={info.icon} size={34} color={COLORS.slateCharcoal} />
                   </View>
-                )}
 
-                <View style={styles.difficultyIconContainer}>
-                  <Icon name={info.icon} size={34} color={COLORS.slateCharcoal} />
-                </View>
+                  <Text
+                    style={[
+                      styles.difficultyLabel,
+                      isHighlighted && styles.difficultyLabelHighlighted,
+                    ]}
+                  >
+                    {info.label} · {info.description}
+                  </Text>
 
-                <Text
-                  style={[
-                    styles.difficultyLabel,
-                    isHighlighted && styles.difficultyLabelHighlighted,
-                  ]}
-                >
-                  {info.label} · {info.description}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.difficultyTraits,
-                    isHighlighted && styles.difficultyTraitsHighlighted,
-                  ]}
-                >
-                  {info.traits}
-                </Text>
-              </Pressable>
+                  <Text
+                    style={[
+                      styles.difficultyTraits,
+                      isHighlighted && styles.difficultyTraitsHighlighted,
+                    ]}
+                  >
+                    {info.traits}
+                  </Text>
+                </Pressable>
+              </PopIn>
             );
           })}
         </View>
@@ -269,9 +276,12 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: 'center',
   },
-  difficultyCard: {
+  difficultyCell: {
     width: '47%',
     minWidth: 136,
+  },
+  difficultyCard: {
+    width: '100%',
     backgroundColor: COLORS.canvasWhite,
     borderRadius: RADIUS.module,
     borderWidth: 2,
@@ -286,7 +296,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
   },
   cardPressed: {
-    transform: [{ scale: 0.98 }],
+    transform: [{ scale: SCALE.press }],
     opacity: 0.92,
   },
   pillBadge: {

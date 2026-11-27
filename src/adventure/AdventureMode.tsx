@@ -148,6 +148,8 @@ interface Props {
   devRescueKeyId?: string;
   /** Dev (/dev/adventure?level=5-4): jump straight into a live fight for this level id */
   devLevelId?: string;
+  /** True when hosted inside `Game.tsx`'s top-level `ScreenTransition` (prevents double enter/exit) */
+  hostTransition?: boolean;
   /** Dev (/dev/adventure?seed=4242): deterministic fight seed when devLevelId is used */
   devSeed?: number;
 }
@@ -162,6 +164,7 @@ const AdventureMode: React.FC<Props> = ({
   devRescueKeyId,
   devLevelId,
   devSeed,
+  hostTransition = false,
 }) => {
   const [save, setSaveState] = useState<AdventureSave>(() => initialSave ?? loadAdventureSave());
   const saveRef = useRef(save);
@@ -177,7 +180,7 @@ const AdventureMode: React.FC<Props> = ({
         : { kind: 'map' }
   );
   // Every change of screen goes through the one shared transition (src/components/ScreenTransition.tsx)
-  const transition = useScreenTransition();
+  const transition = useScreenTransition({ enterOnMount: !hostTransition });
   const screenRef = useRef(screen);
   screenRef.current = screen;
   const reducedMotion = useReducedMotion();
@@ -556,7 +559,14 @@ const AdventureMode: React.FC<Props> = ({
       sfx('click');
       setOverlay({ kind: 'preview', level: frontier });
     },
-    onCancel: () => transition.go(() => { music.stop(); onExit(); }, -1),
+    onCancel: () => {
+      if (hostTransition) {
+        music.stop();
+        onExit();
+      } else {
+        transition.go(() => { music.stop(); onExit(); }, -1);
+      }
+    },
   });
 
   useKeyboardNav({
@@ -658,7 +668,14 @@ const AdventureMode: React.FC<Props> = ({
         onSelectLevel={l => { setWalkingKeyId(null); sfx('click'); setOverlay({ kind: 'preview', level: l }); }}
         onOpenCamp={() => { setWalkingKeyId(null); sfx('confirm'); setScreen({ kind: 'camp' }); }}
         onOpenGuide={() => { setWalkingKeyId(null); sfx('confirm'); setScreen({ kind: 'guide' }); }}
-        onExit={() => transition.go(() => { music.stop(); onExit(); }, -1)}
+        onExit={() => {
+          if (hostTransition) {
+            music.stop();
+            onExit();
+          } else {
+            transition.go(() => { music.stop(); onExit(); }, -1);
+          }
+        }}
       />
     );
   } else if (screen.kind === 'run') {
@@ -966,41 +983,39 @@ const AdventureMode: React.FC<Props> = ({
           <Icon name="lorc/gear-hammer" size={20} color={COLORS.slateCharcoal} noShadow />
         </TouchableOpacity>
       )}
-      {overlay.kind === 'settings' && (
-        <SettingsSheet
-          visible
-          onClose={() => setOverlay({ kind: 'none' })}
-          effectsOn={save.effectsOn}
-          onToggleEffects={() => {
-            const next = !save.effectsOn;
-            FightEffectsStorage.set(next);
-            setSave(s => ({ ...s, effectsOn: next }));
-          }}
-          onMusicChange={enabled => {
-            prevSaveMusicOn.current = enabled;
-            setSave(s => (s.musicOn === enabled ? s : { ...s, musicOn: enabled }));
-          }}
-          onReplayWalkthrough={() => {
-            setOverlay({ kind: 'none' });
-            startRun(MAIN_LEVELS[0]);
-          }}
-          onSaveRestored={() => {
-            const reloaded = loadAdventureSave();
-            setSaveState(reloaded);
-            saveRef.current = reloaded;
-          }}
-          onResetGame={() => {
-            const fresh = loadAdventureSave();
-            setSaveState(fresh);
-            saveRef.current = fresh;
-            const freshHistory = loadBattleHistory();
-            setHistory(freshHistory);
-            historyRef.current = freshHistory;
-            setOverlay({ kind: 'none' });
-            setScreen({ kind: 'map' });
-          }}
-        />
-      )}
+      <SettingsSheet
+        visible={overlay.kind === 'settings'}
+        onClose={() => setOverlay({ kind: 'none' })}
+        effectsOn={save.effectsOn}
+        onToggleEffects={() => {
+          const next = !save.effectsOn;
+          FightEffectsStorage.set(next);
+          setSave(s => ({ ...s, effectsOn: next }));
+        }}
+        onMusicChange={enabled => {
+          prevSaveMusicOn.current = enabled;
+          setSave(s => (s.musicOn === enabled ? s : { ...s, musicOn: enabled }));
+        }}
+        onReplayWalkthrough={() => {
+          setOverlay({ kind: 'none' });
+          startRun(MAIN_LEVELS[0]);
+        }}
+        onSaveRestored={() => {
+          const reloaded = loadAdventureSave();
+          setSaveState(reloaded);
+          saveRef.current = reloaded;
+        }}
+        onResetGame={() => {
+          const fresh = loadAdventureSave();
+          setSaveState(fresh);
+          saveRef.current = fresh;
+          const freshHistory = loadBattleHistory();
+          setHistory(freshHistory);
+          historyRef.current = freshHistory;
+          setOverlay({ kind: 'none' });
+          setScreen({ kind: 'map' });
+        }}
+      />
     </View>
   );
 };

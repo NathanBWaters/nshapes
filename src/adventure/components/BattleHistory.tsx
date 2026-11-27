@@ -25,7 +25,8 @@ import {
 import FightReplay, { DamageSplitBar, REPLAY_SERIES, barPath, niceMax, splitLogDamage } from './FightReplay';
 import PowerExplainer from './PowerExplainer';
 import WeaponExplainer from './WeaponExplainer';
-import { Btn, INK, StarRow, TONE } from './ui';
+import { Btn, INK, PopIn, StarRow, TONE } from './ui';
+import { STAGGER, staggerDelay } from '@/utils/motion';
 
 /** Battles shown at first, and added by each "show older" */
 const PAGE = 30;
@@ -203,7 +204,11 @@ const BattleHistory: React.FC<Props> = ({ history, now, onRateBattle }) => {
         const hasReplay = !!b.replay && b.replay.log.length > 1;
         const damageSplit = b.replay ? splitLogDamage(b.replay.log) : null;
         return (
-          <View key={key} style={[st.card, expanded && st.cardOpen]}>
+          <PopIn
+            key={key}
+            delay={i < 8 ? staggerDelay(i, Math.min(battles.length, 8), STAGGER.card) : 0}
+            style={[st.card, expanded && st.cardOpen]}
+          >
             <TouchableOpacity
               testID="history-battle"
               onPress={() => { sfx('click'); setOpen(expanded ? null : key); }}
@@ -262,7 +267,8 @@ const BattleHistory: React.FC<Props> = ({ history, now, onRateBattle }) => {
             </TouchableOpacity>
 
             {expanded && (
-              <View style={st.details} testID="history-details">
+              <PopIn style={st.details}>
+                <View testID="history-details" style={{ gap: 8 }}>
                 <View style={st.facts}>
                   <Fact label="Damage" value={b.damage.toLocaleString()} />
                   <Fact label="Biggest hit" value={`${b.biggestHit}`} />
@@ -334,9 +340,10 @@ const BattleHistory: React.FC<Props> = ({ history, now, onRateBattle }) => {
                     </View>
                   )
                 )}
-              </View>
+                </View>
+              </PopIn>
             )}
-          </View>
+          </PopIn>
         );
       })}
 

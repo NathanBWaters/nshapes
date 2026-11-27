@@ -1,8 +1,17 @@
 import { MONO_FONT } from '@/utils/fonts';
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { CardReward } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { EASE, MS, SPRING, STAYS, reducedMs } from '@/utils/motion';
 import Icon, { type IconName } from './Icon';
 
 interface RewardRevealProps {
@@ -10,24 +19,28 @@ interface RewardRevealProps {
 }
 
 const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
-  const scaleAnim = useRef(new Animated.Value(0.5)).current;
-  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const reduced = useReducedMotion();
+  const scaleAnim = useSharedValue(reduced ? 1 : 0.6);
+  const opacityAnim = useSharedValue(0);
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 120,
-        friction: 6,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacityAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    if (reduced) {
+      scaleAnim.value = 1;
+      opacityAnim.value = withTiming(1, { duration: reducedMs(MS.quick), easing: EASE.ui, ...STAYS });
+    } else {
+      scaleAnim.value = withSpring(1, SPRING.playful);
+      opacityAnim.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS });
+    }
+    return () => {
+      cancelAnimation(scaleAnim);
+      cancelAnimation(opacityAnim);
+    };
+  }, [reduced, scaleAnim, opacityAnim]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacityAnim.value,
+    transform: [{ scale: scaleAnim.value }],
+  }));
 
   // Special styling for weapon effects
   const isExplosion = reward.effectType === 'explosion';
@@ -152,11 +165,10 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
       style={[
         styles.container,
         {
-          opacity: opacityAnim,
-          transform: [{ scale: scaleAnim }],
           backgroundColor: getBackgroundColor(),
           borderColor: isSpecialEffect ? getBackgroundColor() : COLORS.slateCharcoal,
         },
+        animStyle,
       ]}
     >
       <View style={styles.rewardsContainer}>
@@ -209,6 +221,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     fontFamily: MONO_FONT,
+    fontVariant: ['tabular-nums'],
   },
 });
 

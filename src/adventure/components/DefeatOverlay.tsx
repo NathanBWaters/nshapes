@@ -15,7 +15,7 @@
  */
 import React, { useCallback, useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
@@ -23,13 +23,13 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { useColorblind } from '@/utils/cardColors';
 import { COLORS } from '@/utils/colors';
-import { EASE, MS } from '@/utils/motion';
+import { EASE, MODAL_MOTION, MS, STAYS, reducedMs } from '@/utils/motion';
 import { sfx } from '@/audio';
 import type { LevelDef, RunState } from '../types';
 import type { ResultApplication } from '../progress';
 import { isTailwindOffered, TAILWIND_STAR_CAP } from '../data/relief';
 import { diagnoseResultTip } from '../coach';
-import CompanionBubble from './CompanionBubble';
+import CompanionBubble, { LivingBreath } from './CompanionBubble';
 import { DARK, INK, TONE } from './ui';
 
 export interface DefeatOverlayProps {
@@ -64,18 +64,34 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
 }) => {
   const reduced = useReducedMotion();
   const colorblind = useColorblind();
-  const op = useSharedValue(reduced ? 1 : 0);
-  const y = useSharedValue(reduced ? 0 : 14);
+  const backdropO = useSharedValue(0);
+  const op = useSharedValue(0);
+  const y = useSharedValue(reduced ? 0 : 18);
+  const s = useSharedValue(reduced ? 1 : MODAL_MOTION.popInFromScale);
+  const barFill = useSharedValue(reduced ? 1 : 0);
 
   useEffect(() => {
-    if (reduced) return;
-    op.value = withTiming(1, { duration: MS.quick, easing: EASE.ui });
-    y.value = withTiming(0, { duration: MS.quick, easing: EASE.enterSoft });
+    if (reduced) {
+      y.value = 0;
+      s.value = 1;
+      barFill.value = 1;
+      backdropO.value = withTiming(1, { duration: reducedMs(MS.feedback), easing: EASE.ui, ...STAYS });
+      op.value = withTiming(1, { duration: reducedMs(MS.quick), easing: EASE.ui, ...STAYS });
+    } else {
+      backdropO.value = withTiming(1, { duration: MODAL_MOTION.backdropEnterMs, easing: EASE.ui, ...STAYS });
+      op.value = withTiming(1, { duration: MS.feedback, easing: EASE.ui, ...STAYS });
+      y.value = withTiming(0, { duration: MS.quick, easing: EASE.enterSoft });
+      s.value = withTiming(1, { duration: MS.quick, easing: EASE.enter });
+      barFill.value = withDelay(MODAL_MOTION.contentLagMs, withTiming(1, { duration: MS.move, easing: EASE.enterSoft }));
+    }
     return () => {
+      cancelAnimation(backdropO);
       cancelAnimation(op);
       cancelAnimation(y);
+      cancelAnimation(s);
+      cancelAnimation(barFill);
     };
-  }, [reduced, op, y]);
+  }, [reduced, backdropO, op, y, s, barFill]);
 
   const handleKeyboardRetry = useCallback(() => {
     sfx('confirm');
@@ -91,17 +107,29 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
     onCancel: onMap,
   });
 
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: backdropO.value,
+  }));
+
   const panelStyle = useAnimatedStyle(() => ({
     opacity: op.value,
-    transform: [{ translateY: y.value }],
+    transform: [{ translateY: y.value }, { scale: s.value }],
   }));
 
   const hpPctRemaining = run.foeMaxHp > 0 ? Math.max(0, Math.min(1, run.foeHp / run.foeMaxHp)) : 1;
   const dealtPct = Math.round((1 - hpPctRemaining) * 100);
-  const hpLeft = Math.max(1, Math.ceil(run.foeHp));
-  const nearMiss = run.foeHp > 0 && hpPctRemaining <= 0.25;
+  const dealtScale = Math.max(0.04, Math.min(1, dealtPct / 100));
   const bestHpPct = result.save.bestFoeHpPct?.[level.id] ?? hpPctRemaining;
   const bestDealtPct = Math.round((1 - Math.max(0, Math.min(1, bestHpPct))) * 100);
+  const bestScale = Math.max(0, Math.min(1, bestDealtPct / 100));
+  const fillBarStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: Math.max(0.001, dealtScale * barFill.value) }],
+  }));
+  const bestBarStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: Math.max(0.001, bestScale * barFill.value) }],
+  }));
+  const hpLeft = Math.max(1, Math.ceil(run.foeHp));
+  const nearMiss = run.foeHp > 0 && hpPctRemaining <= 0.25;
   const showPreCoinsProgress = !result.save.coinsUnlocked;
   const diagnostic = diagnoseResultTip(level, run, 0, result.save, colorblind);
   const offerTailwind = isTailwindOffered(level, result.save);
@@ -121,7 +149,7 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
   };
 
   return (
-    <View testID="defeat-overlay" style={st.backdrop}>
+    <Animated.View testID="defeat-overlay" style={[st.backdrop, backdropStyle]}>
       <Animated.View style={[st.panel, panelStyle]}>
         <ScrollView contentContainerStyle={st.scroll} bounces={false}>
           <View style={st.header}>
@@ -129,17 +157,22 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
               <Text testID="defeat-cause" style={st.causeText}>{causeOfDefeat(run).toUpperCase()}</Text>
             </View>
             <View style={st.matchup}>
-              <FighterAvatar character={run.fighter} size={46} mood="defeat" animate={false} framed />
+              <LivingBreath seedKey={`defeat-fighter-${run.fighter}`} size={46}>
+                <FighterAvatar character={run.fighter} size={46} mood="defeat" animate={false} framed />
+              </LivingBreath>
               <Text style={st.vsText}>VS</Text>
-              <EnemyAvatar
-                enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
-                size={46}
-                hp={run.foeHp}
-                maxHp={run.foeMaxHp}
-                mood="victory"
-                animate={false}
-                framed
-              />
+              <LivingBreath seedKey={`defeat-foe-${run.foeName}`} size={46}>
+                <EnemyAvatar
+                  enemy={{ name: run.foeName, icon: run.foeIcon, tier: run.foe.tier }}
+                  size={46}
+                  hp={run.foeHp}
+                  maxHp={run.foeMaxHp}
+                  mood="victory"
+                  animate={false}
+                  lightweight
+                  framed
+                />
+              </LivingBreath>
             </View>
             <Text style={st.title}>{level.id} · {level.name}</Text>
             {nearMiss ? (
@@ -166,9 +199,9 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
               </View>
               <View style={st.progressTrack}>
                 {bestDealtPct > dealtPct && (
-                  <View style={[st.progressBestFill, { width: `${Math.min(100, bestDealtPct)}%` }]} />
+                  <Animated.View style={[st.progressBestFill, bestBarStyle]} />
                 )}
-                <View style={[st.progressFill, { width: `${Math.max(4, Math.min(100, dealtPct))}%` }]} />
+                <Animated.View style={[st.progressFill, fillBarStyle]} />
               </View>
               {(result.hiddenPurseDeposited ?? 0) > 0 && (
                 <Text testID="defeat-hidden-purse" style={st.purseNote}>
@@ -303,7 +336,7 @@ const DefeatOverlay: React.FC<DefeatOverlayProps> = ({
           </View>
         </View>
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -374,16 +407,20 @@ const st = StyleSheet.create({
   progressBestFill: {
     position: 'absolute',
     left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     backgroundColor: '#FDE68A',
+    transformOrigin: 'left center',
   },
   progressFill: {
     position: 'absolute',
     left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     backgroundColor: COLORS.tealSurface,
+    transformOrigin: 'left center',
   },
   purseNote: { fontSize: 11.5, fontWeight: '800', color: TONE.coin, textAlign: 'center' },
   tipBlock: { gap: 8 },

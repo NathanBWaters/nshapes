@@ -8,11 +8,13 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { useModalMotion } from '@/components/ScreenTransition';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
@@ -155,30 +157,43 @@ const HighlightStageModal: React.FC<Props> = ({
     } as unknown as RunState;
   }, [snapshot]);
 
-  if (!visible || !snapshot) return null;
+  const lastSnapshotRef = useRef<MoveSnapshot | null>(snapshot);
+  if (snapshot) lastSnapshotRef.current = snapshot;
+  const activeSnapshot = snapshot ?? lastSnapshotRef.current;
 
-  const boardCards = snapshot.boardBefore.slice(0, 12);
-  const hpBeforePct =
-    snapshot.foeMaxHp > 0
-      ? Math.max(0, Math.min(100, Math.round((snapshot.foeHpBefore / snapshot.foeMaxHp) * 100)))
-      : 100;
-  const hpAfterPct =
-    snapshot.foeMaxHp > 0
-      ? Math.max(0, Math.min(100, Math.round((snapshot.foeHpAfter / snapshot.foeMaxHp) * 100)))
+  const { rendered, closing, backdropStyle, panelStyle, contentStyle } = useModalMotion(
+    visible && Boolean(snapshot),
+    { travelY: 28 }
+  );
+
+  if (!rendered || !activeSnapshot) return null;
+
+  const boardCards = activeSnapshot.boardBefore.slice(0, 12);
+  const hpBeforeRatio =
+    activeSnapshot.foeMaxHp > 0
+      ? Math.max(0, Math.min(1, activeSnapshot.foeHpBefore / activeSnapshot.foeMaxHp))
+      : 1;
+  const hpAfterRatio =
+    activeSnapshot.foeMaxHp > 0
+      ? Math.max(0, Math.min(1, activeSnapshot.foeHpAfter / activeSnapshot.foeMaxHp))
       : 0;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} testID={testID}>
-      <View style={[st.backdrop, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
+    <Modal visible={rendered} transparent animationType="none" onRequestClose={onClose} testID={testID}>
+      <View
+        style={[st.backdrop, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}
+        pointerEvents={closing ? 'none' : 'auto'}
+      >
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, st.backdropScrim, backdropStyle]} />
         <AnchorsProvider value={anchors}>
-          <View style={st.card}>
+          <Animated.View style={[st.card, panelStyle]}>
             {/* Header */}
             <View style={st.header}>
               <Icon name="lorc/bright-explosion" size={18} color={COLORS.impactOrange} />
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={st.eyebrow}>HIGHLIGHT REPLAY · {reducedMotion ? 'STATIC' : `${speed}×`}</Text>
                 <Text style={st.title} numberOfLines={1}>
-                  {snapshot.entry.damage} dmg vs {snapshot.foeName}
+                  {activeSnapshot.entry.damage} dmg vs {activeSnapshot.foeName}
                 </Text>
               </View>
               <TouchableOpacity
@@ -192,6 +207,7 @@ const HighlightStageModal: React.FC<Props> = ({
               </TouchableOpacity>
             </View>
 
+            <Animated.View style={contentStyle}>
             {/* Interactive Playback Stage */}
             <View
               style={st.stage}
@@ -209,21 +225,21 @@ const HighlightStageModal: React.FC<Props> = ({
               <View style={st.hud}>
                 <View style={st.hudRow}>
                   <Anchor name="fighter">
-                    <FighterAvatar character={snapshot.fighter} size={38} framed animate={false} />
+                    <FighterAvatar character={activeSnapshot.fighter} size={38} framed animate={false} />
                   </Anchor>
                   <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
                     <Text style={st.foeLabel} numberOfLines={1}>
-                      {snapshot.foeName} · {snapshot.foeHpBefore} → {snapshot.foeHpAfter} HP
+                      {activeSnapshot.foeName} · {activeSnapshot.foeHpBefore} → {activeSnapshot.foeHpAfter} HP
                     </Text>
                     <View style={st.hpTrack}>
-                      <View style={[st.hpGhost, { width: `${hpBeforePct}%` }]} />
-                      <View style={[st.hpFill, { width: `${hpAfterPct}%` }]} />
+                      <View style={[st.hpGhost, { transform: [{ scaleX: hpBeforeRatio }] }]} />
+                      <View style={[st.hpFill, { transform: [{ scaleX: hpAfterRatio }] }]} />
                     </View>
                   </View>
                   <Anchor name="foe">
                     <View style={st.foeBox}>
                       <EnemyAvatar
-                        enemy={{ name: snapshot.foeName, icon: snapshot.foeIcon, tier: 1 }}
+                        enemy={{ name: activeSnapshot.foeName, icon: activeSnapshot.foeIcon, tier: 1 }}
                         size={38}
                         lightweight
                       />
@@ -231,8 +247,8 @@ const HighlightStageModal: React.FC<Props> = ({
                   </Anchor>
                 </View>
 
-                {snapshot.weapons.length > 0 && (
-                  <GearBelt weapons={snapshot.weapons} width={stage.w} onInspect={() => {}} />
+                {activeSnapshot.weapons.length > 0 && (
+                  <GearBelt weapons={activeSnapshot.weapons} width={stage.w} onInspect={() => {}} />
                 )}
 
                 {activeIgnition && (
@@ -300,7 +316,8 @@ const HighlightStageModal: React.FC<Props> = ({
                 <Text style={st.replayBtnText}>Replay</Text>
               </TouchableOpacity>
             </View>
-          </View>
+            </Animated.View>
+          </Animated.View>
         </AnchorsProvider>
       </View>
     </Modal>
@@ -310,10 +327,12 @@ const HighlightStageModal: React.FC<Props> = ({
 const st = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(18,18,18,0.72)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
+  },
+  backdropScrim: {
+    backgroundColor: 'rgba(18,18,18,0.72)',
   },
   card: {
     width: '100%',
@@ -392,16 +411,20 @@ const st = StyleSheet.create({
   hpGhost: {
     position: 'absolute',
     left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     backgroundColor: '#FCA5A5',
+    transformOrigin: 'left center',
   },
   hpFill: {
     position: 'absolute',
     left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     backgroundColor: COLORS.impactRed,
+    transformOrigin: 'left center',
   },
   foeBox: {
     width: 44,

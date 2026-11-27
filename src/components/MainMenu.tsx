@@ -1,5 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Linking } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { COLORS, RADIUS } from '@/utils/colors';
 import { MONO_FONT } from '@/utils/fonts';
 import { DISCORD_URL } from '@/utils/storeUrls';
@@ -8,8 +17,22 @@ import { playSound } from '@/utils/sounds';
 import { band } from '@/audio';
 import { useKeyboardActive } from '@/utils/keybindings';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import {
+  BTN_PRESS,
+  EASE,
+  MS,
+  OVERLAP,
+  PHASE,
+  SCALE,
+  SPRING,
+  STAYS,
+  reducedMs,
+} from '@/utils/motion';
+import { LivingBreath } from '@/adventure/components/CompanionBubble';
 import Icon, { IconName } from './Icon';
 import { FighterAvatar } from './fighters';
+import type { FighterReactionEvent } from '@/utils/fighterAnimations';
 import { EnemyAvatar } from './enemies';
 import { CHARACTERS } from '@/utils/gameDefinitions';
 import { LabsStorage } from '@/utils/freePlayStorage';
@@ -22,6 +45,8 @@ import { STORY_TAGLINE } from '@/adventure/data/story';
 import { loadSpireMeta, loadSpireRun } from '@/spire/save';
 import { loadPrismMeta, loadPrismRun } from '@/prism/save';
 import { version } from '../../package.json';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export const UNIFIED_ELEVATOR_PITCH =
   'Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike.';
@@ -58,6 +83,43 @@ function ModeCard({
   disabled?: boolean;
   accessibilityLabel?: string;
 }) {
+  const reducedMotion = useReducedMotion();
+  const pressedSV = useSharedValue(0);
+
+  useEffect(() => () => cancelAnimation(pressedSV), [pressedSV]);
+
+  const handlePressIn = useCallback(() => {
+    if (disabled) return;
+    pressedSV.value = withTiming(1, {
+      duration: BTN_PRESS.pressInMs,
+      easing: EASE.ui,
+      ...(reducedMotion ? STAYS : {}),
+    });
+  }, [disabled, pressedSV, reducedMotion]);
+
+  const handlePressOut = useCallback(() => {
+    if (reducedMotion) {
+      pressedSV.value = withTiming(0, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...STAYS });
+    } else {
+      pressedSV.value = withSpring(0, SPRING.snappy);
+    }
+  }, [pressedSV, reducedMotion]);
+
+  const pressStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return {
+        opacity: 1 - pressedSV.value * (1 - BTN_PRESS.reducedOpacity),
+        transform: [{ translateY: 0 }, { scale: 1 }],
+      };
+    }
+    return {
+      transform: [
+        { translateY: pressedSV.value * BTN_PRESS.translateY },
+        { scale: 1 - pressedSV.value * (1 - BTN_PRESS.scale) },
+      ],
+    };
+  });
+
   const handlePress = () => {
     if (disabled || !onPress) return;
     triggerHaptic('light');
@@ -104,18 +166,20 @@ function ModeCard({
   const testIdVariant = variant === 'spire_locked' ? 'spire' : variant;
 
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={handlePress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       accessibilityLabel={accessibilityLabel ?? title}
       testID={`menu-${testIdVariant}`}
-      style={({ pressed }) => [
+      style={[
         styles.menuButton,
         v.button,
-        !disabled && pressed && styles.menuButtonPressed,
         Platform.OS === 'web' && !disabled && { cursor: 'pointer' as any },
+        pressStyle,
       ]}
     >
       <View
@@ -147,7 +211,7 @@ function ModeCard({
           {subtitle}
         </Text>
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -159,6 +223,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
   onSelectFreeplay,
   onSelectOptions,
 }) => {
+  const reducedMotion = useReducedMotion();
   const adventureSave = useMemo(() => {
     try {
       return loadAdventureSave();
@@ -174,9 +239,85 @@ const MainMenu: React.FC<MainMenuProps> = ({
     return idx >= 0 ? idx : 0;
   }, [adventureSave]);
 
-  const [mascotIndex] = useState(initialMascotIdx);
+  const [mascotIndex, setMascotIndex] = useState(initialMascotIdx);
+  const [heroPressed, setHeroPressed] = useState(false);
+  const [mascotReaction, setMascotReaction] = useState<FighterReactionEvent | null>(() =>
+    reducedMotion ? null : { type: 'entrance', id: 1 }
+  );
+  const reactionSeq = useRef(1);
   const [otherModesExpanded, setOtherModesExpanded] = useState(false);
   const keyboardActive = useKeyboardActive();
+
+  // Choreographed mount entrance: title → hero card (primary hero) → mascot pop → subordinate shelf
+  const titleO = useSharedValue(0);
+  const titleY = useSharedValue(reducedMotion ? 0 : 10);
+  const heroO = useSharedValue(0);
+  const heroY = useSharedValue(reducedMotion ? 0 : 16);
+  const heroEnterS = useSharedValue(reducedMotion ? 1 : 0.96);
+  const shelfO = useSharedValue(0);
+  const shelfY = useSharedValue(reducedMotion ? 0 : 10);
+
+  // Tactile Hero CTA press (SCALE.press + bottom ledge push-down) & Mascot tap pop
+  const heroPressSV = useSharedValue(0);
+  const mascotPopS = useSharedValue(1);
+  const mascotPopY = useSharedValue(0);
+  const mascotLeanX = useSharedValue(0);
+  const mascotRingS = useSharedValue(0.8);
+  const mascotRingO = useSharedValue(0);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      const dur = reducedMs(MS.quick);
+      titleY.value = 0;
+      heroY.value = 0;
+      heroEnterS.value = 1;
+      shelfY.value = 0;
+      titleO.value = withTiming(1, { duration: dur, easing: EASE.ui, ...STAYS });
+      heroO.value = withDelay(OVERLAP.primaryMs, withTiming(1, { duration: dur, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
+      shelfO.value = withDelay(OVERLAP.secondaryMs, withTiming(1, { duration: dur, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
+    } else {
+      titleO.value = withTiming(1, { duration: MS.feedback, easing: EASE.ui, ...STAYS });
+      titleY.value = withTiming(0, { duration: MS.quick, easing: EASE.enter });
+
+      heroO.value = withDelay(OVERLAP.uiContentMs, withTiming(1, { duration: MS.feedback, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
+      heroY.value = withDelay(OVERLAP.uiContentMs, withTiming(0, { duration: MS.move, easing: EASE.enterSoft }));
+      heroEnterS.value = withDelay(OVERLAP.uiContentMs, withTiming(1, { duration: MS.move, easing: EASE.enter }));
+
+      shelfO.value = withDelay(MS.feedback, withTiming(1, { duration: MS.feedback, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
+      shelfY.value = withDelay(MS.feedback, withTiming(0, { duration: MS.quick, easing: EASE.enter }));
+    }
+
+    return () => {
+      cancelAnimation(titleO);
+      cancelAnimation(titleY);
+      cancelAnimation(heroO);
+      cancelAnimation(heroY);
+      cancelAnimation(heroEnterS);
+      cancelAnimation(shelfO);
+      cancelAnimation(shelfY);
+      cancelAnimation(heroPressSV);
+      cancelAnimation(mascotPopS);
+      cancelAnimation(mascotPopY);
+      cancelAnimation(mascotLeanX);
+      cancelAnimation(mascotRingS);
+      cancelAnimation(mascotRingO);
+    };
+  }, [
+    reducedMotion,
+    titleO,
+    titleY,
+    heroO,
+    heroY,
+    heroEnterS,
+    shelfO,
+    shelfY,
+    heroPressSV,
+    mascotPopS,
+    mascotPopY,
+    mascotLeanX,
+    mascotRingS,
+    mascotRingO,
+  ]);
 
   // [AU-20]: Warm drumless title theme on Main Menu; stop cleanly on unmount if still playing title
   React.useEffect(() => {
@@ -195,6 +336,55 @@ const MainMenu: React.FC<MainMenuProps> = ({
     playSound('click');
     onSelectAdventure();
   }, [onSelectAdventure]);
+
+  const handleHeroPressIn = useCallback(() => {
+    setHeroPressed(true);
+    heroPressSV.value = withTiming(1, {
+      duration: BTN_PRESS.pressInMs,
+      easing: EASE.ui,
+      ...(reducedMotion ? STAYS : {}),
+    });
+    if (!reducedMotion) {
+      // Mascot leans eagerly toward the Frontier Foe on Hero CTA press!
+      mascotLeanX.value = withTiming(5, { duration: MS.feedback, easing: EASE.enter });
+    }
+  }, [heroPressSV, mascotLeanX, reducedMotion]);
+
+  const handleHeroPressOut = useCallback(() => {
+    setHeroPressed(false);
+    if (reducedMotion) {
+      heroPressSV.value = withTiming(0, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...STAYS });
+    } else {
+      heroPressSV.value = withSpring(0, SPRING.snappy);
+      mascotLeanX.value = withSpring(0, SPRING.snappy);
+    }
+  }, [heroPressSV, mascotLeanX, reducedMotion]);
+
+  const handleMascotTap = useCallback(() => {
+    triggerHaptic('light');
+    playSound('click');
+    setMascotIndex(idx => (idx + 1) % CHARACTERS.length);
+    reactionSeq.current += 1;
+    setMascotReaction({ type: 'pet', id: reactionSeq.current });
+    if (!reducedMotion) {
+      // Non-nested mascot swap & joy pop: crisp gather → playful overshoot hop → golden burst ring!
+      mascotPopS.value = withSequence(
+        withTiming(SCALE.press, { duration: PHASE.uiGatherMs, easing: EASE.ui }),
+        withTiming(SCALE.reward, { duration: MS.feedback, easing: EASE.popSoft }),
+        withSpring(1, SPRING.playful)
+      );
+      mascotPopY.value = withSequence(
+        withTiming(-9, { duration: MS.feedback, easing: EASE.enter }),
+        withSpring(0, SPRING.playful)
+      );
+      mascotRingS.value = 0.8;
+      mascotRingS.value = withTiming(1.52, { duration: MS.move, easing: EASE.enterSoft });
+      mascotRingO.value = withSequence(
+        withTiming(0.92, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+        withTiming(0, { duration: MS.move, easing: EASE.enterSoft })
+      );
+    }
+  }, [mascotPopS, mascotPopY, mascotRingS, mascotRingO, reducedMotion]);
 
   // [UI-23]: Web mash-to-play (`Enter` / `Space` launches Hero Adventure CTA when no modal is open)
   useKeyboardNav({
@@ -338,6 +528,47 @@ const MainMenu: React.FC<MainMenuProps> = ({
   const useCompactFreshShelf = adventure.isFresh && !spire.unlocked && !prismVisible;
   const showFullSecondaryCards = !useCompactFreshShelf || otherModesExpanded;
 
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: titleO.value,
+    transform: [{ translateY: titleY.value }],
+  }));
+
+  const heroCardStyle = useAnimatedStyle(() => {
+    if (reducedMotion) {
+      return {
+        opacity: heroO.value * (1 - heroPressSV.value * (1 - BTN_PRESS.reducedOpacity)),
+        transform: [{ translateY: 0 }, { scale: 1 }],
+      };
+    }
+    const pressScale = 1 - heroPressSV.value * (1 - SCALE.press);
+    const pressY = heroPressSV.value * 3;
+    return {
+      opacity: heroO.value,
+      transform: [
+        { translateY: heroY.value + pressY },
+        { scale: heroEnterS.value * pressScale },
+      ],
+    };
+  });
+
+  const mascotWrapStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: mascotLeanX.value },
+      { translateY: mascotPopY.value },
+      { scale: mascotPopS.value },
+    ],
+  }));
+
+  const mascotRingStyle = useAnimatedStyle(() => ({
+    opacity: mascotRingO.value,
+    transform: [{ scale: mascotRingS.value }],
+  }));
+
+  const shelfStyle = useAnimatedStyle(() => ({
+    opacity: shelfO.value,
+    transform: [{ translateY: shelfY.value }],
+  }));
+
   const handleOpenDojo = () => {
     triggerHaptic('light');
     playSound('click');
@@ -393,56 +624,96 @@ const MainMenu: React.FC<MainMenuProps> = ({
         </View>
 
         {/* Title & Unified 1-Sentence Pitch (Title "NSHAPES" preserved untouched) */}
-        <View style={styles.titleSection}>
+        <Animated.View style={[styles.titleSection, titleStyle]}>
           <Text style={styles.title}>NSHAPES</Text>
           <Text style={styles.pitch} testID="menu-pitch">
             {UNIFIED_ELEVATOR_PITCH}
           </Text>
-        </View>
+        </Animated.View>
 
         {/* Dominant 2x Hero Play / Continue Storybook Card */}
         <View style={styles.menuSection}>
-          <Pressable
-            onPress={handleAdventurePress}
-            accessibilityRole="button"
-            accessibilityLabel={`Adventure: ${adventure.title}`}
-            testID="menu-adventure"
-            style={({ pressed }) => [
-              styles.heroCard,
-              pressed && styles.heroCardPressed,
-              Platform.OS === 'web' && { cursor: 'pointer' as any },
-            ]}
-          >
-            {/* Live Storybook Matchup Stage: Fighter vs Frontier Foe */}
-            <View style={styles.heroStage}>
-              <View style={styles.heroAvatarBadge}>
-                {/* Display-only inside the Hero CTA: a pettable avatar here would nest a <button> in a <button> */}
-                <FighterAvatar
-                  character={mascotCharacter}
-                  size={58}
-                  testID="main-menu-mascot"
+          <Animated.View style={[styles.heroCard, heroCardStyle]}>
+            {/* Live Storybook Matchup Stage: Mascot (non-nested interactive swap/pop!) vs Living Frontier Foe */}
+            <View style={styles.heroStage} testID="menu-hero-stage">
+              <Pressable
+                testID="main-menu-mascot-tap"
+                onPress={handleMascotTap}
+                accessibilityRole="button"
+                accessibilityLabel={`Cheer ${mascotCharacter.name} and preview next companion`}
+                style={[
+                  styles.heroAvatarBadge,
+                  Platform.OS === 'web' && { cursor: 'pointer' as any },
+                ]}
+              >
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    {
+                      position: 'absolute',
+                      width: 62,
+                      height: 62,
+                      borderRadius: 31,
+                      borderWidth: 3.5,
+                      borderColor: COLORS.actionYellow,
+                    },
+                    mascotRingStyle,
+                  ]}
                 />
-              </View>
+                <Animated.View style={mascotWrapStyle}>
+                  <FighterAvatar
+                    character={mascotCharacter}
+                    size={58}
+                    mood={heroPressed ? 'anticipation' : 'idle'}
+                    reaction={mascotReaction}
+                    testID="main-menu-mascot"
+                  />
+                </Animated.View>
+              </Pressable>
 
-              <View style={styles.heroVsCrest}>
-                <Icon name="lorc/crossed-swords" size={18} color={COLORS.actionYellow} noShadow />
-                <Text style={styles.heroStageTag}>{adventure.frontierLevel.id}</Text>
-              </View>
+              <Pressable
+                onPress={handleAdventurePress}
+                onPressIn={handleHeroPressIn}
+                onPressOut={handleHeroPressOut}
+                accessibilityRole="button"
+                accessibilityLabel={`Next battle ${adventure.frontierLevel.id} vs ${adventure.frontierFoe.name}`}
+                style={[
+                  styles.heroStageRight,
+                  Platform.OS === 'web' && { cursor: 'pointer' as any },
+                ]}
+              >
+                <View style={styles.heroVsCrest}>
+                  <Icon name="lorc/crossed-swords" size={18} color={COLORS.actionYellow} noShadow />
+                  <Text style={styles.heroStageTag}>{adventure.frontierLevel.id}</Text>
+                </View>
 
-              <View style={styles.heroFoeBadge}>
-                <EnemyAvatar
-                  enemy={adventure.frontierFoe}
-                  size={50}
-                  mood="idle"
-                  animate={false}
-                  lightweight
-                  testID="menu-frontier-foe"
-                />
-              </View>
+                <View style={styles.heroFoeBadge} testID="menu-frontier-foe">
+                  <LivingBreath seedKey={`menu-foe-${adventure.frontierFoe.name}`} size={50} amplitude={0.038}>
+                    <EnemyAvatar
+                      enemy={adventure.frontierFoe}
+                      size={50}
+                      mood="idle"
+                      animate={false}
+                      lightweight
+                    />
+                  </LivingBreath>
+                </View>
+              </Pressable>
             </View>
 
-            {/* Dominant Hero CTA Copy */}
-            <View style={styles.heroBody}>
+            {/* Dominant Hero CTA Copy (non-nested Pressable compressing the entire Hero Card) */}
+            <Pressable
+              onPress={handleAdventurePress}
+              onPressIn={handleHeroPressIn}
+              onPressOut={handleHeroPressOut}
+              accessibilityRole="button"
+              accessibilityLabel={`Adventure: ${adventure.title}`}
+              testID="menu-adventure"
+              style={[
+                styles.heroBody,
+                Platform.OS === 'web' && { cursor: 'pointer' as any },
+              ]}
+            >
               <View style={styles.heroTitleRow}>
                 <Text style={styles.heroTitle}>{adventure.title}</Text>
                 {adventure.isFresh ? (
@@ -462,11 +733,11 @@ const MainMenu: React.FC<MainMenuProps> = ({
                 )}
               </View>
               <Text style={styles.heroSubtitle}>{adventure.subtitle}</Text>
-            </View>
-          </Pressable>
+            </Pressable>
+          </Animated.View>
 
           {/* Secondary Mode Shelf */}
-          <View style={styles.secondaryShelf}>
+          <Animated.View style={[styles.secondaryShelf, shelfStyle]}>
             {useCompactFreshShelf && (
               <View style={styles.otherModesHeader}>
                 <Text style={styles.otherModesTitle}>OTHER MODES</Text>
@@ -576,7 +847,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
                 />
               </View>
             )}
-          </View>
+          </Animated.View>
         </View>
 
         {/* Restrained Footer: Discord + Version */}
@@ -689,32 +960,39 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   heroCard: {
-    minHeight: 136,
+    minHeight: 144,
     backgroundColor: COLORS.actionYellow,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 3,
     borderBottomWidth: 7,
     borderColor: COLORS.slateCharcoal,
-    padding: 14,
+    padding: 12,
     gap: 10,
-  },
-  heroCardPressed: {
-    transform: [{ scale: 0.985 }],
-    opacity: 0.95,
   },
   heroStage: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFDF7',
-    borderRadius: 12,
+    // Concentric radius: outer 18 - padding 12 ≈ 6..10
+    borderRadius: 10,
     borderWidth: 2,
     borderColor: COLORS.slateCharcoal,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     gap: 10,
   },
+  heroStageRight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 58,
+    gap: 8,
+  },
   heroAvatarBadge: {
+    minWidth: 58,
+    minHeight: 58,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -731,6 +1009,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     fontFamily: MONO_FONT,
+    fontVariant: ['tabular-nums'],
     color: COLORS.canvasWhite,
     letterSpacing: 0.6,
   },
@@ -740,6 +1019,10 @@ const styles = StyleSheet.create({
   },
   heroBody: {
     gap: 4,
+    paddingHorizontal: 2,
+    paddingVertical: 4,
+    minHeight: 54,
+    justifyContent: 'center',
   },
   heroTitleRow: {
     flexDirection: 'row',
@@ -780,6 +1063,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     fontFamily: MONO_FONT,
+    fontVariant: ['tabular-nums'],
     color: COLORS.actionYellow,
   },
   keycapBadge: {
@@ -884,8 +1168,8 @@ const styles = StyleSheet.create({
     gap: 11,
   },
   menuButtonPressed: {
-    transform: [{ scale: 0.985 }],
-    opacity: 0.92,
+    transform: [{ scale: SCALE.press }, { translateY: 1.5 }],
+    opacity: 0.94,
   },
   spireButton: {
     backgroundColor: COLORS.tealSurface,
