@@ -653,14 +653,14 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
 }) {
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
-  const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
-  const shouldLightweightBreathe = animate && lightweight && !reducedMotion && appActive && !quiet;
-
   const characterName =
     typeof character === 'string'
       ? character
       : character?.name ?? 'Orange Tabby';
   const characterIcon = typeof character === 'object' && character ? character.icon : undefined;
+  const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
+  const shouldLightweightBreathe =
+    animate && lightweight && !reducedMotion && appActive && !quiet && !hasFighterSpriteAtlas(characterName);
 
   const personality = useMemo(() => getFighterPersonality(characterName), [characterName]);
   const pivots = getFighterPivots(characterName);

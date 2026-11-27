@@ -149,3 +149,12 @@ Upgraded all 6 Hero Fighters (`Orange Tabby`, `Sly Fox`, `Badger`, `Corgi`, `Emp
 - **Silhouette Audit (`[UI-07]`):** Solid-black `#121212` silhouette flattening (`filter: brightness(0)` on web, `tintColor` on native), visually verified at 36px & 80px in `/dev/fighters`.
 - **Stage Framing:** Lifted Main Menu Hero Card mascot (`58 → 74px`) and roomy Battle Stage fighter size (`66 → 74px` mobile / `86 → 92px` wide) while keeping all layouts overflow-free.
 - **Captures verified (`r1`):** `motion-out/fighter-sprite-idle-loop/r1/contact.png`, `motion-out/fighter-tabby-pounce/r1/contact.png`, `motion-out/fighter-badger-jab/r1/contact.png` (`0` hints on `fighter-badger-jab`).
+
+---
+
+## 7. Gemini Omni 1.2 Flash 20–24 FPS Fluid Video-Loop Upgrade (`v0.1.188`)
+
+Replaced the 6-frame static-grid idle slideshows (~7 fps) with true temporally-coherent **Gemini Omni 1.2 Flash (`gemini-omni-1.2-flash`) first-and-last-frame seamless 24 fps video loops** for all 6 Hero Fighters (`assets/fighters/*.webp`, 8×7 = 56 cells @ 160×160 = 1280×1120, 1.62 MB total across 312 retina frames):
+- **True 20–24 fps fluid cartoon loops (`0..47`):** Generated 3-second locked-camera `#00FF00` chroma-key seamless loops per hero, solved minimum-MSE loop wrap seams across all 72 native frames (Orange Tabby `4.1` MSE = `0.20×` step, Corgi `1.7` = `0.04×`, Pelican `4.9` = `0.02×`, Badger `3.1` = `0.10×`, Sly Fox `84.3` = `0.75×`, Emperor Penguin `0.000` palindrome), and cropped EVERY frame with ONE fixed global bounding box so planted feet stay sub-pixel locked with zero jitter.
+- **Natural in-loop eye blinks & clean acting poses (`48..53`):** Removed jarring mid-loop static blink frame swaps (every Omni loop blinks naturally inside the 24 fps video), disabled redundant synthetic `lightweight` rubber-squash on sprite heroes, and kept all 6 crisp Disney acting poses (`blink`, `windup`, `attack`, `cheer`, `hurt`, `sleepy`) at fixed slots `48..53` layered with Reanimated combat kinematics.
+- **Captures verified (`r2`):** `motion-out/fighter-sprite-idle-loop/r2/{contact,strip}.png`, `motion-out/fighter-tabby-pounce/r2/contact.png`.

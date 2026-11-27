@@ -181,7 +181,7 @@ export default {
 
   'fighter-sprite-idle-loop': {
     id: 'fighter-sprite-idle-loop',
-    about: 'Orange Tabby Nano Banana 6-frame seamless sprite idle loop (780ms cycle) on /dev/fighters',
+    about: 'Orange Tabby Gemini Omni 48-frame 20fps seamless video-loop idle (2400ms cycle) on /dev/fighters',
     path: '/dev/fighters',
     ready: (page, h) => h.until('studio-tab-fighters'),
     prepare: async (page, h) => {
@@ -193,7 +193,7 @@ export default {
     },
     trigger: async () => {},
     clip: cardOf(0),
-    frames: 54,
+    frames: 60,
     ambient: 0,
     mute: ['DEAD-STRETCH'],
   },

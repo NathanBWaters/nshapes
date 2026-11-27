@@ -5,7 +5,6 @@ import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
@@ -18,29 +17,25 @@ import type { FighterAmbientMood } from '@/utils/fighterAnimations';
 import { CHEER, THROW, seedFromKey } from '@/utils/motion';
 import type { FighterOverlayReactionType } from './FighterEffectsOverlay';
 
-export const FIGHTER_ATLAS_COLS = 4;
-export const FIGHTER_ATLAS_ROWS = 3;
-export const FIGHTER_IDLE_FRAME_COUNT = 6;
+export const FIGHTER_ATLAS_COLS = 8;
+export const FIGHTER_ATLAS_ROWS = 7;
+export const FIGHTER_IDLE_FRAME_COUNT = 48;
+const FIGHTER_ATLAS_MAX_INDEX = 53;
 
 /**
- * Packed 4×3 Nano Banana storybook sprite atlas frame indices (`1024×768`, `256×256` cells):
- * - Row 0: `idle0`, `idle1`, `idle2`, `idle3` (6-frame seamless Disney idle cycle)
- * - Row 1: `idle4`, `idle5`, `blink`, `windup`
- * - Row 2: `attack`, `cheer`, `hurt`, `sleepy`
+ * Packed 8×7 Gemini Omni 1.2 Flash + Nano Banana storybook sprite atlas (`1280×1120`, `160×160` cells):
+ * - Frames `0..47`: 48 temporally-coherent 20–22 fps seamless video-loop idle frames
+ *   (fixed global crop window for zero foot jitter, natural mid-loop blink baked in).
+ * - Frames `48..53`: 6 crisp bespoke Disney acting poses (`blink`, `windup`, `attack`, `cheer`, `hurt`, `sleepy`).
  */
 export const FIGHTER_FRAME = {
   idle0: 0,
-  idle1: 1,
-  idle2: 2,
-  idle3: 3,
-  idle4: 4,
-  idle5: 5,
-  blink: 6,
-  windup: 7,
-  attack: 8,
-  cheer: 9,
-  hurt: 10,
-  sleepy: 11,
+  blink: 48,
+  windup: 49,
+  attack: 50,
+  cheer: 51,
+  hurt: 52,
+  sleepy: 53,
 } as const;
 
 export type FighterFrameIndex = (typeof FIGHTER_FRAME)[keyof typeof FIGHTER_FRAME];
@@ -54,14 +49,17 @@ export const FIGHTER_SPRITE_ATLASES: Readonly<Record<string, ImageSourcePropType
   Pelican: require('../../../assets/fighters/pelican.webp'),
 };
 
-/** Species-tuned 6-frame seamless idle cycle durations (ms) — animated on Disney 2s/3s (~6.5–9 fps). */
-const SPECIES_IDLE_CYCLE_MS: Readonly<Record<string, number>> = {
-  'Orange Tabby': 780,
-  'Sly Fox': 840,
-  Badger: 840,
-  Corgi: 680,
-  'Emperor Penguin': 960,
-  Pelican: 720,
+/**
+ * Species-tuned native 24fps zero-seam Omni loop lengths and durations (~20–24 fps).
+ * Acting poses always live at fixed atlas indices `48..53` across every 8×7 atlas.
+ */
+const SPECIES_IDLE_LOOP: Readonly<Record<string, { frames: number; cycleMs: number }>> = {
+  'Orange Tabby': { frames: 48, cycleMs: 2400 },     // 20.0 fps
+  'Sly Fox': { frames: 38, cycleMs: 1900 },          // 20.0 fps (exact native 24fps zero-seam subcycle)
+  Badger: { frames: 46, cycleMs: 1920 },             // 24.0 fps (exact native 24fps boxer weave)
+  Corgi: { frames: 48, cycleMs: 2160 },              // 22.2 fps (exuberant tippy-tap bounce)
+  'Emperor Penguin': { frames: 48, cycleMs: 2400 },  // 20.0 fps (0.000-MSE regal palindrome flourish)
+  Pelican: { frames: 48, cycleMs: 2180 },            // 22.0 fps (two full aerodynamic wing-flap cycles)
 };
 
 export function hasFighterSpriteAtlas(characterName: string): boolean {
@@ -202,7 +200,9 @@ export const FighterSpriteRig: React.FC<FighterSpriteRigProps> = memo(function F
     };
   }, [activeReaction, reactionKey, cheerReleaseMs, quiet, reducedMotion]);
 
-  // Resolve static/acting override frame (`-1` means run the continuous 6-frame idle loop!)
+  // Resolve static/acting override frame (`-1` means run the continuous 48-frame Omni video idle loop!)
+  // Natural eye blinks are baked smoothly into the 48-frame video loop, so we never interrupt
+  // mid-loop with a static blink frame (avoiding body/tail pops during blinks).
   let lockedFrame: FighterFrameIndex | -1 = -1;
   if (silhouette) {
     lockedFrame = FIGHTER_FRAME.idle0;
@@ -216,11 +216,12 @@ export const FighterSpriteRig: React.FC<FighterSpriteRigProps> = memo(function F
     lockedFrame = FIGHTER_FRAME.cheer;
   } else if (mood === 'anticipation' && !lightweight) {
     lockedFrame = FIGHTER_FRAME.windup;
-  } else if (blinkStage >= 2) {
-    lockedFrame = FIGHTER_FRAME.blink;
   } else if (!animate || reducedMotion || quiet) {
     lockedFrame = FIGHTER_FRAME.idle0;
   }
+
+  // Keep `blinkStage` referenced cleanly in props contract for compatibility with FighterAvatar
+  void blinkStage;
 
   const shouldRunIdleLoop =
     Boolean(atlasSource) &&
@@ -238,9 +239,10 @@ export const FighterSpriteRig: React.FC<FighterSpriteRigProps> = memo(function F
     overrideFrameSV.value = lockedFrame;
   }, [lockedFrame, overrideFrameSV]);
 
-  const baseCycleMs = SPECIES_IDLE_CYCLE_MS[characterName] ?? 800;
-  const cycleMs = Math.max(480, Math.round(baseCycleMs * moodTempoFactor(mood)));
-  const phaseOffset = seedFromKey(characterName) % FIGHTER_IDLE_FRAME_COUNT;
+  const loopSpec = SPECIES_IDLE_LOOP[characterName] ?? { frames: FIGHTER_IDLE_FRAME_COUNT, cycleMs: 2400 };
+  const idleFrameCount = loopSpec.frames;
+  const cycleMs = Math.max(1200, Math.round(loopSpec.cycleMs * moodTempoFactor(mood)));
+  const phaseOffset = (seedFromKey(characterName) * 7) % idleFrameCount;
 
   useEffect(() => {
     if (!shouldRunIdleLoop) {
@@ -248,23 +250,19 @@ export const FighterSpriteRig: React.FC<FighterSpriteRigProps> = memo(function F
       loopProgress.value = 0;
       return;
     }
-    const startDelay = (seedFromKey(characterName) % 5) * 28;
     loopProgress.value = 0;
-    loopProgress.value = withDelay(
-      startDelay,
-      withRepeat(
-        withTiming(FIGHTER_IDLE_FRAME_COUNT, {
-          duration: cycleMs,
-          easing: Easing.linear,
-        }),
-        -1,
-        false
-      )
+    loopProgress.value = withRepeat(
+      withTiming(idleFrameCount, {
+        duration: cycleMs,
+        easing: Easing.linear,
+      }),
+      -1,
+      false
     );
     return () => {
       cancelAnimation(loopProgress);
     };
-  }, [shouldRunIdleLoop, characterName, cycleMs, loopProgress]);
+  }, [shouldRunIdleLoop, idleFrameCount, cycleMs, loopProgress]);
 
   // Integer cell pixel size prevents 0.5px subpixel bleed between neighboring atlas cells on Web
   const cellSize = Math.max(16, Math.round(size));
@@ -274,12 +272,13 @@ export const FighterSpriteRig: React.FC<FighterSpriteRigProps> = memo(function F
   const atlasOffsetStyle = useAnimatedStyle(() => {
     'worklet';
     const override = overrideFrameSV.value;
-    const rawStep = Math.floor(loopProgress.value) % FIGHTER_IDLE_FRAME_COUNT;
+    const raw = Math.floor(loopProgress.value);
+    const step = ((raw % idleFrameCount) + idleFrameCount) % idleFrameCount;
     const idx =
       override >= 0
         ? override
-        : (rawStep + phaseOffset) % FIGHTER_IDLE_FRAME_COUNT;
-    const clampedIdx = idx < 0 ? 0 : idx > 11 ? 11 : idx;
+        : (step + phaseOffset) % idleFrameCount;
+    const clampedIdx = idx < 0 ? 0 : idx > FIGHTER_ATLAS_MAX_INDEX ? FIGHTER_ATLAS_MAX_INDEX : idx;
     const col = clampedIdx % FIGHTER_ATLAS_COLS;
     const row = Math.floor(clampedIdx / FIGHTER_ATLAS_COLS);
     return {
