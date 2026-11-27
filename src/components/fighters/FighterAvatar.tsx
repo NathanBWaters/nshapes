@@ -31,6 +31,7 @@ import {
   EASE,
   HIT,
   HitTier,
+  MASS_CLASS,
   MODAL_MOTION,
   MS,
   OVERLAP,
@@ -54,7 +55,12 @@ import {
 } from '@/utils/fighterAnimations';
 import { FallbackFighterRig } from './creatures/FallbackFighterRig';
 import { FighterEffectsOverlay, FighterOverlayReactionType } from './FighterEffectsOverlay';
-import { FighterSpriteRig, hasFighterSpriteAtlas } from './FighterSpriteRig';
+import {
+  FIGHTER_CLIP_DURATION_MS,
+  FighterSpriteRig,
+  getSpriteMoodTempo,
+  hasFighterSpriteAtlas,
+} from './FighterSpriteRig';
 import {
   getFighterCreature,
   getFighterMassClass,
@@ -157,12 +163,57 @@ function buildHitstopVibration(
   return withSequence(withTiming(center, snap), ...vibSteps, withSpring(rest, spring));
 }
 
+/**
+ * Species throw wind-up duration (ms) aligned 1:1 with `fighterRegistry.tsx`:
+ * Heavyweight Badger uses a 3-frame (`48ms`) rear uppercut cock-back; all other heroes use `THROW.windMs` (`32ms`).
+ */
+export function getFighterThrowWindMs(characterName?: string | null): number {
+  return characterName === 'Badger' ? HIT.snapMs * 3 : THROW.windMs;
+}
+
 /** How fighters move: bouncy, affectionate, Disney-style anticipation and Sakurai-crisp combat acting. */
 export const FIGHTER_MOTION: CreatureMotionConfig<FighterAmbientMood, FighterAvatarReactionType> = {
   moodMotion: FIGHTER_MOOD_MOTION,
   reactionHoldMs: {
     ...FIGHTER_REACTION_HOLD_MS,
     throw: THROW.expressionHoldMs,
+  },
+  resolveReactionHoldMs: (type, context) => {
+    if (!context.atlasBakedIdle) {
+      const base =
+        type === 'throw' ? THROW.expressionHoldMs : (FIGHTER_REACTION_HOLD_MS[type] ?? 850);
+      const mult = MASS_CLASS[context.massClass ?? 'standard'].timeMult;
+      return mult === 1 ? base : Math.round(base * mult);
+    }
+    // Option B 8×8 sprite-atlas heroes: align reaction holds 1:1 with clip completion
+    // (never inflate Badger's cheer hold by heavy `massTimeMult`!)
+    switch (type) {
+      case 'throw':
+        return getFighterThrowWindMs(context.name) + FIGHTER_CLIP_DURATION_MS.attack;
+      case 'joy': {
+        const releaseMs = Math.max(CHEER.windMs, context.cheerReleaseMs ?? CHEER.releaseMs);
+        return releaseMs + FIGHTER_CLIP_DURATION_MS.cheer;
+      }
+      case 'dizzy_joy':
+        return CREATURE_FX.pokeStepMs + CREATURE_FX.spinMs;
+      case 'ecstatic':
+      case 'pet':
+      case 'powerup':
+      case 'heal':
+      case 'entrance':
+        return FIGHTER_CLIP_DURATION_MS.cheer;
+      case 'pain':
+        return (
+          hitstopHoldMs(context.hitTier ?? 0, context.moveKind, context.chain) +
+          FIGHTER_CLIP_DURATION_MS.hurtRecovery
+        );
+      case 'relief':
+        return 380;
+      case 'hint':
+        return 480;
+      default:
+        return FIGHTER_CLIP_DURATION_MS.cheer;
+    }
   },
   tapReaction: 'pet',
   tapStreakReaction: 'dizzy_joy',
@@ -658,9 +709,12 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
       ? character
       : character?.name ?? 'Orange Tabby';
   const characterIcon = typeof character === 'object' && character ? character.icon : undefined;
+  const usesSpriteAtlas = hasFighterSpriteAtlas(characterName);
+  const throwWindMs = getFighterThrowWindMs(characterName);
+  const spriteTempo = getSpriteMoodTempo(mood);
   const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
   const shouldLightweightBreathe =
-    animate && lightweight && !reducedMotion && appActive && !quiet && !hasFighterSpriteAtlas(characterName);
+    animate && lightweight && !reducedMotion && appActive && !quiet && !usesSpriteAtlas;
 
   const personality = useMemo(() => getFighterPersonality(characterName), [characterName]);
   const pivots = getFighterPivots(characterName);
@@ -684,6 +738,8 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
     massClass,
     speciesChoreography,
     speciesFidget,
+    atlasBakedIdle: usesSpriteAtlas,
+    spriteTempo,
     reaction,
     cheerReleaseMs: effectiveCheerReleaseMs,
     animate: shouldAnimate,
@@ -767,7 +823,6 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
     silhouette,
   };
   const Rig = getFighterCreature(characterName)?.Rig;
-  const usesSpriteAtlas = hasFighterSpriteAtlas(characterName);
 
   const isCriticalFrame = healthState === 'critical' || healthState === 'knocked_out';
   const isStreakFrame = streak >= 3 || mood === 'streak' || mood === 'victory';
@@ -991,6 +1046,10 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
               activeReaction={motion.activeReaction}
               reactionKey={motion.reactionKey}
               cheerReleaseMs={effectiveCheerReleaseMs}
+              throwWindMs={throwWindMs}
+              painHitstopMs={motion.reactionHitstopMs}
+              spriteClockMs={motion.spriteClockMs}
+              spriteIdleSec={motion.spriteIdleSec}
               blinkStage={effectiveBlinkStage}
               animate={animate}
               lightweight={lightweight}
@@ -1005,7 +1064,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
           {!silhouette && (
             <CreatureDamageOverlay
               healthState={healthState}
-              headStyle={motion.headStyle}
+              headStyle={usesSpriteAtlas ? undefined : motion.headStyle}
               animate={shouldAnimate}
             />
           )}

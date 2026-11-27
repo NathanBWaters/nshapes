@@ -98,7 +98,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
         return (
           <>
             <View style={st.headerRow}>
-              <FighterAvatar character={run.fighter} size={44} mood="anticipation" animate={allowPortraitMotion} quiet={reducedMotion} framed />
+              <FighterAvatar character={run.fighter} size={44} mood="idle" animate={allowPortraitMotion} quiet={reducedMotion} framed />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text="Fighter Passives" />
                 <Text style={titleStyle}>{run.fighter}</Text>

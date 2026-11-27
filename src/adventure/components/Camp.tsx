@@ -763,7 +763,7 @@ const Camp: React.FC<Props> = ({
                             testID={`camp-fighter-avatar-${f.name}`}
                             character={f.name}
                             size={50}
-                            mood={selected ? 'anticipation' : 'idle'}
+                            mood="idle"
                             reaction={reactions[f.name] ?? null}
                             animate={selected || Boolean(reactions[f.name])}
                             framed

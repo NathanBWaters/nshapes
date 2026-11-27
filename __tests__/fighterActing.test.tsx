@@ -1,24 +1,49 @@
 import React from 'react';
-import { render, act } from '@testing-library/react-native';
+import { render, renderHook, fireEvent, act } from '@testing-library/react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { Svg } from 'react-native-svg';
+import MainMenu from '@/components/MainMenu';
 import type { ReactionChannels } from '@/components/creatures/types';
+import { useCreatureMotion } from '@/components/creatures/useCreatureMotion';
 import { CreatureEyes } from '@/components/fighters/creatures/FacialFeatures';
-import { FighterAvatar } from '@/components/fighters/FighterAvatar';
+import {
+  FIGHTER_MOTION,
+  FighterAvatar,
+  getFighterThrowWindMs,
+} from '@/components/fighters/FighterAvatar';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { FighterEffectsOverlay } from '@/components/fighters/FighterEffectsOverlay';
 import {
+  FIGHTER_ATLAS_COLS,
+  FIGHTER_ATLAS_MAX_INDEX,
+  FIGHTER_ATLAS_ROWS,
+  FIGHTER_CLIPS,
+  FIGHTER_CLIP_DURATION_MS,
+  FIGHTER_IDLE_FRAME_COUNT,
   FIGHTER_SPRITE_ATLASES,
+  FighterSpriteRig,
+  getSpriteMoodTempo,
   hasFighterSpriteAtlas,
 } from '@/components/fighters/FighterSpriteRig';
 import {
   getFighterMassClass,
   getFighterPersonality,
+  getFighterPivots,
   getFighterSpeciesChoreography,
   getFighterSpeciesFidget,
 } from '@/components/fighters/fighterRegistry';
 import { CHARACTERS } from '@/utils/gameDefinitions';
-import { ACCESSIBLE, HIT, MODAL_MOTION, OVERLAP, SMEAR, SQUASH_TIER, THROW } from '@/utils/motion';
+import {
+  ACCESSIBLE,
+  CHEER,
+  HIT,
+  MODAL_MOTION,
+  OVERLAP,
+  SMEAR,
+  SPRITE_TX,
+  SQUASH_TIER,
+  THROW,
+} from '@/utils/motion';
 
 const mockWithTiming = jest.fn();
 const mockWithDelay = jest.fn();
@@ -27,6 +52,21 @@ const mockCancelAnimation = jest.fn();
 let mockAppActive = true;
 let mockReducedMotion = false;
 let mockFrameCallbackCalls: boolean[] = [];
+let mockCapturedFrameCallbacks: {
+  cb: (info: { timeSincePreviousFrame: number | null }) => void;
+  active: boolean;
+}[] = [];
+let mockCapturedAnimatedStyleFns: (() => Record<string, unknown>)[] = [];
+
+jest.mock('@/components/Icon', () => {
+  const ReactActual = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: (props: { name: string }) =>
+      ReactActual.createElement(View, { accessibilityLabel: `icon-${props.name}` }),
+  };
+});
 
 jest.mock('@/hooks/useAppActive', () => ({
   useAppActive: () => mockAppActive,
@@ -37,9 +77,14 @@ jest.mock('@/hooks/useReducedMotion', () => ({
 }));
 
 jest.mock('@/hooks/useGuardedFrameCallback', () => ({
-  useGuardedFrameCallback: (_cb: unknown, autostart = true) => {
-    mockFrameCallbackCalls.push(Boolean(autostart));
-    return { setActive: jest.fn(), callbackId: 0, isActive: Boolean(autostart) };
+  useGuardedFrameCallback: (
+    cb: (info: { timeSincePreviousFrame: number | null }) => void,
+    autostart = true
+  ) => {
+    const active = Boolean(autostart) && mockAppActive;
+    mockFrameCallbackCalls.push(active);
+    mockCapturedFrameCallbacks.push({ cb, active });
+    return { setActive: jest.fn(), callbackId: 0, isActive: active };
   },
 }));
 
@@ -64,6 +109,10 @@ jest.mock('react-native-reanimated', () => {
     cancelAnimation: (...args: unknown[]) => {
       mockCancelAnimation(...args);
       return actual.cancelAnimation(...args);
+    },
+    useAnimatedStyle: (fn: () => Record<string, unknown>, ...rest: unknown[]) => {
+      mockCapturedAnimatedStyleFns.push(fn);
+      return actual.useAnimatedStyle(fn, ...rest);
     },
   };
 });
@@ -115,6 +164,8 @@ describe('Lane 1 — Hero Fighter Species Acting, 3-Step Blinks, Lightweight Bre
     mockAppActive = true;
     mockReducedMotion = false;
     mockFrameCallbackCalls = [];
+    mockCapturedFrameCallbacks = [];
+    mockCapturedAnimatedStyleFns = [];
     mockWithTiming.mockClear();
     mockWithDelay.mockClear();
     mockWithRepeat.mockClear();
@@ -406,43 +457,471 @@ describe('Lane 1 — Hero Fighter Species Acting, 3-Step Blinks, Lightweight Bre
     });
   });
 
-  describe('5. Nano Banana 4x3 Sprite-Loop Atlas Rig (`FighterSpriteRig.tsx`)', () => {
-    it('runs GPU-only 6-frame idle sprite loop for all 6 heroes, halts on background/reduced-motion, and cancels cleanly', () => {
-      const { getByTestId, unmount } = render(
-        <FighterAvatar character="Orange Tabby" size={74} mood="idle" animate={true} />
-      );
-      expect(getByTestId('fighter-sprite-viewport')).toBeTruthy();
-      expect(getByTestId('fighter-sprite-atlas')).toBeTruthy();
-      expect(mockWithRepeat).toHaveBeenCalled();
+  describe('5. Option B 8x8 Hybrid Sprite State Machine (`FighterSpriteRig.tsx` & `useCreatureMotion.ts`)', () => {
+    it('enforces the locked 8x8 (64-slot) atlas contract and reports availability for all 6 heroes', () => {
+      expect(FIGHTER_ATLAS_COLS).toBe(8);
+      expect(FIGHTER_ATLAS_ROWS).toBe(8);
+      expect(FIGHTER_IDLE_FRAME_COUNT).toBe(32);
+      expect(FIGHTER_ATLAS_MAX_INDEX).toBe(63);
+      expect(FIGHTER_CLIPS.idle).toEqual({ start: 0, count: 32, fps: 16 });
+      expect(FIGHTER_CLIPS.windup).toEqual({ start: 32, count: 4, fps: 16 });
+      expect(FIGHTER_CLIPS.attack).toEqual({ start: 36, count: 8, fps: 20 });
+      expect(FIGHTER_CLIPS.cheer).toEqual({ start: 44, count: 8, fps: 16 });
+      expect(FIGHTER_CLIPS.hurt).toEqual({ start: 52, count: 6, fps: 16 });
+      expect(FIGHTER_CLIPS.sleepy).toEqual({ start: 58, count: 6, fps: 8 });
+      expect(getFighterThrowWindMs('Badger')).toBe(HIT.snapMs * 3);
+      expect(getFighterThrowWindMs('Orange Tabby')).toBe(THROW.windMs);
 
-      mockCancelAnimation.mockClear();
-      unmount();
-      expect(mockCancelAnimation).toHaveBeenCalled();
-
-      // Backgrounding immediately halts sprite loop without starting a new withRepeat
-      mockWithRepeat.mockClear();
-      mockAppActive = false;
-      const bgView = render(<FighterAvatar character="Sly Fox" size={64} mood="idle" animate={true} />);
-      expect(bgView.getByTestId('fighter-sprite-atlas')).toBeTruthy();
-      expect(mockWithRepeat).not.toHaveBeenCalled();
-      bgView.unmount();
-
-      // Reduced motion keeps static neutral pose with zero infinite loops
-      mockAppActive = true;
-      mockReducedMotion = true;
-      mockWithRepeat.mockClear();
-      const rmView = render(<FighterAvatar character="Pelican" size={64} mood="idle" animate={true} />);
-      expect(rmView.getByTestId('fighter-sprite-atlas')).toBeTruthy();
-      expect(mockWithRepeat).not.toHaveBeenCalled();
-      rmView.unmount();
-    });
-
-    it('reports sprite atlas availability for all 6 heroes and false for unregistered names', () => {
       for (const hero of ['Orange Tabby', 'Sly Fox', 'Badger', 'Corgi', 'Emperor Penguin', 'Pelican']) {
         expect(hasFighterSpriteAtlas(hero)).toBe(true);
         expect(FIGHTER_SPRITE_ATLASES[hero]).toBeDefined();
       }
       expect(hasFighterSpriteAtlas('Mystery Capybara')).toBe(false);
+    });
+
+    it('(a) advances monotonic idle clock continuously across idle -> curious -> streak -> urgent without resetting', () => {
+      const hook = renderHook(
+        ({ mood }: { mood: 'idle' | 'curious' | 'streak' | 'urgent' }) =>
+          useCreatureMotion(FIGHTER_MOTION, {
+            name: 'Orange Tabby',
+            size: 74,
+            mood,
+            healthState: 'pristine',
+            personality: getFighterPersonality('Orange Tabby'),
+            pivots: getFighterPivots('Orange Tabby'),
+            massClass: getFighterMassClass('Orange Tabby'),
+            atlasBakedIdle: true,
+            spriteTempo: getSpriteMoodTempo(mood),
+            reaction: null,
+            animate: true,
+            lively: true,
+            interactive: false,
+          }),
+        { initialProps: { mood: 'idle' as 'idle' | 'curious' | 'streak' | 'urgent' } }
+      );
+
+      const stepFrames = (count: number, dtMs = 16) => {
+        const latest = mockCapturedFrameCallbacks[mockCapturedFrameCallbacks.length - 1];
+        expect(latest?.active).toBe(true);
+        for (let i = 0; i < count; i++) {
+          latest.cb({ timeSincePreviousFrame: dtMs });
+        }
+      };
+
+      stepFrames(10, 16);
+      const clockAfterIdle = hook.result.current.spriteClockMs.value;
+      const idleSecAfterIdle = hook.result.current.spriteIdleSec.value;
+      expect(clockAfterIdle).toBe(160);
+      expect(idleSecAfterIdle).toBeCloseTo(0.16, 3);
+
+      // Transition idle -> curious -> streak -> urgent: monotonic clocks NEVER reset to 0!
+      hook.rerender({ mood: 'curious' });
+      stepFrames(10, 16);
+      expect(hook.result.current.spriteClockMs.value).toBe(320);
+      expect(hook.result.current.spriteIdleSec.value).toBeGreaterThan(idleSecAfterIdle + 0.16);
+
+      const idleSecAfterCurious = hook.result.current.spriteIdleSec.value;
+      hook.rerender({ mood: 'streak' });
+      stepFrames(10, 16);
+      expect(hook.result.current.spriteClockMs.value).toBe(480);
+      expect(hook.result.current.spriteIdleSec.value).toBeGreaterThan(idleSecAfterCurious + 0.165);
+
+      const idleSecAfterStreak = hook.result.current.spriteIdleSec.value;
+      hook.rerender({ mood: 'urgent' });
+      stepFrames(10, 16);
+      expect(hook.result.current.spriteClockMs.value).toBe(640);
+      expect(hook.result.current.spriteIdleSec.value).toBeGreaterThan(idleSecAfterStreak + 0.18);
+      hook.unmount();
+
+      // In active FighterAvatar, idle -> curious -> streak triggers ZERO crossfade resets and ZERO extra frame loops
+      mockWithTiming.mockClear();
+      mockWithRepeat.mockClear();
+      mockFrameCallbackCalls = [];
+      const view = render(
+        <FighterAvatar character="Orange Tabby" size={74} mood="idle" animate={true} />
+      );
+      expect(mockFrameCallbackCalls.filter(Boolean)).toHaveLength(1);
+      expect(mockWithRepeat).not.toHaveBeenCalled();
+
+      mockWithTiming.mockClear();
+      mockCancelAnimation.mockClear();
+      view.rerender(<FighterAvatar character="Orange Tabby" size={74} mood="curious" animate={true} />);
+      view.rerender(<FighterAvatar character="Orange Tabby" size={74} mood="streak" animate={true} />);
+      // No sprite blend timing fired on idle -> curious -> streak!
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([, cfg]) => (cfg as { duration?: number } | undefined)?.duration === SPRITE_TX.moodBlendMs
+        )
+      ).toBe(false);
+      view.unmount();
+    });
+
+    it('(b) captures cheerReleaseMs ONCE per reactionKey so async leadImpactMs updates mid-joy NEVER snap back to windup', () => {
+      const clockMs = { value: 1000 } as unknown as SharedValue<number>;
+      const idleSec = { value: 1.0 } as unknown as SharedValue<number>;
+      const painHitstop = { value: HIT.holdMs } as unknown as SharedValue<number>;
+
+      const view = render(
+        <FighterSpriteRig
+          characterName="Orange Tabby"
+          size={80}
+          mood="idle"
+          healthState="pristine"
+          activeReaction="joy"
+          reactionKey={1}
+          cheerReleaseMs={240}
+          painHitstopMs={painHitstop}
+          spriteClockMs={clockMs}
+          spriteIdleSec={idleSec}
+          animate={true}
+        />
+      );
+
+      // Advance clock past releaseMs (240ms) into the cheer clip (t = 1300ms -> 300ms elapsed)
+      clockMs.value = 1300;
+      idleSec.value = 1.3;
+      mockWithTiming.mockClear();
+      mockCancelAnimation.mockClear();
+
+      // Async `leadImpactMs` update arrives with same `reactionKey = 1`
+      view.rerender(
+        <FighterSpriteRig
+          characterName="Orange Tabby"
+          size={80}
+          mood="idle"
+          healthState="pristine"
+          activeReaction="joy"
+          reactionKey={1}
+          cheerReleaseMs={265}
+          painHitstopMs={painHitstop}
+          spriteClockMs={clockMs}
+          spriteIdleSec={idleSec}
+          animate={true}
+        />
+      );
+
+      // Must be a strict no-op: zero transition re-triggers, zero blend restarts, zero windup snaps
+      expect(mockWithTiming).not.toHaveBeenCalled();
+      expect(mockCancelAnimation).not.toHaveBeenCalled();
+      view.unmount();
+    });
+
+    it('(c) mounts dual-layer single-texture crossfade with unique fighter-sprite-atlas testID and SPRITE_TX blend matrix', () => {
+      const view = render(
+        <FighterAvatar character="Orange Tabby" size={80} mood="idle" animate={true} />
+      );
+      expect(view.getByTestId('fighter-sprite-viewport')).toBeTruthy();
+      expect(view.getAllByTestId('fighter-sprite-atlas')).toHaveLength(1);
+      const primary = view.getByTestId('fighter-sprite-atlas');
+      const secondary = view.getByTestId('fighter-sprite-atlas-prev');
+      // Both layers share the exact same preloaded texture reference (0 extra VRAM)
+      expect(secondary.props.source).toBe(primary.props.source);
+
+      // Smooth 64ms mood blend on idle -> anticipation
+      mockWithTiming.mockClear();
+      view.rerender(
+        <FighterAvatar character="Orange Tabby" size={80} mood="anticipation" animate={true} />
+      );
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([to, cfg]) => to === 1 && (cfg as { duration?: number } | undefined)?.duration === SPRITE_TX.moodBlendMs
+        )
+      ).toBe(true);
+
+      // Smooth 96ms sleepy bridge blend on anticipation -> sleepy
+      mockWithTiming.mockClear();
+      view.rerender(
+        <FighterAvatar character="Orange Tabby" size={80} mood="sleepy" animate={true} />
+      );
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([to, cfg]) => to === 1 && (cfg as { duration?: number } | undefined)?.duration === SPRITE_TX.sleepBlendMs
+        )
+      ).toBe(true);
+
+      // 0ms Sakurai snap on pain (no 64/96ms crossfade blur on combat impacts)
+      mockWithTiming.mockClear();
+      view.rerender(
+        <FighterAvatar
+          character="Orange Tabby"
+          size={80}
+          mood="idle"
+          reaction={{ type: 'pain', id: 1 }}
+          animate={true}
+        />
+      );
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([to, cfg]) =>
+            to === 1 &&
+            ((cfg as { duration?: number } | undefined)?.duration === SPRITE_TX.moodBlendMs ||
+              (cfg as { duration?: number } | undefined)?.duration === SPRITE_TX.sleepBlendMs)
+        )
+      ).toBe(false);
+      view.unmount();
+
+      // Silhouette mode keeps unique fighter-sprite-atlas without secondary crossfade layer
+      const sil = render(
+        <FighterAvatar character="Orange Tabby" size={64} silhouette animate={false} />
+      );
+      expect(sil.getByTestId('fighter-sprite-silhouette')).toBeTruthy();
+      expect(sil.getAllByTestId('fighter-sprite-atlas')).toHaveLength(1);
+      expect(sil.queryByTestId('fighter-sprite-atlas-prev')).toBeNull();
+      sil.unmount();
+
+      // Reduced motion uses calm ACCESSIBLE.fadeMs crossfades (zero strobe!)
+      mockReducedMotion = true;
+      const rm = render(
+        <FighterAvatar character="Orange Tabby" size={80} mood="idle" animate={true} />
+      );
+      mockWithTiming.mockClear();
+      rm.rerender(
+        <FighterAvatar character="Orange Tabby" size={80} mood="sleepy" animate={true} />
+      );
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([to, cfg]) => to === 1 && (cfg as { duration?: number } | undefined)?.duration === ACCESSIBLE.fadeMs
+        )
+      ).toBe(true);
+      rm.unmount();
+    });
+
+    it('(d) atlasBakedIdle disables redundant procedural idle breath/fidgets while keeping combat reactions & aligned Badger holds', () => {
+      jest.useFakeTimers();
+      const speciesFidget = jest.fn(() => true);
+      const speciesChoreography = jest.fn(() => true);
+
+      const hook = renderHook(
+        ({ reaction }: { reaction: { type: 'throw' | 'joy' | 'pain'; id: number } | null }) =>
+          useCreatureMotion(FIGHTER_MOTION, {
+            name: 'Badger',
+            size: 80,
+            mood: 'victory',
+            healthState: 'pristine',
+            personality: getFighterPersonality('Badger'),
+            pivots: getFighterPivots('Badger'),
+            massClass: 'heavy',
+            atlasBakedIdle: true,
+            speciesChoreography,
+            speciesFidget,
+            reaction,
+            animate: true,
+            lively: true,
+            interactive: false,
+          }),
+        { initialProps: { reaction: null as { type: 'throw' | 'joy' | 'pain'; id: number } | null } }
+      );
+
+      // Advance 12s of idle/victory time: zero procedural blinks, zero gaze shifts, zero fidget body warps!
+      act(() => {
+        jest.advanceTimersByTime(12_000);
+      });
+      expect(speciesFidget).not.toHaveBeenCalled();
+      expect(hook.result.current.blinkStage).toBe(0);
+      expect(hook.result.current.isBlinking).toBe(false);
+
+      // Combat reaction choreography STILL runs 100%, and heavy Badger's `joy` settles at exact
+      // clip completion (`CHEER.releaseMs + 500ms = 740ms`), NOT massTimeMult-inflated `1125ms`!
+      act(() => {
+        hook.rerender({ reaction: { type: 'joy', id: 1 } });
+      });
+      expect(speciesChoreography).toHaveBeenCalledTimes(1);
+      expect(hook.result.current.activeReaction).toBe('joy');
+
+      const expectedJoyHoldMs = CHEER.releaseMs + FIGHTER_CLIP_DURATION_MS.cheer; // 740ms
+      act(() => {
+        jest.advanceTimersByTime(expectedJoyHoldMs - 20);
+      });
+      expect(hook.result.current.activeReaction).toBe('joy');
+
+      act(() => {
+        jest.advanceTimersByTime(30);
+      });
+      expect(hook.result.current.activeReaction).toBeNull();
+      hook.unmount();
+    });
+
+    it('(e) runs lightweight sprite loop with 0 active frame loops and halts immediately on background or reduced motion', () => {
+      mockFrameCallbackCalls = [];
+      mockWithRepeat.mockClear();
+      const lw = render(
+        <FighterAvatar character="Orange Tabby" size={74} mood="idle" lightweight animate={true} />
+      );
+      expect(lw.getByTestId('fighter-sprite-viewport')).toBeTruthy();
+      expect(lw.getByTestId('fighter-sprite-atlas')).toBeTruthy();
+      expect(mockFrameCallbackCalls.every((active) => active === false)).toBe(true);
+      expect(mockWithRepeat).toHaveBeenCalledTimes(1);
+
+      // Mood changes in lightweight mode do NOT reset or restart the GPU loop
+      lw.rerender(
+        <FighterAvatar character="Orange Tabby" size={74} mood="curious" lightweight animate={true} />
+      );
+      lw.rerender(
+        <FighterAvatar character="Orange Tabby" size={74} mood="streak" lightweight animate={true} />
+      );
+      expect(mockWithRepeat).toHaveBeenCalledTimes(1);
+
+      mockCancelAnimation.mockClear();
+      lw.unmount();
+      expect(mockCancelAnimation).toHaveBeenCalled();
+
+      // Backgrounding immediately halts sprite loop without starting a new withRepeat
+      mockWithRepeat.mockClear();
+      mockFrameCallbackCalls = [];
+      mockAppActive = false;
+      const bgView = render(
+        <FighterAvatar character="Sly Fox" size={64} mood="idle" lightweight animate={true} />
+      );
+      expect(bgView.getByTestId('fighter-sprite-atlas')).toBeTruthy();
+      expect(mockFrameCallbackCalls.every((active) => active === false)).toBe(true);
+      expect(mockWithRepeat).not.toHaveBeenCalled();
+      bgView.unmount();
+
+      // Reduced motion keeps static neutral pose with zero infinite loops and zero frame loops
+      mockAppActive = true;
+      mockReducedMotion = true;
+      mockWithRepeat.mockClear();
+      mockFrameCallbackCalls = [];
+      const rmView = render(
+        <FighterAvatar character="Pelican" size={64} mood="idle" lightweight animate={true} />
+      );
+      expect(rmView.getByTestId('fighter-sprite-atlas')).toBeTruthy();
+      expect(mockFrameCallbackCalls.every((active) => active === false)).toBe(true);
+      expect(mockWithRepeat).not.toHaveBeenCalled();
+      rmView.unmount();
+    });
+
+    it('(f) runs Phase B UI-thread crossfade (`SPRITE_TX.sleepBlendMs`) from bridge 58 -> 59 in sleepy and 58 -> 63 in KO', () => {
+      const clockMs = { value: 0 } as unknown as SharedValue<number>;
+      const idleSec = { value: 0 } as unknown as SharedValue<number>;
+      const painHitstop = { value: HIT.holdMs } as unknown as SharedValue<number>;
+
+      mockCapturedAnimatedStyleFns = [];
+      const view = render(
+        <FighterSpriteRig
+          characterName="Orange Tabby"
+          size={80}
+          mood="sleepy"
+          healthState="pristine"
+          activeReaction={null}
+          reactionKey={0}
+          painHitstopMs={painHitstop}
+          spriteClockMs={clockMs}
+          spriteIdleSec={idleSec}
+          animate={true}
+        />
+      );
+      // FighterSpriteRig registers 3 worklets in order: settleWrapStyle, currAtlasStyle, prevAtlasStyle
+      const [, evalCurr, evalPrev] = mockCapturedAnimatedStyleFns.slice(-3);
+
+      // Before Phase B (`112ms < 125ms`): pure standing drowsy bridge 58
+      clockMs.value = 112;
+      expect(evalCurr().transform).toEqual([{ translateX: -2 * 80 }, { translateY: -7 * 80 }]);
+      expect(evalCurr().opacity).toBe(1);
+      expect(evalPrev().opacity).toBe(0);
+
+      // Midpoint of Phase B (`125ms + 48ms = 173ms`): smooth crossfade from standing bridge 58 (col 2, row 7) -> curled 59 (col 3, row 7)
+      clockMs.value = 173;
+      const currLayerMid = evalCurr();
+      const prevLayerMid = evalPrev();
+      expect(currLayerMid.opacity).toBeCloseTo(0.5, 2);
+      expect(prevLayerMid.opacity as number).toBeGreaterThan(0.5);
+      expect(prevLayerMid.opacity as number).toBeLessThan(0.8);
+      expect(prevLayerMid.transform).toEqual([{ translateX: -2 * 80 }, { translateY: -7 * 80 }]);
+      expect(currLayerMid.transform).toEqual([{ translateX: -3 * 80 }, { translateY: -7 * 80 }]);
+
+      // After Phase B completes (`125ms + 96ms = 221ms`): pure curled frame 59 with prev opacity 0
+      clockMs.value = 224;
+      expect(evalCurr().opacity).toBe(1);
+      expect(evalPrev().opacity).toBe(0);
+      view.unmount();
+
+      // Verify identical Phase B crossfade for `knocked_out` (`58 -> 63`: col 7, row 7)
+      clockMs.value = 0;
+      mockCapturedAnimatedStyleFns = [];
+      const koView = render(
+        <FighterSpriteRig
+          characterName="Orange Tabby"
+          size={80}
+          mood="idle"
+          healthState="knocked_out"
+          activeReaction={null}
+          reactionKey={0}
+          painHitstopMs={painHitstop}
+          spriteClockMs={clockMs}
+          spriteIdleSec={idleSec}
+          animate={true}
+        />
+      );
+      const [, evalKoCurr, evalKoPrev] = mockCapturedAnimatedStyleFns.slice(-3);
+      clockMs.value = 173;
+      const koCurr = evalKoCurr();
+      const koPrev = evalKoPrev();
+      expect(koCurr.opacity).toBeCloseTo(0.5, 2);
+      expect(koPrev.opacity as number).toBeGreaterThan(0.5);
+      expect(koPrev.transform).toEqual([{ translateX: -2 * 80 }, { translateY: -7 * 80 }]);
+      expect(koCurr.transform).toEqual([{ translateX: -7 * 80 }, { translateY: -7 * 80 }]);
+      koView.unmount();
+    });
+
+    it('(g) crossfades MainMenu mascot tap over SPRITE_TX.swapBlendMs without a blank white flash and unmounts outgoing layer cleanly', () => {
+      jest.useFakeTimers();
+      const menu = render(
+        <MainMenu
+          onSelectAdventure={jest.fn()}
+          onSelectFreeplay={jest.fn()}
+          onSelectOptions={jest.fn()}
+        />
+      );
+
+      expect(menu.getByTestId('main-menu-mascot')).toBeTruthy();
+      expect(menu.queryByTestId('main-menu-mascot-outgoing')).toBeNull();
+
+      mockWithTiming.mockClear();
+      mockFrameCallbackCalls = [];
+      fireEvent.press(menu.getByTestId('main-menu-mascot-tap'));
+
+      // Both outgoing previous mascot and incoming mascot are mounted during the 112ms dual-layer crossfade
+      expect(menu.getByTestId('main-menu-mascot-outgoing')).toBeTruthy();
+      expect(menu.getByTestId('main-menu-mascot-prev')).toBeTruthy();
+      expect(menu.getByTestId('main-menu-mascot')).toBeTruthy();
+      // Outgoing mascot is static lightweight (`animate={false}`), adding ZERO extra active frame loops
+      expect(mockFrameCallbackCalls.filter(Boolean).length).toBeLessThanOrEqual(1);
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([to, cfg]) => to === 1 && (cfg as { duration?: number } | undefined)?.duration === SPRITE_TX.swapBlendMs
+        )
+      ).toBe(true);
+
+      // Outgoing layer unmounts cleanly once the swap crossfade finishes
+      act(() => {
+        jest.advanceTimersByTime(SPRITE_TX.swapBlendMs + 20);
+      });
+      expect(menu.queryByTestId('main-menu-mascot-outgoing')).toBeNull();
+      menu.unmount();
+
+      // Reduced motion crossfades calmly over ACCESSIBLE.fadeMs before unmounting
+      mockReducedMotion = true;
+      mockWithTiming.mockClear();
+      const rmMenu = render(
+        <MainMenu
+          onSelectAdventure={jest.fn()}
+          onSelectFreeplay={jest.fn()}
+          onSelectOptions={jest.fn()}
+        />
+      );
+      fireEvent.press(rmMenu.getByTestId('main-menu-mascot-tap'));
+      expect(rmMenu.getByTestId('main-menu-mascot-outgoing')).toBeTruthy();
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([to, cfg]) => to === 1 && (cfg as { duration?: number } | undefined)?.duration === ACCESSIBLE.fadeMs
+        )
+      ).toBe(true);
+      act(() => {
+        jest.advanceTimersByTime(ACCESSIBLE.fadeMs + 20);
+      });
+      expect(rmMenu.queryByTestId('main-menu-mascot-outgoing')).toBeNull();
+      rmMenu.unmount();
     });
   });
 });

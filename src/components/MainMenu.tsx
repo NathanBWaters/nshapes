@@ -19,13 +19,14 @@ import { useKeyboardActive } from '@/utils/keybindings';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import {
+  ACCESSIBLE,
   BTN_PRESS,
   EASE,
   MS,
   OVERLAP,
-  PHASE,
   SCALE,
   SPRING,
+  SPRITE_TX,
   STAYS,
   reducedMs,
 } from '@/utils/motion';
@@ -240,6 +241,8 @@ const MainMenu: React.FC<MainMenuProps> = ({
   }, [adventureSave]);
 
   const [mascotIndex, setMascotIndex] = useState(initialMascotIdx);
+  const [outgoingMascotIndex, setOutgoingMascotIndex] = useState<number | null>(null);
+  const outgoingSwapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [heroPressed, setHeroPressed] = useState(false);
   const [mascotReaction, setMascotReaction] = useState<FighterReactionEvent | null>(() =>
     reducedMotion ? null : { type: 'entrance', id: 1 }
@@ -257,10 +260,9 @@ const MainMenu: React.FC<MainMenuProps> = ({
   const shelfO = useSharedValue(0);
   const shelfY = useSharedValue(reducedMotion ? 0 : 10);
 
-  // Tactile Hero CTA press (SCALE.press + bottom ledge push-down) & Mascot tap pop
+  // Tactile Hero CTA press (SCALE.press + bottom ledge push-down) & dual-layer mascot swap crossfade
   const heroPressSV = useSharedValue(0);
-  const mascotPopS = useSharedValue(1);
-  const mascotPopY = useSharedValue(0);
+  const mascotSwapProgress = useSharedValue(1);
   const mascotLeanX = useSharedValue(0);
   const mascotRingS = useSharedValue(0.8);
   const mascotRingO = useSharedValue(0);
@@ -296,11 +298,14 @@ const MainMenu: React.FC<MainMenuProps> = ({
       cancelAnimation(shelfO);
       cancelAnimation(shelfY);
       cancelAnimation(heroPressSV);
-      cancelAnimation(mascotPopS);
-      cancelAnimation(mascotPopY);
+      cancelAnimation(mascotSwapProgress);
       cancelAnimation(mascotLeanX);
       cancelAnimation(mascotRingS);
       cancelAnimation(mascotRingO);
+      if (outgoingSwapTimerRef.current) {
+        clearTimeout(outgoingSwapTimerRef.current);
+        outgoingSwapTimerRef.current = null;
+      }
     };
   }, [
     reducedMotion,
@@ -312,8 +317,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
     shelfO,
     shelfY,
     heroPressSV,
-    mascotPopS,
-    mascotPopY,
+    mascotSwapProgress,
     mascotLeanX,
     mascotRingS,
     mascotRingO,
@@ -363,20 +367,33 @@ const MainMenu: React.FC<MainMenuProps> = ({
   const handleMascotTap = useCallback(() => {
     triggerHaptic('light');
     playSound('click');
-    setMascotIndex(idx => (idx + 1) % CHARACTERS.length);
+    const prevIdx = mascotIndex;
+    const nextIdx = (prevIdx + 1) % CHARACTERS.length;
+    setOutgoingMascotIndex(prevIdx);
+    setMascotIndex(nextIdx);
     reactionSeq.current += 1;
     setMascotReaction({ type: 'pet', id: reactionSeq.current });
+
+    if (outgoingSwapTimerRef.current) {
+      clearTimeout(outgoingSwapTimerRef.current);
+      outgoingSwapTimerRef.current = null;
+    }
+
+    const swapDur = reducedMotion ? ACCESSIBLE.fadeMs : SPRITE_TX.swapBlendMs;
+    cancelAnimation(mascotSwapProgress);
+    mascotSwapProgress.value = 0;
+    mascotSwapProgress.value = withTiming(1, {
+      duration: swapDur,
+      easing: reducedMotion ? EASE.ui : EASE.state,
+      ...STAYS,
+    });
+
+    outgoingSwapTimerRef.current = setTimeout(() => {
+      outgoingSwapTimerRef.current = null;
+      setOutgoingMascotIndex(null);
+    }, swapDur + 16);
+
     if (!reducedMotion) {
-      // Non-nested mascot swap & joy pop: crisp gather → playful overshoot hop → golden burst ring!
-      mascotPopS.value = withSequence(
-        withTiming(SCALE.press, { duration: PHASE.uiGatherMs, easing: EASE.ui }),
-        withTiming(SCALE.reward, { duration: MS.feedback, easing: EASE.popSoft }),
-        withSpring(1, SPRING.playful)
-      );
-      mascotPopY.value = withSequence(
-        withTiming(-9, { duration: MS.feedback, easing: EASE.enter }),
-        withSpring(0, SPRING.playful)
-      );
       mascotRingS.value = 0.8;
       mascotRingS.value = withTiming(1.52, { duration: MS.move, easing: EASE.enterSoft });
       mascotRingO.value = withSequence(
@@ -384,7 +401,7 @@ const MainMenu: React.FC<MainMenuProps> = ({
         withTiming(0, { duration: MS.move, easing: EASE.enterSoft })
       );
     }
-  }, [mascotPopS, mascotPopY, mascotRingS, mascotRingO, reducedMotion]);
+  }, [mascotIndex, mascotSwapProgress, mascotRingS, mascotRingO, reducedMotion]);
 
   // [UI-23]: Web mash-to-play (`Enter` / `Space` launches Hero Adventure CTA when no modal is open)
   useKeyboardNav({
@@ -525,6 +542,8 @@ const MainMenu: React.FC<MainMenuProps> = ({
   }, [prismVisible]);
 
   const mascotCharacter = CHARACTERS[mascotIndex % CHARACTERS.length];
+  const outgoingMascotCharacter =
+    outgoingMascotIndex !== null ? CHARACTERS[outgoingMascotIndex % CHARACTERS.length] : null;
   const useCompactFreshShelf = adventure.isFresh && !spire.unlocked && !prismVisible;
   const showFullSecondaryCards = !useCompactFreshShelf || otherModesExpanded;
 
@@ -551,13 +570,31 @@ const MainMenu: React.FC<MainMenuProps> = ({
     };
   });
 
-  const mascotWrapStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: mascotLeanX.value },
-      { translateY: mascotPopY.value },
-      { scale: mascotPopS.value },
-    ],
-  }));
+  const mascotOutWrapStyle = useAnimatedStyle(() => {
+    const p = mascotSwapProgress.value;
+    // Lifted-floor crossfade preserves solid core opacity mid-swap and reaches 0 cleanly with zero white flash
+    const outOpacity = p >= 0.999 ? 0 : (1 - p) * (1 + 0.55 * p);
+    const outScale = reducedMotion ? 1 : 1 - 0.05 * p;
+    return {
+      opacity: outOpacity,
+      transform: [
+        { translateX: mascotLeanX.value },
+        { scale: outScale },
+      ],
+    };
+  });
+
+  const mascotWrapStyle = useAnimatedStyle(() => {
+    const p = mascotSwapProgress.value;
+    const inScale = reducedMotion ? 1 : 0.95 + 0.05 * p;
+    return {
+      opacity: p,
+      transform: [
+        { translateX: mascotLeanX.value },
+        { scale: inScale },
+      ],
+    };
+  });
 
   const mascotRingStyle = useAnimatedStyle(() => ({
     opacity: mascotRingO.value,
@@ -660,8 +697,26 @@ const MainMenu: React.FC<MainMenuProps> = ({
                     mascotRingStyle,
                   ]}
                 />
+                {outgoingMascotCharacter && (
+                  <Animated.View
+                    pointerEvents="none"
+                    testID="main-menu-mascot-outgoing"
+                    style={[styles.mascotOutLayer, mascotOutWrapStyle]}
+                  >
+                    <FighterAvatar
+                      key={`out-${outgoingMascotCharacter.name}`}
+                      character={outgoingMascotCharacter}
+                      size={74}
+                      mood="idle"
+                      animate={false}
+                      lightweight
+                      testID="main-menu-mascot-prev"
+                    />
+                  </Animated.View>
+                )}
                 <Animated.View style={mascotWrapStyle}>
                   <FighterAvatar
+                    key={mascotCharacter.name}
                     character={mascotCharacter}
                     size={74}
                     mood={heroPressed ? 'anticipation' : 'idle'}
@@ -991,8 +1046,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroAvatarBadge: {
+    position: 'relative',
     minWidth: 74,
     minHeight: 74,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mascotOutLayer: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },

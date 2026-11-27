@@ -9,7 +9,9 @@ import { EnemyAvatar } from '@/components/enemies/EnemyAvatar';
 import { FighterAvatar } from '@/components/fighters/FighterAvatar';
 import {
   FIGHTER_ATLAS_COLS,
+  FIGHTER_ATLAS_MAX_INDEX,
   FIGHTER_ATLAS_ROWS,
+  FIGHTER_IDLE_FRAME_COUNT,
   FIGHTER_SPRITE_ATLASES,
 } from '@/components/fighters/FighterSpriteRig';
 import { SILHOUETTE_INK } from '@/components/illustration/primitives';
@@ -193,7 +195,12 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
   });
 
   describe('[UI-05] + [UI-06] + [UI-07] 6 Fighter 3/4 Silhouettes, Overhead Lighting & Boss Shadows', () => {
-    it('renders all 6 fighters with distinct 4x3 Nano Banana storybook sprite atlases', () => {
+    it('renders all 6 fighters with distinct 8x8 Option B storybook sprite atlases and dual-layer crossfade', () => {
+      expect(FIGHTER_ATLAS_COLS).toBe(8);
+      expect(FIGHTER_ATLAS_ROWS).toBe(8);
+      expect(FIGHTER_IDLE_FRAME_COUNT).toBe(32);
+      expect(FIGHTER_ATLAS_MAX_INDEX).toBe(63);
+
       const atlasSources = new Set<unknown>();
 
       for (const char of CHARACTERS) {
@@ -209,13 +216,15 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
         );
         const viewport = view.getByTestId('fighter-sprite-viewport');
         const atlas = view.getByTestId('fighter-sprite-atlas');
+        const prevAtlas = view.getByTestId('fighter-sprite-atlas-prev');
         expect(viewport).toBeTruthy();
         expect(atlas.props.source).toBe(FIGHTER_SPRITE_ATLASES[char.name]);
+        expect(prevAtlas.props.source).toBe(atlas.props.source);
         const flatStyle = Array.isArray(atlas.props.style)
           ? Object.assign({}, ...atlas.props.style.filter(Boolean))
           : atlas.props.style;
-        expect(flatStyle.width).toBe(80 * FIGHTER_ATLAS_COLS);
-        expect(flatStyle.height).toBe(80 * FIGHTER_ATLAS_ROWS);
+        expect(flatStyle.width).toBe(80 * 8);
+        expect(flatStyle.height).toBe(80 * 8);
         atlasSources.add(atlas.props.source);
         view.unmount();
       }

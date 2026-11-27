@@ -38,6 +38,8 @@ import {
   MASS_CLASS,
   MS,
   OVERLAP,
+  SPRITE_TX,
+  hitstopHoldMs,
   nextDeterministicUnit,
   seedFromKey,
 } from '@/utils/motion';
@@ -76,6 +78,10 @@ export interface ReactionContext {
   compact?: boolean;
   /** Physical inertia class (`nimble` | `standard` | `heavy` | `boss`) */
   massClass?: CreatureMassClass;
+  /** Creature name for species-aligned sprite clip timings */
+  name?: string;
+  /** True when idle motion is baked into a sprite atlas (`FighterSpriteRig`) */
+  atlasBakedIdle?: boolean;
 }
 
 /** (frequency, damping, response) of one second-order posture channel. */
@@ -242,6 +248,17 @@ interface CreatureMotionInput<Mood extends string, Reaction extends string> {
   ) => boolean | void;
   /** Optional species-specific idle fidget override; return `true` to skip `config.idleFidget`. */
   speciesFidget?: (roll: number, channels: ReactionChannels, size: number) => boolean | void;
+  /**
+   * True when idle animation is baked into a sprite atlas (`FighterSpriteRig`).
+   * Skips redundant procedural idle breathing, ambient sway, wandering gaze leans,
+   * victory pogo-rocking, and idle fidget body warps while keeping macro combat kinematics intact.
+   */
+  atlasBakedIdle?: boolean;
+  /**
+   * Target monotonic idle playback tempo (`1` = native idle speed), smoothed on the UI thread
+   * via `expApproach(..., SPRITE_TX.tempoApproachRate, dt)` so mood changes never reset phase.
+   */
+  spriteTempo?: number;
 }
 
 interface CreatureMotion<Reaction extends string> {
@@ -268,6 +285,12 @@ interface CreatureMotion<Reaction extends string> {
   bodyTy: SharedValue<number>;
   /** Live reaction vertical squash/stretch multiplier for stage/shadow coupling */
   reactionScaleY: SharedValue<number>;
+  /** Monotonic UI-thread elapsed clock (ms) advanced inside the single `useGuardedFrameCallback` */
+  spriteClockMs: SharedValue<number>;
+  /** Monotonic UI-thread tempo-integrated idle clock (seconds) advanced inside the single `useGuardedFrameCallback` */
+  spriteIdleSec: SharedValue<number>;
+  /** Live hitstop duration (ms) of the latest reaction so sprite `hurt[52]` holds 1:1 with hitstop */
+  reactionHitstopMs: SharedValue<number>;
 }
 
 interface SimState {
@@ -336,6 +359,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     massClass,
     speciesChoreography,
     speciesFidget,
+    atlasBakedIdle = false,
+    spriteTempo = 1,
   } = input;
   const stillReactions = input.stillReactions ?? false;
   const reactionIntensity = input.reactionIntensity ?? 0;
@@ -427,6 +452,13 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   const bodySkewX = useSharedValue(0);
   const lidClose = useSharedValue(0);
   const compactHeadScale = useSharedValue(1);
+  const spriteClockMs = useSharedValue(0);
+  const spriteIdleSec = useSharedValue(0);
+  const spriteTempoSV = useSharedValue(spriteTempo);
+  const targetSpriteTempoSV = useSharedValue(spriteTempo);
+  const reactionHitstopMs = useSharedValue<number>(
+    hitstopHoldMs(reaction?.tier ?? reaction?.hitTier ?? hitTier ?? 0, reaction?.moveKind, 0)
+  );
 
   const channels = useMemo<ReactionChannels>(
     () => ({
@@ -478,8 +510,10 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     const blends = config.targetBlends(mood, healthState);
 
     targets.value = { rates, pose, bounce: blends.bounce, tremor: blends.tremor };
+    targetSpriteTempoSV.value = spriteTempo;
 
     if (!animate) {
+      spriteTempoSV.value = spriteTempo;
       // Reduced-motion / backgrounded / static mode: halt pending reaction release timers,
       // settle directly into the resting pose, and cancel impulse channels
       if (reactionTimerRef.current) {
@@ -578,6 +612,9 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     bodySkewX,
     lidClose,
     compactHeadScale,
+    spriteTempo,
+    spriteTempoSV,
+    targetSpriteTempoSV,
   ]);
 
   const { easing, drift, poseSprings } = config;
@@ -588,11 +625,31 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     'worklet';
     const dtMs = frameInfo.timeSincePreviousFrame;
     if (dtMs === null || dtMs <= 0) return;
-    const dt = Math.min(dtMs / 1000, 0.05);
+    const clampedDtMs = Math.min(dtMs, 50);
+    const dt = clampedDtMs / 1000;
+
+    // Advance monotonic sprite clocks inside this exact single frame loop (zero extra loops!)
+    spriteClockMs.value += clampedDtMs;
+    const nextTempo = expApproach(
+      spriteTempoSV.value,
+      targetSpriteTempoSV.value,
+      SPRITE_TX.tempoApproachRate,
+      dt
+    );
+    spriteTempoSV.value = nextTempo;
+    spriteIdleSec.value += dt * nextTempo;
 
     const stepSim = <T extends SimState>(cur: T): T => {
       'worklet';
       const tgt = targets.value;
+      if (atlasBakedIdle) {
+        // Baked sprite-atlas rigs skip procedural idle breath/sway/posture springs; keep only urgency tremor
+        const wagHz = expApproach(cur.wagHz, tgt.rates.wagHz, easing.wagHz, dt);
+        cur.wagHz = wagHz;
+        cur.tremorBlend = expApproach(cur.tremorBlend, tgt.tremor, easing.tremor, dt);
+        cur.wagPhase = advancePhase(cur.wagPhase, wagHz, dt);
+        return cur;
+      }
       const breathHz = expApproach(cur.breathHz, tgt.rates.breathHz, easing.breathHz, dt);
       const wagHz = expApproach(cur.wagHz, tgt.rates.wagHz, easing.wagHz, dt);
       const swayHz = expApproach(cur.swayHz, tgt.rates.swayHz, easing.swayHz, dt);
@@ -678,17 +735,26 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
         cheerReleaseMs: meta?.cheerReleaseMs ?? cheerReleaseMs,
         compact: isCompact,
         massClass: resolvedMassClass,
+        name,
+        atlasBakedIdle,
       };
+
+      reactionHitstopMs.value = hitstopHoldMs(context.hitTier ?? 0, context.moveKind, chain);
 
       const rawHoldMs = config.resolveReactionHoldMs?.(type, context) ?? config.reactionHoldMs[type] ?? 850;
       const holdMs =
-        config.resolveReactionHoldMs || massTimeMult === 1
+        config.resolveReactionHoldMs || atlasBakedIdle || massTimeMult === 1
           ? rawHoldMs
           : Math.round(rawHoldMs * massTimeMult);
 
-      // Soft blink-through release avoids jarring 1-frame snap-cuts when returning to idle expression
+      // Soft blink-through release avoids jarring 1-frame snap-cuts on SVG eyelids (sprite atlases use dual-layer crossfade)
       const canSoftBlinkRelease =
-        animate && !stillReactions && lively && healthState !== 'knocked_out' && holdMs > BLINK.closeMs * 3;
+        !atlasBakedIdle &&
+        animate &&
+        !stillReactions &&
+        lively &&
+        healthState !== 'knocked_out' &&
+        holdMs > BLINK.closeMs * 3;
       if (canSoftBlinkRelease) {
         reactionLeadTimerRef.current = setTimeout(() => {
           reactionLeadTimerRef.current = null;
@@ -746,6 +812,9 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
       speciesChoreography,
       compactHeadScale,
       lidClose,
+      name,
+      atlasBakedIdle,
+      reactionHitstopMs,
     ]
   );
 
@@ -811,9 +880,10 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     compactHeadScale,
   ]);
 
-  // Deterministic 3-step single & double blinks (`0 -> 1 -> 2 -> 1 -> 0`), eye saccades, and idle micro-fidgets
+  // Deterministic 3-step single & double blinks (`0 -> 1 -> 2 -> 1 -> 0`), eye saccades, and idle micro-fidgets.
+  // Skipped when `atlasBakedIdle` is true because natural blinks and idle life are already baked into the 32f atlas.
   useEffect(() => {
-    if (!animate || !lively || healthState === 'knocked_out') {
+    if (!animate || !lively || atlasBakedIdle || healthState === 'knocked_out') {
       cancelAnimation(lidClose);
       lidClose.value = 0;
       setBlinkStage(0);
@@ -921,6 +991,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     personality.tailCycleMs,
     animate,
     lively,
+    atlasBakedIdle,
     healthState,
     channels,
     speciesFidget,
@@ -979,9 +1050,12 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   // Core contact shadow: widens & deepens on squash/stomp, shrinks & fades crisply on lift
   const groundShadowStyle = useAnimatedStyle(() => {
     const s = sim.value;
-    const breathWave = sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
-    const celebrationHop = -Math.abs(Math.sin(s.breathPhase)) * size * hop * s.bounceBlend;
-    const totalTy = bodyTy.value + s.leanY.y + celebrationHop;
+    const breathWave = atlasBakedIdle ? 0 : sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
+    const celebrationHop = atlasBakedIdle ? 0 : -Math.abs(Math.sin(s.breathPhase)) * size * hop * s.bounceBlend;
+    const leanX = atlasBakedIdle ? 0 : s.leanX.y;
+    const leanY = atlasBakedIdle ? 0 : s.leanY.y;
+    const postureY = atlasBakedIdle ? 1 : s.postureStretchY.y;
+    const totalTy = bodyTy.value + leanY + celebrationHop;
     const liftPx = Math.max(0, -totalTy);
     const stompPx = Math.max(0, totalTy);
     const liftNorm = Math.min(1, liftPx / Math.max(8, size * 0.28));
@@ -989,7 +1063,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     const combinedScaleY =
       reactionScaleY.value *
-      s.postureStretchY.y *
+      postureY *
       (1 + breathWave * baseBreathAmp);
     const { scaleX: volScaleX } = computeVolumePreservedScale(combinedScaleY);
     const finalScaleX = Math.max(0.68, Math.min(1.45, volScaleX * scaleX.value));
@@ -1001,7 +1075,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
         Math.max(0.06, shadowOpacity * (1 + squashBoost * 0.25 + stompNorm * 0.18) * (1 - liftNorm * 0.65))
       ),
       transform: [
-        { translateX: (bodyTx.value + s.leanX.y) * 0.55 },
+        { translateX: (bodyTx.value + leanX) * 0.55 },
         { scaleX: finalScaleX * (1 + squashBoost * 0.22 + stompNorm * 0.12) * (1 - liftNorm * shadowLiftShrinkX) },
         { scaleY: Math.max(0.55, (1 + squashBoost * 0.1 + stompNorm * 0.08) * (1 - liftNorm * shadowLiftShrinkY)) },
       ],
@@ -1011,9 +1085,12 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   // Outer soft penumbra shadow: shifts gently away from upper-left key light and diffuses softly on lift
   const groundPenumbraStyle = useAnimatedStyle(() => {
     const s = sim.value;
-    const breathWave = sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
-    const celebrationHop = -Math.abs(Math.sin(s.breathPhase)) * size * hop * s.bounceBlend;
-    const totalTy = bodyTy.value + s.leanY.y + celebrationHop;
+    const breathWave = atlasBakedIdle ? 0 : sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
+    const celebrationHop = atlasBakedIdle ? 0 : -Math.abs(Math.sin(s.breathPhase)) * size * hop * s.bounceBlend;
+    const leanX = atlasBakedIdle ? 0 : s.leanX.y;
+    const leanY = atlasBakedIdle ? 0 : s.leanY.y;
+    const postureY = atlasBakedIdle ? 1 : s.postureStretchY.y;
+    const totalTy = bodyTy.value + leanY + celebrationHop;
     const liftPx = Math.max(0, -totalTy);
     const stompPx = Math.max(0, totalTy);
     const liftNorm = Math.min(1, liftPx / Math.max(8, size * 0.28));
@@ -1021,7 +1098,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
 
     const combinedScaleY =
       reactionScaleY.value *
-      s.postureStretchY.y *
+      postureY *
       (1 + breathWave * baseBreathAmp);
     const { scaleX: volScaleX } = computeVolumePreservedScale(combinedScaleY);
     const finalScaleX = Math.max(0.68, Math.min(1.45, volScaleX * scaleX.value));
@@ -1033,7 +1110,7 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
         Math.max(0.04, shadowOpacity * (1 + squashBoost * 0.2 + stompNorm * 0.14) * (1 - liftNorm * 0.45))
       ),
       transform: [
-        { translateX: (bodyTx.value + s.leanX.y) * 0.55 + liftNorm * size * 0.045 },
+        { translateX: (bodyTx.value + leanX) * 0.55 + liftNorm * size * 0.045 },
         { scaleX: finalScaleX * (1 + squashBoost * 0.28 + stompNorm * 0.16 + liftNorm * 0.06) },
         { scaleY: Math.max(0.65, (1 + squashBoost * 0.12 + stompNorm * 0.08) * (1 - liftNorm * shadowLiftShrinkY * 0.55)) },
       ],
@@ -1043,12 +1120,34 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   // Whole rig: breathing, inertial posture, volume-preserving squash/stretch, and 1-2f strike smear
   const rigRootStyle = useAnimatedStyle(() => {
     const s = sim.value;
+    const tremorX = Math.sin(s.wagPhase * tremorFreq) * tremorAmpPx * s.tremorBlend;
+
+    if (atlasBakedIdle) {
+      // Preserve crisp macro combat kinematics while eliminating procedural idle breath/sway/gaze-lean/pogo-bounce
+      // on already-animated 16-20fps sprite pixels; dial vertical arc so it complements rather than double-lifts cheer clips.
+      const rawTy = bodyTy.value;
+      const effectiveTy = rawTy < 0 ? rawTy * 0.45 : rawTy * 0.5;
+      const { scaleX: volScaleX, scaleY } = computeVolumePreservedScale(reactionScaleY.value);
+      const finalScaleX = Math.max(0.65, Math.min(1.48, volScaleX * scaleX.value));
+      return {
+        transform: [
+          { translateX: bodyTx.value + tremorX },
+          { translateY: effectiveTy },
+          { rotate: `${bodyRotate.value}deg` },
+          // Anchor squash, stretch & directional velocity smear at ground contact line so feet stay planted
+          { translateY: footAnchorY },
+          { skewX: `${bodySkewX.value}deg` },
+          { scaleX: finalScaleX },
+          { scaleY },
+          { translateY: -footAnchorY },
+        ],
+      };
+    }
+
     const breathWave = sampleOrganicBreath(s.breathPhase, s.driftPhase) * s.breathAmpScale;
     const swayWave = Math.sin(s.swayPhase) * s.swayAmpScale;
 
     const celebrationHop = -Math.abs(Math.sin(s.breathPhase)) * size * hop * s.bounceBlend;
-    const tremorX = Math.sin(s.wagPhase * tremorFreq) * tremorAmpPx * s.tremorBlend;
-
     const danceTilt = swayWave * danceTiltDeg * s.bounceBlend;
     const ambientTilt = swayWave * idleTiltAmp;
 
@@ -1077,6 +1176,9 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
   // Head lags `OVERLAP.headRad` (0.68 rad) behind chest breathing for a natural spine wave,
   // with dual-axis 2.5D orbital parallax (`headTx`), smooth blink compression, and compact acting boost
   const headStyle = useAnimatedStyle(() => {
+    if (atlasBakedIdle) {
+      return { transform: [] };
+    }
     const s = sim.value;
     const laggedBreath = sampleOverlappingWave(s.breathPhase, OVERLAP.headRad, 0.14) * s.breathAmpScale;
     const laggedSway = sampleOverlappingWave(s.swayPhase, OVERLAP.swayRad, 0.1) * s.swayAmpScale;
@@ -1189,5 +1291,8 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     pawStyle: asPart(pawStyle),
     bodyTy,
     reactionScaleY,
+    spriteClockMs,
+    spriteIdleSec,
+    reactionHitstopMs,
   };
 }

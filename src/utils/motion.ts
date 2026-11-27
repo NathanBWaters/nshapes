@@ -800,3 +800,25 @@ export const WEAPON_FX = {
   flourishScale: 1.14,
   recoilDeg: 14,
 } as const;
+
+/**
+ * Hybrid sprite-atlas transition blend & tempo-smoothing tokens (Option B state machine).
+ * Combat strikes and hit impacts snap in 0 ms (Sakurai 1-frame responsiveness), while
+ * animated recoveries, mood transitions, sleepy bridges, and mascot swaps crossfade cleanly.
+ */
+export const SPRITE_TX = {
+  /** Instant 1-frame Sakurai snap for strikes, impacts, and rapid hit-chains */
+  snapMs: 0,
+  /** Smooth dual-layer recovery crossfade from animated clip tail back to Pose0 idle (4 frames) */
+  recoverBlendMs: 64,
+  /** Smooth dual-layer crossfade for ambient mood transitions (e.g. idle ↔ anticipation windup) */
+  moodBlendMs: 64,
+  /** Drowsy bridge crossfade entering and waking from sleepy/defeat/KO loops (6 frames) */
+  sleepBlendMs: 96,
+  /** Subtle opacity/scale entrance on Main Menu mascot swap (7 frames) */
+  swapBlendMs: 112,
+  /** Subtle volume-preserved settle squash cushioning action recoveries into momentum */
+  settleSquashY: 0.965,
+  /** Exponential smoothing rate (1/s) for monotonic idle tempo changes (`expApproach`) */
+  tempoApproachRate: 8,
+} as const;
