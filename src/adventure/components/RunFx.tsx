@@ -3,23 +3,25 @@
  * evolution countdown rings, and the non-blocking evolution banner ([FX-14]).
  * The numbers and everything that moves are the effects stage's (src/adventure/fx).
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
   cancelAnimation,
   useSharedValue,
   useAnimatedStyle,
   useReducedMotion,
+  withRepeat,
   withSequence,
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
 import { Svg, Circle } from 'react-native-svg';
 import Icon, { IconName } from '@/components/Icon';
+import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
 import { band } from '@/audio';
 import { ScreenFlashStorage, useScreenFlashEnabled } from '@/utils/fxSettingsStorage';
-import { EASE, MS, STAYS, exitMs } from '@/utils/motion';
+import { ACCESSIBLE, EASE, MS, STAYS, exitMs } from '@/utils/motion';
 import { fxMs } from '../fx/clock';
 import { DARK, INK, TONE } from './ui';
 
@@ -196,63 +198,259 @@ export const EvolutionBanner: React.FC<{ recipeId?: string; name: string; icon: 
   );
 };
 
-/** One active evolution: its icon inside a ring that empties as the time runs out. */
-export const EvolutionRing: React.FC<{ icon: IconName; name: string; remainingMs: number; durationMs: number; compact?: boolean }> = ({
+/** Matches AdventureRun's 250 ms simulation tick for silky 60fps GPU ring sweep */
+const EVO_TICK_MS = 250;
+
+/**
+ * One active evolution: its icon inside a 60fps GPU-composited countdown ring
+ * that sweeps smoothly via twin clipped semicircle masks (`transform: [{ rotate }]`)
+ * instead of 4 Hz React SVG `strokeDasharray` stepping.
+ */
+export const EvolutionRing: React.FC<{
+  icon: IconName;
+  name: string;
+  remainingMs: number;
+  durationMs: number;
+  compact?: boolean;
+  /** Whether the fight clock is actively ticking (pauses smooth interpolation when halted) */
+  active?: boolean;
+  /** Adventure's Effects switch: off snaps to discrete ticks and disables urgency rim pulse */
+  effects?: boolean;
+}> = ({
   icon,
   name,
   remainingMs,
   durationMs,
   compact = false,
+  active = true,
+  effects = true,
 }) => {
+  const appActive = useAppActive();
+  const reducedMotion = useReducedMotion();
   const size = compact ? 26 : 34;
+  const half = size / 2;
   const strokeW = compact ? 3 : 4;
   const r = compact ? 10.5 : 14;
   const c = 2 * Math.PI * r;
+  const halfC = c / 2;
   const frac = durationMs > 0 ? Math.max(0, Math.min(1, remainingMs / durationMs)) : 0;
   const secs = Math.ceil(remainingMs / 1000);
-  if (compact) {
-    return (
-      <View style={st.ringPill} accessibilityLabel={`${name} evolution, ${secs} seconds left`} testID="evolution-ring">
-        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-          <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-            <Circle cx={size / 2} cy={size / 2} r={r} stroke="#E9D5FF" strokeWidth={strokeW} fill={COLORS.canvasWhite} />
+  const urgent = secs <= 5 && remainingMs > 0;
+  const ringColor = urgent ? COLORS.impactRed : TONE.evoReady;
+
+  // Smooth 60fps GPU drain interpolation over EVO_TICK_MS
+  const fracSv = useSharedValue(frac);
+  const prevDurationRef = useRef(durationMs);
+  const glideActive = active && appActive && effects && !reducedMotion && durationMs > 0 && remainingMs > 0;
+
+  useEffect(() => {
+    const reset = prevDurationRef.current !== durationMs;
+    prevDurationRef.current = durationMs;
+
+    if (!glideActive) {
+      cancelAnimation(fracSv);
+      fracSv.value = frac;
+      return;
+    }
+
+    if (reset || Math.abs(fracSv.value - frac) > 0.14) {
+      cancelAnimation(fracSv);
+      fracSv.value = frac;
+    }
+
+    const delta = EVO_TICK_MS / durationMs;
+    const nextFrac = Math.max(0, frac - delta);
+    fracSv.value = withTiming(nextFrac, { duration: EVO_TICK_MS, easing: EASE.linear });
+
+    return () => cancelAnimation(fracSv);
+  }, [frac, durationMs, glideActive, fracSv]);
+
+  // Crisp mount entrance (EASE.popSoft scale + EASE.ui opacity; STAYS fade under reducedMotion)
+  const enterOp = useSharedValue(0);
+  const enterScale = useSharedValue(reducedMotion || !effects ? 1 : 0.84);
+  useEffect(() => {
+    if (reducedMotion || !effects) {
+      enterScale.value = 1;
+      enterOp.value = withTiming(1, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS });
+    } else {
+      enterOp.value = withTiming(1, { duration: MS.feedback, easing: EASE.ui });
+      enterScale.value = withTiming(1, { duration: MS.quick, easing: EASE.popSoft });
+    }
+    return () => {
+      cancelAnimation(enterOp);
+      cancelAnimation(enterScale);
+    };
+    // mount entrance once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Low-time urgency rim glow (GPU opacity only — never scales countdown digits)
+  const urgentPulse = useSharedValue(0);
+  const shouldUrgentPulse = urgent && active && appActive && effects && !reducedMotion;
+  useEffect(() => {
+    if (!shouldUrgentPulse) {
+      cancelAnimation(urgentPulse);
+      urgentPulse.value = urgent ? 0.5 : 0;
+      return;
+    }
+    urgentPulse.value = 0.2;
+    urgentPulse.value = withRepeat(
+      withTiming(0.95, { duration: MS.move, easing: EASE.drift }),
+      -1,
+      true
+    );
+    return () => cancelAnimation(urgentPulse);
+  }, [shouldUrgentPulse, urgent, urgentPulse]);
+
+  const enterStyle = useAnimatedStyle(() => ({
+    opacity: enterOp.value,
+    transform: [{ scale: enterScale.value }],
+  }));
+
+  // Right semicircle covers 12→6 o'clock (0..180°); drains during frac ∈ [0.5, 0]
+  const rightMaskStyle = useAnimatedStyle(() => {
+    const f = fracSv.value;
+    const rightShare = Math.max(0, Math.min(1, f * 2));
+    const deg = -(1 - rightShare) * 180;
+    return {
+      opacity: f <= 0.002 ? 0 : 1,
+      transform: [{ rotate: `${deg}deg` }],
+    };
+  });
+
+  // Left semicircle covers 6→12 o'clock (180..360°); drains during frac ∈ [1, 0.5]
+  const leftMaskStyle = useAnimatedStyle(() => {
+    const f = fracSv.value;
+    const leftShare = Math.max(0, Math.min(1, (f - 0.5) * 2));
+    const deg = -(1 - leftShare) * 180;
+    return {
+      opacity: f <= 0.502 ? 0 : 1,
+      transform: [{ rotate: `${deg}deg` }],
+    };
+  });
+
+  // Rotating rounded tip dot tracks exact leading edge at 60fps
+  const tipStyle = useAnimatedStyle(() => ({
+    opacity: fracSv.value <= 0.005 ? 0 : 1,
+    transform: [{ rotate: `${fracSv.value * 360}deg` }],
+  }));
+
+  const urgentRimStyle = useAnimatedStyle(() => ({
+    opacity: urgentPulse.value,
+  }));
+
+  const dial = (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }} testID="evolution-ring-dial">
+      {/* Static base track */}
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
+        <Circle cx={half} cy={half} r={r} stroke="#E9D5FF" strokeWidth={strokeW} fill={COLORS.canvasWhite} />
+      </Svg>
+      {/* Right-half GPU rotating semicircle */}
+      <View
+        pointerEvents="none"
+        style={[st.ringHalfClip, { left: half, width: half, height: size }]}
+      >
+        <Animated.View
+          style={[{ position: 'absolute', left: -half, top: 0, width: size, height: size }, rightMaskStyle]}
+        >
+          <Svg width={size} height={size}>
             <Circle
-              cx={size / 2}
-              cy={size / 2}
+              cx={half}
+              cy={half}
               r={r}
-              stroke={secs <= 5 ? COLORS.impactRed : TONE.evoReady}
+              stroke={ringColor}
               strokeWidth={strokeW}
               fill="none"
-              strokeDasharray={`${c * frac} ${c}`}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+              strokeDasharray={`${halfC} ${c}`}
+              strokeLinecap="butt"
+              transform={`rotate(-90 ${half} ${half})`}
             />
           </Svg>
-          <Icon name={icon} size={12} color={INK} />
-        </View>
-        <Text style={st.ringPillSecs}>{secs}s</Text>
+        </Animated.View>
       </View>
+      {/* Left-half GPU rotating semicircle */}
+      <View
+        pointerEvents="none"
+        style={[st.ringHalfClip, { left: 0, width: half, height: size }]}
+      >
+        <Animated.View
+          style={[{ position: 'absolute', left: 0, top: 0, width: size, height: size }, leftMaskStyle]}
+        >
+          <Svg width={size} height={size}>
+            <Circle
+              cx={half}
+              cy={half}
+              r={r}
+              stroke={ringColor}
+              strokeWidth={strokeW}
+              fill="none"
+              strokeDasharray={`${halfC} ${c}`}
+              strokeLinecap="butt"
+              transform={`rotate(90 ${half} ${half})`}
+            />
+          </Svg>
+        </Animated.View>
+      </View>
+      {/* Crisp 12-o'clock start cap + 60fps rotating leading tip cap */}
+      {frac > 0.005 && (
+        <View
+          pointerEvents="none"
+          style={[
+            st.ringCapDot,
+            {
+              width: strokeW,
+              height: strokeW,
+              borderRadius: strokeW / 2,
+              backgroundColor: ringColor,
+              left: half - strokeW / 2,
+              top: half - r - strokeW / 2,
+            },
+          ]}
+        />
+      )}
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, tipStyle]}>
+        <View
+          style={[
+            st.ringCapDot,
+            {
+              width: strokeW,
+              height: strokeW,
+              borderRadius: strokeW / 2,
+              backgroundColor: ringColor,
+              left: half - strokeW / 2,
+              top: half - r - strokeW / 2,
+            },
+          ]}
+        />
+      </Animated.View>
+      <Icon name={icon} size={compact ? 12 : 14} color={INK} />
+    </View>
+  );
+
+  if (compact) {
+    return (
+      <Animated.View
+        style={[st.ringPill, urgent && st.ringPillUrgent, enterStyle]}
+        accessibilityLabel={`${name} evolution, ${secs} seconds left`}
+        testID="evolution-ring"
+      >
+        {urgent && (
+          <Animated.View pointerEvents="none" style={[st.ringPillUrgentRim, urgentRimStyle]} />
+        )}
+        {dial}
+        <Text style={[st.ringPillSecs, urgent && st.ringSecsUrgent]}>{secs}s</Text>
+      </Animated.View>
     );
   }
   return (
-    <View style={st.ring} accessibilityLabel={`${name} evolution, ${secs} seconds left`} testID="evolution-ring">
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke="#E9D5FF" strokeWidth={strokeW} fill={COLORS.canvasWhite} />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke={secs <= 5 ? COLORS.impactRed : TONE.evoReady}
-          strokeWidth={strokeW}
-          fill="none"
-          strokeDasharray={`${c * frac} ${c}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </Svg>
-      <Icon name={icon} size={14} color={INK} />
-      <Text style={st.ringSecs}>{secs}</Text>
-    </View>
+    <Animated.View
+      style={[st.ring, enterStyle]}
+      accessibilityLabel={`${name} evolution, ${secs} seconds left`}
+      testID="evolution-ring"
+    >
+      {dial}
+      <Text style={[st.ringSecs, urgent && st.ringSecsUrgent]}>{secs}</Text>
+    </Animated.View>
   );
 };
 
@@ -294,7 +492,12 @@ const st = StyleSheet.create({
   bannerName: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 22 },
   bannerText: { color: DARK.text, fontSize: 12 },
   ring: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  ringSecs: { position: 'absolute', bottom: -6, fontSize: 9, fontWeight: '900', color: INK, backgroundColor: COLORS.canvasWhite, borderRadius: 4, paddingHorizontal: 2, overflow: 'hidden' },
-  ringPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FEF3C7', borderRadius: 999, borderWidth: 1.5, borderColor: TONE.evoReady, paddingLeft: 1, paddingRight: 5, paddingVertical: 0.5 },
+  ringHalfClip: { position: 'absolute', top: 0, overflow: 'hidden' },
+  ringCapDot: { position: 'absolute' },
+  ringSecs: { position: 'absolute', bottom: -6, fontSize: 9, fontWeight: '900', color: INK, backgroundColor: COLORS.canvasWhite, borderRadius: 4, paddingHorizontal: 2, overflow: 'hidden', fontVariant: ['tabular-nums'] },
+  ringSecsUrgent: { color: '#B91C1C' },
+  ringPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FEF3C7', borderRadius: 999, borderWidth: 1.5, borderColor: TONE.evoReady, paddingLeft: 1, paddingRight: 5, paddingVertical: 0.5, overflow: 'hidden' },
+  ringPillUrgent: { backgroundColor: '#FEE2E2', borderColor: COLORS.impactRed },
+  ringPillUrgentRim: { ...StyleSheet.absoluteFillObject, borderRadius: 999, borderWidth: 1.5, borderColor: '#FFFFFF' },
   ringPillSecs: { fontSize: 9.5, fontWeight: '900', color: INK, fontVariant: ['tabular-nums'] },
 });

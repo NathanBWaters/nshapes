@@ -9,12 +9,12 @@ import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
-  Easing,
   ReduceMotion,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withSequence,
   withTiming,
   type EasingFunction,
   type EasingFunctionFactory,
@@ -25,7 +25,7 @@ import Card from '@/components/Card';
 import { CARD_MOTION } from '@/components/CardMotion';
 import type { Card as CardType } from '@/types';
 import { COLORS } from '@/utils/colors';
-import { EASE as MOTION, MS, STAYS, exitMs } from '@/utils/motion';
+import { ACCESSIBLE, EASE, MS, STAYS, exitMs, sampleArcPoint } from '@/utils/motion';
 import { fxMs } from './clock';
 import type { HitTier, Point, Rect, SweepKind } from './types';
 
@@ -33,13 +33,6 @@ const INK = COLORS.slateCharcoal;
 /** High-contrast dark ink outline for hit sparks, shockwaves & 4-stage explosions ([FX-15]/[FX-16]). */
 const CHARCOAL_INK = '#161412';
 const WHITE = COLORS.canvasWhite;
-
-const EASE = {
-  linear: Easing.linear,
-  out: Easing.out(Easing.cubic),
-  in: Easing.in(Easing.quad),
-  inOut: Easing.inOut(Easing.quad),
-};
 
 export const centerOf = (r: Rect): Point => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
 
@@ -77,21 +70,15 @@ const seg = (t: number, xs: number[], ys: number[]): number => {
 // ─── Things that fly ────────────────────────────────────────────────────────
 
 const Dot: React.FC<{ from: Point; to: Point; delay: number; ms: number; size: number; color: string; bend: number; head: boolean }> = ({ from, to, delay, ms, size, color, bend, head }) => {
-  const p = useProgress(ms, delay, EASE.in);
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const len = Math.hypot(dx, dy) || 1;
-  // sideways unit vector: the path bows out and comes back in
-  const nx = -dy / len;
-  const ny = dx / len;
+  const p = useProgress(ms, delay, EASE.impact);
   const style = useAnimatedStyle(() => {
     const t = p.value;
-    const bow = Math.sin(Math.PI * t) * bend;
+    const pt = sampleArcPoint(from.x, from.y, to.x, to.y, t, bend);
     return {
       opacity: t <= 0 || t >= 1 ? 0 : 1,
       transform: [
-        { translateX: from.x + dx * t + nx * bow - size / 2 },
-        { translateY: from.y + dy * t + ny * bow - size / 2 },
+        { translateX: pt.x - size / 2 },
+        { translateY: pt.y - size / 2 },
         { scale: seg(t, [0, 0.18, 1], [0.3, 1.15, 0.7]) },
       ],
     };
@@ -128,7 +115,7 @@ export const Ring: React.FC<{ at: Point; delay?: number; size: number; color: st
   width = 3,
   testID,
 }) => {
-  const p = useProgress(ms, delay, EASE.out);
+  const p = useProgress(ms, delay, EASE.ui);
   const style = useAnimatedStyle(() => ({
     opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.45, 1], [1, 0.9, 0]),
     transform: [{ scale: 0.25 + 0.75 * p.value }],
@@ -209,7 +196,7 @@ export const Ticks: React.FC<{ at: Point; delay?: number; size: number; color: s
   tier = 0,
   testID,
 }) => {
-  const p = useProgress(ms, delay, EASE.out);
+  const p = useProgress(ms, delay, EASE.ui);
   const style = useAnimatedStyle(() => ({
     opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.55, 1], [1, 1, 0]),
     transform: [{ scale: 0.45 + 0.75 * p.value }],
@@ -287,7 +274,7 @@ export const Starburst: React.FC<{ at: Point; delay?: number; size: number; colo
   ms = STARBURST_DEFAULT_MS,
   testID,
 }) => {
-  const p = useProgress(ms, delay, MOTION.ui);
+  const p = useProgress(ms, delay, EASE.ui);
   const style = useAnimatedStyle(() => {
     const t = p.value;
     return {
@@ -404,7 +391,7 @@ const ExplosionFlashStage: React.FC<{ at: Point; size: number; delay: number }> 
 };
 
 const ExplosionFireballStage: React.FC<{ at: Point; size: number; color: string; delay: number }> = ({ at, size, color, delay }) => {
-  const p = useProgress(EXPLOSION_TIMING.fireballMs, delay + EXPLOSION_TIMING.fireballDelayMs, MOTION.enter);
+  const p = useProgress(EXPLOSION_TIMING.fireballMs, delay + EXPLOSION_TIMING.fireballDelayMs, EASE.enter);
   const style = useAnimatedStyle(() => {
     const t = p.value;
     return {
@@ -440,7 +427,7 @@ const ExplosionSmokeCloud: React.FC<{ at: Point; u: number; dx: number; dy: numb
   fill,
   delay,
 }) => {
-  const p = useProgress(EXPLOSION_TIMING.smokeMs, delay, EASE.out);
+  const p = useProgress(EXPLOSION_TIMING.smokeMs, delay, EASE.ui);
   const rise = -u * 0.25;
   const style = useAnimatedStyle(() => {
     const t = p.value;
@@ -485,7 +472,7 @@ const ExplosionEmberShard: React.FC<{ at: Point; deg: number; dist: number; size
   delay,
   spin,
 }) => {
-  const p = useProgress(EXPLOSION_TIMING.emberMs, delay, MOTION.enter);
+  const p = useProgress(EXPLOSION_TIMING.emberMs, delay, EASE.enterSoft);
   const rad = (deg * Math.PI) / 180;
   const dx = Math.cos(rad) * dist;
   const dy = Math.sin(rad) * dist;
@@ -494,12 +481,12 @@ const ExplosionEmberShard: React.FC<{ at: Point; deg: number; dist: number; size
     const t = p.value;
     const inv = 1 - t;
     return {
-      opacity: t <= 0 ? 0 : seg(t, [0, 0.55, 0.92, 1], [1, 0.9, 0, 0]),
+      opacity: t <= 0 ? 0 : seg(t, [0, 0.45, 1], [1, 0.88, 0]),
       transform: [
         { translateX: dx * t },
         // subtle upward arc that settles to zero vertical velocity at t = 1 (no hard stop)
         { translateY: dy * t - 8 * t * inv * inv },
-        { scale: seg(t, [0, 0.18, 0.92, 1], [0.95, 1, 0.15, 0]) },
+        { scale: seg(t, [0, 0.18, 1], [0.95, 1, 0.12]) },
         { rotate: `${deg + spin * t}deg` },
       ],
     };
@@ -522,7 +509,7 @@ const ExplosionReduced: React.FC<{ at: Point; size: number; color: string; delay
   useEffect(() => {
     p.value = withDelay(
       fxMs(delay),
-      withTiming(1, { duration: fxMs(180), easing: MOTION.ui, ...STAYS }),
+      withTiming(1, { duration: fxMs(180), easing: EASE.ui, ...STAYS }),
       STAYS.reduceMotion
     );
     return () => cancelAnimation(p);
@@ -615,9 +602,10 @@ export const Explosion: React.FC<{
 
 // ─── Lines ([FX-19]) ────────────────────────────────────────────────────────
 
-/** 2-frame snap beam timings & 30 Hz core flicker parameters ([FX-19]). */
+/** 2-frame snap laser timings, smooth 4-frame zap chain shoot-out, & 30 Hz core flicker ([FX-19]). */
 export const BEAM_TIMING = {
   growMs: 28,
+  zapGrowMs: 64,
   defaultHoldMs: 140,
   zapHoldMs: 70,
   fadeMs: 110,
@@ -627,8 +615,10 @@ export const BEAM_TIMING = {
 } as const;
 
 /**
- * A beam drawn from one point to another ([FX-19]): snaps across the whole
- * span in 2 frames (`28 ms`), crackles at 30 Hz during hold, then thins sharply.
+ * A beam drawn from one point to another ([FX-19]): lasers (`core: true`) snap
+ * across the span in 2 frames (`28 ms`) and crackle at 30 Hz; ricochet zap bolts
+ * (`core: false`) shoot out over 4 eased frames (`64 ms`) so chains visibly arc
+ * card-to-card without teleporting.
  */
 export const Beam: React.FC<{
   from: Point;
@@ -641,7 +631,7 @@ export const Beam: React.FC<{
   testID?: string;
 }> = ({ from, to, delay = 0, thickness, color, hold = BEAM_TIMING.defaultHoldMs, core = true, testID }) => {
   const still = useReducedMotion();
-  const grow = BEAM_TIMING.growMs;
+  const grow = core ? BEAM_TIMING.growMs : BEAM_TIMING.zapGrowMs;
   const fade = BEAM_TIMING.fadeMs;
   const total = grow + hold + fade;
   const p = useProgress(total, delay);
@@ -720,7 +710,7 @@ export const Flash: React.FC<{ rect: Rect; delay?: number; color?: string; ms?: 
 };
 
 const Drop: React.FC<{ at: Point; delay: number; size: number; color: string; rise: number; sway: number }> = ({ at, delay, size, color, rise, sway }) => {
-  const p = useProgress(420, delay, EASE.out);
+  const p = useProgress(420, delay, EASE.ui);
   const style = useAnimatedStyle(() => {
     const t = p.value;
     return {
@@ -785,7 +775,7 @@ export const Sparkles: React.FC<{ rect: Rect; delay?: number; color: string }> =
 };
 
 const Cloud: React.FC<{ at: Point; delay: number; size: number; color: string; dx: number; dy: number }> = ({ at, delay, size, color, dx, dy }) => {
-  const p = useProgress(380, delay, EASE.out);
+  const p = useProgress(380, delay, EASE.ui);
   const style = useAnimatedStyle(() => ({
     opacity: p.value <= 0 ? 0 : seg(p.value, [0, 0.4, 1], [0.85, 0.7, 0]),
     transform: [{ translateX: dx * p.value }, { translateY: dy * p.value }, { scale: 0.4 + 0.8 * p.value }],
@@ -821,7 +811,7 @@ const SWEEPS: Record<SweepKind, { fill: string; edge: string }> = {
 
 /** A slanted band of colour that crosses the whole board once. */
 export const Sweep: React.FC<{ rect: Rect; kind: SweepKind; delay?: number; ms?: number }> = ({ rect, kind, delay = 0, ms = 420 }) => {
-  const p = useProgress(ms, delay, EASE.inOut);
+  const p = useProgress(ms, delay, EASE.move);
   const band = rect.w * 0.5;
   const back = kind === 'dark' || kind === 'whirl';
   const style = useAnimatedStyle(() => ({
@@ -866,15 +856,19 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
   const p = useSharedValue(delay > 0 ? 0 : ON_MOUNT);
   // (with no delay it is already a third of the way in on the frame it mounts: fully opaque, still big)
   const land = useSharedValue(delay > 0 ? 0 : 1 / 3);
-  const leave = useSharedValue(0);
+  const leaveOp = useSharedValue(0);
+  const leaveLift = useSharedValue(0);
   useEffect(() => {
     p.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(total), easing: EASE.linear, ...timed }), ReduceMotion.Never);
-    land.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(MS.feedback), easing: MOTION.enter, ...timed }), ReduceMotion.Never);
-    leave.value = withDelay(fxMs(delay + hold), withTiming(1, { duration: fxMs(out), easing: MOTION.exit, ...timed }), ReduceMotion.Never);
+    land.value = withDelay(fxMs(delay), withTiming(1, { duration: fxMs(MS.feedback), easing: EASE.enter, ...timed }), ReduceMotion.Never);
+    leaveOp.value = withDelay(fxMs(delay + hold), withTiming(1, { duration: fxMs(out), easing: EASE.exitSoft, ...timed }), ReduceMotion.Never);
+    // Ease-out upward lift so floating damage numbers glide softly to rest instead of hard-stopping on their final frame
+    leaveLift.value = withDelay(fxMs(delay + hold), withTiming(1, { duration: fxMs(out), easing: EASE.ui, ...timed }), ReduceMotion.Never);
     return () => {
       cancelAnimation(p);
       cancelAnimation(land);
-      cancelAnimation(leave);
+      cancelAnimation(leaveOp);
+      cancelAnimation(leaveLift);
     };
     // once, on mount: a piece never restarts
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -898,10 +892,10 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
     const l = land.value;
     return {
       // in over the first two frames of the slam (never a pop), out as it lifts
-      opacity: t <= 0 ? 0 : Math.min(1, l * 3) * (1 - leave.value),
+      opacity: t <= 0 ? 0 : Math.min(1, l * 3) * (1 - leaveOp.value),
       transform: [
         { translateX: shake ? seg(t, [0, 0.06, 0.12, 0.18, 0.24], [0, -6, 6, -4, 0]) : 0 },
-        { translateY: -rise * leave.value },
+        { translateY: -rise * leaveLift.value },
         { scale: sour ? 1 : big + (1 - big) * l },
       ],
     };
@@ -922,24 +916,72 @@ export const Stamp: React.FC<{ at: Point; text: string; color: string; tier?: Hi
 };
 
 /**
- * A moment of the fight itself (a knockout): a tilted plate that slams in across
- * the middle of the board, holds, and lifts away.
+ * A moment of the fight itself (opening FIGHT!, wave banner, or knockout):
+ * a tilted plate that slams in with tokenized `EASE.pop`, holds cleanly, and
+ * lifts away with eased deceleration + `EASE.exitSoft` opacity (zero linear ramps).
+ * Under reduced motion, holds a crisp fade-in/out with `STAYS` and static scale 1.
  */
 export const Banner: React.FC<{ rect: Rect; text: string; color: string; delay?: number }> = ({ rect, text, color, delay = 0 }) => {
-  const p = useProgress(1150, delay);
+  const still = useReducedMotion();
+  const enterOp = useSharedValue(0);
+  const enterScale = useSharedValue(still ? 1 : 1.75);
+  const leaveOp = useSharedValue(0);
+  const leaveLift = useSharedValue(0);
+
+  useEffect(() => {
+    const enterMs = still ? ACCESSIBLE.fadeMs : MS.quick;
+    const holdEndMs = 540;
+    const leaveMs = still ? ACCESSIBLE.fadeMs : exitMs(MS.move);
+
+    enterOp.value = withDelay(
+      fxMs(delay),
+      withTiming(1, { duration: fxMs(still ? ACCESSIBLE.fadeMs : 80), easing: EASE.ui, ...STAYS }),
+      STAYS.reduceMotion
+    );
+    if (still) {
+      enterScale.value = 1;
+    } else {
+      // Slam in with EASE.pop, then subtle Disney #12 moving-hold micro-swell (1.0 -> 1.025) so hold stays alive
+      enterScale.value = withDelay(
+        fxMs(delay),
+        withSequence(
+          withTiming(1, { duration: fxMs(enterMs), easing: EASE.pop }),
+          withTiming(1.025, { duration: fxMs(Math.max(80, holdEndMs - enterMs)), easing: EASE.drift })
+        )
+      );
+    }
+    leaveOp.value = withDelay(
+      fxMs(delay + holdEndMs),
+      withTiming(1, { duration: fxMs(leaveMs), easing: EASE.exitSoft, ...STAYS }),
+      STAYS.reduceMotion
+    );
+    if (!still) {
+      leaveLift.value = withDelay(
+        fxMs(delay + holdEndMs),
+        withTiming(1, { duration: fxMs(leaveMs), easing: EASE.ui })
+      );
+    }
+
+    return () => {
+      cancelAnimation(enterOp);
+      cancelAnimation(enterScale);
+      cancelAnimation(leaveOp);
+      cancelAnimation(leaveLift);
+    };
+    // once, on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // As big as fits: a short shout ("K.O.!") fills the board, a longer one ("BOSS FIGHT!") is sized to stay on it
   const size = Math.max(26, Math.min(64, rect.w * 0.17, (rect.w - 40) / (text.length * 0.62 + 1)));
-  const style = useAnimatedStyle(() => {
-    const t = p.value;
-    return {
-      opacity: t <= 0 ? 0 : seg(t, [0, 0.06, 0.8, 1], [0, 1, 1, 0]),
-      transform: [
-        { translateY: -seg(t, [0.8, 1], [0, 26]) },
-        { scale: seg(t, [0, 0.1, 0.17, 0.24, 1], [2.4, 0.92, 1.06, 1, 1]) },
-        { rotate: '-5deg' },
-      ],
-    };
-  });
+  const style = useAnimatedStyle(() => ({
+    opacity: enterOp.value * (1 - leaveOp.value),
+    transform: [
+      { translateY: still ? 0 : -24 * leaveLift.value },
+      { scale: enterScale.value },
+      { rotate: '-5deg' },
+    ],
+  }));
   return (
     <Animated.View
       pointerEvents="none"
@@ -955,12 +997,38 @@ export const Banner: React.FC<{ rect: Rect; text: string; color: string; delay?:
 
 /** A small dark tag under the weapon, skill or evolution that just fired, naming it. */
 export const Tag: React.FC<{ at: Point; text: string; maxX: number }> = ({ at, text, maxX }) => {
-  const p = useProgress(700);
+  const still = useReducedMotion();
+  const enterOp = useSharedValue(0);
+  const enterPop = useSharedValue(still ? 1 : 0);
+  const leaveOp = useSharedValue(0);
+
+  useEffect(() => {
+    enterOp.value = withTiming(1, { duration: fxMs(still ? ACCESSIBLE.fadeMs : 72), easing: EASE.ui, ...STAYS });
+    if (!still) {
+      enterPop.value = withTiming(1, { duration: fxMs(MS.feedback), easing: EASE.popSoft });
+    }
+    leaveOp.value = withDelay(
+      fxMs(520),
+      withTiming(1, { duration: fxMs(exitMs(MS.quick)), easing: EASE.exitSoft, ...STAYS }),
+      STAYS.reduceMotion
+    );
+    return () => {
+      cancelAnimation(enterOp);
+      cancelAnimation(enterPop);
+      cancelAnimation(leaveOp);
+    };
+    // once, on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const width = Math.min(maxX - 8, text.length * 6.4 + 14);
   const left = Math.max(4, Math.min(maxX - width - 4, at.x - width / 2));
   const style = useAnimatedStyle(() => ({
-    opacity: seg(p.value, [0, 0.08, 0.75, 1], [0, 1, 1, 0]),
-    transform: [{ translateY: seg(p.value, [0, 0.1], [-5, 0]) }, { scale: seg(p.value, [0, 0.1, 0.2], [0.7, 1.08, 1]) }],
+    opacity: enterOp.value * (1 - leaveOp.value),
+    transform: [
+      { translateY: still ? 0 : (1 - enterPop.value) * -5 },
+      { scale: still ? 1 : 0.78 + 0.22 * enterPop.value },
+    ],
   }));
   return (
     <Animated.View style={[st.abs, st.tag, { left, top: at.y, width }, style]} testID="fx-source-tag">
@@ -1087,29 +1155,35 @@ export const SwishRibbon: React.FC<{
   const segHead = subCurvePath(lp0, lctrl, lp2, 0.62, 0.99);
 
   // Each segment reveals strictly BEHIND the accelerating thrown Ghost card
-  // (never ahead of it during wind-up or early flight) and whips cleanly out after passage.
+  // with smooth cubic-out scale whip (zero hard-stop or fade-only artifacts).
   const tailStyle = useAnimatedStyle(() => {
     const t = p.value;
     const f = flightRatio;
+    const u = Math.max(0, Math.min(1, (t - 0.24 * f) / Math.max(0.05, 0.54 * f)));
+    const easeOut = 1 - (1 - u) * (1 - u) * (1 - u);
     return {
-      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.28 * f, 0.46 * f, 0.78 * f, 1], [0, 0, 0.72, 0, 0]),
-      transform: [{ scale: seg(t, [0, 0.28 * f, 0.56 * f, 1], [0.96, 0.96, 1, 1]) }],
+      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.24 * f, 0.44 * f, 0.78 * f, 1], [0, 0, 0.72, 0, 0]),
+      transform: [{ scale: 0.88 + 0.14 * easeOut }],
     };
   });
   const midStyle = useAnimatedStyle(() => {
     const t = p.value;
     const f = flightRatio;
+    const u = Math.max(0, Math.min(1, (t - 0.48 * f) / Math.max(0.05, 0.46 * f)));
+    const easeOut = 1 - (1 - u) * (1 - u) * (1 - u);
     return {
-      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.54 * f, 0.74 * f, Math.min(0.98, 0.98 * f + 0.08), 1], [0, 0, 0.78, 0, 0]),
-      transform: [{ scale: seg(t, [0, 0.54 * f, 0.78 * f, 1], [0.96, 0.96, 1, 1]) }],
+      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.48 * f, 0.72 * f, Math.min(0.98, 0.98 * f + 0.08), 1], [0, 0, 0.78, 0, 0]),
+      transform: [{ scale: 0.88 + 0.14 * easeOut }],
     };
   });
   const headStyle = useAnimatedStyle(() => {
     const t = p.value;
     const f = flightRatio;
+    const u = Math.max(0, Math.min(1, (t - 0.68 * f) / Math.max(0.05, 1 - 0.68 * f)));
+    const easeOut = 1 - (1 - u) * (1 - u) * (1 - u);
     return {
-      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.76 * f, 0.94 * f, 1], [0, 0, 0.84, 0]),
-      transform: [{ scale: seg(t, [0, 0.76 * f, 0.96 * f, 1], [0.97, 0.97, 1, 1]) }],
+      opacity: t <= 0 || t >= 1 ? 0 : seg(t, [0, 0.68 * f, 0.9 * f, 1], [0, 0, 0.84, 0]),
+      transform: [{ scale: 0.88 + 0.14 * easeOut }],
     };
   });
 
@@ -1174,7 +1248,7 @@ export const Ghost: React.FC<{
 
   useEffect(() => {
     if (broken) {
-      p.value = withTiming(1, { duration: fxMs(totalDuration), easing: thrown ? EASE.linear : EASE.in });
+      p.value = withTiming(1, { duration: fxMs(totalDuration), easing: thrown ? EASE.linear : EASE.impact });
     }
     return () => cancelAnimation(p);
   }, [broken, totalDuration, thrown, p]);

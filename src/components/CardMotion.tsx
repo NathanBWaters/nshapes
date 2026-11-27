@@ -9,12 +9,19 @@
  * preserving color washes and short fades.
  *
  * It never draws a border or an outline on the card: those belong to selection (Card.tsx).
+ *
+ * Lane 3 polish:
+ * - Hint-hop adds a 32 ms anticipation crouch (`scaleY: 0.94` with volume-preserving
+ *   `scaleX ≈ 1.047` via `volumeScale`), `EASE.enter` ascent, faster `EASE.impact`
+ *   descent, and phase-offset staggering from `dealDelayMs` so hinted cards never twin.
+ * - Wrong-pick shake derives deterministically from `geometricShakeKeyframes` (×0.7 decay)
+ *   and decouples exit scale deceleration (`EASE.ui`) from opacity (`EASE.exitSoft`) to
+ *   prevent hard-stop clipping on the final frame.
  */
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
-  Easing,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
@@ -27,8 +34,20 @@ import Animated, {
 import Icon from '@/components/Icon';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { EASE, exitMs, MS, SPRING, STAYS } from '@/utils/motion';
+import {
+  EASE,
+  MS,
+  SHAKE,
+  SPRING,
+  SQUASH_TIER,
+  STAYS,
+  exitMs,
+  geometricShakeKeyframes,
+  volumeScale,
+} from '@/utils/motion';
 import { RADIUS } from '@/utils/colors';
+
+const MISS_SHAKE_PX = geometricShakeKeyframes(12, 3, SHAKE.decay, -1);
 
 export const CARD_MOTION = {
   /** A freshly dealt card grows from this size... */
@@ -54,9 +73,11 @@ export const CARD_MOTION = {
   leaveAfterMs: 110,
   /** A pointed-out card hops, rests this long, and hops again */
   hopRestMs: 1500,
-  /** A wrong pick: each of the three cards shakes sideways, swings that shrink (px, then ms per swing) */
-  missShakePx: [-12, 9, -5, 0],
-  missShakeMs: [48, 64, 64, 80],
+  /** Anticipation crouch before each hint hop (2 frames) */
+  hopCrouchMs: 32,
+  /** A wrong pick: deterministic geometric-decay sideways shake (×0.7 decay, px then ms per leg) */
+  missShakePx: MISS_SHAKE_PX,
+  missShakeMs: [40, 56, 56, 68],
   /** ...is washed red (never a border: borders are for selection) */
   missWashOpacity: 0.3,
   missWashColor: '#EF4444',
@@ -163,9 +184,11 @@ const CardMotion: React.FC<Props> = ({
   const dealScale = useSharedValue(moves ? CARD_MOTION.dealFromScale : 1);
   const lift = useSharedValue(1);
   const hop = useSharedValue(0);
+  const hopSquashY = useSharedValue(1);
   const missX = useSharedValue(0);
   const missWash = useSharedValue(0);
-  const missLeave = useSharedValue(0);
+  const missLeaveOp = useSharedValue(0);
+  const missLeaveScale = useSharedValue(0);
   const mounted = useRef(false);
 
   // Dealt in once, when the card arrives in the slot
@@ -207,27 +230,51 @@ const CardMotion: React.FC<Props> = ({
     return () => cancelAnimation(lift);
   }, [selected, moves, lift]);
 
-  // Pointed out: it hops, rests, and hops again for as long as it is, so the eye keeps finding it.
-  // A picked card stands still (it has been found).
+  // Pointed out: 32ms anticipation crouch -> lively hop -> fast-fall landing -> mini bounce -> rest.
+  // Phase-offset from `dealDelayMs` so multiple hinted cards ripple organically instead of twinning.
   const hopping = pointedOut && !selected && moves && appActive;
+  const hopPhaseOffsetMs = Math.min(180, Math.round(dealDelayMs * 0.9));
   useEffect(() => {
     if (!hopping) {
       cancelAnimation(hop);
-      hop.value = withTiming(0, { duration: 90 });
+      cancelAnimation(hopSquashY);
+      hop.value = withTiming(0, { duration: 90, easing: EASE.ui });
+      hopSquashY.value = withTiming(1, { duration: 90, easing: EASE.ui });
       return;
     }
-    hop.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 150, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 200, easing: Easing.in(Easing.quad) }),
-        withTiming(0.5, { duration: 120, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: 160, easing: Easing.in(Easing.quad) }),
-        withDelay(CARD_MOTION.hopRestMs, withTiming(0, { duration: 1 }))
-      ),
-      -1
+    const crouchMs = CARD_MOTION.hopCrouchMs;
+    const hopCycle = withSequence(
+      withTiming(0, { duration: crouchMs, easing: EASE.ui }),
+      withTiming(1, { duration: 136, easing: EASE.enter }),
+      withTiming(0, { duration: 118, easing: EASE.impact }),
+      withTiming(0, { duration: crouchMs, easing: EASE.ui }),
+      withTiming(0.48, { duration: 96, easing: EASE.enter }),
+      withTiming(0, { duration: 88, easing: EASE.impact }),
+      withDelay(CARD_MOTION.hopRestMs, withTiming(0, { duration: 1, easing: EASE.linear }))
     );
-    return () => cancelAnimation(hop);
-  }, [hopping, hop]);
+    const squashCycle = withSequence(
+      // 32ms anticipation crouch: scaleY 0.94 -> volume-preserving scaleX ≈ 1.047
+      withTiming(0.94, { duration: crouchMs, easing: EASE.ui }),
+      // Stretch slightly on takeoff & relax at apex
+      withTiming(1.04, { duration: 64, easing: EASE.enter }),
+      withTiming(1, { duration: 72, easing: EASE.ui }),
+      // Fall to ground & absorb impact
+      withTiming(1.02, { duration: 118, easing: EASE.impact }),
+      withTiming(0.95, { duration: crouchMs, easing: EASE.ui }),
+      // Mini follow-up bounce & crisp settle
+      withTiming(1.025, { duration: 96, easing: EASE.enter }),
+      withTiming(0.98, { duration: 88, easing: EASE.impact }),
+      withTiming(1, { duration: 80, easing: EASE.ui }),
+      withDelay(Math.max(1, CARD_MOTION.hopRestMs - 80), withTiming(1, { duration: 1, easing: EASE.linear }))
+    );
+
+    hop.value = withDelay(hopPhaseOffsetMs, withRepeat(hopCycle, -1));
+    hopSquashY.value = withDelay(hopPhaseOffsetMs, withRepeat(squashCycle, -1));
+    return () => {
+      cancelAnimation(hop);
+      cancelAnimation(hopSquashY);
+    };
+  }, [hopping, hopPhaseOffsetMs, hop, hopSquashY]);
 
   // A wrong pick, shown on the three cards themselves: the wash and the step out are colour and
   // opacity (kept with reduced motion or Effects off); the shake and the shrink are movement (dropped).
@@ -244,8 +291,17 @@ const CardMotion: React.FC<Props> = ({
       )
     );
     const leaveMs = exitMs(MS.quick);
-    missLeave.value = withSequence(
+    missLeaveOp.value = withSequence(
       withDelay(CARD_MOTION.missLeaveAtMs, withTiming(1, { duration: leaveMs, easing: EASE.exitSoft, ...keep }), ReduceMotion.Never),
+      withDelay(
+        CARD_MOTION.missReturnAtMs - CARD_MOTION.missLeaveAtMs - leaveMs,
+        withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }),
+        ReduceMotion.Never
+      )
+    );
+    // Ease-out scale deceleration so shrink never clips into a hard stop on its last frame
+    missLeaveScale.value = withSequence(
+      withDelay(CARD_MOTION.missLeaveAtMs, withTiming(1, { duration: leaveMs, easing: EASE.ui, ...keep }), ReduceMotion.Never),
       withDelay(
         CARD_MOTION.missReturnAtMs - CARD_MOTION.missLeaveAtMs - leaveMs,
         withTiming(0, { duration: MS.feedback, easing: EASE.ui, ...keep }),
@@ -263,25 +319,32 @@ const CardMotion: React.FC<Props> = ({
     return () => {
       cancelAnimation(missX);
       cancelAnimation(missWash);
-      cancelAnimation(missLeave);
+      cancelAnimation(missLeaveOp);
+      cancelAnimation(missLeaveScale);
       missX.value = 0;
       missWash.value = 0;
-      missLeave.value = 0;
+      missLeaveOp.value = 0;
+      missLeaveScale.value = 0;
     };
-  }, [missed, moves, missX, missWash, missLeave]);
+  }, [missed, moves, missX, missWash, missLeaveOp, missLeaveScale]);
 
   useEffect(() => {
     mounted.current = true;
   }, []);
 
-  const style = useAnimatedStyle(() => ({
-    opacity: dealShown.value * (1 - missLeave.value),
-    transform: [
-      { translateX: missX.value },
-      { translateY: -7 * hop.value },
-      { scale: dealScale.value * lift.value * (moves ? 1 - (1 - CARD_MOTION.missLeaveScale) * missLeave.value : 1) },
-    ],
-  }));
+  const style = useAnimatedStyle(() => {
+    const baseScale = dealScale.value * lift.value * (moves ? 1 - (1 - CARD_MOTION.missLeaveScale) * missLeaveScale.value : 1);
+    const vol = volumeScale(hopSquashY.value, SQUASH_TIER.ui.conserve, 0.9, 1.08);
+    return {
+      opacity: dealShown.value * (1 - missLeaveOp.value),
+      transform: [
+        { translateX: missX.value },
+        { translateY: -8 * hop.value },
+        { scaleX: baseScale * vol.scaleX },
+        { scaleY: baseScale * vol.scaleY },
+      ],
+    };
+  });
   const washStyle = useAnimatedStyle(() => ({ opacity: missWash.value }));
 
   return (

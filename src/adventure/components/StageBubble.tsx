@@ -6,11 +6,23 @@
  * It is words only (the trait checks have a strip of their own above the
  * board: TraitChecks.tsx) and it lives inside the stage, whose height is
  * fixed, so the board never moves when the words change.
+ *
+ * Tokenized with `motion.ts` (`EASE.popSoft` / `EASE.ui` / `STAYS`) for crisp
+ * entrance and smooth crossfade on taunt → coach swaps, with full `useReducedMotion`
+ * and `cancelAnimation` hygiene.
  */
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
+import { ACCESSIBLE, EASE, MS, STAYS } from '@/utils/motion';
 import type { GuidanceKind } from '../coach';
 import { INK } from './ui';
 
@@ -39,18 +51,76 @@ interface Props {
   tail?: 'left' | 'down' | 'right' | 'down-right';
   /** Compact inline style for short battle stages so tips fit cleanly without spilling out */
   compact?: boolean;
+  /** Optional entrance delay (ms) so opening taunts cleanly trail creature/banner staging */
+  enterDelayMs?: number;
   testID?: string;
 }
 
-const StageBubble: React.FC<Props> = ({ text, kind = 'lesson', onPress, tail = 'left', compact = false, testID }) => {
+const StageBubble: React.FC<Props> = ({
+  text,
+  kind = 'lesson',
+  onPress,
+  tail = 'left',
+  compact = false,
+  enterDelayMs = 0,
+  testID,
+}) => {
+  const reducedMotion = useReducedMotion();
   const [bg, edge] = TONE[kind];
   const foeSide = tail === 'right' || tail === 'down-right';
-  // A new line pops in, so the eye goes to it
-  const pop = useSharedValue(1);
+
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(reducedMotion ? 1 : 0.92);
+  const shiftX = useSharedValue(0);
+  const shiftY = useSharedValue(0);
+
   useEffect(() => {
-    pop.value = withSequence(withTiming(0.9, { duration: 0 }), withTiming(1.04, { duration: 110, easing: Easing.out(Easing.quad) }), withTiming(1, { duration: 90 }));
-  }, [text, pop]);
-  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+    cancelAnimation(opacity);
+    cancelAnimation(scale);
+    cancelAnimation(shiftX);
+    cancelAnimation(shiftY);
+
+    const delay = enterDelayMs > 0 ? enterDelayMs : 0;
+
+    if (reducedMotion) {
+      scale.value = 1;
+      shiftX.value = 0;
+      shiftY.value = 0;
+      opacity.value = 0.25;
+      opacity.value = withDelay(
+        delay,
+        withTiming(1, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS }),
+        STAYS.reduceMotion
+      );
+      return () => cancelAnimation(opacity);
+    }
+
+    opacity.value = 0;
+    scale.value = 0.92;
+    shiftX.value = tail === 'right' ? 6 : tail === 'left' ? -6 : 0;
+    shiftY.value = tail === 'down' || tail === 'down-right' ? 5 : 2;
+
+    opacity.value = withDelay(delay, withTiming(1, { duration: MS.feedback, easing: EASE.ui }));
+    scale.value = withDelay(delay, withTiming(1, { duration: MS.quick, easing: EASE.popSoft }));
+    shiftX.value = withDelay(delay, withTiming(0, { duration: MS.quick, easing: EASE.enter }));
+    shiftY.value = withDelay(delay, withTiming(0, { duration: MS.quick, easing: EASE.enter }));
+
+    return () => {
+      cancelAnimation(opacity);
+      cancelAnimation(scale);
+      cancelAnimation(shiftX);
+      cancelAnimation(shiftY);
+    };
+  }, [text, kind, tail, enterDelayMs, reducedMotion, opacity, scale, shiftX, shiftY]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [
+      { translateX: shiftX.value },
+      { translateY: shiftY.value },
+      { scale: scale.value },
+    ],
+  }));
 
   const body = (
     <>
@@ -60,7 +130,7 @@ const StageBubble: React.FC<Props> = ({ text, kind = 'lesson', onPress, tail = '
   );
 
   return (
-    <Animated.View style={[st.wrap, popStyle]}>
+    <Animated.View style={[st.wrap, animStyle]}>
       {onPress ? (
         <TouchableOpacity
           testID={testID}

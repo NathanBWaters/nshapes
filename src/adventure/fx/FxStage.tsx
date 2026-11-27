@@ -75,10 +75,9 @@ const labelPoint = (to: AnchorName, r: Rect, lane: number, lead: boolean): Point
   if (to !== 'foe') return { x: r.x + r.w / 2, y: r.y + r.h + 13 + (lane % 3) * 18 };
   // (a long word is kept on screen by the stamp itself)
   if (lead) return { x: r.x + r.w * 0.5, y: r.y + r.h * 0.4 };
-  // (they start level with the top of the foe, where the stage meets the HP bar, and step down:
-  // the middle of the stage is where the fighter's words are)
+  // Non-lead foe labels fan out cleanly to the left BELOW `fx-lead-word` (r.y + 4) in two non-overlapping columns
   const n = Math.max(0, lane - 1);
-  return { x: r.x - 44 - (n % 2) * 92, y: r.y + 2 + (Math.floor(n / 2) % 3) * 20 };
+  return { x: r.x - 48 - (n % 2) * 108, y: r.y + 26 + (Math.floor(n / 2) % 3) * 26 };
 };
 
 /**
@@ -237,12 +236,12 @@ const BeatView: React.FC<{ beat: Beat; anchors: Anchors; size: Size; hideWeaponN
             core={laser}
             hold={laser ? BEAM_TIMING.defaultHoldMs : BEAM_TIMING.zapHoldMs}
           />
-          {/* [FX-19]: Crisp ink-outlined endpoint contact sparks */}
+          {/* [FX-19]: Crisp ink-outlined endpoint contact sparks synced to beam/zap arrival */}
           <Ticks
             at={l.to}
             size={Math.max(24, thickness * 2.8)}
             color={color}
-            delay={l.delay + BEAM_TIMING.endpointSparkDelayMs}
+            delay={l.delay + (laser ? BEAM_TIMING.endpointSparkDelayMs : BEAM_TIMING.zapGrowMs - 8)}
             ms={BEAM_TIMING.endpointSparkMs}
             tier={beat.tier}
             testID="fx-beam-spark"
