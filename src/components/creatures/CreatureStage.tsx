@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated, { SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import type { CreatureScaleTier } from './RigLayers';
 import type { PartStyle } from './useCreatureMotion';
@@ -144,9 +144,12 @@ export const CreatureStage: React.FC<CreatureStageProps> = ({
   const outerShadowWidth = Math.round(shadowWidth * 1.18);
   const outerShadowHeight = Math.round(shadowHeight * 1.32);
 
+  const webContain = Platform.OS === 'web' ? ({ contain: 'layout style' } as ViewStyle) : undefined;
+  const webWillChange = Platform.OS === 'web' ? ({ willChange: 'transform' } as ViewStyle) : undefined;
+
   const stage = (
     <View
-      style={[styles.stageBase, frameStyle]}
+      style={[styles.stageBase, webContain, frameStyle]}
       testID={testID}
       accessibilityRole={interactive ? 'button' : 'image'}
       accessibilityLabel={accessibilityLabel}
@@ -175,6 +178,7 @@ export const CreatureStage: React.FC<CreatureStageProps> = ({
             testID={`${shadow.testID}-penumbra`}
             style={[
               styles.groundShadow,
+              webWillChange,
               {
                 width: outerShadowWidth,
                 height: outerShadowHeight,
@@ -193,6 +197,7 @@ export const CreatureStage: React.FC<CreatureStageProps> = ({
             testID={shadow.testID}
             style={[
               styles.groundShadow,
+              webWillChange,
               {
                 width: shadowWidth,
                 height: shadowHeight,
@@ -208,7 +213,7 @@ export const CreatureStage: React.FC<CreatureStageProps> = ({
         </>
       )}
 
-      <Animated.View style={[StyleSheet.absoluteFill, rigRootStyle]}>{rig}</Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, webWillChange, rigRootStyle]}>{rig}</Animated.View>
 
       {children}
     </View>

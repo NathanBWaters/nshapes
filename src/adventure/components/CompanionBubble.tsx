@@ -10,7 +10,7 @@
  * menus, modals, pickers, and celebrations without breaking battery budgets.
  */
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, View, Text, StyleSheet, TouchableOpacity, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -120,7 +120,14 @@ export const LivingBreath: React.FC<{
     };
   });
 
-  return <Animated.View style={[animStyle, style]}>{children}</Animated.View>;
+  const webContain = Platform.OS === 'web' ? ({ contain: 'layout style' } as ViewStyle) : undefined;
+  const webWillChange = Platform.OS === 'web' ? ({ willChange: 'transform' } as ViewStyle) : undefined;
+
+  return (
+    <View style={[webContain, style]}>
+      <Animated.View style={[webWillChange, animStyle]}>{children}</Animated.View>
+    </View>
+  );
 };
 
 const StaggeredTraitPill: React.FC<{
@@ -305,9 +312,7 @@ const CompanionBubble: React.FC<Props> = ({
   const content = (
     <>
       <Animated.View style={[st.avatarWrap, nodAnimStyle]}>
-        <LivingBreath seedKey={`companion-${character}-${testID ?? 'bubble'}`} size={avatarSize} active={animate}>
-          <FighterAvatar character={character} size={avatarSize} mood={mood} animate={false} framed />
-        </LivingBreath>
+        <FighterAvatar character={character} size={avatarSize} mood={mood} animate={animate} lightweight framed />
       </Animated.View>
       <Animated.View style={[st.bubble, { backgroundColor: bubbleBg, borderColor: bubbleBorder }, bubbleAnimStyle]}>
         <View style={[st.tail, { backgroundColor: bubbleBg, borderColor: bubbleBorder }]} />

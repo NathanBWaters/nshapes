@@ -1,6 +1,6 @@
 /** Small shared UI primitives for Adventure screens (Tactile Tabletop Storybook). */
 import React, { useCallback, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { Platform, View, Text, Pressable, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -269,7 +269,8 @@ export const Bob: React.FC<{
   }, [running, amount, phase, delayMs, periodMs, y]);
 
   const st = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
-  return <Animated.View style={st}>{children}</Animated.View>;
+  const webContain = Platform.OS === 'web' ? ({ contain: 'layout style', willChange: 'transform' } as ViewStyle) : undefined;
+  return <Animated.View style={[webContain, st]}>{children}</Animated.View>;
 };
 
 /**

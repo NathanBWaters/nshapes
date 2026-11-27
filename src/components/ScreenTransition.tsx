@@ -160,10 +160,17 @@ export function useScreenTransition({
     safetyTimerRef.current = setTimeout(() => swap(id), out + MS.feedback);
   }, [instant, reduced, durationMs, exitShift, shift, o, swap, clearSafetyTimer]);
 
-  const style = useAnimatedStyle(() => ({
-    opacity: o.value,
-    transform: axis === 'y' ? [{ translateY: shift.value }] : [{ translateX: shift.value }],
-  }));
+  const style = useAnimatedStyle(() => {
+    const s = shift.value;
+    const op = o.value;
+    if (s === 0 && op === 1) {
+      return { opacity: 1 };
+    }
+    return {
+      opacity: op,
+      transform: axis === 'y' ? [{ translateY: s }] : [{ translateX: s }],
+    };
+  });
 
   return { go, style, leaving };
 }

@@ -8,7 +8,7 @@
  * A branch can lead on to further branches.
  */
 import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Text, ScrollView, Pressable, TouchableOpacity, StyleSheet, useWindowDimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, TouchableOpacity, StyleSheet, useWindowDimensions, Platform, type ViewStyle } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withSpring, withTiming, cancelAnimation } from 'react-native-reanimated';
 import { BTN_PRESS, EASE, MS, SCALE, SPRING, STAGGER, STAYS, reducedMs } from '@/utils/motion';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -34,7 +34,7 @@ import { isFighterTrial, starRewards, unlockablesOf } from '../data/rewards';
 import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, refundableCoins, totalStars, isBiomeOpen } from '../progress';
 import { companionMapGreeting } from '../coach';
 import { BiomeScenery } from './BiomeScenery';
-import CompanionBubble, { LivingBreath } from './CompanionBubble';
+import CompanionBubble from './CompanionBubble';
 import { GoldenKeyArt } from './RescueArt';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
 
@@ -346,7 +346,12 @@ const AdventureMap: React.FC<Props> = ({
         onContentSizeChange={handleContentSizeChange}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ width, height }}>
+        <View
+          style={[
+            { width, height, overflow: 'hidden' },
+            Platform.OS === 'web' ? ({ contain: 'layout style' } as ViewStyle) : null,
+          ]}
+        >
           {banners.map(b => {
             const biome = BIOMES[b.biomeIndex];
             const open = isBiomeOpen(save, biome.id);
@@ -483,9 +488,7 @@ const AdventureMap: React.FC<Props> = ({
           accessibilityRole="button"
           style={[s.playNext, playNextAnimStyle]}
         >
-          <LivingBreath seedKey="map-play-next" size={34} active={isLive}>
-            <FighterAvatar character={fighter.name} size={34} mood="anticipation" animate={false} />
-          </LivingBreath>
+          <FighterAvatar character={fighter.name} size={34} mood="anticipation" animate={isLive} lightweight />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={s.playNextLabel}>PLAY {frontier.id}</Text>
             <Text style={s.playNextSub} numberOfLines={1}>{frontier.name}</Text>
@@ -927,7 +930,12 @@ const MapNode: React.FC<{
 });
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#E8F6E3' },
+  root: {
+    flex: 1,
+    backgroundColor: '#E8F6E3',
+    overflow: 'hidden',
+    ...(Platform.OS === 'web' ? ({ contain: 'layout style' } as ViewStyle) : null),
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -952,7 +960,9 @@ const s = StyleSheet.create({
     borderBottomColor: INK,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    overflow: 'hidden',
     zIndex: 9,
+    ...(Platform.OS === 'web' ? ({ contain: 'layout style' } as ViewStyle) : null),
   },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
   worldProgress: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
@@ -1004,7 +1014,19 @@ const s = StyleSheet.create({
   keyClaimedTag: { marginTop: 2, backgroundColor: COLORS.logicTeal, borderRadius: 999, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 1 },
   keyClaimedText: { color: COLORS.canvasWhite, fontSize: 8, fontWeight: '900', letterSpacing: 0.9 },
   keyWalker: { position: 'absolute', width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.canvasWhite, borderWidth: 2.5, borderColor: INK, alignItems: 'center', justifyContent: 'center', zIndex: 8 },
-  dock: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingTop: 10, backgroundColor: COLORS.canvasWhite, borderTopWidth: 2, borderTopColor: INK, gap: 6 },
+  dock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    backgroundColor: COLORS.canvasWhite,
+    borderTopWidth: 2,
+    borderTopColor: INK,
+    gap: 6,
+    overflow: 'hidden',
+    ...(Platform.OS === 'web' ? ({ contain: 'layout style' } as ViewStyle) : null),
+  },
   dockBtn: { alignItems: 'center', width: 58 },
   dockLabel: { fontSize: 10, fontWeight: '800', color: INK, marginTop: 2 },
   badgeDot: { position: 'absolute', top: -2, right: 8, width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.impactRed, borderWidth: 2, borderColor: COLORS.canvasWhite },

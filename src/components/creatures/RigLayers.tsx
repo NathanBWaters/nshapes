@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useId } from 'react';
-import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { Platform, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { G, Svg } from 'react-native-svg';
 import {
@@ -145,8 +145,10 @@ export const RigLayer: React.FC<RigLayerProps> = (props) => {
     </Svg>
   );
 
+  const webWillChange = Platform.OS === 'web' ? ({ willChange: 'transform' } as ViewStyle) : undefined;
+
   return 'style' in props ? (
-    <Animated.View style={[StyleSheet.absoluteFill, props.style]}>{svg}</Animated.View>
+    <Animated.View style={[StyleSheet.absoluteFill, webWillChange, props.style]}>{svg}</Animated.View>
   ) : (
     <View style={StyleSheet.absoluteFill}>{svg}</View>
   );
