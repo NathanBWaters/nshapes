@@ -183,18 +183,34 @@ export const BadgerRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Staggered Raised Boxing Fists — continuously GPU-animated for jabs & fist-pumps (zero 1f JSX teleport) */}
+      {/* 6. Staggered Raised Boxing Fists with connected forearms — stays anatomically attached through haymaker jabs */}
       <RigLayer skipAutoLighting style={pawStyle}>
         <Defs>
           <TwoToneGradient id="badger-fist" lit={BADGER_LIT} base={BADGER_CHARCOAL} shadow={BADGER_SHADOW} />
         </Defs>
         <G>
+          {/* Connected rear left forearm anchoring cocked uppercut fist to hunched shoulder */}
+          <Path
+            d="M 34 61 C 27 61, 21 64, 21 70 C 21 75, 29 76, 38 72 Z"
+            fill="url(#badger-fist)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
           {/* Rear cocked uppercut fist on the left */}
           <Circle cx={21} cy={70} r={7.5} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
           <Line x1={18} y1={65} x2={18} y2={68.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
           <Line x1={21} y1={64} x2={21} y2={68} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
           <Line x1={24} y1={65} x2={24} y2={68.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
 
+          {/* Connected lead right muscular forearm anchoring boxing guard fist to torso */}
+          <Path
+            d="M 60 63 C 68 58, 76 57, 84 61 C 84 67, 75 72, 62 73 Z"
+            fill="url(#badger-fist)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
           {/* Lead raised guard boxing fist jutting forward-right */}
           <Circle cx={85} cy={61} r={8.2} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
           <Line x1={82} y1={55} x2={82} y2={58.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />

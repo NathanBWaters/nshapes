@@ -1014,6 +1014,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
           reactionId={motion.reactionKey}
           mood={mood}
           personality={personality}
+          size={size}
           animate={shouldAnimate}
           stillBurst={quiet}
           intensity={cheerIntensity(streak)}

@@ -146,13 +146,13 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
   if (!theme) return null;
 
   const palette = ROLE_AURA_STYLE[theme.dominantRole] ?? ROLE_AURA_STYLE.damage;
-  // Generous ring span clears both bare combat fighters AND rounded-square framed Camp portraits
-  const ringSize = Math.round(size * 1.38);
+  // Balanced ring span clears framed 50px portraits (rOuter > 25px) while avoiding right-hand Camp text Tangent Traps
+  const ringSize = Math.round(size * 1.28);
   const offset = -Math.round((ringSize - size) / 2);
   const cx = ringSize / 2;
   const rOuter = ringSize * 0.455;
   const rOrbit = ringSize * 0.435;
-  const rInner = ringSize * 0.4;
+  const rInner = ringSize * 0.405;
   const arcanaNodes = Math.min(3, theme.arcanaCount);
 
   return (
@@ -250,10 +250,10 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
                   key={`arc-${i}`}
                   cx={ax}
                   cy={ay}
-                  r={3.4}
+                  r={3.0}
                   fill={ARCANA_VIOLET}
                   stroke={INK}
-                  strokeWidth={1.25}
+                  strokeWidth={1.2}
                 />
               );
             })}

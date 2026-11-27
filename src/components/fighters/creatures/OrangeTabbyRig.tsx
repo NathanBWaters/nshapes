@@ -225,14 +225,23 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Asymmetric Swipe Paw Forward-Right + Braced Rear Paw (continuously GPU-animated; zero 1f JSX teleport) */}
+      {/* 6. Asymmetric Swipe Paw Forward-Right + Braced Rear Paw (with connected orange forearm for attached pounce swipes) */}
       <RigLayer skipAutoLighting style={pawStyle}>
         <Defs>
           <TwoToneGradient id="tabby-paw" lit={TABBY_CREAM_LIT} base={TABBY_CREAM} shadow={TABBY_CREAM_SHADOW} />
+          <TwoToneGradient id="tabby-arm" lit={TABBY_LIT} base={TABBY_ORANGE} shadow={TABBY_SHADOW} />
         </Defs>
         <G>
           {/* Grounded back support paw */}
           <Ellipse cx={40} cy={87} rx={7.2} ry={4.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
+          {/* Connected orange foreleg bridging chest to raised swipe paw */}
+          <Path
+            d="M 62 72 C 67 69, 73 68, 77 70 C 77 75, 71 78, 63 79 Z"
+            fill="url(#tabby-arm)"
+            stroke={STROKE}
+            strokeWidth={2.8}
+            strokeLinejoin="round"
+          />
           {/* Raised asymmetrical combat swipe paw reaching right */}
           <Ellipse cx={77} cy={71} rx={7.2} ry={5.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
           <Circle cx={79} cy={71.5} r={2} fill={NOSE_PINK} />

@@ -6,13 +6,15 @@ import type { ReactionChannels } from '@/components/creatures/types';
 import { CreatureEyes } from '@/components/fighters/creatures/FacialFeatures';
 import { FighterAvatar } from '@/components/fighters/FighterAvatar';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
+import { FighterEffectsOverlay } from '@/components/fighters/FighterEffectsOverlay';
 import {
   getFighterMassClass,
+  getFighterPersonality,
   getFighterSpeciesChoreography,
   getFighterSpeciesFidget,
 } from '@/components/fighters/fighterRegistry';
 import { CHARACTERS } from '@/utils/gameDefinitions';
-import { MODAL_MOTION, OVERLAP, SMEAR, SQUASH_TIER, THROW } from '@/utils/motion';
+import { ACCESSIBLE, HIT, MODAL_MOTION, OVERLAP, SMEAR, SQUASH_TIER, THROW } from '@/utils/motion';
 
 const mockWithTiming = jest.fn();
 const mockWithDelay = jest.fn();
@@ -211,12 +213,12 @@ describe('Lane 1 — Hero Fighter Species Acting, 3-Step Blinks, Lightweight Bre
       expect(fox).toContain(80 * THROW.lungeTxRatio * 1.25);
       expect(fox).toContain(18);
 
-      // 3) Badger: heavy rear uppercut cock-back (-12°, 0.80 squash) -> haymaker cross jab (+17°, pawTx +0.28*size)
+      // 3) Badger: heavy rear uppercut cock-back (-12°, 0.80 squash) -> attached haymaker cross jab (+17°, pawTx +0.13*size)
       const badger = signatures.get('Badger')!;
       expect(badger).toContain(-12);
       expect(badger).toContain(17);
       expect(badger).toContain(0.8);
-      expect(badger).toContain(80 * 0.28);
+      expect(badger).toContain(80 * 0.13);
 
       // 4) Emperor Penguin: tall upright draw-up (`scaleY: 1.06`) + sweeping casting flipper (`-34°` -> `+24°`)
       const penguin = signatures.get('Emperor Penguin')!;
@@ -353,6 +355,50 @@ describe('Lane 1 — Hero Fighter Species Acting, 3-Step Blinks, Lightweight Bre
       expect(reducedView.getByTestId('fighter-build-aura')).toBeTruthy();
       expect(mockWithRepeat).not.toHaveBeenCalled();
       reducedView.unmount();
+    });
+
+    it('keeps reduced-motion reaction bursts mounted through ACCESSIBLE.fadeMs exit fade (zero POP-OUT)', () => {
+      jest.useFakeTimers();
+      const personality = getFighterPersonality('Badger');
+      const { getByTestId, queryByTestId, rerender } = render(
+        <FighterEffectsOverlay
+          activeReaction="throw"
+          reactionId={1}
+          mood="idle"
+          personality={personality}
+          size={80}
+          animate={false}
+        />
+      );
+      expect(getByTestId('fighter-fx-throw')).toBeTruthy();
+
+      // Clear activeReaction: stays mounted while fading out via ACCESSIBLE.fadeMs, then unmounts cleanly
+      mockWithTiming.mockClear();
+      rerender(
+        <FighterEffectsOverlay
+          activeReaction={null}
+          reactionId={1}
+          mood="idle"
+          personality={personality}
+          size={80}
+          animate={false}
+        />
+      );
+      expect(queryByTestId('fighter-fx-throw')).toBeTruthy();
+      expect(
+        mockWithTiming.mock.calls.some(
+          ([to, cfg]) =>
+            to === 0 &&
+            typeof cfg === 'object' &&
+            cfg !== null &&
+            (cfg as { duration?: number }).duration === ACCESSIBLE.fadeMs
+        )
+      ).toBe(true);
+
+      act(() => {
+        jest.advanceTimersByTime(ACCESSIBLE.fadeMs + HIT.snapMs + 16);
+      });
+      expect(queryByTestId('fighter-fx-throw')).toBeNull();
     });
   });
 });

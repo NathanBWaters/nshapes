@@ -204,22 +204,22 @@ const tabbyChoreography: FighterSpeciesChoreography = (type, ch, size, context) 
     );
     pulseStrikeSmear(ch, THROW.windMs, -SMEAR.strikeSkewDeg);
 
-    // High-paw diagonal swipe matching `fighters-acting-sheet.png`!
+    // High-paw diagonal swipe matching `fighters-acting-sheet.png` (attached forearm range!)
     ch.pawBounce.value = withSequence(
-      withTiming(size * 0.04, wind),
-      withTiming(-size * 0.2, lunge),
+      withTiming(size * 0.035, wind),
+      withTiming(-size * 0.14, lunge),
       withDelay(THROW.holdMs, withSpring(0, SPRING.playful))
     );
     if (ch.pawTx) {
       ch.pawTx.value = withSequence(
-        withTiming(-size * 0.08, wind),
-        withTiming(size * 0.22, lunge),
+        withTiming(-size * 0.06, wind),
+        withTiming(size * 0.12, lunge),
         withDelay(THROW.holdMs, withSpring(0, SPRING.lively))
       );
     }
     if (ch.pawRotate) {
       ch.pawRotate.value = withSequence(
-        withTiming(20, wind),
+        withTiming(18, wind),
         withTiming(-34, lunge),
         withDelay(THROW.holdMs, withSpring(0, SPRING.playful))
       );
@@ -266,7 +266,7 @@ const tabbyChoreography: FighterSpeciesChoreography = (type, ch, size, context) 
     const { now, i, windMs, hold, followDelay } = resolveCheerTiming(type, context);
     const wind = { duration: windMs, easing: EASE.enter };
     const rise = { duration: CHEER.riseMs, easing: EASE.enter };
-    const lift = jumpPx * 0.96 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
+    const lift = jumpPx * 0.6 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
     const stretchMs = CHEER.stretchMs;
     const apexMs = CHEER.riseMs - stretchMs + CHEER.apexExtraMs;
     const toLanding = Math.max(0, CHEER.riseMs + CHEER.fallMs - stretchMs - apexMs);
@@ -275,7 +275,7 @@ const tabbyChoreography: FighterSpeciesChoreography = (type, ch, size, context) 
 
     ch.reactionScaleY.value = withSequence(
       withTiming(0.84, wind),
-      withDelay(hold, withTiming(1.16 + 0.04 * i, { duration: stretchMs, easing: EASE.enter })),
+      withDelay(hold, withTiming(1.13 + 0.03 * i, { duration: stretchMs, easing: EASE.enter })),
       withTiming(1, { duration: apexMs, easing: EASE.drift }),
       withDelay(toLanding, withTiming(0.86, { duration: CHEER.landHoldMs, easing: EASE.enter })),
       withDelay(CHEER.landHoldMs, withSpring(1, SPRING.playful))
@@ -507,7 +507,7 @@ const foxChoreography: FighterSpeciesChoreography = (type, ch, size, context) =>
     const riseMs = Math.round(CHEER.riseMs * 0.86);
     const fallMs = Math.round(CHEER.fallMs * 0.86);
     const rise = { duration: riseMs, easing: EASE.enter };
-    const lift = jumpPx * 0.96 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
+    const lift = jumpPx * 0.68 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
 
     playLaunchKickback(ch, recoilPx, now);
 
@@ -636,15 +636,15 @@ const badgerChoreography: FighterSpeciesChoreography = (type, ch, size, context)
     : 1;
 
   if (type === 'throw') {
-    // Heavy rear uppercut cock-back -> thunderous haymaker cross jab (`pawTx`/`pawRotate`, higher recoil)
-    const windMs = 48; // Weighty 3f cock-back within 33% startup cap
+    // Heavy rear uppercut cock-back -> thunderous haymaker cross jab (anatomically attached forearm range + higher recoil)
+    const windMs = HIT.snapMs * 3; // Weighty 3f cock-back within 33% startup cap
     const wind = { duration: windMs, easing: EASE.enter };
     const lunge = { duration: THROW.lungeMs, easing: EASE.enter };
     const kick = { duration: HIT.snapMs, easing: EASE.enter };
     const rebound = { duration: HIT.snapMs * 2, easing: EASE.ui };
-    const lungeTx = size * 0.19;
+    const lungeTx = size * 0.17;
     const heavyKickOffset = recoilPx * HIT.attackerRecoilRatio * 1.5;
-    const holdMs = THROW.holdMs + 16;
+    const holdMs = THROW.holdMs + HIT.snapMs;
     const lingerAfterRecoilMs = Math.max(0, holdMs - HIT.snapMs * 3);
 
     // Feet stay PLANTED like a heavyweight brawler (slight stomp gather on wind-up)
@@ -654,7 +654,7 @@ const badgerChoreography: FighterSpeciesChoreography = (type, ch, size, context)
       withSpring(0, SPRING.heavy)
     );
     ch.bodyTx.value = withSequence(
-      withTiming(-size * 0.11, wind),
+      withTiming(-size * 0.1, wind),
       withTiming(lungeTx, lunge),
       withTiming(lungeTx - heavyKickOffset, kick),
       withTiming(lungeTx + recoilPx * 0.06, rebound),
@@ -673,24 +673,24 @@ const badgerChoreography: FighterSpeciesChoreography = (type, ch, size, context)
     );
     pulseStrikeSmear(ch, windMs, -SMEAR.strikeSkewDeg);
 
-    // Rear uppercut cock-back -> heavy haymaker cross jab on `paws`!
+    // Rear uppercut cock-back -> heavy haymaker cross jab on `paws` (grounded attached range!)
     ch.pawBounce.value = withSequence(
-      withTiming(size * 0.06, wind),
-      withTiming(-size * 0.15, lunge),
+      withTiming(size * 0.04, wind),
+      withTiming(-size * 0.09, lunge),
       withDelay(holdMs, withSpring(0, SPRING.settle))
     );
     if (ch.pawTx) {
       ch.pawTx.value = withSequence(
-        withTiming(-size * 0.16, wind),
-        withTiming(size * 0.28, lunge),
-        withTiming(size * 0.22, kick),
+        withTiming(-size * 0.08, wind),
+        withTiming(size * 0.13, lunge),
+        withTiming(size * 0.1, kick),
         withDelay(holdMs, withSpring(0, SPRING.heavy))
       );
     }
     if (ch.pawRotate) {
       ch.pawRotate.value = withSequence(
-        withTiming(24, wind),
-        withTiming(-28, lunge),
+        withTiming(18, wind),
+        withTiming(-20, lunge),
         withDelay(holdMs, withSpring(0, SPRING.settle))
       );
     }
@@ -833,9 +833,9 @@ const corgiFidget: FighterSpeciesFidget = (roll, ch, size) => {
       );
     }
     ch.tailExtra.value = withSequence(
-      withTiming(28, { duration: 48, easing: EASE.ui }),
-      withTiming(-28, { duration: 48, easing: EASE.ui }),
-      withTiming(24, { duration: 48, easing: EASE.ui }),
+      withTiming(28, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(-28, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(24, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
       withSpring(0, SPRING.loose)
     );
     return true;
@@ -912,9 +912,9 @@ const corgiChoreography: FighterSpeciesChoreography = (type, ch, size, context) 
       withSequence(withTiming(22, lunge), withDelay(THROW.holdMs, withSpring(0, SPRING.loose)))
     );
     ch.tailExtra.value = withSequence(
-      withTiming(32, { duration: 48, easing: EASE.ui }),
-      withTiming(-32, { duration: 48, easing: EASE.ui }),
-      withTiming(26, { duration: 48, easing: EASE.ui }),
+      withTiming(32, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(-32, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(26, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
       withSpring(0, SPRING.loose)
     );
     return true;
@@ -923,24 +923,24 @@ const corgiChoreography: FighterSpeciesChoreography = (type, ch, size, context) 
   if (type === 'joy' || type === 'ecstatic') {
     // Butt-wiggle anticipation crouch -> exuberant zoomie sploot bounce + frantic nub-tail blur!
     const { now, i, windMs, hold, followDelay } = resolveCheerTiming(type, context);
-    const wiggleStepMs = 32;
+    const wiggleStepMs = OVERLAP.primaryMs;
     const wiggleCount = now ? 2 : Math.max(2, Math.min(4, Math.floor((windMs + hold) / wiggleStepMs)));
     const wiggleTotalMs = now ? wiggleStepMs * 2 : windMs + hold;
     const crouchLaunchDelay = Math.max(0, wiggleTotalMs - wiggleStepMs);
     const rise = { duration: CHEER.riseMs, easing: EASE.enter };
-    const lift = jumpPx * 0.94 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
+    const lift = jumpPx * 0.54 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
     const stretchMs = CHEER.stretchMs;
     const apexMs = CHEER.riseMs - stretchMs + CHEER.apexExtraMs;
     const toLanding = Math.max(0, CHEER.riseMs + CHEER.fallMs - stretchMs - apexMs);
 
     playLaunchKickback(ch, recoilPx, now);
 
-    // Plush deep crouch (0.78) -> bouncy zoomie stretch (1.22 per SQUASH_TIER.playful) -> plush landing
+    // Plush deep crouch (0.78 per SQUASH_TIER.playful) -> crisp frame-safe zoomie stretch (1.14) -> plush landing
     ch.reactionScaleY.value = withSequence(
       withTiming(SQUASH_TIER.playful.squashY, { duration: wiggleStepMs, easing: EASE.enter }),
       withDelay(
         crouchLaunchDelay,
-        withTiming(SQUASH_TIER.playful.stretchY, { duration: stretchMs, easing: EASE.enter })
+        withTiming(1.14, { duration: stretchMs, easing: EASE.enter })
       ),
       withTiming(1, { duration: apexMs, easing: EASE.drift }),
       withDelay(toLanding, withTiming(0.8, { duration: CHEER.landHoldMs, easing: EASE.enter })),
@@ -1004,11 +1004,11 @@ const corgiChoreography: FighterSpeciesChoreography = (type, ch, size, context) 
     );
     // Frantic Corgi nub-tail blur!
     ch.tailExtra.value = withSequence(
-      withTiming(36, { duration: 48, easing: EASE.ui }),
-      withTiming(-36, { duration: 48, easing: EASE.ui }),
-      withTiming(34, { duration: 48, easing: EASE.ui }),
-      withTiming(-32, { duration: 48, easing: EASE.ui }),
-      withTiming(26, { duration: 48, easing: EASE.ui }),
+      withTiming(36, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(-36, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(34, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(-32, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+      withTiming(26, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
       withSpring(0, SPRING.loose)
     );
     return true;
@@ -1333,7 +1333,7 @@ const pelicanChoreography: FighterSpeciesChoreography = (type, ch, size, context
     const { now, i, windMs, hold, followDelay } = resolveCheerTiming(type, context);
     const wind = { duration: windMs, easing: EASE.enter };
     const rise = { duration: CHEER.riseMs, easing: EASE.enter };
-    const lift = jumpPx * 0.86 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
+    const lift = jumpPx * 0.52 * (CHEER.liftMin + (CHEER.liftMax - CHEER.liftMin) * i);
     const stretchMs = CHEER.stretchMs;
     const apexMs = CHEER.riseMs - stretchMs + CHEER.apexExtraMs;
     const toLanding = Math.max(0, CHEER.riseMs + CHEER.fallMs - stretchMs - apexMs);
@@ -1342,7 +1342,7 @@ const pelicanChoreography: FighterSpeciesChoreography = (type, ch, size, context
 
     ch.reactionScaleY.value = withSequence(
       withTiming(0.85, wind),
-      withDelay(hold, withTiming(1.15, { duration: stretchMs, easing: EASE.enter })),
+      withDelay(hold, withTiming(1.1, { duration: stretchMs, easing: EASE.enter })),
       withTiming(1, { duration: apexMs, easing: EASE.drift }),
       withDelay(toLanding, withTiming(0.88, { duration: CHEER.landHoldMs, easing: EASE.enter })),
       withDelay(CHEER.landHoldMs, withSpring(1, SPRING.lively))
@@ -1354,39 +1354,39 @@ const pelicanChoreography: FighterSpeciesChoreography = (type, ch, size, context
     );
     ch.bodyRotate.value = withSequence(
       withTiming(4, wind),
-      withDelay(hold, withTiming(-(5 + 3 * i), rise)),
+      withDelay(hold, withTiming(-(4 + 2.5 * i), rise)),
       withSpring(0, SPRING.lively)
     );
-    // Proud coastal bill tilt upward (`-13°`) + subtle orbital lift
+    // Proud coastal bill tilt upward (`-8°` keeps bill & 3-feather crest cleanly inside framed portrait!)
     ch.headRotate.value = withSequence(
-      withTiming(6, wind),
-      withDelay(hold, withTiming(-13, rise)),
+      withTiming(5, wind),
+      withDelay(hold, withTiming(-8, rise)),
       withSpring(0, SPRING.lively)
     );
     ch.headTy.value = withDelay(
       followDelay,
       withSequence(
-        withTiming(-size * 0.03, { duration: CHEER.followMs, easing: EASE.enter }),
+        withTiming(-size * 0.02, { duration: CHEER.followMs, easing: EASE.enter }),
         withSpring(0, SPRING.lively)
       )
     );
-    // Rhythmic 2-beat coastal wing flaps (CW `+54°` lifts swept-back wings skyward!) — zero JSX teleport!
-    const flapUp = { duration: 96, easing: EASE.enter };
-    const flapDown = { duration: 80, easing: EASE.ui };
+    // Rhythmic 2-beat coastal wing flaps (CW `+52°` lifts swept-back wings skyward!) — zero JSX teleport!
+    const flapUp = { duration: OVERLAP.tertiaryMs, easing: EASE.enter };
+    const flapDown = { duration: CREATURE_FX.fidgetFastMs, easing: EASE.ui };
     ch.leftEarExtra.value = withSequence(
       withTiming(-8, wind),
-      withDelay(hold, withTiming(54, flapUp)),
+      withDelay(hold, withTiming(52, flapUp)),
       withTiming(12, flapDown),
-      withTiming(44, flapUp),
+      withTiming(42, flapUp),
       withSpring(0, SPRING.loose)
     );
     ch.rightEarExtra.value = withDelay(
       OVERLAP.primaryMs,
       withSequence(
         withTiming(-6, wind),
-        withDelay(hold, withTiming(48, flapUp)),
+        withDelay(hold, withTiming(46, flapUp)),
         withTiming(10, flapDown),
-        withTiming(38, flapUp),
+        withTiming(36, flapUp),
         withSpring(0, SPRING.loose)
       )
     );
@@ -1394,8 +1394,8 @@ const pelicanChoreography: FighterSpeciesChoreography = (type, ch, size, context
     ch.tailExtra.value = withDelay(
       followDelay,
       withSequence(
-        withTiming(-20, { duration: 96, easing: EASE.enter }),
-        withTiming(24, { duration: 112, easing: EASE.ui }),
+        withTiming(-18, { duration: OVERLAP.tertiaryMs, easing: EASE.enter }),
+        withTiming(22, { duration: CREATURE_FX.entranceDropMs, easing: EASE.ui }),
         withSpring(0, SPRING.loose)
       )
     );
