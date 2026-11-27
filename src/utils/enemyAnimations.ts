@@ -4,11 +4,17 @@ import {
   MoodMotionTable,
   getCreatureHealthState,
 } from './creatureAnimations';
+import { ENEMY_ATTACK, MASS_CLASS, MassClass, PHASE } from './motion';
 
 /**
  * Enemy battle-wear state: pristine -> scuffed -> battered -> critical -> knocked_out.
  */
 export type EnemyHealthState = CreatureHealthState;
+
+/**
+ * Species acting archetype driving distinct limb, wingbeat, multi-head, pincer, and boss kinematics.
+ */
+export type EnemySpeciesClass = 'standard' | 'winged' | 'hydra' | 'pincer' | 'boss';
 
 /**
  * Continuous ambient moods for enemies & foes.
@@ -83,13 +89,13 @@ export interface EnemyPersonalityProfile {
 /** Duration (ms) a one-shot enemy reaction holds its expression before settling */
 export const ENEMY_REACTION_HOLD_MS: Record<EnemyReactionType, number> = {
   pain: 760,
-  crit_pain: 1050,
-  taunt: 920,
-  attack: 880,
-  regen: 900,
-  poke: 700,
-  rage_spin: 1200,
-  entrance: 820,
+  crit_pain: 920,
+  taunt: 840,
+  attack: 820,
+  regen: 860,
+  poke: 640,
+  rage_spin: 880,
+  entrance: 640,
 };
 
 export type EnemyTier = 1 | 2 | 3 | 4;
@@ -115,36 +121,102 @@ function hashName(str: string): number {
 }
 
 /**
- * Deterministic personality & motion physics for an enemy of the given build and tier.
+ * Computes the exact attack strike launch offset (ms) for a given `MassClass`,
+ * keeping visual slash/spark bursts strictly synced to the lunge frame (zero premature VFX).
+ */
+export function getEnemyAttackTimings(massClass: MassClass = 'standard'): {
+  windMs: number;
+  coilHoldMs: number;
+  strikeMs: number;
+  apexHoldMs: number;
+  strikeStartMs: number;
+} {
+  if (massClass === 'boss') {
+    const windMs = PHASE.bossWindMs;
+    const coilHoldMs = PHASE.bossCoilHoldMs;
+    const strikeMs = ENEMY_ATTACK.strikeMs;
+    const apexHoldMs = PHASE.bossApexHoldMs;
+    return { windMs, coilHoldMs, strikeMs, apexHoldMs, strikeStartMs: windMs + coilHoldMs };
+  }
+  const timeMult = MASS_CLASS[massClass].timeMult;
+  const windMs = Math.round(ENEMY_ATTACK.windMs * timeMult);
+  const coilHoldMs = Math.round(ENEMY_ATTACK.coilHoldMs * timeMult);
+  const strikeMs = ENEMY_ATTACK.strikeMs;
+  const apexHoldMs = Math.round(ENEMY_ATTACK.apexHoldMs * timeMult);
+  return { windMs, coilHoldMs, strikeMs, apexHoldMs, strikeStartMs: windMs + coilHoldMs };
+}
+
+/**
+ * Deterministic personality & motion physics for an enemy of the given build, species class, and tier.
  */
 export function buildEnemyPersonality(params: {
   name: string;
   tier: EnemyTier;
   motionClass?: EnemyMotionClass;
+  speciesClass?: EnemySpeciesClass;
+  isBoss?: boolean;
   naturallySleepy?: boolean;
 }): EnemyPersonalityProfile {
-  const { name, tier, motionClass, naturallySleepy = false } = params;
+  const { name, tier, motionClass, speciesClass = 'standard', isBoss = false, naturallySleepy = false } = params;
   const h = hashName(name);
   const isFast = motionClass === 'fast';
   const isHeavy = motionClass === 'heavy';
+  const isWinged = speciesClass === 'winged';
+  const isHydra = speciesClass === 'hydra';
 
-  const breathCycleMs = naturallySleepy
-    ? 3400
-    : isFast
-      ? 1450 + (h % 320)
-      : isHeavy
-        ? 2850 + (h % 450)
-        : 2150 + (h % 420);
+  // Winged critters get brisk rhythmic wingbeats (`breathPhase` drives asymmetric wing layers);
+  // bosses keep deep weighty chest heaves (`2850–3300ms`, 0.042 intensity).
+  let breathCycleMs: number;
+  if (naturallySleepy) {
+    breathCycleMs = 3400;
+  } else if (isWinged && !isBoss) {
+    breathCycleMs = isFast ? 520 + (h % 120) : 920 + (h % 180);
+  } else if (isBoss || tier >= 4) {
+    breathCycleMs = isWinged ? 2550 + (h % 250) : 2880 + (h % 380);
+  } else if (isFast) {
+    breathCycleMs = 1450 + (h % 320);
+  } else if (isHeavy) {
+    breathCycleMs = 2850 + (h % 450);
+  } else {
+    breathCycleMs = 2150 + (h % 420);
+  }
+
+  const breathIntensity =
+    isWinged && !isBoss
+      ? isFast
+        ? 0.024
+        : 0.028
+      : isBoss || tier >= 4
+        ? 0.042
+        : isHeavy
+          ? 0.038
+          : isFast
+            ? 0.034
+            : 0.03;
+
+  const earSwayDeg = isWinged
+    ? isFast
+      ? 26
+      : isBoss
+        ? 15
+        : 19
+    : isHydra
+      ? 14.5
+      : isFast
+        ? 11
+        : isHeavy
+          ? 6.5
+          : 8.5;
 
   return {
     name,
     auraColor: TIER_AURA_COLORS[tier],
     breathCycleMs,
-    breathIntensity: isHeavy ? 0.038 : isFast ? 0.034 : 0.03,
-    earSwayDeg: isFast ? 11 : isHeavy ? 6.5 : 8.5,
-    tailCycleMs: isFast ? 780 + (h % 280) : isHeavy ? 2100 + (h % 400) : 1480 + (h % 360),
-    tailWagDeg: isFast ? 16 : isHeavy ? 10 : 13,
-    idleTiltDeg: isHeavy ? 1.6 : isFast ? 2.8 : 2.1,
+    breathIntensity,
+    earSwayDeg,
+    tailCycleMs: isFast ? 780 + (h % 280) : isBoss || isHeavy ? 2100 + (h % 400) : 1480 + (h % 360),
+    tailWagDeg: isHydra ? 15 : isFast ? 16 : isHeavy ? 10 : 13,
+    idleTiltDeg: isWinged && isFast ? 3.2 : isBoss || isHeavy ? 1.6 : isFast ? 2.8 : 2.1,
     naturallySleepy,
   };
 }
@@ -201,14 +273,17 @@ export function resolveEnemyAmbientMood(params: {
 
 /**
  * Resolves exact facial expression for an enemy rig.
+ * Supports both legacy boolean `isBlinking` and 3-step `blinkStage` (`2` → `'blink'`,
+ * `1` keeps base expression while `EnemyEyes` renders `HalfBlinkLidEye`).
  */
 export function resolveEnemyExpression(params: {
   healthState: EnemyHealthState;
   mood: EnemyAmbientMood;
   activeReaction: EnemyReactionType | null;
   isBlinking: boolean;
+  blinkStage?: 0 | 1 | 2;
 }): EnemyExpression {
-  const { healthState, mood, activeReaction, isBlinking } = params;
+  const { healthState, mood, activeReaction, isBlinking, blinkStage } = params;
 
   if (healthState === 'knocked_out' && activeReaction !== 'regen') {
     return 'ko';
@@ -236,7 +311,7 @@ export function resolveEnemyExpression(params: {
   if (mood === 'enraged') return 'enraged';
   if (mood === 'sleepy') return 'sleepy';
 
-  if (isBlinking) {
+  if (blinkStage === 2 || (blinkStage === undefined && isBlinking)) {
     return 'blink';
   }
 

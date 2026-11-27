@@ -1,8 +1,13 @@
 import React from 'react';
 import { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { RigLayers } from '@/components/creatures/RigLayers';
+import { HalfBlinkLidEye, ShutBlinkEye } from '@/components/creatures/eyes';
 import { isBattleWorn, isFierceExpression, isHurtExpression } from '@/components/creatures/expressions';
-import { STROKE } from '@/components/illustration/primitives';
+import {
+  STROKE,
+  StorybookToneDefs,
+  SunlitRimStroke,
+} from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { EnemyEyes } from '../EnemyEyes';
 import { EnemyRigProps } from './types';
@@ -1525,104 +1530,181 @@ const renderOneEyedTerror = (s: SubRigState) => {
 };
 
 /* ============================================================================
- * 10. STONE SENTINEL — Carved monolith golem, slab shoulders, cyan rune fissures & floating shields
+ * 10. CHAPTER BOSS: STONE SENTINEL — True 3/4 LEFT armored basalt rune-golem
+ *     Beveled stone pauldrons, slotted cyan visor-helm, glowing arcane chest runes & lead fist
  * ============================================================================ */
 const renderStoneSentinel = (s: SubRigState) => {
-  const STONE = '#57534E';
-  const STONE_DARK = '#44403C';
-  const STONE_BEVEL = '#78716C';
-  const RUNE = '#2DD4BF';
-  const RUNE_GLOW = '#CCFBF1';
+  const STONE_LIT = '#9CA3AF';
+  const STONE_BASE = '#6B7280';
+  const STONE_SHADOW = '#374151';
+  const PLATE_LIT = '#64748B';
+  const PLATE_BASE = '#475569';
+  const PLATE_SHADOW = '#1E293B';
+  const RUNE = '#22D3EE';
+  const RUNE_GLOW = '#CFFAFE';
+  const lean = s.facing === 'left' ? 'translate(-0.6, 0)' : undefined;
 
   return (
     <RigLayers
       partStyles={s}
       earsInFront
+      skipAutoLighting
+      skipFacingOffset
       tail={
         <G>
-          {/* Levitating arcane spire shards behind monolith */}
-          <Polygon points="50,6 55,14 50,18 45,14" fill={RUNE} stroke={STROKE} strokeWidth={2.3} strokeLinejoin="round" />
-          <Polygon points="28,15 33,20 30,26 25,21" fill={STONE_BEVEL} stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
-          <Polygon points="72,15 75,21 70,26 67,20" fill={STONE_BEVEL} stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
-        </G>
-      }
-      body={
-        <G>
-          {/* Carved trapezoidal monolith torso */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'sent-tail-stone', lit: STONE_LIT, base: STONE_BASE, shadow: STONE_SHADOW },
+              { id: 'sent-tail-rune', lit: RUNE_GLOW, base: RUNE, shadow: '#0E7490' },
+            ]}
+          />
+          {/* Rear hovering arcane rune crystal & right stone leg */}
           <Polygon
-            points="25,53 75,53 68,89 32,89"
-            fill={STONE}
+            points="72,14 78,22 73,30 67,22"
+            fill="url(#sent-tail-rune)"
             stroke={STROKE}
-            strokeWidth={3.3}
+            strokeWidth={2.5}
             strokeLinejoin="round"
           />
-          {/* Glowing teal/cyan arcane rune fissures & power core */}
           <Path
-            d="M 50 56 L 50 86 M 34 62 L 45 69 L 37 82 M 66 62 L 55 69 L 63 82"
-            stroke={RUNE}
-            strokeWidth={2.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
-          />
-          <Polygon points="50,62 57,70 50,78 43,70" fill={RUNE} stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
-          <Polygon points="50,65.5 53.5,70 50,74.5 46.5,70" fill={RUNE_GLOW} />
-        </G>
-      }
-      leftEar={
-        <G>
-          {/* Left angular stone-slab shoulder pauldron */}
-          <Polygon
-            points="7,34 26,27 28,53 11,57"
-            fill={STONE_BEVEL}
-            stroke={STROKE}
-            strokeWidth={3.1}
-            strokeLinejoin="round"
-          />
-          <Path d="M 14 36 L 21 42 L 16 50" stroke={RUNE} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        </G>
-      }
-      rightEar={
-        <G>
-          {/* Right angular stone-slab shoulder pauldron */}
-          <Polygon
-            points="93,34 74,27 72,53 89,57"
-            fill={STONE_BEVEL}
-            stroke={STROKE}
-            strokeWidth={3.1}
-            strokeLinejoin="round"
-          />
-          <Path d="M 86 36 L 79 42 L 84 50" stroke={RUNE} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        </G>
-      }
-      head={
-        <G>
-          {/* Chiseled octagonal monolith helm-head */}
-          <Polygon
-            points={
-              s.isRuffled
-                ? '32,17 64,17 68,22 74,31 70,56 30,56 26,31'
-                : '32,17 68,17 74,31 70,56 30,56 26,31'
-            }
-            fill={STONE}
+            d="M 55 68 L 71 67 L 78 86 L 61 88 L 57 78 Z"
+            fill="url(#sent-tail-stone)"
             stroke={STROKE}
             strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          <Polygon points="31,36 69,36 67,47 33,47" fill={STONE_DARK} stroke={STROKE} strokeWidth={2} />
-
-          {/* Glowing cyan brow rune fissure */}
-          <Polygon points="50,21 55,27 50,33 45,27" fill={RUNE} stroke={STROKE} strokeWidth={1.8} />
-          <Line x1={36} y1={27} x2={44} y2={27} stroke={RUNE} strokeWidth={2.4} strokeLinecap="round" />
-          <Line x1={56} y1={27} x2={64} y2={27} stroke={RUNE} strokeWidth={2.4} strokeLinecap="round" />
-
+          <Line x1={62} y1={77} x2={75} y2={76} stroke={STROKE} strokeWidth={2.1} strokeLinecap="round" />
+        </G>
+      }
+      body={
+        <G>
+          <StorybookToneDefs
+            tones={[
+              { id: 'sent-body', lit: STONE_LIT, base: STONE_BASE, shadow: STONE_SHADOW },
+              { id: 'sent-plate', lit: PLATE_LIT, base: PLATE_BASE, shadow: PLATE_SHADOW },
+              { id: 'sent-core', lit: RUNE_GLOW, base: RUNE, shadow: '#0891B2' },
+            ]}
+          />
+          {/* Forward-left armored stone leg planted in 3/4 brawler stride */}
+          <Path
+            d="M 35 67 L 52 68 L 48 88 L 31 87 L 33 77 Z"
+            fill="url(#sent-body)"
+            stroke={STROKE}
+            strokeWidth={3.2}
+            strokeLinejoin="round"
+          />
+          <Line x1={34} y1={78} x2={48} y2={78} stroke={STROKE} strokeWidth={2} strokeLinecap="round" />
+          {/* Heavy beveled hexagonal basalt torso angled 3/4 left */}
+          <Path
+            d="M 30 38 L 43 32 L 64 35 L 70 50 L 63 69 L 37 69 L 29 52 Z"
+            fill="url(#sent-plate)"
+            stroke={STROKE}
+            strokeWidth={3.4}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 32 49 L 33 39 L 43 34" strokeWidth={2.2} opacity={0.58} />
+          {/* Waist slab belt */}
+          <Polygon
+            points="36,62 63,62 60,70 39,70"
+            fill="url(#sent-body)"
+            stroke={STROKE}
+            strokeWidth={2.6}
+            strokeLinejoin="round"
+          />
+          {/* Glowing cyan arcane chest rune circuit & hexagonal power core */}
+          <Path
+            d="M 36 44 L 44 48 L 41 58 M 57 45 L 50 49 L 55 58 M 46 39 L 46 61"
+            stroke={RUNE}
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+          <Polygon
+            points="46,42 53,48 51,57 46,60 41,57 39,48"
+            fill="url(#sent-core)"
+            stroke={STROKE}
+            strokeWidth={2.2}
+            strokeLinejoin="round"
+          />
+          <Polygon points="46,46 49.5,50.5 46,55 42.5,50.5" fill={RUNE_GLOW} />
+          {s.isRuffled && (
+            <Path d="M 54 38 L 59 45 L 55 50" stroke={STROKE} strokeWidth={2.1} strokeLinecap="round" fill="none" />
+          )}
+        </G>
+      }
+      leftEar={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'sent-pauldron-l', lit: STONE_LIT, base: STONE_BASE, shadow: STONE_SHADOW }]}
+          />
+          {/* Lead left beveled granite shoulder pauldron */}
+          <Path
+            d="M 18 44 L 24 34 L 38 35 L 36 52 L 22 53 Z"
+            fill="url(#sent-pauldron-l)"
+            stroke={STROKE}
+            strokeWidth={3.2}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 20 44 L 25 36 L 35 37" strokeWidth={2} opacity={0.62} />
+          <Path d="M 24 41 L 31 44 L 27 49" stroke={RUNE} strokeWidth={2.1} strokeLinecap="round" fill="none" />
+        </G>
+      }
+      rightEar={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'sent-pauldron-r', lit: STONE_LIT, base: STONE_BASE, shadow: STONE_SHADOW }]}
+          />
+          {/* Dominant rear-right massive carved stone shoulder pauldron + rune vein */}
+          <Path
+            d="M 59 35 L 77 32 L 85 45 L 82 60 L 63 58 Z"
+            fill="url(#sent-pauldron-r)"
+            stroke={STROKE}
+            strokeWidth={3.3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 62 36 L 76 34 L 82 43" strokeWidth={2.1} opacity={0.52} />
+          <Path d="M 73 41 L 78 48 L 72 54" stroke={RUNE} strokeWidth={2.3} strokeLinecap="round" fill="none" />
+        </G>
+      }
+      head={
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[
+              { id: 'sent-helm', lit: STONE_LIT, base: STONE_BASE, shadow: STONE_SHADOW },
+              { id: 'sent-visor', lit: '#1E293B', base: '#0F172A', shadow: '#020617' },
+            ]}
+          />
+          {/* Chiseled 3/4 left monolith visor-helm */}
+          <Path
+            d={
+              s.isRuffled
+                ? 'M 33 21 L 46 16 L 56 20 L 59 29 L 55 39 L 36 39 L 31 30 L 34 25 Z'
+                : 'M 33 20 L 46 15 L 57 20 L 59 30 L 55 39 L 35 39 L 31 29 Z'
+            }
+            fill="url(#sent-helm)"
+            stroke={STROKE}
+            strokeWidth={3.2}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 35 21 L 45 17 L 53 20" strokeWidth={2.1} opacity={0.65} />
+          {/* Recessed dark T-visor faceplate */}
+          <Path
+            d="M 34 25 L 51 25 L 50 32 L 44 32 L 43 37 L 39 37 L 38 32 L 34 32 Z"
+            fill="url(#sent-visor)"
+            stroke={STROKE}
+            strokeWidth={2}
+            strokeLinejoin="round"
+          />
+          {/* Glowing cyan visor eyes */}
           <EnemyEyes
             expression={s.expression}
+            blinkStage={s.blinkStage}
             gazeOffset={s.gazeOffset}
-            leftX={40}
-            rightX={60}
-            y={41.5}
-            radius={4.1}
+            leftX={38}
+            rightX={47.5}
+            y={28.5}
+            radius={3.2}
             irisColor={RUNE}
             darkMask
           />
@@ -1630,24 +1712,32 @@ const renderStoneSentinel = (s: SubRigState) => {
       }
       paws={
         <G>
-          {/* Twin floating arcane rune shield-slabs */}
-          <Polygon
-            points="13,64 25,59 35,66 33,86 21,90 12,82"
-            fill={STONE_DARK}
+          <StorybookToneDefs
+            tones={[
+              { id: 'sent-fist', lit: STONE_LIT, base: STONE_BASE, shadow: STONE_SHADOW },
+              { id: 'sent-arm', lit: PLATE_LIT, base: PLATE_BASE, shadow: PLATE_SHADOW },
+            ]}
+          />
+          {/* Forward-left raised clenched brawler stone fist */}
+          <Path
+            d="M 10 58 L 22 54 L 30 61 L 27 72 L 13 71 L 8 64 Z"
+            fill="url(#sent-fist)"
             stroke={STROKE}
-            strokeWidth={2.9}
+            strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          <Polygon points="23,66 28,74 23,82 18,74" fill="none" stroke={RUNE} strokeWidth={2.2} />
-
-          <Polygon
-            points="87,64 75,59 65,66 67,86 79,90 88,82"
-            fill={STONE_DARK}
+          <SunlitRimStroke d="M 11 59 L 21 56" strokeWidth={2} opacity={0.6} />
+          <Line x1={15} y1={63} x2={15} y2={70} stroke={STROKE} strokeWidth={2} />
+          <Line x1={21} y1={63} x2={21} y2={70} stroke={STROKE} strokeWidth={2} />
+          {/* Rear-right heavy rune-etched stone gauntlet */}
+          <Path
+            d="M 68 58 L 83 57 L 89 68 L 82 78 L 69 75 Z"
+            fill="url(#sent-arm)"
             stroke={STROKE}
-            strokeWidth={2.9}
+            strokeWidth={3.2}
             strokeLinejoin="round"
           />
-          <Polygon points="77,66 82,74 77,82 72,74" fill="none" stroke={RUNE} strokeWidth={2.2} />
+          <Path d="M 76 62 L 82 67 L 78 72" stroke={RUNE} strokeWidth={2.2} strokeLinecap="round" fill="none" />
         </G>
       }
     />
@@ -1655,187 +1745,235 @@ const renderStoneSentinel = (s: SubRigState) => {
 };
 
 /* ============================================================================
- * 11. TIER 4 BOSS: ANCIENT DRAGON — Crowned crimson-and-gold wyrm, pinions, gold scales & embers
+ * 11. TIER 4 BOSS: ANCIENT DRAGON — True 3/4 LEFT crimson-and-gold storybook wyrm
+ *     Swept double bat-wings, twin golden curved horns, ribbed gold belly & fire snout
  * ============================================================================ */
 const renderAncientDragon = (s: SubRigState) => {
-  const WYRM_RED = '#DC2626';
-  const WYRM_DARK = '#991B1B';
-  const GOLD = '#F59E0B';
-  const GOLD_BRIGHT = '#FDE047';
-  const WING_GOLD = '#D97706';
+  const RED_LIT = '#EF4444';
+  const RED_BASE = '#B91C1C';
+  const RED_SHADOW = '#7F1D1D';
+  const WING_LIT = '#991B1B';
+  const WING_BASE = '#7F1D1D';
+  const WING_SHADOW = '#450A0A';
+  const GOLD_LIT = '#FEF08A';
+  const GOLD_BASE = '#F59E0B';
+  const GOLD_SHADOW = '#B45309';
+  const lean = s.facing === 'left' ? 'translate(-0.7, 0)' : undefined;
 
   return (
     <RigLayers
       partStyles={s}
+      skipAutoLighting
+      skipFacingOffset
       tail={
         <G>
-          {/* Spiked crimson-and-gold dragon tail */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'drg-tail', lit: RED_LIT, base: RED_BASE, shadow: RED_SHADOW },
+              { id: 'drg-spine', lit: GOLD_LIT, base: GOLD_BASE, shadow: GOLD_SHADOW },
+            ]}
+          />
+          {/* Sweeping curling crimson dragon tail & dorsal spines curving right */}
           <Path
-            d="M 58 82 C 79 85, 94 73, 89 52"
+            d="M 55 75 C 74 79, 89 72, 87 58 C 85 49, 77 50, 77 58 C 77 65, 67 69, 55 66 Z"
+            fill="url(#drg-tail)"
             stroke={STROKE}
-            strokeWidth={8.5}
-            strokeLinecap="round"
-            fill="none"
+            strokeWidth={3.2}
+            strokeLinejoin="round"
           />
-          <Path
-            d="M 58 82 C 79 85, 94 73, 89 52"
-            stroke={WYRM_RED}
-            strokeWidth={4.6}
-            strokeLinecap="round"
-            fill="none"
-          />
-          <Polygon points="83,75 91,78 86,82" fill={GOLD_BRIGHT} stroke={STROKE} strokeWidth={1.8} />
-          <Polygon points="89,63 97,64 91,69" fill={GOLD_BRIGHT} stroke={STROKE} strokeWidth={1.8} />
-          <Polygon points="89,45 95,54 89,52 83,55" fill={GOLD} stroke={STROKE} strokeWidth={2.3} strokeLinejoin="round" />
+          {/* Dorsal ridge spines */}
+          <Polygon points="68,66 72,60 75,67" fill="url(#drg-spine)" stroke={STROKE} strokeWidth={1.8} strokeLinejoin="round" />
+          <Polygon points="79,63 85,58 84,66" fill="url(#drg-spine)" stroke={STROKE} strokeWidth={1.8} strokeLinejoin="round" />
+          <Polygon points="84,54 91,47 89,58" fill="url(#drg-spine)" stroke={STROKE} strokeWidth={2.1} strokeLinejoin="round" />
         </G>
       }
       leftEar={
         <G>
-          {/* Left grand bat-winged dragon pinion */}
+          <StorybookToneDefs
+            tones={[{ id: 'drg-wing-far', lit: WING_LIT, base: WING_BASE, shadow: WING_SHADOW }]}
+          />
+          {/* Far-left swept-back secondary bat wing */}
           <Path
-            d={
-              s.isRuffled
-                ? 'M 30 55 L 3 20 L 18 28 L 5 41 L 16 48 L 11 54 L 8 63 L 23 62 L 31 69 Z'
-                : 'M 30 55 L 3 20 L 18 28 L 4 42 L 18 49 L 7 63 L 23 62 L 31 69 Z'
-            }
-            fill={WYRM_DARK}
+            d="M 46 43 C 33 26, 20 15, 9 14 C 16 25, 19 36, 17 45 C 25 41, 33 43, 44 50 Z"
+            fill="url(#drg-wing-far)"
             stroke={STROKE}
             strokeWidth={3.1}
             strokeLinejoin="round"
           />
-          <Polygon points="9,28 27,55 10,42" fill={WING_GOLD} />
-          <Polygon points="11,48 27,59 12,60" fill={WING_GOLD} />
-          <Polygon points="3,20 7,13 9,22" fill={GOLD_BRIGHT} stroke={STROKE} strokeWidth={1.8} />
+          <SunlitRimStroke d="M 14 17 C 24 20, 34 29, 43 40" strokeWidth={2} opacity={0.5} />
+          <Line x1={42} y1={43} x2={19} y2={35} stroke={STROKE} strokeWidth={1.9} strokeLinecap="round" />
         </G>
       }
       rightEar={
         <G>
-          {/* Right grand bat-winged dragon pinion */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'drg-wing-near', lit: RED_LIT, base: WING_LIT, shadow: WING_SHADOW },
+              { id: 'drg-wing-arm', lit: RED_LIT, base: RED_BASE, shadow: RED_SHADOW },
+            ]}
+          />
+          {/* Colossal arched foreground bat-wing pinion sweeping top-right */}
           <Path
-            d="M 70 55 L 97 20 L 82 28 L 96 42 L 82 49 L 93 63 L 77 62 L 69 69 Z"
-            fill={WYRM_DARK}
+            d={
+              s.isRuffled
+                ? 'M 52 46 C 58 26, 65 11, 52 9 C 72 13, 88 29, 94 59 L 87 54 L 84 68 C 77 56, 70 55, 65 65 C 62 55, 57 52, 50 56 Z'
+                : 'M 52 46 C 58 26, 65 11, 52 9 C 73 13, 89 30, 94 61 C 87 54, 83 56, 82 69 C 76 57, 69 56, 65 65 C 61 55, 56 52, 50 56 Z'
+            }
+            fill="url(#drg-wing-near)"
             stroke={STROKE}
-            strokeWidth={3.1}
+            strokeWidth={3.3}
             strokeLinejoin="round"
           />
-          <Polygon points="91,28 73,55 90,42" fill={WING_GOLD} />
-          <Polygon points="89,48 73,59 88,60" fill={WING_GOLD} />
-          <Polygon points="97,20 93,13 91,22" fill={GOLD_BRIGHT} stroke={STROKE} strokeWidth={1.8} />
+          {/* Muscular wing leading arm & golden wing claw */}
+          <Path
+            d="M 50 47 C 57 29, 63 14, 52 10"
+            stroke={RED_BASE}
+            strokeWidth={4.2}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <SunlitRimStroke d="M 55 11 C 69 16, 82 29, 89 48" strokeWidth={2.2} opacity={0.55} />
+          {/* Wing membrane struts */}
+          <Line x1={57} y1={22} x2={82} y2={62} stroke={STROKE} strokeWidth={2.1} strokeLinecap="round" />
+          <Line x1={55} y1={32} x2={66} y2={61} stroke={STROKE} strokeWidth={2} strokeLinecap="round" />
+          <Polygon points="52,9 46,6 54,13" fill={GOLD_LIT} stroke={STROKE} strokeWidth={1.8} strokeLinejoin="round" />
         </G>
       }
       body={
         <G>
-          {/* Armored crimson wyrm chest & ribbed golden belly plastron */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'drg-body', lit: RED_LIT, base: RED_BASE, shadow: RED_SHADOW },
+              { id: 'drg-belly', lit: GOLD_LIT, base: GOLD_BASE, shadow: GOLD_SHADOW },
+            ]}
+          />
+          {/* Rear braced haunch leg */}
           <Path
-            d="M 27 52 C 23 67, 24 85, 32 90 L 68 90 C 76 85, 77 67, 73 52 Z"
-            fill={WYRM_RED}
+            d="M 54 68 C 63 66, 68 74, 65 86 L 56 87 L 54 78 Z"
+            fill="url(#drg-body)"
             stroke={STROKE}
-            strokeWidth={3.3}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          {/* Muscular 3/4 left dragon chest, arched neck & ribbed golden belly plastron */}
+          <Path
+            d="M 27 42 C 25 56, 26 74, 38 82 L 58 81 C 68 75, 68 59, 57 48 C 48 42, 41 39, 38 35 Z"
+            fill="url(#drg-body)"
+            stroke={STROKE}
+            strokeWidth={3.4}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 29 52 C 29 61, 31 70, 37 76" strokeWidth={2.1} opacity={0.5} />
+          {/* Warm gold segmented ventral armor plates */}
+          <Path
+            d="M 27 46 C 24 60, 27 74, 38 81 L 45 78 C 38 69, 36 58, 37 45 Z"
+            fill="url(#drg-belly)"
+            stroke={STROKE}
+            strokeWidth={2.4}
             strokeLinejoin="round"
           />
           <Path
-            d="M 37 54 L 63 54 L 61 90 L 39 90 Z"
-            fill={GOLD_BRIGHT}
+            d="M 27 54 L 37 54 M 27 62 L 38 61 M 29 70 L 40 69 M 33 76 L 42 75"
             stroke={STROKE}
-            strokeWidth={2.6}
-            strokeLinejoin="round"
+            strokeWidth={1.8}
+            strokeLinecap="round"
           />
-          <Line x1={38} y1={63} x2={62} y2={63} stroke={STROKE} strokeWidth={2.1} />
-          <Line x1={38.5} y1={72} x2={61.5} y2={72} stroke={STROKE} strokeWidth={2.1} />
-          <Line x1={39} y1={81} x2={61} y2={81} stroke={STROKE} strokeWidth={2.1} />
         </G>
       }
       head={
-        <G>
-          {/* Swept golden horns + imperial 3-point dragon crown */}
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[
+              { id: 'drg-head', lit: RED_LIT, base: RED_BASE, shadow: RED_SHADOW },
+              { id: 'drg-horn', lit: GOLD_LIT, base: GOLD_BASE, shadow: GOLD_SHADOW },
+            ]}
+          />
+          {/* Twin swept golden curved horns */}
           <Path
-            d="M 35 24 C 21 20, 12 12, 15 4 C 21 12, 28 16, 40 19 Z"
-            fill={GOLD}
+            d="M 30 24 C 34 15, 42 11, 49 12 C 43 17, 38 22, 34 27 Z"
+            fill="url(#drg-horn)"
             stroke={STROKE}
-            strokeWidth={3}
+            strokeWidth={2.7}
             strokeLinejoin="round"
           />
           <Path
-            d="M 65 24 C 79 20, 88 12, 85 4 C 79 12, 72 16, 60 19 Z"
-            fill={GOLD}
-            stroke={STROKE}
-            strokeWidth={3}
-            strokeLinejoin="round"
-          />
-          <Polygon
-            points="40,20 44,9 50,15 50,6 50,15 56,9 60,20"
-            fill={GOLD_BRIGHT}
+            d="M 25 25 C 24 17, 29 12, 35 11 C 32 16, 30 21, 29 26 Z"
+            fill="url(#drg-horn)"
             stroke={STROKE}
             strokeWidth={2.6}
             strokeLinejoin="round"
           />
-
-          {/* Cheek spikes & armored crimson dragon head */}
-          <Polygon points="26,38 15,41 26,47" fill={GOLD} stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
-          <Polygon points="74,38 85,41 74,47" fill={GOLD} stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
-
+          {/* Ferocious 3/4 left horned dragon head & projecting snout */}
           <Path
-            d="M 26 35 C 26 21, 36 17, 50 17 C 64 17, 74 21, 74 35 L 70 52 C 66 59, 59 61, 50 61 C 41 61, 34 59, 30 52 Z"
-            fill={WYRM_RED}
+            d="M 10 34 C 11 26, 20 22, 31 23 C 40 24, 44 30, 42 38 L 36 45 L 22 44 L 11 40 Z"
+            fill="url(#drg-head)"
             stroke={STROKE}
             strokeWidth={3.3}
             strokeLinejoin="round"
           />
-
-          {s.isRuffled && (
-            <Path d="M 34 24 L 40 31 M 63 23 L 59 29" stroke={STROKE} strokeWidth={2.2} strokeLinecap="round" />
-          )}
-
-          {/* Blazing slit dragon eyes */}
-          <EnemyEyes
-            expression={s.expression}
-            gazeOffset={s.gazeOffset}
-            leftX={38}
-            rightX={62}
-            y={35}
-            radius={4.6}
-            irisColor={GOLD_BRIGHT}
-            slitPupil
-          />
-
-          {/* Armored snout bridge & smoking nostrils */}
+          <SunlitRimStroke d="M 13 29 C 19 25, 27 24, 34 25" strokeWidth={2.1} opacity={0.6} />
+          {/* Cheek spikes */}
+          <Polygon points="37,33 45,32 39,38" fill="url(#drg-horn)" stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
+          {/* Open fanged wyrm jaw */}
           <Path
-            d="M 36 45 Q 50 40 64 45 L 62 54 Q 50 57 38 54 Z"
-            fill={WYRM_DARK}
+            d={
+              s.isFierce
+                ? 'M 11 39 L 28 39 L 25 48 L 13 46 Z'
+                : 'M 12 39 L 27 39 L 24 45 L 14 44 Z'
+            }
+            fill="#450A0A"
             stroke={STROKE}
-            strokeWidth={2.5}
+            strokeWidth={2.4}
             strokeLinejoin="round"
           />
-          <Circle cx={43} cy={48} r={2} fill={COLORS.deepOnyx} />
-          <Circle cx={57} cy={48} r={2} fill={COLORS.deepOnyx} />
-
-          {/* Fierce fanged wyrm roar */}
-          <Polygon points="39,54 42,60 45,55" fill={COLORS.canvasWhite} stroke={STROKE} strokeWidth={1.6} strokeLinejoin="round" />
-          <Polygon points="55,55 58,60 61,54" fill={COLORS.canvasWhite} stroke={STROKE} strokeWidth={1.6} strokeLinejoin="round" />
+          <Polygon points="14,39 16,44 18,39" fill="#FFFFFF" stroke={STROKE} strokeWidth={1.2} />
+          <Polygon points="21,39 23,44 25,39" fill="#FFFFFF" stroke={STROKE} strokeWidth={1.2} />
+          {/* Smoking nostril */}
+          <Circle cx={15} cy={33.5} r={1.6} fill={COLORS.deepOnyx} />
+          {s.isRuffled && (
+            <Path d="M 27 26 L 31 32" stroke={STROKE} strokeWidth={2} strokeLinecap="round" />
+          )}
+          {/* Blazing dragon eyes oriented 3/4 left */}
+          <EnemyEyes
+            expression={s.expression}
+            blinkStage={s.blinkStage}
+            gazeOffset={s.gazeOffset}
+            leftX={20.5}
+            rightX={31}
+            y={30.5}
+            radius={3.8}
+            irisColor={GOLD_LIT}
+            slitPupil
+          />
         </G>
       }
       paws={
         <G>
-          {/* Nostril smoke & glowing orange-gold fire/ember wisps */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'drg-paw', lit: RED_LIT, base: RED_BASE, shadow: RED_SHADOW },
+              { id: 'drg-claw', lit: GOLD_LIT, base: GOLD_BASE, shadow: GOLD_SHADOW },
+            ]}
+          />
+          {/* Raised swipe front-left talon with deep chest shoulder anchor + grounded front-right dragon leg */}
           <Path
-            d="M 38 50 C 26 49, 20 55, 25 61 C 29 58, 33 56, 38 54 Z"
-            fill={COLORS.impactOrange}
+            d="M 38 62 L 26 70 L 17 78 L 21 86 L 31 85 L 39 74 Z"
+            fill="url(#drg-paw)"
             stroke={STROKE}
-            strokeWidth={2.2}
+            strokeWidth={3}
             strokeLinejoin="round"
           />
-          <Circle cx={21} cy={53} r={2.3} fill={GOLD_BRIGHT} stroke={STROKE} strokeWidth={1.5} />
+          <Polygon points="18,85 13,89 21,87" fill="url(#drg-claw)" stroke={STROKE} strokeWidth={1.6} />
+          <Polygon points="23,86 20,90 27,87" fill="url(#drg-claw)" stroke={STROKE} strokeWidth={1.6} />
           <Path
-            d="M 62 50 C 74 49, 80 55, 75 61 C 71 58, 67 56, 62 54 Z"
-            fill={COLORS.impactOrange}
+            d="M 45 71 L 40 87 L 50 88 L 54 73 Z"
+            fill="url(#drg-paw)"
             stroke={STROKE}
-            strokeWidth={2.2}
+            strokeWidth={3}
             strokeLinejoin="round"
           />
-          <Circle cx={79} cy={53} r={2.3} fill={GOLD_BRIGHT} stroke={STROKE} strokeWidth={1.5} />
-
-          <Polygon points="25,84 31,79 37,84 34,91 27,91" fill={WYRM_DARK} stroke={STROKE} strokeWidth={2.6} strokeLinejoin="round" />
-          <Polygon points="63,84 69,79 75,84 73,91 66,91" fill={WYRM_DARK} stroke={STROKE} strokeWidth={2.6} strokeLinejoin="round" />
+          <Polygon points="40,87 36,90 43,89" fill="url(#drg-claw)" stroke={STROKE} strokeWidth={1.6} />
+          <Polygon points="46,88 44,91 50,89" fill="url(#drg-claw)" stroke={STROKE} strokeWidth={1.6} />
         </G>
       }
     />
@@ -1843,11 +1981,16 @@ const renderAncientDragon = (s: SubRigState) => {
 };
 
 /* ============================================================================
- * 12. TIER 4 BOSS: THE HYDRA — THREE ARTICULATED SERPENT HEADS!
- *     leftEarStyle = left serpent neck & head; rightEarStyle = right serpent neck & head;
- *     headStyle = crowned central alpha head!
+ * 12. TIER 4 BOSS: THE HYDRA — True 3/4 LEFT triple-headed emerald-teal serpent
+ *     3 staggered 3/4-left heads (`leftEar` low-left striker, `head` towering center alpha,
+ *     `rightEar` upper-right coiled back striker) with aqua crests & 3-step blinks!
  * ============================================================================ */
-const renderHydraSideEye = (cx: number, cy: number, expression: EnemyRigProps['expression']) => {
+const renderHydraSideEye = (
+  cx: number,
+  cy: number,
+  expression: EnemyRigProps['expression'],
+  blinkStage?: EnemyRigProps['blinkStage']
+) => {
   if (expression === 'ko') {
     return (
       <G stroke={STROKE} strokeWidth={2.2} strokeLinecap="round">
@@ -1856,188 +1999,263 @@ const renderHydraSideEye = (cx: number, cy: number, expression: EnemyRigProps['e
       </G>
     );
   }
-  if (expression === 'blink' || expression === 'sleepy') {
+  if (expression === 'blink' || blinkStage === 2) {
+    return <ShutBlinkEye cx={cx} cy={cy} r={3} stroke={STROKE} />;
+  }
+  if (blinkStage === 1 && expression !== 'sleepy' && expression !== 'wince') {
+    return <HalfBlinkLidEye cx={cx} cy={cy} r={3} stroke={STROKE} irisColor="#FACC15" />;
+  }
+  if (expression === 'sleepy') {
     return <Line x1={cx - 3} y1={cy} x2={cx + 3} y2={cy} stroke={STROKE} strokeWidth={2.3} strokeLinecap="round" />;
+  }
+  if (expression === 'wince') {
+    return (
+      <Path
+        d={`M ${cx - 2.6} ${cy - 2.2} L ${cx + 2} ${cy} L ${cx - 2.6} ${cy + 2.2}`}
+        stroke={STROKE}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        fill="none"
+      />
+    );
   }
   return (
     <G>
-      <Circle cx={cx} cy={cy} r={3.2} fill="#FACC15" stroke={STROKE} strokeWidth={1.9} />
-      <Ellipse cx={cx} cy={cy} rx={0.9} ry={2.3} fill={COLORS.deepOnyx} />
+      <Circle
+        cx={cx}
+        cy={cy}
+        r={3.2}
+        fill={expression === 'enraged' ? '#EF4444' : '#FACC15'}
+        stroke={STROKE}
+        strokeWidth={1.9}
+      />
+      <Ellipse cx={cx - 0.5} cy={cy} rx={0.95} ry={2.3} fill={COLORS.deepOnyx} />
+      <Circle cx={cx - 1.1} cy={cy - 1.1} r={0.9} fill="#FFFFFF" />
     </G>
   );
 };
 
 const renderTheHydra = (s: SubRigState) => {
-  const EMERALD = '#059669';
-  const DARK_TEAL = '#065F46';
-  const FIN_TEAL = '#2DD4BF';
-  const BELLY_GOLD = '#FDE68A';
-  const TONGUE = '#EF4444';
+  const EMERALD_LIT = '#34D399';
+  const EMERALD_BASE = '#059669';
+  const EMERALD_SHADOW = '#064E3B';
+  const FIN_LIT = '#99F6E4';
+  const FIN_BASE = '#2DD4BF';
+  const FIN_SHADOW = '#0F766E';
+  const BELLY_LIT = '#CCFBF1';
+  const BELLY_BASE = '#6EE7B7';
+  const BELLY_SHADOW = '#047857';
+  const lean = s.facing === 'left' ? 'translate(-0.7, 0)' : undefined;
 
   return (
     <RigLayers
       partStyles={s}
+      skipAutoLighting
+      skipFacingOffset
       tail={
         <G>
-          {/* Whip-like scaled hydra tail */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'hyd-tail', lit: EMERALD_LIT, base: EMERALD_BASE, shadow: EMERALD_SHADOW },
+              { id: 'hyd-fin-t', lit: FIN_LIT, base: FIN_BASE, shadow: FIN_SHADOW },
+            ]}
+          />
+          {/* Sweeping finned hydra tail curving gracefully upward-right */}
           <Path
-            d="M 68 83 C 83 84, 94 76, 92 63"
+            d="M 66 80 C 82 81, 91 71, 86 58 C 83 51, 89 47, 94 49 C 87 44, 77 49, 77 61 C 77 70, 72 74, 63 75 Z"
+            fill="url(#hyd-tail)"
             stroke={STROKE}
-            strokeWidth={7.8}
-            strokeLinecap="round"
-            fill="none"
+            strokeWidth={3.1}
+            strokeLinejoin="round"
           />
-          <Path
-            d="M 68 83 C 83 84, 94 76, 92 63"
-            stroke={DARK_TEAL}
-            strokeWidth={4.2}
-            strokeLinecap="round"
-            fill="none"
+          <Polygon
+            points="84,48 96,43 91,53 96,58 83,55"
+            fill="url(#hyd-fin-t)"
+            stroke={STROKE}
+            strokeWidth={2.3}
+            strokeLinejoin="round"
           />
-          <Polygon points="92,58 97,66 88,65" fill={FIN_TEAL} stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
         </G>
       }
       leftEar={
         <G>
-          {/* LEFT FLANKING HYDRA NECK & FANGED SERPENT HEAD */}
-          <Path
-            d="M 35 68 C 21 63, 14 50, 19 37"
-            stroke={STROKE}
-            strokeWidth={12}
-            strokeLinecap="round"
-            fill="none"
+          <StorybookToneDefs
+            tones={[
+              { id: 'hyd-neck-l', lit: EMERALD_LIT, base: EMERALD_BASE, shadow: EMERALD_SHADOW },
+              { id: 'hyd-fin-l', lit: FIN_LIT, base: FIN_BASE, shadow: FIN_SHADOW },
+            ]}
           />
+          {/* HEAD 1 (Lower-Left Striker): curved neck + 3/4-left snarling serpent jaws */}
           <Path
-            d="M 35 68 C 21 63, 14 50, 19 37"
-            stroke={EMERALD}
-            strokeWidth={7.2}
-            strokeLinecap="round"
-            fill="none"
-          />
-          {/* Fin crest on left head */}
-          <Polygon points="12,26 6,19 16,22 14,15 22,22" fill={FIN_TEAL} stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
-          {/* Left serpent head & open fanged jaws */}
-          <Path
-            d="M 10 35 C 9 25, 18 21, 28 25 L 33 32 L 22 35 L 31 40 L 16 42 Z"
-            fill={EMERALD}
+            d="M 37 74 C 24 68, 22 54, 27 44 L 35 48 C 32 56, 33 65, 43 70 Z"
+            fill="url(#hyd-neck-l)"
             stroke={STROKE}
-            strokeWidth={2.9}
+            strokeWidth={3.1}
             strokeLinejoin="round"
           />
-          <Polygon points="27,32 29,36 31,32" fill={COLORS.canvasWhite} stroke={STROKE} strokeWidth={1.3} />
-          <Path d="M 30 35 L 36 35 L 39 33 M 36 35 L 39 38" stroke={TONGUE} strokeWidth={1.8} strokeLinecap="round" fill="none" />
-          {renderHydraSideEye(20, 29, s.expression)}
+          {/* Aqua dorsal fin crest */}
+          <Polygon
+            points="21,39 27,31 31,37 36,33 35,44"
+            fill="url(#hyd-fin-l)"
+            stroke={STROKE}
+            strokeWidth={2.2}
+            strokeLinejoin="round"
+          />
+          {/* Lower-left serpent head facing LEFT */}
+          <Path
+            d="M 7 47 C 9 40, 17 37, 29 38 C 35 39, 37 44, 34 50 L 23 53 L 10 52 Z"
+            fill="url(#hyd-neck-l)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 11 42 C 16 39, 23 39, 29 40" strokeWidth={1.8} opacity={0.6} />
+          <Path d="M 10 49 L 24 49 L 21 55 L 12 53 Z" fill="#7F1D1D" stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
+          <Polygon points="12,49 14,53 16,49" fill="#FFFFFF" />
+          <Polygon points="18,49 20,53 22,49" fill="#FFFFFF" />
+          {renderHydraSideEye(19, 44, s.expression, s.blinkStage)}
         </G>
       }
       rightEar={
         <G>
-          {/* RIGHT FLANKING HYDRA NECK & FANGED SERPENT HEAD */}
-          <Path
-            d="M 65 68 C 79 63, 86 50, 81 37"
-            stroke={STROKE}
-            strokeWidth={12}
-            strokeLinecap="round"
-            fill="none"
+          <StorybookToneDefs
+            tones={[
+              { id: 'hyd-neck-r', lit: EMERALD_LIT, base: EMERALD_BASE, shadow: EMERALD_SHADOW },
+              { id: 'hyd-fin-r', lit: FIN_LIT, base: FIN_BASE, shadow: FIN_SHADOW },
+            ]}
           />
+          {/* HEAD 3 (Upper-Right Coiled Striker): sweeping S-neck arcing right then facing LEFT */}
           <Path
-            d="M 65 68 C 79 63, 86 50, 81 37"
-            stroke={EMERALD}
-            strokeWidth={7.2}
-            strokeLinecap="round"
-            fill="none"
-          />
-          {/* Fin crest on right head */}
-          <Polygon points="88,26 94,19 84,22 86,15 78,22" fill={FIN_TEAL} stroke={STROKE} strokeWidth={2.2} strokeLinejoin="round" />
-          {/* Right serpent head & open fanged jaws */}
-          <Path
-            d="M 90 35 C 91 25, 82 21, 72 25 L 67 32 L 78 35 L 69 40 L 84 42 Z"
-            fill={EMERALD}
+            d="M 55 72 C 69 65, 76 50, 70 36 L 61 39 C 65 50, 60 61, 49 67 Z"
+            fill="url(#hyd-neck-r)"
             stroke={STROKE}
-            strokeWidth={2.9}
+            strokeWidth={3.1}
             strokeLinejoin="round"
           />
-          <Polygon points="73,32 71,36 69,32" fill={COLORS.canvasWhite} stroke={STROKE} strokeWidth={1.3} />
-          <Path d="M 70 35 L 64 35 L 61 33 M 64 35 L 61 38" stroke={TONGUE} strokeWidth={1.8} strokeLinecap="round" fill="none" />
-          {renderHydraSideEye(80, 29, s.expression)}
+          {/* Aqua dorsal fin crest */}
+          <Polygon
+            points="64,28 73,22 72,30 79,28 73,38"
+            fill="url(#hyd-fin-r)"
+            stroke={STROKE}
+            strokeWidth={2.2}
+            strokeLinejoin="round"
+          />
+          {/* Upper-right serpent head lunging LEFT */}
+          <Path
+            d="M 48 33 C 51 26, 61 24, 70 28 C 75 31, 74 38, 68 41 L 56 41 L 48 38 Z"
+            fill="url(#hyd-neck-r)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 52 29 C 58 26, 65 26, 69 29" strokeWidth={1.8} opacity={0.55} />
+          <Path d="M 50 36 L 63 36 L 60 42 L 51 40 Z" fill="#7F1D1D" stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
+          <Polygon points="52,36 54,40 56,36" fill="#FFFFFF" />
+          <Polygon points="58,36 60,40 62,36" fill="#FFFFFF" />
+          {renderHydraSideEye(58, 32, s.expression, s.blinkStage)}
         </G>
       }
       body={
         <G>
-          {/* Coiled emerald-and-dark-teal scaled body at base */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'hyd-body', lit: EMERALD_LIT, base: EMERALD_BASE, shadow: EMERALD_SHADOW },
+              { id: 'hyd-belly', lit: BELLY_LIT, base: BELLY_BASE, shadow: BELLY_SHADOW },
+            ]}
+          />
+          {/* Thick coiled emerald serpentine base */}
           <Path
-            d="M 20 75 C 18 63, 32 58, 50 58 C 68 58, 82 63, 80 75 C 83 86, 69 90, 50 90 C 31 90, 17 86, 20 75 Z"
-            fill={DARK_TEAL}
+            d="M 18 76 C 17 65, 30 60, 48 61 C 66 61, 79 66, 77 77 C 76 87, 63 90, 48 90 C 31 90, 19 86, 18 76 Z"
+            fill="url(#hyd-body)"
             stroke={STROKE}
-            strokeWidth={3.3}
+            strokeWidth={3.4}
             strokeLinejoin="round"
           />
-          {/* Central neck column & ribbed belly scales */}
-          <Path d="M 41 44 L 59 44 L 62 88 L 38 88 Z" fill={EMERALD} stroke={STROKE} strokeWidth={3} />
-          <Path d="M 44 48 L 56 48 L 58 88 L 42 88 Z" fill={BELLY_GOLD} stroke={STROKE} strokeWidth={2} />
-          <Line x1={43} y1={58} x2={57} y2={58} stroke={STROKE} strokeWidth={1.9} />
-          <Line x1={43} y1={67} x2={57} y2={67} stroke={STROKE} strokeWidth={1.9} />
-          <Line x1={42.5} y1={76} x2={57.5} y2={76} stroke={STROKE} strokeWidth={1.9} />
-        </G>
-      }
-      head={
-        <G>
-          {/* Crowned/frilled central Alpha Hydra head */}
-          <Polygon
-            points="31,26 22,17 35,19 39,8 50,15 50,6 50,15 61,8 65,19 78,17 69,26"
-            fill={FIN_TEAL}
-            stroke={STROKE}
-            strokeWidth={2.7}
-            strokeLinejoin="round"
-          />
+          <SunlitRimStroke d="M 22 71 C 28 65, 39 63, 52 64" strokeWidth={2.2} opacity={0.5} />
+          {/* Sweeping central alpha neck column with pale mint ribbed belly bands */}
           <Path
-            d="M 31 32 C 31 19, 39 15, 50 15 C 61 15, 69 19, 69 32 L 66 45 C 62 51, 56 52, 50 52 C 44 52, 38 51, 34 45 Z"
-            fill={EMERALD}
+            d="M 38 33 C 42 46, 37 64, 41 79 L 55 78 C 53 63, 57 46, 51 32 Z"
+            fill="url(#hyd-body)"
             stroke={STROKE}
             strokeWidth={3.2}
             strokeLinejoin="round"
           />
-
+          <Path
+            d="M 39 39 C 41 51, 39 64, 42 77 L 48 77 C 46 64, 47 51, 45 38 Z"
+            fill="url(#hyd-belly)"
+          />
+          <Path d="M 39 48 L 47 48 M 39 56 L 47 56 M 40 64 L 48 64 M 41 72 L 49 72" stroke={STROKE} strokeWidth={1.7} strokeLinecap="round" />
+        </G>
+      }
+      head={
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[
+              { id: 'hyd-head', lit: EMERALD_LIT, base: EMERALD_BASE, shadow: EMERALD_SHADOW },
+              { id: 'hyd-fin-c', lit: FIN_LIT, base: FIN_BASE, shadow: FIN_SHADOW },
+            ]}
+          />
+          {/* Towering central Alpha Hydra head crest facing 3/4 LEFT */}
+          <Polygon
+            points="39,17 44,7 51,14 58,8 59,19 65,17 57,26"
+            fill="url(#hyd-fin-c)"
+            stroke={STROKE}
+            strokeWidth={2.5}
+            strokeLinejoin="round"
+          />
+          <Path
+            d="M 25 24 C 27 16, 38 13, 50 15 C 58 17, 60 24, 56 32 L 43 34 L 26 30 Z"
+            fill="url(#hyd-head)"
+            stroke={STROKE}
+            strokeWidth={3.3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 29 19 C 35 16, 43 16, 49 17" strokeWidth={2.1} opacity={0.62} />
           {s.isRuffled && (
-            <Path d="M 44 19 L 48 25 L 43 28" stroke={STROKE} strokeWidth={2.1} strokeLinecap="round" fill="none" />
+            <Path d="M 43 18 L 46 24 L 42 27" stroke={STROKE} strokeWidth={2} strokeLinecap="round" fill="none" />
           )}
-
-          {/* Alpha serpent slit eyes */}
+          {/* Snarling fanged alpha jaws + forked tongue */}
+          <Path
+            d="M 27 28 L 44 28 L 41 36 L 29 34 Z"
+            fill="#7F1D1D"
+            stroke={STROKE}
+            strokeWidth={2.4}
+            strokeLinejoin="round"
+          />
+          <Polygon points="29,28 31.5,33 34,28" fill="#FFFFFF" stroke={STROKE} strokeWidth={1.2} />
+          <Polygon points="37,28 39.5,33 42,28" fill="#FFFFFF" stroke={STROKE} strokeWidth={1.2} />
+          <Path d="M 28 32 L 21 34 L 18 32 M 21 34 L 18 37" stroke="#EF4444" strokeWidth={2.1} strokeLinecap="round" fill="none" />
+          {/* Alpha serpent slit eyes facing 3/4 left */}
           <EnemyEyes
             expression={s.expression}
+            blinkStage={s.blinkStage}
             gazeOffset={s.gazeOffset}
-            leftX={40.5}
-            rightX={59.5}
-            y={32}
-            radius={4.3}
+            leftX={34.5}
+            rightX={45}
+            y={22}
+            radius={3.7}
             irisColor="#FACC15"
             slitPupil
-          />
-
-          {/* Fangs & forked crimson tongue */}
-          <Path d="M 37 44 Q 50 49 63 44" stroke={STROKE} strokeWidth={2.6} strokeLinecap="round" fill="none" />
-          <Polygon points="39,45 42,51 45,46" fill={COLORS.canvasWhite} stroke={STROKE} strokeWidth={1.6} strokeLinejoin="round" />
-          <Polygon points="55,46 58,51 61,45" fill={COLORS.canvasWhite} stroke={STROKE} strokeWidth={1.6} strokeLinejoin="round" />
-          <Path
-            d="M 50 48 L 50 58 L 45 63 M 50 58 L 55 63"
-            stroke={TONGUE}
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            fill="none"
           />
         </G>
       }
       paws={
         <G>
-          {/* Forefront coiled serpent ridge & swamp venom bubbles */}
-          <Path
-            d="M 25 85 Q 50 79 75 85 Q 65 92 50 92 Q 35 92 25 85 Z"
-            fill={EMERALD}
-            stroke={STROKE}
-            strokeWidth={2.8}
+          <StorybookToneDefs
+            tones={[
+              { id: 'hyd-coil', lit: EMERALD_LIT, base: EMERALD_BASE, shadow: EMERALD_SHADOW },
+              { id: 'hyd-coil-b', lit: BELLY_LIT, base: BELLY_BASE, shadow: BELLY_SHADOW },
+            ]}
           />
-          <Circle cx={22} cy={87} r={2.8} fill={FIN_TEAL} stroke={STROKE} strokeWidth={1.8} />
-          <Circle cx={79} cy={87} r={2.5} fill={FIN_TEAL} stroke={STROKE} strokeWidth={1.8} />
+          {/* Foreground heavy ribbed serpent coil resting firmly on ground shadow */}
+          <Path
+            d="M 27 83 C 33 76, 56 76, 68 83 C 62 91, 35 91, 27 83 Z"
+            fill="url(#hyd-coil)"
+            stroke={STROKE}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          <Path d="M 35 84 Q 48 88 61 84" stroke="url(#hyd-coil-b)" strokeWidth={3.2} strokeLinecap="round" fill="none" />
         </G>
       }
     />
@@ -2045,47 +2263,56 @@ const renderTheHydra = (s: SubRigState) => {
 };
 
 /* ============================================================================
- * 13. TIER 4 BOSS: KRAKEN'S GRASP — Colossal teal-midnight mantle, armored brow, parrot beak & giant tentacles
+ * 13. TIER 4 BOSS: KRAKEN'S GRASP — True 3/4 LEFT deep-teal abyssal kraken
+ *     Tall spotted bulbous mantle, furrowed amber eyes, curling terracotta-suckered tentacles
  * ============================================================================ */
 const renderKrakensGrasp = (s: SubRigState) => {
-  const KRAKEN_TEAL = '#0F766E';
-  const KRAKEN_MIDNIGHT = '#1E293B';
-  const BIO_MINT = '#2DD4BF';
-  const SUCKER_AMBER = '#FB923C';
-  const FOAM = '#E0F2FE';
+  const TEAL_LIT = '#2DD4BF';
+  const TEAL_BASE = '#0F766E';
+  const TEAL_SHADOW = '#134E4A';
+  const MANTLE_SPOT = '#99F6E4';
+  const SUCKER_LIT = '#FDBA74';
+  const SUCKER_BASE = '#EA580C';
+  const SUCKER_SHADOW = '#9A3412';
+  const lean = s.facing === 'left' ? 'translate(-0.7, 0)' : undefined;
 
   return (
     <RigLayers
       partStyles={s}
       earsInFront
+      skipAutoLighting
+      skipFacingOffset
       tail={
         <G>
-          {/* Towering rear abyssal tentacles */}
+          <StorybookToneDefs
+            tones={[{ id: 'krk-rear', lit: TEAL_BASE, base: TEAL_SHADOW, shadow: '#042F2E' }]}
+          />
+          {/* Towering rear curling tentacles framing the silhouette */}
           <Path
-            d="M 33 58 C 22 42, 20 22, 29 12"
+            d="M 32 64 C 16 58, 12 40, 21 31 C 25 27, 29 33, 24 37"
             stroke={STROKE}
-            strokeWidth={7.8}
+            strokeWidth={8.6}
             strokeLinecap="round"
             fill="none"
           />
           <Path
-            d="M 33 58 C 22 42, 20 22, 29 12"
-            stroke={KRAKEN_MIDNIGHT}
-            strokeWidth={4}
+            d="M 32 64 C 16 58, 12 40, 21 31 C 25 27, 29 33, 24 37"
+            stroke="url(#krk-rear)"
+            strokeWidth={4.5}
             strokeLinecap="round"
             fill="none"
           />
           <Path
-            d="M 67 58 C 78 42, 80 22, 71 12"
+            d="M 67 64 C 84 56, 90 39, 81 32 C 76 28, 73 34, 78 38"
             stroke={STROKE}
-            strokeWidth={7.8}
+            strokeWidth={8.6}
             strokeLinecap="round"
             fill="none"
           />
           <Path
-            d="M 67 58 C 78 42, 80 22, 71 12"
-            stroke={KRAKEN_MIDNIGHT}
-            strokeWidth={4}
+            d="M 67 64 C 84 56, 90 39, 81 32 C 76 28, 73 34, 78 38"
+            stroke="url(#krk-rear)"
+            strokeWidth={4.5}
             strokeLinecap="round"
             fill="none"
           />
@@ -2093,98 +2320,120 @@ const renderKrakensGrasp = (s: SubRigState) => {
       }
       body={
         <G>
-          {/* Abyssal collar & whirlpool surf */}
+          <StorybookToneDefs
+            tones={[{ id: 'krk-body', lit: TEAL_LIT, base: TEAL_BASE, shadow: TEAL_SHADOW }]}
+          />
+          {/* Muscular tentacle collar base anchoring the mantle */}
           <Path
-            d="M 25 53 L 75 53 L 79 86 L 21 86 Z"
-            fill={KRAKEN_MIDNIGHT}
+            d="M 28 54 C 24 66, 26 81, 46 84 C 66 85, 74 72, 70 55 Z"
+            fill="url(#krk-body)"
             stroke={STROKE}
-            strokeWidth={3.2}
+            strokeWidth={3.3}
             strokeLinejoin="round"
           />
         </G>
       }
       leftEar={
         <G>
-          {/* Giant left curling suckered boss tentacle */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'krk-tent-l', lit: TEAL_LIT, base: TEAL_BASE, shadow: TEAL_SHADOW },
+              { id: 'krk-suck-l', lit: SUCKER_LIT, base: SUCKER_BASE, shadow: SUCKER_SHADOW },
+            ]}
+          />
+          {/* Dramatic sweeping left curling tentacle with warm coral suckers */}
           <Path
-            d="M 26 74 C 7 68, 5 36, 17 26 C 23 21, 27 29, 20 33"
+            d="M 33 65 C 16 74, 6 66, 11 54 C 14 47, 21 51, 18 57"
             stroke={STROKE}
-            strokeWidth={9.6}
+            strokeWidth={10.2}
             strokeLinecap="round"
             fill="none"
           />
           <Path
-            d="M 26 74 C 7 68, 5 36, 17 26 C 23 21, 27 29, 20 33"
-            stroke={KRAKEN_TEAL}
-            strokeWidth={5.2}
+            d="M 33 65 C 16 74, 6 66, 11 54 C 14 47, 21 51, 18 57"
+            stroke="url(#krk-tent-l)"
+            strokeWidth={5.6}
             strokeLinecap="round"
             fill="none"
           />
-          <Circle cx={12} cy={58} r={2.5} fill={SUCKER_AMBER} stroke={STROKE} strokeWidth={1.6} />
-          <Circle cx={10} cy={47} r={2.4} fill={SUCKER_AMBER} stroke={STROKE} strokeWidth={1.6} />
-          <Circle cx={13} cy={36} r={2.2} fill={SUCKER_AMBER} stroke={STROKE} strokeWidth={1.6} />
+          <Circle cx={19} cy={70} r={2.7} fill="url(#krk-suck-l)" stroke={STROKE} strokeWidth={1.5} />
+          <Circle cx={12} cy={66} r={2.5} fill="url(#krk-suck-l)" stroke={STROKE} strokeWidth={1.5} />
+          <Circle cx={10} cy={59} r={2.2} fill="url(#krk-suck-l)" stroke={STROKE} strokeWidth={1.5} />
         </G>
       }
       rightEar={
         <G>
-          {/* Giant right curling suckered boss tentacle */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'krk-tent-r', lit: TEAL_LIT, base: TEAL_BASE, shadow: TEAL_SHADOW },
+              { id: 'krk-suck-r', lit: SUCKER_LIT, base: SUCKER_BASE, shadow: SUCKER_SHADOW },
+            ]}
+          />
+          {/* Dramatic curling right tentacles with coral suction cups */}
           <Path
-            d="M 74 74 C 93 68, 95 36, 83 26 C 77 21, 73 29, 80 33"
+            d="M 65 65 C 83 74, 94 64, 88 52 C 84 46, 78 51, 82 57"
             stroke={STROKE}
-            strokeWidth={9.6}
+            strokeWidth={10.2}
             strokeLinecap="round"
             fill="none"
           />
           <Path
-            d="M 74 74 C 93 68, 95 36, 83 26 C 77 21, 73 29, 80 33"
-            stroke={KRAKEN_TEAL}
-            strokeWidth={5.2}
+            d="M 65 65 C 83 74, 94 64, 88 52 C 84 46, 78 51, 82 57"
+            stroke="url(#krk-tent-r)"
+            strokeWidth={5.6}
             strokeLinecap="round"
             fill="none"
           />
-          <Circle cx={88} cy={58} r={2.5} fill={SUCKER_AMBER} stroke={STROKE} strokeWidth={1.6} />
-          <Circle cx={90} cy={47} r={2.4} fill={SUCKER_AMBER} stroke={STROKE} strokeWidth={1.6} />
-          <Circle cx={87} cy={36} r={2.2} fill={SUCKER_AMBER} stroke={STROKE} strokeWidth={1.6} />
+          <Circle cx={79} cy={70} r={2.7} fill="url(#krk-suck-r)" stroke={STROKE} strokeWidth={1.5} />
+          <Circle cx={86} cy={66} r={2.5} fill="url(#krk-suck-r)" stroke={STROKE} strokeWidth={1.5} />
+          <Circle cx={88} cy={59} r={2.2} fill="url(#krk-suck-r)" stroke={STROKE} strokeWidth={1.5} />
         </G>
       }
       head={
-        <G>
-          {/* Towering teal-and-midnight Kraken mantle dome */}
-          <Path
-            d="M 24 52 C 20 29, 31 10, 50 6 C 69 10, 80 29, 76 52 Q 50 58 24 52 Z"
-            fill={KRAKEN_TEAL}
-            stroke={STROKE}
-            strokeWidth={3.3}
-            strokeLinejoin="round"
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[{ id: 'krk-mantle', lit: TEAL_LIT, base: TEAL_BASE, shadow: TEAL_SHADOW }]}
           />
-          {/* Armored chitinous crown crest & brow ridges */}
-          <Polygon
-            points="50,6 60,18 55,31 50,27 45,31 40,18"
-            fill={KRAKEN_MIDNIGHT}
+          {/* Ear-like lateral squid fins on upper mantle */}
+          <Path
+            d="M 38 25 C 33 17, 36 12, 41 18 Z"
+            fill="url(#krk-mantle)"
             stroke={STROKE}
-            strokeWidth={2.4}
+            strokeWidth={2.8}
             strokeLinejoin="round"
           />
           <Path
-            d="M 26 36 L 44 33 L 42 38 L 27 41 Z M 74 36 L 56 33 L 58 38 L 73 41 Z"
-            fill={KRAKEN_MIDNIGHT}
+            d="M 64 26 C 72 19, 73 14, 66 19 Z"
+            fill="url(#krk-mantle)"
             stroke={STROKE}
-            strokeWidth={2}
+            strokeWidth={2.8}
+            strokeLinejoin="round"
           />
-          {/* Bioluminescent trench markings + harpoon scars */}
-          <Circle cx={50} cy={19} r={2.6} fill={BIO_MINT} />
+          {/* Tall bulbous slanted Kraken mantle leaning 3/4 left */}
+          <Path
+            d="M 32 54 C 28 34, 41 13, 55 9 C 68 15, 73 35, 68 54 C 58 61, 41 61, 32 54 Z"
+            fill="url(#krk-mantle)"
+            stroke={STROKE}
+            strokeWidth={3.4}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 35 42 C 36 28, 44 17, 54 12" strokeWidth={2.3} opacity={0.58} />
+          {/* Luminous oceanic mantle spots */}
+          <Circle cx={54} cy={22} r={3.1} fill={MANTLE_SPOT} opacity={0.62} />
+          <Circle cx={44} cy={31} r={2.4} fill={MANTLE_SPOT} opacity={0.55} />
+          <Circle cx={60} cy={34} r={2.1} fill={MANTLE_SPOT} opacity={0.48} />
           {s.isRuffled && (
-            <Path d="M 33 22 L 38 30 M 65 20 L 61 28" stroke={BIO_MINT} strokeWidth={2.2} strokeLinecap="round" />
+            <Path d="M 46 22 L 51 29 L 47 34" stroke={MANTLE_SPOT} strokeWidth={2.1} strokeLinecap="round" fill="none" />
           )}
-
-          {/* Blazing abyssal Kraken eyes */}
+          {/* Heavy brooding cephalopod brow ridges + glowing amber eyes facing 3/4 left */}
           <EnemyEyes
             expression={s.expression}
+            blinkStage={s.blinkStage}
             gazeOffset={s.gazeOffset}
-            leftX={37.5}
-            rightX={62.5}
-            y={43}
-            radius={4.8}
+            leftX={36}
+            rightX={52}
+            y={46}
+            radius={4.6}
             irisColor="#F97316"
             slitPupil
             darkMask
@@ -2193,38 +2442,46 @@ const renderKrakensGrasp = (s: SubRigState) => {
       }
       paws={
         <G>
-          {/* Snapping chitinous parrot-beak maw */}
-          <Circle cx={50} cy={65} r={12} fill="#7F1D1D" stroke={STROKE} strokeWidth={2.8} />
-          <Path
-            d="M 40 60 Q 50 52 60 60 L 50 69 Z"
-            fill={COLORS.deepOnyx}
-            stroke={SUCKER_AMBER}
-            strokeWidth={2}
-            strokeLinejoin="round"
+          <StorybookToneDefs
+            tones={[
+              { id: 'krk-front', lit: TEAL_LIT, base: TEAL_BASE, shadow: TEAL_SHADOW },
+              { id: 'krk-suck-f', lit: SUCKER_LIT, base: SUCKER_BASE, shadow: SUCKER_SHADOW },
+            ]}
           />
+          {/* Foreground slamming tentacles curling across the floor with terracotta suckers */}
           <Path
-            d="M 43 68 L 50 63 L 57 68 Q 50 76 43 68 Z"
-            fill={KRAKEN_MIDNIGHT}
-            stroke={SUCKER_AMBER}
-            strokeWidth={1.8}
-            strokeLinejoin="round"
-          />
-
-          {/* Swirling turquoise & white ocean foam at base */}
-          <Path
-            d="M 12 84 Q 26 76 40 84 Q 50 77 60 84 Q 74 76 88 84 L 88 92 L 12 92 Z"
-            fill="#0284C7"
+            d="M 42 63 C 38 78, 26 89, 17 85 C 12 83, 15 76, 21 79"
             stroke={STROKE}
-            strokeWidth={2.9}
-            strokeLinejoin="round"
-          />
-          <Path
-            d="M 16 84 Q 28 79 40 84 Q 50 79 60 84 Q 72 79 84 84"
-            stroke={FOAM}
-            strokeWidth={3.4}
+            strokeWidth={10}
             strokeLinecap="round"
             fill="none"
           />
+          <Path
+            d="M 42 63 C 38 78, 26 89, 17 85 C 12 83, 15 76, 21 79"
+            stroke="url(#krk-front)"
+            strokeWidth={5.4}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <Circle cx={33} cy={83} r={2.8} fill="url(#krk-suck-f)" stroke={STROKE} strokeWidth={1.5} />
+          <Circle cx={25} cy={86} r={2.6} fill="url(#krk-suck-f)" stroke={STROKE} strokeWidth={1.5} />
+
+          <Path
+            d="M 55 63 C 58 77, 70 88, 79 84 C 84 82, 81 76, 75 79"
+            stroke={STROKE}
+            strokeWidth={9.8}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <Path
+            d="M 55 63 C 58 77, 70 88, 79 84 C 84 82, 81 76, 75 79"
+            stroke="url(#krk-front)"
+            strokeWidth={5.2}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <Circle cx={63} cy={82} r={2.7} fill="url(#krk-suck-f)" stroke={STROKE} strokeWidth={1.5} />
+          <Circle cx={71} cy={85} r={2.5} fill="url(#krk-suck-f)" stroke={STROKE} strokeWidth={1.5} />
         </G>
       }
     />
@@ -2232,131 +2489,159 @@ const renderKrakensGrasp = (s: SubRigState) => {
 };
 
 /* ============================================================================
- * 14. TIER 4 BOSS: THE REAPER — Spectral hooded Grim Reaper, bone skull, cyan soul-fire & silver scythe
+ * 14. TIER 4 BOSS: THE REAPER — True 3/4 LEFT floating spectral wraith
+ *     Billowing tattered slate cloak, deep void hood with cyan eyes & overhead curved silver scythe
  * ============================================================================ */
 const renderTheReaper = (s: SubRigState) => {
-  const COWL = '#1E293B';
-  const VOID = '#09090B';
-  const BONE = '#F8FAFC';
-  const BONE_SHADE = '#CBD5E1';
+  const CLOAK_LIT = '#475569';
+  const CLOAK_BASE = '#1E293B';
+  const CLOAK_SHADOW = '#0F172A';
+  const VOID = '#020617';
+  const BONE_LIT = '#FFFFFF';
+  const BONE_BASE = '#E2E8F0';
+  const BONE_SHADOW = '#94A3B8';
+  const SCYTHE_LIT = '#F8FAFC';
+  const SCYTHE_BASE = '#CBD5E1';
+  const SCYTHE_SHADOW = '#64748B';
   const SOUL_CYAN = '#22D3EE';
-  const SILVER = '#E2E8F0';
-  const SILVER_EDGE = '#94A3B8';
+  const lean = s.facing === 'left' ? 'translate(-0.7, 0)' : undefined;
 
   return (
     <RigLayers
       partStyles={s}
       earsInFront
+      skipAutoLighting
+      skipFacingOffset
       tail={
         <G>
-          {/* Floating ghostly cloak wisps */}
-          <Path
-            d="M 18 76 C 10 83, 15 92, 27 89 L 38 92 L 50 87 L 62 92 L 73 89 C 85 92, 90 83, 82 76 Z"
-            fill={COWL}
-            stroke={STROKE}
-            strokeWidth={2.8}
-            strokeLinejoin="round"
+          <StorybookToneDefs
+            tones={[{ id: 'rpr-wisp', lit: CLOAK_BASE, base: CLOAK_SHADOW, shadow: VOID }]}
           />
-          <Path d="M 15 62 C 11 55, 16 49, 14 43" stroke={SOUL_CYAN} strokeWidth={2.6} strokeLinecap="round" fill="none" />
-          <Path d="M 85 64 C 89 57, 84 51, 86 45" stroke={SOUL_CYAN} strokeWidth={2.6} strokeLinecap="round" fill="none" />
-        </G>
-      }
-      body={
-        <G>
-          {/* Tattered midnight robe & pale bone ribcage */}
+          {/* Floating tattered spectral hem billowing down-right */}
           <Path
-            d="M 26 54 L 20 88 L 36 84 L 50 90 L 64 84 L 80 88 L 74 54 Z"
-            fill={COWL}
-            stroke={STROKE}
-            strokeWidth={3.2}
-            strokeLinejoin="round"
-          />
-          <Line x1={50} y1={59} x2={50} y2={78} stroke={BONE_SHADE} strokeWidth={3} strokeLinecap="round" />
-          <Path d="M 41 64 Q 50 67 59 64 M 42 70 Q 50 73 58 70" stroke={BONE_SHADE} strokeWidth={2.4} strokeLinecap="round" fill="none" />
-          <Circle cx={50} cy={60} r={3.2} fill={SOUL_CYAN} stroke={STROKE} strokeWidth={1.8} />
-        </G>
-      }
-      leftEar={
-        <Path
-          d="M 27 46 L 11 54 L 18 60 L 12 67 L 27 63 Z"
-          fill={COWL}
-          stroke={STROKE}
-          strokeWidth={2.8}
-          strokeLinejoin="round"
-        />
-      }
-      rightEar={
-        <Path
-          d="M 73 46 L 89 54 L 82 60 L 88 67 L 73 63 Z"
-          fill={COWL}
-          stroke={STROKE}
-          strokeWidth={2.8}
-          strokeLinejoin="round"
-        />
-      }
-      head={
-        <G>
-          {/* Deep peaked tattered midnight cowl */}
-          <Path
-            d="M 50 6 C 69 14, 80 31, 77 56 L 65 61 L 35 61 L 23 56 C 20 31, 31 14, 50 6 Z"
-            fill={COWL}
-            stroke={STROKE}
-            strokeWidth={3.3}
-            strokeLinejoin="round"
-          />
-          <Path d="M 50 14 C 64 21, 71 34, 69 55 L 31 55 C 29 34, 36 21, 50 14 Z" fill={VOID} />
-
-          {/* Pale bone skull visage */}
-          <Path
-            d="M 34 36 C 34 24, 41 20, 50 20 C 59 20, 66 24, 66 36 C 66 43, 62 46, 59 48 L 59 56 L 41 56 L 41 48 C 38 46, 34 43, 34 36 Z"
-            fill={BONE}
-            stroke={STROKE}
-            strokeWidth={2.8}
-            strokeLinejoin="round"
-          />
-          {s.isRuffled && (
-            <Path d="M 44 21 L 47 27 L 43 30" stroke={STROKE} strokeWidth={2} strokeLinecap="round" fill="none" />
-          )}
-
-          {/* Eerie cyan soul-fire wisps & glowing sockets */}
-          <Path d="M 37 34 Q 33 27 38 24 M 63 34 Q 67 27 62 24" stroke={SOUL_CYAN} strokeWidth={2.4} strokeLinecap="round" fill="none" />
-          <EnemyEyes
-            expression={s.expression}
-            gazeOffset={s.gazeOffset}
-            leftX={41.5}
-            rightX={58.5}
-            y={37}
-            radius={4.3}
-            irisColor={SOUL_CYAN}
-            darkMask
-          />
-
-          {/* Skull nasal cavity & carved teeth */}
-          <Polygon points="50,42 47,47 53,47" fill={VOID} />
-          <Line x1={45} y1={51} x2={45} y2={56} stroke={STROKE} strokeWidth={2} />
-          <Line x1={50} y1={51} x2={50} y2={56} stroke={STROKE} strokeWidth={2} />
-          <Line x1={55} y1={51} x2={55} y2={56} stroke={STROKE} strokeWidth={2} />
-        </G>
-      }
-      paws={
-        <G>
-          <Line x1={20} y1={89} x2={79} y2={19} stroke={STROKE} strokeWidth={6.2} strokeLinecap="round" />
-          <Line x1={20} y1={89} x2={79} y2={19} stroke="#475569" strokeWidth={3} strokeLinecap="round" />
-
-          {/* Huge gleaming silver-and-cyan crescent scythe blade */}
-          <Path
-            d="M 78 21 C 54 6, 21 9, 8 29 C 27 19, 53 19, 72 30 Z"
-            fill={SILVER}
+            d="M 35 72 L 29 85 L 41 79 L 47 89 L 58 80 L 68 88 L 76 77 L 85 82 L 73 66 Z"
+            fill="url(#rpr-wisp)"
             stroke={STROKE}
             strokeWidth={3}
             strokeLinejoin="round"
           />
-          <Path d="M 73 22 C 52 11, 26 13, 14 26" stroke={SOUL_CYAN} strokeWidth={2} strokeLinecap="round" fill="none" />
-          <Path d="M 72 30 C 53 19, 27 19, 8 29" stroke={SILVER_EDGE} strokeWidth={1.6} fill="none" />
-
-          {/* Skeletal bony hands gripping the shaft */}
-          <Rect x={33} y={67} width={9} height={7} rx={3} fill={BONE} stroke={STROKE} strokeWidth={2.3} />
-          <Rect x={57} y={39} width={9} height={7} rx={3} fill={BONE} stroke={STROKE} strokeWidth={2.3} />
+        </G>
+      }
+      body={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'rpr-cloak', lit: CLOAK_LIT, base: CLOAK_BASE, shadow: CLOAK_SHADOW }]}
+          />
+          {/* Billowing multi-fold hooded wraith shroud angled 3/4 left */}
+          <Path
+            d="M 36 42 C 29 55, 29 70, 35 80 L 49 77 L 60 83 L 75 76 C 72 62, 68 48, 59 41 Z"
+            fill="url(#rpr-cloak)"
+            stroke={STROKE}
+            strokeWidth={3.3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 37 46 C 33 56, 33 66, 36 74" strokeWidth={2.1} opacity={0.5} />
+          {/* Draped cloth fold lines */}
+          <Path d="M 46 47 C 44 58, 45 68, 48 76 M 58 46 C 60 58, 63 67, 68 74" stroke={VOID} strokeWidth={2.1} strokeLinecap="round" fill="none" />
+          {s.isRuffled && (
+            <Path d="M 50 56 L 56 62 L 51 67" stroke={SOUL_CYAN} strokeWidth={2} strokeLinecap="round" fill="none" />
+          )}
+        </G>
+      }
+      leftEar={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'rpr-sleeve-l', lit: CLOAK_LIT, base: CLOAK_BASE, shadow: CLOAK_SHADOW }]}
+          />
+          {/* Forward-left hanging cloak sleeve */}
+          <Path
+            d="M 36 44 L 22 50 L 25 68 L 34 62 L 38 52 Z"
+            fill="url(#rpr-sleeve-l)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 24 51 L 34 46" strokeWidth={1.8} opacity={0.55} />
+        </G>
+      }
+      rightEar={
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'rpr-sleeve-r', lit: CLOAK_LIT, base: CLOAK_BASE, shadow: CLOAK_SHADOW }]}
+          />
+          {/* Rear-right draped cloak shoulder & sleeve */}
+          <Path
+            d="M 59 43 L 74 52 L 80 68 L 65 65 L 58 54 Z"
+            fill="url(#rpr-sleeve-r)"
+            stroke={STROKE}
+            strokeWidth={3}
+            strokeLinejoin="round"
+          />
+        </G>
+      }
+      head={
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[{ id: 'rpr-hood', lit: CLOAK_LIT, base: CLOAK_BASE, shadow: CLOAK_SHADOW }]}
+          />
+          {/* Deep peaked 3/4 left spectral cowl */}
+          <Path
+            d="M 34 42 C 33 27, 42 18, 53 19 L 61 23 C 62 32, 60 40, 56 45 L 36 45 Z"
+            fill="url(#rpr-hood)"
+            stroke={STROKE}
+            strokeWidth={3.3}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 36 33 C 38 24, 45 20, 53 21" strokeWidth={2.2} opacity={0.6} />
+          {/* Pitch-black void face opening angled left */}
+          <Path
+            d="M 37 41 C 36 30, 42 24, 50 25 C 55 28, 55 37, 51 42 Z"
+            fill={VOID}
+            stroke={STROKE}
+            strokeWidth={1.8}
+          />
+          {/* Twin eerie icy-cyan spectral eyes inside void hood */}
+          <EnemyEyes
+            expression={s.expression}
+            blinkStage={s.blinkStage}
+            gazeOffset={s.gazeOffset}
+            leftX={40.5}
+            rightX={48.5}
+            y={33.5}
+            radius={3.3}
+            irisColor={SOUL_CYAN}
+            darkMask
+          />
+        </G>
+      }
+      paws={
+        <G>
+          <StorybookToneDefs
+            tones={[
+              { id: 'rpr-blade', lit: SCYTHE_LIT, base: SCYTHE_BASE, shadow: SCYTHE_SHADOW },
+              { id: 'rpr-bone', lit: BONE_LIT, base: BONE_BASE, shadow: BONE_SHADOW },
+            ]}
+          />
+          {/* Diagonal steel-dark scythe haft swept cleanly from upper-left to lower-right */}
+          <Line x1={16} y1={28} x2={72} y2={76} stroke={STROKE} strokeWidth={6.4} strokeLinecap="round" />
+          <Line x1={16} y1={28} x2={72} y2={76} stroke="#64748B" strokeWidth={2.8} strokeLinecap="round" />
+          {/* Colossal gleaming curved crescent scythe blade arcing high overhead */}
+          <Path
+            d="M 14 27 C 24 8, 60 5, 81 24 C 62 15, 36 16, 20 33 L 12 43 C 8 36, 10 30, 14 27 Z"
+            fill="url(#rpr-blade)"
+            stroke={STROKE}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          <SunlitRimStroke d="M 18 24 C 31 11, 56 10, 74 20" strokeWidth={2.1} opacity={0.85} />
+          <Path d="M 22 29 C 38 17, 59 16, 75 23" stroke={SOUL_CYAN} strokeWidth={1.7} strokeLinecap="round" fill="none" />
+          {/* Skeletal bony hands gripping the scythe haft */}
+          <Rect x={26} y={37} width={9} height={7} rx={2.5} fill="url(#rpr-bone)" stroke={STROKE} strokeWidth={2.3} />
+          <Line x1={29} y1={37} x2={29} y2={44} stroke={STROKE} strokeWidth={1.3} />
+          <Line x1={32} y1={37} x2={32} y2={44} stroke={STROKE} strokeWidth={1.3} />
+          <Rect x={51} y={57} width={9} height={7} rx={2.5} fill="url(#rpr-bone)" stroke={STROKE} strokeWidth={2.3} />
+          <Line x1={54} y1={57} x2={54} y2={64} stroke={STROKE} strokeWidth={1.3} />
+          <Line x1={57} y1={57} x2={57} y2={64} stroke={STROKE} strokeWidth={1.3} />
         </G>
       }
     />
@@ -2364,103 +2649,164 @@ const renderTheReaper = (s: SubRigState) => {
 };
 
 /* ============================================================================
- * 15. TIER 4 BOSS: WORLD EATER — Cosmic obsidian Void Daemon skull, molten horns, crystals & jawbone
+ * 15. TIER 4 BOSS: WORLD EATER — True 3/4 LEFT hunched cosmic void-beast
+ *     Starry obsidian-violet hide, glowing magenta fanged maw, dorsal crystals & twin cosmic rings
  * ============================================================================ */
 const renderWorldEater = (s: SubRigState) => {
-  const OBSIDIAN = '#18181B';
-  const OBSIDIAN_PLATE = '#27272A';
-  const MOLTEN_CRIMSON = '#E11D48';
-  const VOID_VIOLET = '#9333EA';
-  const VOID_CRYSTAL = '#C084FC';
-  const STAR_CORE = '#FEF08A';
+  const VOID_LIT = '#4C1D95';
+  const VOID_BASE = '#1E1B4B';
+  const VOID_SHADOW = '#09090B';
+  const RING_LIT = '#F0ABFC';
+  const RING_BASE = '#9333EA';
+  const RING_SHADOW = '#581C87';
+  const MAW_PINK = '#EC4899';
+  const STAR_GLOW = '#FDE047';
+  const lean = s.facing === 'left' ? 'translate(-0.7, 0)' : undefined;
 
   return (
     <RigLayers
       partStyles={s}
       earsInFront
+      skipAutoLighting
+      skipFacingOffset
       tail={
         <G>
-          {/* Orbiting void-crystal shards & cosmic singularity ring */}
-          <Ellipse cx={50} cy={52} rx={44} ry={14} fill="none" stroke={VOID_VIOLET} strokeWidth={1.8} opacity={0.65} />
-          <Polygon points="11,22 16,29 11,36 6,29" fill={VOID_CRYSTAL} stroke={STROKE} strokeWidth={2.3} strokeLinejoin="round" />
-          <Polygon points="89,22 94,29 89,36 84,29" fill={MOLTEN_CRIMSON} stroke={STROKE} strokeWidth={2.3} strokeLinejoin="round" />
-          <Polygon points="10,66 14,72 10,78 6,72" fill={MOLTEN_CRIMSON} stroke={STROKE} strokeWidth={2.1} strokeLinejoin="round" />
-          <Polygon points="90,66 94,72 90,78 86,72" fill={VOID_CRYSTAL} stroke={STROKE} strokeWidth={2.1} strokeLinejoin="round" />
+          <StorybookToneDefs
+            tones={[{ id: 'we-ring-b', lit: RING_LIT, base: RING_BASE, shadow: RING_SHADOW }]}
+          />
+          {/* Rear sweeping cosmic vortex ellipse + floating stardust shards (framed cleanly inside portrait) */}
+          <Ellipse
+            cx={49}
+            cy={52}
+            rx={36}
+            ry={14}
+            transform="rotate(-26, 49, 52)"
+            fill="none"
+            stroke="url(#we-ring-b)"
+            strokeWidth={5.0}
+          />
+          <Ellipse
+            cx={49}
+            cy={52}
+            rx={36}
+            ry={14}
+            transform="rotate(-26, 49, 52)"
+            fill="none"
+            stroke={RING_LIT}
+            strokeWidth={1.6}
+          />
+          <Circle cx={17} cy={24} r={2.2} fill={RING_LIT} />
+          <Circle cx={82} cy={30} r={2.4} fill={MAW_PINK} />
+          <Circle cx={83} cy={65} r={2.1} fill={RING_LIT} />
         </G>
       }
       body={
         <G>
-          {/* Obsidian Void-Daemon armor & blazing abyssal singularity core */}
-          <Polygon
-            points="24,56 76,56 70,90 30,90"
-            fill={OBSIDIAN}
+          <StorybookToneDefs
+            tones={[
+              { id: 'we-body', lit: VOID_LIT, base: VOID_BASE, shadow: VOID_SHADOW },
+              { id: 'we-spine', lit: '#A855F7', base: '#3B0764', shadow: VOID_SHADOW },
+            ]}
+          />
+          {/* Crystalline obsidian dorsal spines along hunched back */}
+          <Polygon points="41,28 49,19 52,30" fill="url(#we-spine)" stroke={STROKE} strokeWidth={2.5} strokeLinejoin="round" />
+          <Polygon points="51,31 61,23 62,36" fill="url(#we-spine)" stroke={STROKE} strokeWidth={2.5} strokeLinejoin="round" />
+          <Polygon points="61,38 71,32 70,45" fill="url(#we-spine)" stroke={STROKE} strokeWidth={2.4} strokeLinejoin="round" />
+          {/* Hunched muscular cosmic void-beast torso & crouched digitigrade legs */}
+          <Path
+            d="M 33 44 C 37 29, 55 27, 67 38 C 76 47, 74 62, 66 71 L 78 86 L 66 87 L 57 73 L 49 86 L 38 86 L 45 69 C 35 64, 31 54, 33 44 Z"
+            fill="url(#we-body)"
             stroke={STROKE}
-            strokeWidth={3.2}
+            strokeWidth={3.4}
             strokeLinejoin="round"
           />
-          <Circle cx={50} cy={76} r={10.5} fill={VOID_VIOLET} stroke={MOLTEN_CRIMSON} strokeWidth={2.4} />
-          <Circle cx={50} cy={76} r={5.5} fill={MOLTEN_CRIMSON} />
-          <Polygon points="50,70 52,74 56,76 52,78 50,82 48,78 44,76 48,74" fill={STAR_CORE} />
+          <SunlitRimStroke d="M 37 38 C 43 31, 53 30, 62 36" stroke="#E9D5FF" strokeWidth={2.1} opacity={0.55} />
+          {/* Starlight nebula constellations speckled inside the obsidian hide */}
+          <Circle cx={53} cy={43} r={1.8} fill="#FFFFFF" />
+          <Circle cx={61} cy={49} r={1.4} fill={RING_LIT} />
+          <Circle cx={47} cy={55} r={1.6} fill={MAW_PINK} />
+          <Circle cx={60} cy={60} r={1.5} fill={STAR_GLOW} />
+          <Circle cx={42} cy={48} r={1.2} fill={RING_LIT} />
         </G>
       }
       leftEar={
         <G>
-          {/* Left molten violet-and-crimson curved daemon horn */}
+          {/* Orbiting front-left stardust & cosmic flare crescent */}
           <Path
-            d="M 32 30 C 12 27, 4 14, 15 4 C 18 14, 24 19, 37 22 Z"
-            fill={OBSIDIAN_PLATE}
-            stroke={STROKE}
-            strokeWidth={3.1}
-            strokeLinejoin="round"
+            d="M 11 40 C 12 22, 32 16, 48 24"
+            stroke={RING_BASE}
+            strokeWidth={4.2}
+            strokeLinecap="round"
+            fill="none"
           />
-          <Path d="M 15 8 C 16 17, 22 22, 32 25" stroke={MOLTEN_CRIMSON} strokeWidth={2.6} strokeLinecap="round" fill="none" />
+          <Path
+            d="M 12 39 C 14 24, 31 19, 44 24"
+            stroke={RING_LIT}
+            strokeWidth={1.6}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <Circle cx={20} cy={17} r={2} fill={RING_LIT} />
         </G>
       }
       rightEar={
         <G>
-          {/* Right molten violet-and-crimson curved daemon horn */}
+          {/* Sweeping diagonal foreground cosmic ring arcing across the beast */}
           <Path
-            d="M 68 30 C 88 27, 96 14, 85 4 C 82 14, 76 19, 63 22 Z"
-            fill={OBSIDIAN_PLATE}
-            stroke={STROKE}
-            strokeWidth={3.1}
-            strokeLinejoin="round"
+            d="M 15 68 C 28 77, 68 60, 82 36"
+            stroke={RING_BASE}
+            strokeWidth={4.4}
+            strokeLinecap="round"
+            fill="none"
           />
-          <Path d="M 85 8 C 84 17, 78 22, 68 25" stroke={VOID_CRYSTAL} strokeWidth={2.6} strokeLinecap="round" fill="none" />
+          <Path
+            d="M 17 67 C 30 74, 66 58, 80 38"
+            stroke={RING_LIT}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            fill="none"
+          />
+          <Circle cx={74} cy={54} r={2.2} fill={MAW_PINK} />
         </G>
       }
       head={
-        <G>
-          <Polygon
-            points="32,15 68,15 77,31 73,53 62,57 55,51 50,57 45,51 38,57 27,53 23,31"
-            fill={OBSIDIAN_PLATE}
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[{ id: 'we-head', lit: VOID_LIT, base: VOID_BASE, shadow: VOID_SHADOW }]}
+          />
+          {/* Jagged lupine-draconic cosmic head & gaping fanged maw facing 3/4 LEFT */}
+          <Path
+            d="M 11 42 C 13 31, 25 26, 39 29 L 47 36 L 40 48 L 28 53 L 14 48 Z"
+            fill="url(#we-head)"
             stroke={STROKE}
             strokeWidth={3.3}
             strokeLinejoin="round"
           />
-          {/* Molten abyssal crown cracks & cosmic rift */}
+          <SunlitRimStroke d="M 15 35 C 21 30, 29 29, 37 31" stroke="#E9D5FF" strokeWidth={2} opacity={0.62} />
+          {/* Luminous magenta-pink open fanged maw */}
           <Path
-            d={
-              s.isRuffled
-                ? 'M 50 16 L 50 31 M 34 20 L 44 27 L 39 33 M 66 20 L 56 27 L 61 33'
-                : 'M 50 16 L 50 29 M 37 21 L 45 26 M 63 21 L 55 26'
-            }
-            stroke={MOLTEN_CRIMSON}
-            strokeWidth={2.5}
-            strokeLinecap="round"
-            fill="none"
+            d="M 12 43 L 31 42 L 26 53 L 15 50 Z"
+            fill={MAW_PINK}
+            stroke={STROKE}
+            strokeWidth={2.4}
+            strokeLinejoin="round"
           />
-          <Polygon points="50,20 54,26 50,32 46,26" fill={VOID_CRYSTAL} stroke={STROKE} strokeWidth={1.7} />
-
-          {/* Blazing cosmic daemon eyes */}
+          <Polygon points="14,43 16.5,48.5 19,43" fill="#FFFFFF" stroke={STROKE} strokeWidth={1.1} />
+          <Polygon points="21,42.5 23.5,48 26,42.5" fill="#FFFFFF" stroke={STROKE} strokeWidth={1.1} />
+          <Polygon points="17,51 19.5,47 22,52" fill="#FFFFFF" />
+          {s.isRuffled && (
+            <Path d="M 32 32 L 36 37" stroke={RING_LIT} strokeWidth={2} strokeLinecap="round" />
+          )}
+          {/* Blazing magenta-violet cosmic eyes facing 3/4 left */}
           <EnemyEyes
             expression={s.expression}
+            blinkStage={s.blinkStage}
             gazeOffset={s.gazeOffset}
-            leftX={37.5}
-            rightX={62.5}
-            y={39}
-            radius={4.7}
-            irisColor={MOLTEN_CRIMSON}
+            leftX={20.5}
+            rightX={30.5}
+            y={36.5}
+            radius={3.6}
+            irisColor={MAW_PINK}
             slitPupil
             darkMask
           />
@@ -2468,17 +2814,24 @@ const renderWorldEater = (s: SubRigState) => {
       }
       paws={
         <G>
-          {/* Blazing maw glow + articulated jagged obsidian lower jawbone */}
-          <Polygon points="32,55 68,55 62,69 38,69" fill={MOLTEN_CRIMSON} />
-          <Polygon
-            points="28,55 35,62 42,56 50,64 58,56 65,62 72,55 66,73 50,77 34,73"
-            fill={OBSIDIAN}
-            stroke={VOID_CRYSTAL}
-            strokeWidth={2.4}
+          <StorybookToneDefs
+            tones={[{ id: 'we-paw', lit: VOID_LIT, base: VOID_BASE, shadow: VOID_SHADOW }]}
+          />
+          {/* Reaching forward-left clawed void arm + hunched right claw */}
+          <Path
+            d="M 36 56 L 19 66 L 11 74 L 18 73 L 14 80 L 23 75 L 22 81 L 29 73 L 40 64 Z"
+            fill="url(#we-paw)"
+            stroke={STROKE}
+            strokeWidth={3}
             strokeLinejoin="round"
           />
-          <Polygon points="15,74 25,70 28,83 18,86" fill={OBSIDIAN_PLATE} stroke={MOLTEN_CRIMSON} strokeWidth={2} strokeLinejoin="round" />
-          <Polygon points="85,74 75,70 72,83 82,86" fill={OBSIDIAN_PLATE} stroke={VOID_CRYSTAL} strokeWidth={2} strokeLinejoin="round" />
+          <Path
+            d="M 54 58 L 46 70 L 42 78 L 49 75 L 48 81 L 56 73 L 61 64 Z"
+            fill="url(#we-paw)"
+            stroke={STROKE}
+            strokeWidth={2.9}
+            strokeLinejoin="round"
+          />
         </G>
       }
     />

@@ -2,7 +2,7 @@ import React from 'react';
 import { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { RigLayers } from '@/components/creatures/RigLayers';
 import { isBattleWorn, isMouthOpenExpression } from '@/components/creatures/expressions';
-import { STROKE } from '@/components/illustration/primitives';
+import { STROKE, StorybookToneDefs, SunlitRimStroke } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { EnemyEyes } from '../EnemyEyes';
 import { EnemyRigProps } from './types';
@@ -237,164 +237,184 @@ export const FrogRig: React.FC<EnemyRigProps<'bramble'>> = (props) => {
 };
 
 /**
- * Iron Shell: armored snapping tortoise with a heavy riveted steel dome shell
- * (bolts, metal plates, glowing seam), sturdy clawed feet, and grumpy horned turtle head!
+ * CHAPTER BOSS: Iron Shell — True 3/4 LEFT fortress snapping tortoise
+ * Heavy bolted slate-iron octagonal dome shell with 7 radial steel spikes, olive-moss
+ * wrinkled grumpy head protruding left, and stocky clawed 3/4 stride legs.
  */
 export const IronShellRig: React.FC<EnemyRigProps> = (props) => {
-  const { expression, healthState, gazeOffset } = props;
+  const { expression, blinkStage, healthState, gazeOffset, facing } = props;
   const isRuffled = isBattleWorn(healthState);
   const openMouth = isMouthOpenExpression(expression);
 
-  const STEEL_DARK = '#334155';
-  const STEEL_MID = '#64748B';
-  const STEEL_LIGHT = '#CBD5E1';
-  const TURTLE_SKIN = '#3F6212';
-  const GLOW_SEAM = COLORS.impactOrange;
+  const STEEL_LIT = '#94A3B8';
+  const STEEL_BASE = '#475569';
+  const STEEL_SHADOW = '#1E293B';
+  const SPIKE_LIT = '#F1F5F9';
+  const SPIKE_BASE = '#CBD5E1';
+  const SPIKE_SHADOW = '#64748B';
+  const SKIN_LIT = '#84A94C';
+  const SKIN_BASE = '#5A7830';
+  const SKIN_SHADOW = '#365314';
+  const lean = facing === 'left' ? 'translate(-0.7, 0)' : undefined;
 
   return (
     <RigLayers
       partStyles={props}
+      skipAutoLighting
+      skipFacingOffset
       tail={
         <G>
-          {/* Spiked iron tortoise tail + furnace puff */}
-          <Polygon
-            points="76,72 92,76 79,82"
-            fill={STEEL_MID}
+          <StorybookToneDefs
+            tones={[{ id: 'is-tail', lit: SKIN_LIT, base: SKIN_BASE, shadow: SKIN_SHADOW }]}
+          />
+          {/* Stubby armored tortoise tail protruding right */}
+          <Path
+            d="M 80 65 L 93 61 L 87 71 L 78 72 Z"
+            fill="url(#is-tail)"
             stroke={STROKE}
-            strokeWidth={2.8}
+            strokeWidth={2.9}
             strokeLinejoin="round"
           />
-          <Circle cx={90} cy={66} r={3.5} fill="#E2E8F0" opacity={0.75} />
         </G>
       }
       leftEar={
-        <Polygon
-          points={isRuffled ? '29,39 16,27 21,35 18,38 25,45' : '29,39 15,26 24,45'}
-          fill={STEEL_LIGHT}
-          stroke={STROKE}
-          strokeWidth={2.8}
-          strokeLinejoin="round"
-        />
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'is-spike-l', lit: SPIKE_LIT, base: SPIKE_BASE, shadow: SPIKE_SHADOW }]}
+          />
+          {/* Upper crown & left radial steel spikes */}
+          <Polygon
+            points={isRuffled ? '49,28 53,13 55,21 58,28' : '48,29 53,12 59,29'}
+            fill="url(#is-spike-l)"
+            stroke={STROKE}
+            strokeWidth={2.7}
+            strokeLinejoin="round"
+          />
+          <Polygon
+            points="30,39 22,29 37,33"
+            fill="url(#is-spike-l)"
+            stroke={STROKE}
+            strokeWidth={2.6}
+            strokeLinejoin="round"
+          />
+        </G>
       }
       rightEar={
-        <Polygon
-          points="71,39 85,26 76,45"
-          fill={STEEL_LIGHT}
-          stroke={STROKE}
-          strokeWidth={2.8}
-          strokeLinejoin="round"
-        />
+        <G>
+          <StorybookToneDefs
+            tones={[{ id: 'is-spike-r', lit: SPIKE_LIT, base: SPIKE_BASE, shadow: SPIKE_SHADOW }]}
+          />
+          {/* Rear-right & rim radial steel fortress spikes */}
+          <Polygon
+            points="69,34 78,24 76,39"
+            fill="url(#is-spike-r)"
+            stroke={STROKE}
+            strokeWidth={2.6}
+            strokeLinejoin="round"
+          />
+          <Polygon
+            points="81,48 91,42 84,56"
+            fill="url(#is-spike-r)"
+            stroke={STROKE}
+            strokeWidth={2.6}
+            strokeLinejoin="round"
+          />
+        </G>
       }
       body={
         <G>
-          {/* Heavy riveted steel dome shell */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'is-shell', lit: STEEL_LIT, base: STEEL_BASE, shadow: STEEL_SHADOW },
+              { id: 'is-rim', lit: SPIKE_BASE, base: STEEL_LIT, shadow: STEEL_BASE },
+              { id: 'is-spike-f', lit: SPIKE_LIT, base: SPIKE_BASE, shadow: SPIKE_SHADOW },
+            ]}
+          />
+          {/* Massive domed 3/4 left bolted steel fortress carapace */}
           <Path
-            d="M 14 76 C 14 35, 30 22, 50 22 C 70 22, 86 35, 86 76 Z"
-            fill={STEEL_DARK}
+            d="M 22 66 C 21 37, 36 25, 55 25 C 74 25, 86 38, 86 66 C 72 72, 36 72, 22 66 Z"
+            fill="url(#is-shell)"
             stroke={STROKE}
-            strokeWidth={3.3}
+            strokeWidth={3.4}
             strokeLinejoin="round"
           />
-          {/* Welded steel armor plates */}
+          <SunlitRimStroke d="M 27 52 C 30 35, 42 28, 56 28" strokeWidth={2.3} opacity={0.58} />
+          {/* Bolted octagonal armor plate seams */}
           <Path
-            d="M 22 72 C 23 42, 35 28, 50 28 C 65 28, 77 42, 78 72 Z"
-            fill={STEEL_MID}
+            d="M 28 56 L 44 46 L 64 46 L 82 56 M 44 46 L 52 27 M 64 46 L 66 28 M 54 46 L 54 67"
             stroke={STROKE}
-            strokeWidth={2.4}
-          />
-          {/* Glowing furnace seam lines between plates */}
-          <Path
-            d="M 50 28 L 50 46 M 24 55 L 40 46 L 60 46 L 76 55"
-            stroke={GLOW_SEAM}
-            strokeWidth={3}
+            strokeWidth={2.3}
             strokeLinecap="round"
             strokeLinejoin="round"
             fill="none"
           />
-          {/* Battle-dent crack when battered */}
+          {/* Warm glowing furnace crack accent when battle-worn */}
           {isRuffled && (
             <Path
-              d="M 63 34 L 67 40 L 62 43"
-              stroke={STROKE}
+              d="M 59 35 L 64 41 L 59 45"
+              stroke={COLORS.impactOrange}
               strokeWidth={2.4}
               strokeLinecap="round"
-              strokeLinejoin="round"
               fill="none"
             />
           )}
-          {/* Steel rivets / bolts */}
-          <Circle cx={32} cy={43} r={2.2} fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.4} />
-          <Circle cx={68} cy={43} r={2.2} fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.4} />
-          <Circle cx={23} cy={65} r={2.2} fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.4} />
-          <Circle cx={77} cy={65} r={2.2} fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.4} />
-          {/* Heavy iron shell rim */}
-          <Rect
-            x={12}
-            y={73}
-            width={76}
-            height={7.5}
-            rx={3.5}
-            fill={STEEL_LIGHT}
+          {/* Riveted foreground dome spikes */}
+          <Polygon points="37,51 43,39 48,52" fill="url(#is-spike-f)" stroke={STROKE} strokeWidth={2.5} strokeLinejoin="round" />
+          <Polygon points="61,51 67,39 72,52" fill="url(#is-spike-f)" stroke={STROKE} strokeWidth={2.5} strokeLinejoin="round" />
+          {/* Steel rivets */}
+          <Circle cx={35} cy={43} r={1.8} fill={SPIKE_LIT} stroke={STROKE} strokeWidth={1.2} />
+          <Circle cx={55} cy={35} r={1.8} fill={SPIKE_LIT} stroke={STROKE} strokeWidth={1.2} />
+          <Circle cx={74} cy={44} r={1.8} fill={SPIKE_LIT} stroke={STROKE} strokeWidth={1.2} />
+          <Circle cx={33} cy={61} r={1.8} fill={SPIKE_LIT} stroke={STROKE} strokeWidth={1.2} />
+          <Circle cx={75} cy={61} r={1.8} fill={SPIKE_LIT} stroke={STROKE} strokeWidth={1.2} />
+          {/* Heavy bolted shell lower rim */}
+          <Path
+            d="M 20 65 Q 54 74 88 65 L 86 73 Q 54 81 22 73 Z"
+            fill="url(#is-rim)"
             stroke={STROKE}
-            strokeWidth={3}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
           />
         </G>
       }
       head={
-        <G>
-          {/* Grumpy horned snapping-turtle head */}
-          <Ellipse
-            cx={50}
-            cy={58}
-            rx={18.5}
-            ry={14.5}
-            fill={TURTLE_SKIN}
+        <G transform={lean}>
+          <StorybookToneDefs
+            tones={[{ id: 'is-skin', lit: SKIN_LIT, base: SKIN_BASE, shadow: SKIN_SHADOW }]}
+          />
+          {/* Thick wrinkled olive-moss tortoise neck & grumpy head facing 3/4 LEFT */}
+          <Path
+            d="M 33 67 L 23 68 C 14 68, 9 63, 10 56 C 11 49, 18 47, 28 49 L 37 54 L 36 65 Z"
+            fill="url(#is-skin)"
             stroke={STROKE}
             strokeWidth={3.2}
-          />
-          {/* Central steel brow horn */}
-          <Polygon
-            points="46,46 50,35 54,46"
-            fill={STEEL_LIGHT}
-            stroke={STROKE}
-            strokeWidth={2.5}
             strokeLinejoin="round"
           />
-          <Polygon points="32,57 25,55 32,62" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
-          <Polygon points="68,57 75,55 68,62" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={2} strokeLinejoin="round" />
-
+          <SunlitRimStroke d="M 13 54 C 16 50, 22 50, 28 51" strokeWidth={1.9} opacity={0.55} />
           <EnemyEyes
             expression={expression}
+            blinkStage={blinkStage}
             gazeOffset={gazeOffset}
-            leftX={40}
-            rightX={60}
-            y={55}
-            radius={4.3}
-            irisColor="#EF4444"
+            leftX={16.5}
+            rightX={25.5}
+            y={56}
+            radius={3.3}
+            irisColor="#F59E0B"
           />
-
+          {/* Grumpy snapping turtle beak */}
           {openMouth ? (
-            <G>
-              <Polygon
-                points="40,63 50,60 60,63 50,67.5"
-                fill="#BEF264"
-                stroke={STROKE}
-                strokeWidth={2.2}
-                strokeLinejoin="round"
-              />
-              <Polygon
-                points="42,66.5 58,66.5 50,73"
-                fill="#991B1B"
-                stroke={STROKE}
-                strokeWidth={2.2}
-                strokeLinejoin="round"
-              />
-            </G>
+            <Path
+              d="M 11 63 L 22 61 L 20 68 L 12 67 Z"
+              fill="#7F1D1D"
+              stroke={STROKE}
+              strokeWidth={2.2}
+              strokeLinejoin="round"
+            />
           ) : (
             <Path
-              d="M 39 65 L 45 62.5 L 50 66 L 55 62.5 L 61 65"
+              d="M 10 62 L 16 61 L 20 64 L 25 62"
               stroke={STROKE}
-              strokeWidth={2.8}
+              strokeWidth={2.4}
               strokeLinecap="round"
               strokeLinejoin="round"
               fill="none"
@@ -404,26 +424,42 @@ export const IronShellRig: React.FC<EnemyRigProps> = (props) => {
       }
       paws={
         <G>
-          {/* Sturdy iron-clawed tortoise feet */}
+          <StorybookToneDefs
+            tones={[
+              { id: 'is-leg', lit: SKIN_LIT, base: SKIN_BASE, shadow: SKIN_SHADOW },
+              { id: 'is-claw', lit: '#FEF9C3', base: '#E5E7EB', shadow: '#94A3B8' },
+            ]}
+          />
+          {/* Asymmetric 3/4 left stocky tortoise legs (lead front-left, center-front, rear-right) */}
           <Path
-            d="M 20 79 L 18 89 L 36 89 L 34 79 Z"
-            fill={TURTLE_SKIN}
+            d="M 22 71 L 18 86 L 34 86 L 35 72 Z"
+            fill="url(#is-leg)"
             stroke={STROKE}
             strokeWidth={3}
             strokeLinejoin="round"
           />
-          <Polygon points="19,89 22,93 25,89" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.8} />
-          <Polygon points="25,89 28,93 31,89" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.8} />
+          <Polygon points="19,86 16,89 23,88" fill="url(#is-claw)" stroke={STROKE} strokeWidth={1.6} />
+          <Polygon points="26,86 24,89 30,88" fill="url(#is-claw)" stroke={STROKE} strokeWidth={1.6} />
 
           <Path
-            d="M 66 79 L 64 89 L 82 89 L 80 79 Z"
-            fill={TURTLE_SKIN}
+            d="M 46 72 L 45 88 L 62 88 L 61 72 Z"
+            fill="url(#is-leg)"
+            stroke={STROKE}
+            strokeWidth={3.1}
+            strokeLinejoin="round"
+          />
+          <Polygon points="47,88 45,91 51,89" fill="url(#is-claw)" stroke={STROKE} strokeWidth={1.6} />
+          <Polygon points="54,88 53,91 59,89" fill="url(#is-claw)" stroke={STROKE} strokeWidth={1.6} />
+
+          <Path
+            d="M 70 70 L 72 86 L 86 86 L 84 69 Z"
+            fill="url(#is-leg)"
             stroke={STROKE}
             strokeWidth={3}
             strokeLinejoin="round"
           />
-          <Polygon points="69,89 72,93 75,89" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.8} />
-          <Polygon points="75,89 78,93 81,89" fill={STEEL_LIGHT} stroke={STROKE} strokeWidth={1.8} />
+          <Polygon points="74,86 72,89 78,88" fill="url(#is-claw)" stroke={STROKE} strokeWidth={1.6} />
+          <Polygon points="80,86 79,89 85,88" fill="url(#is-claw)" stroke={STROKE} strokeWidth={1.6} />
         </G>
       }
     />

@@ -40,6 +40,7 @@ const EnemyPortrait: React.FC<EnemyPortraitProps> = ({
         maxHp={maxHp}
         mood={mood}
         reaction={reaction}
+        facing="left"
         interactive
       />
       <View style={[styles.tierDot, { backgroundColor: tierColor }]} />
@@ -51,9 +52,10 @@ const styles = StyleSheet.create({
   containerCompact: {
     position: 'relative',
     padding: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     borderRadius: RADIUS.button,
     borderWidth: 1,
+    borderBottomWidth: 2,
     borderColor: COLORS.slateCharcoal,
   },
   tierDot: {
@@ -63,7 +65,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: COLORS.canvasWhite,
   },
 });

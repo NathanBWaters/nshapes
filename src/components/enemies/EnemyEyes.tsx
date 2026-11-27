@@ -1,19 +1,39 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
 import { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
 import {
   CrescentEye,
+  HalfBlinkLidEye,
   KoCrossEye,
+  ShutBlinkEye,
   SleepyLidEye,
   WinceChevronEye,
   eyeGazeShift,
+  resolveBlinkStage,
 } from '@/components/creatures/eyes';
 import { useRigVisual } from '@/components/creatures/RigLayers';
-import { GazeOffset } from '@/components/creatures/types';
+import { BlinkStage, GazeOffset } from '@/components/creatures/types';
 import { COLORS } from '@/utils/colors';
 import { EnemyExpression } from '@/utils/enemyAnimations';
 
+/**
+ * Provides live 3-step `blinkStage` (`0` open → `1` half-lid droop → `2` shut)
+ * from `EnemyAvatar` to every nested `<EnemyEyes />` across all 50+ enemy rigs.
+ */
+const EnemyBlinkContext = createContext<BlinkStage | undefined>(undefined);
+
+export const EnemyBlinkProvider: React.FC<{
+  blinkStage: BlinkStage;
+  children: React.ReactNode;
+}> = ({ blinkStage, children }) => (
+  <EnemyBlinkContext.Provider value={blinkStage}>{children}</EnemyBlinkContext.Provider>
+);
+
+export const useEnemyBlinkStage = (): BlinkStage | undefined => useContext(EnemyBlinkContext);
+
 interface EnemyEyesProps {
   expression: EnemyExpression;
+  /** Explicit 3-step eyelid blink stage (`0 | 1 | 2`), overriding `EnemyBlinkContext` when provided */
+  blinkStage?: BlinkStage;
   leftX?: number;
   rightX?: number;
   y?: number;
@@ -31,11 +51,13 @@ interface EnemyEyesProps {
 
 /**
  * Expressive NShapes-styled cartoon enemy eyes in 0..100 SVG space.
- * Supports corneal highlight parallax, menacing brows, evil grins, pain winces, KO X's,
+ * Supports smooth 3-step eyelid blinks (`0` open → `1` half-lid droop → `2` shut),
+ * corneal highlight parallax, menacing brows, evil grins, pain winces, KO X's,
  * single-eye Cyclops/Shadow rigs, and multi-eye Spider rigs.
  */
 export const EnemyEyes: React.FC<EnemyEyesProps> = ({
   expression,
+  blinkStage: propBlinkStage,
   leftX = 38.5,
   rightX = 61.5,
   y = 43,
@@ -47,26 +69,67 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
   slitPupil = false,
 }) => {
   const { silhouette } = useRigVisual();
+  const ctxBlinkStage = useEnemyBlinkStage();
   if (silhouette) return null;
 
   const strokeColor = darkMask ? '#FFFFFF' : COLORS.slateCharcoal;
   const { gx, gy, hx, hy } = eyeGazeShift(gazeOffset, radius);
+  const effectiveBlinkStage = resolveBlinkStage(
+    propBlinkStage ?? ctxBlinkStage,
+    expression === 'blink'
+  );
+
+  // Expressive states where eyelids stay open/posed unless explicitly mid-blink release
+  const canRenderHalfBlink =
+    effectiveBlinkStage === 1 &&
+    expression !== 'ko' &&
+    expression !== 'sleepy' &&
+    expression !== 'wince';
 
   const renderEyeAt = (cx: number, cy: number, r: number, side: 'left' | 'right' | 'center') => {
     const dir = side === 'right' ? 1 : side === 'left' ? -1 : 0;
 
-    switch (expression) {
-      case 'blink':
-        return (
-          <Path
-            d={`M ${cx - r * 1.15} ${cy + 0.4} Q ${cx} ${cy + r * 0.5} ${cx + r * 1.15} ${cy + 0.4}`}
-            stroke={strokeColor}
-            strokeWidth={2.7}
-            strokeLinecap="round"
-            fill="none"
-          />
-        );
+    if (expression === 'ko') {
+      return <KoCrossEye cx={cx} cy={cy} r={r} backingRadius={darkMask ? r * 1.22 : undefined} />;
+    }
 
+    if (expression === 'sleepy') {
+      return <SleepyLidEye cx={cx} cy={cy} r={r} stroke={strokeColor} irisColor={irisColor} />;
+    }
+
+    if (expression === 'blink' || effectiveBlinkStage === 2) {
+      return <ShutBlinkEye cx={cx} cy={cy} r={r} stroke={strokeColor} />;
+    }
+
+    if (canRenderHalfBlink) {
+      const halfIris = expression === 'enraged' ? '#EF4444' : irisColor;
+      return (
+        <G>
+          <HalfBlinkLidEye
+            cx={cx}
+            cy={cy}
+            r={r}
+            stroke={strokeColor}
+            irisColor={halfIris}
+            darkMask={darkMask}
+            gazeOffset={gazeOffset}
+          />
+          {dir !== 0 && (
+            <Line
+              x1={cx - dir * r * 1.1}
+              y1={cy - r * 0.45}
+              x2={cx + dir * r * 1.15}
+              y2={cy - r * 1.05}
+              stroke={strokeColor}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+            />
+          )}
+        </G>
+      );
+    }
+
+    switch (expression) {
       case 'wince':
         if (side !== 'center') {
           return <WinceChevronEye cx={cx} cy={cy} r={r} stroke={strokeColor} side={side} />;
@@ -90,9 +153,6 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
           </G>
         );
 
-      case 'ko':
-        return <KoCrossEye cx={cx} cy={cy} r={r} backingRadius={darkMask ? r * 1.22 : undefined} />;
-
       case 'wicked_glee':
         // Sinister smug crescent eyes with sharp inner slant!
         return (
@@ -111,9 +171,6 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
             )}
           </G>
         );
-
-      case 'sleepy':
-        return <SleepyLidEye cx={cx} cy={cy} r={r} stroke={strokeColor} irisColor={irisColor} />;
 
       case 'startled':
         return (

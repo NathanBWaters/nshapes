@@ -1,5 +1,5 @@
 import { CreatureScaleTier } from '@/components/creatures/RigLayers';
-import { CreaturePartStyles, GazeOffset } from '@/components/creatures/types';
+import { BlinkStage, CreaturePartStyles, GazeOffset } from '@/components/creatures/types';
 import { EnemyExpression, EnemyHealthState } from '@/utils/enemyAnimations';
 
 /**
@@ -13,6 +13,8 @@ export interface EnemyRigProps<V extends string = never> extends CreaturePartSty
   expression: EnemyExpression;
   /** Current progressive battle-wear state */
   healthState: EnemyHealthState;
+  /** 3-step upper-eyelid sweep (`0` open, `1` half-lid travel, `2` full shut) */
+  blinkStage?: BlinkStage;
   /** Eye gaze offset (-1..1) with corneal parallax */
   gazeOffset?: GazeOffset;
   /** [UI-07] Combat posture orientation (`'left'` squares off against the fighter; `'front'` for portraits) */
