@@ -24,6 +24,7 @@ const NOSE_PINK = '#FF7169';
 export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  blinkStage = 0,
   gazeOffset,
   headStyle,
   leftEarStyle,
@@ -177,7 +178,9 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
 
         <CreatureEyes
           expression={expression}
+          blinkStage={blinkStage}
           gazeOffset={gazeOffset}
+          lidFill={TABBY_ORANGE}
           leftX={46}
           rightX={68}
           y={41.5}
@@ -222,27 +225,18 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Asymmetric Swipe Paw Forward-Right + Braced Rear Paw */}
+      {/* 6. Asymmetric Swipe Paw Forward-Right + Braced Rear Paw (continuously GPU-animated; zero 1f JSX teleport) */}
       <RigLayer skipAutoLighting style={pawStyle}>
         <Defs>
           <TwoToneGradient id="tabby-paw" lit={TABBY_CREAM_LIT} base={TABBY_CREAM} shadow={TABBY_CREAM_SHADOW} />
         </Defs>
-        {isCheering ? (
-          <G>
-            <Ellipse cx={34} cy={62} rx={6.4} ry={5.2} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
-            <Circle cx={34} cy={62.5} r={2} fill={NOSE_PINK} />
-            <Ellipse cx={82} cy={56} rx={6.8} ry={5.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
-            <Circle cx={82} cy={56.5} r={2.1} fill={NOSE_PINK} />
-          </G>
-        ) : (
-          <G>
-            {/* Grounded back support paw */}
-            <Ellipse cx={40} cy={87} rx={7.2} ry={4.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
-            {/* Raised asymmetrical combat swipe paw reaching right */}
-            <Ellipse cx={77} cy={71} rx={7.2} ry={5.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
-            <Circle cx={79} cy={71.5} r={2} fill={NOSE_PINK} />
-          </G>
-        )}
+        <G>
+          {/* Grounded back support paw */}
+          <Ellipse cx={40} cy={87} rx={7.2} ry={4.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
+          {/* Raised asymmetrical combat swipe paw reaching right */}
+          <Ellipse cx={77} cy={71} rx={7.2} ry={5.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
+          <Circle cx={79} cy={71.5} r={2} fill={NOSE_PINK} />
+        </G>
       </RigLayer>
     </RigLayerStack>
   );

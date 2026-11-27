@@ -22,6 +22,7 @@ const TONGUE_PINK = '#FF7169';
 export const CorgiRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  blinkStage = 0,
   gazeOffset,
   headStyle,
   leftEarStyle,
@@ -176,7 +177,9 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
 
         <CreatureEyes
           expression={expression}
+          blinkStage={blinkStage}
           gazeOffset={gazeOffset}
+          lidFill={CORGI_FAWN}
           leftX={48}
           rightX={71}
           y={41.5}
@@ -226,26 +229,19 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Kicked-Back Rear Loaf Paw + Forward-Lunging Sprint Paw */}
+      {/* 6. Kicked-Back Rear Loaf Paw + Forward-Lunging Sprint Paw (continuously GPU-animated; zero 1f JSX teleport) */}
       <RigLayer skipAutoLighting style={pawStyle}>
         <Defs>
           <TwoToneGradient id="corgi-paw" lit={CORGI_CREAM_LIT} base={CORGI_CREAM} shadow={CORGI_CREAM_SHADOW} />
         </Defs>
-        {isCheering ? (
-          <G>
-            <Ellipse cx={24} cy={83} rx={7} ry={4.6} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
-            <Ellipse cx={82} cy={65} rx={7} ry={5.2} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
-          </G>
-        ) : (
-          <G>
-            {/* Kicked-back stubby rear loaf paw */}
-            <Ellipse cx={20} cy={86.5} rx={7.4} ry={4.5} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
-            {/* Mid support paw */}
-            <Ellipse cx={48} cy={87.5} rx={6.4} ry={4.2} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.7} />
-            {/* Forward lunging tippy-tap paw */}
-            <Ellipse cx={76} cy={84} rx={7.5} ry={4.8} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
-          </G>
-        )}
+        <G>
+          {/* Kicked-back stubby rear loaf paw */}
+          <Ellipse cx={20} cy={86.5} rx={7.4} ry={4.5} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
+          {/* Mid support paw */}
+          <Ellipse cx={48} cy={87.5} rx={6.4} ry={4.2} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.7} />
+          {/* Forward lunging tippy-tap paw */}
+          <Ellipse cx={76} cy={84} rx={7.5} ry={4.8} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
+        </G>
       </RigLayer>
     </RigLayerStack>
   );

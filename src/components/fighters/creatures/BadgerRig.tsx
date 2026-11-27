@@ -25,6 +25,7 @@ const STRIPE_SHADOW = '#CBD5E1';
 export const BadgerRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  blinkStage = 0,
   gazeOffset,
   headStyle,
   leftEarStyle,
@@ -127,7 +128,9 @@ export const BadgerRig: React.FC<CreatureRigProps> = ({
 
         <CreatureEyes
           expression={expression}
+          blinkStage={blinkStage}
           gazeOffset={gazeOffset}
+          lidFill={STROKE}
           leftX={45}
           rightX={68}
           y={41.5}
@@ -180,38 +183,24 @@ export const BadgerRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Staggered Raised Boxing Fists — unmistakable brawler silhouette! */}
+      {/* 6. Staggered Raised Boxing Fists — continuously GPU-animated for jabs & fist-pumps (zero 1f JSX teleport) */}
       <RigLayer skipAutoLighting style={pawStyle}>
         <Defs>
           <TwoToneGradient id="badger-fist" lit={BADGER_LIT} base={BADGER_CHARCOAL} shadow={BADGER_SHADOW} />
         </Defs>
-        {isCheering ? (
-          <G>
-            <Circle cx={22} cy={52} r={7.4} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
-            <Line x1={19} y1={46} x2={19} y2={49.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={22} y1={45} x2={22} y2={49} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={25} y1={46} x2={25} y2={49.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
+        <G>
+          {/* Rear cocked uppercut fist on the left */}
+          <Circle cx={21} cy={70} r={7.5} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
+          <Line x1={18} y1={65} x2={18} y2={68.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
+          <Line x1={21} y1={64} x2={21} y2={68} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
+          <Line x1={24} y1={65} x2={24} y2={68.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
 
-            <Circle cx={85} cy={49} r={7.8} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
-            <Line x1={82} y1={43} x2={82} y2={46.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={85} y1={42} x2={85} y2={46} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={88} y1={43} x2={88} y2={46.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-          </G>
-        ) : (
-          <G>
-            {/* Rear cocked uppercut fist on the left */}
-            <Circle cx={21} cy={70} r={7.5} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
-            <Line x1={18} y1={65} x2={18} y2={68.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={21} y1={64} x2={21} y2={68} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={24} y1={65} x2={24} y2={68.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-
-            {/* Lead raised guard boxing fist jutting forward-right */}
-            <Circle cx={85} cy={61} r={8.2} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
-            <Line x1={82} y1={55} x2={82} y2={58.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={85} y1={54} x2={85} y2={58} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-            <Line x1={88} y1={55} x2={88} y2={58.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
-          </G>
-        )}
+          {/* Lead raised guard boxing fist jutting forward-right */}
+          <Circle cx={85} cy={61} r={8.2} fill="url(#badger-fist)" stroke={STROKE} strokeWidth={3} />
+          <Line x1={82} y1={55} x2={82} y2={58.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
+          <Line x1={85} y1={54} x2={85} y2={58} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
+          <Line x1={88} y1={55} x2={88} y2={58.5} stroke={STRIPE_LIT} strokeWidth={2} strokeLinecap="round" />
+        </G>
       </RigLayer>
     </RigLayerStack>
   );

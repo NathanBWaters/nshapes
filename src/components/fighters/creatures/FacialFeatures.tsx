@@ -2,13 +2,15 @@ import React from 'react';
 import { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
 import {
   CrescentEye,
+  HalfBlinkLidEye,
   KoCrossEye,
+  ShutBlinkEye,
   SleepyLidEye,
   WinceChevronEye,
   eyeGazeShift,
 } from '@/components/creatures/eyes';
 import { useRigVisual } from '@/components/creatures/RigLayers';
-import { GazeOffset } from '@/components/creatures/types';
+import { BlinkStage, GazeOffset } from '@/components/creatures/types';
 import { StarBurst } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { FighterExpression } from '@/utils/fighterAnimations';
@@ -19,16 +21,21 @@ interface CreatureEyesProps {
   rightX?: number;
   y?: number;
   radius?: number;
+  /** 3-step upper-eyelid sweep (`0` open, `1` half-lid droop, `2` full shut arc) */
+  blinkStage?: BlinkStage;
   /** Optional micro-saccade / gaze look offset (`-1..1`) with corneal highlight parallax */
   gazeOffset?: GazeOffset;
   /** Optional override for eye stroke/iris color on dark masks (e.g. Badger/Penguin) */
   irisColor?: string;
+  /** Optional upper-eyelid fill tint matching the creature's face fur/plumage during stage-1 half-lid droop */
+  lidFill?: string;
   /** Whether the eye sits on a dark background and needs a white sclera backing */
   darkMask?: boolean;
 }
 
 /**
- * Renders expressive NShapes-styled cartoon eyes across all 15 FighterExpressions.
+ * Renders expressive NShapes-styled cartoon eyes across all 15 FighterExpressions
+ * with organic 3-step upper-eyelid blinks (`0` open → `1` heavy half-lid droop → `2` shut arc).
  * Coordinates live in the 0..100 creature viewBox so eyes stay razor-sharp at any pixel size.
  */
 export const CreatureEyes: React.FC<CreatureEyesProps> = ({
@@ -37,8 +44,10 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
   rightX = 61,
   y = 44,
   radius = 4.6,
+  blinkStage = 0,
   gazeOffset,
   irisColor = COLORS.slateCharcoal,
+  lidFill,
   darkMask = false,
 }) => {
   const { silhouette } = useRigVisual();
@@ -47,20 +56,43 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
   const strokeColor = darkMask ? '#FFFFFF' : COLORS.slateCharcoal;
   const { gx, gy, hx, hy } = eyeGazeShift(gazeOffset, radius);
 
+  const isBlinkable =
+    expression === 'normal' ||
+    expression === 'determined' ||
+    expression === 'eager' ||
+    expression === 'aha' ||
+    expression === 'bruised_grit' ||
+    expression === 'blink';
+
+  const resolvedStage: BlinkStage =
+    expression === 'blink' ? 2 : isBlinkable ? blinkStage : 0;
+
   const renderSingleEye = (cx: number, isRight: boolean) => {
     const dir = isRight ? 1 : -1;
 
+    // Right eye stays in gritty wince during `bruised_grit`; left eye still blinks organically
+    const applyBlink = !(expression === 'bruised_grit' && isRight);
+    if (applyBlink && resolvedStage === 2) {
+      return <ShutBlinkEye cx={cx} cy={y} r={radius} stroke={strokeColor} />;
+    }
+    if (applyBlink && resolvedStage === 1) {
+      return (
+        <HalfBlinkLidEye
+          cx={cx}
+          cy={y}
+          r={radius}
+          stroke={strokeColor}
+          irisColor={irisColor}
+          lidFill={lidFill}
+          darkMask={darkMask}
+          gazeOffset={gazeOffset}
+        />
+      );
+    }
+
     switch (expression) {
       case 'blink':
-        return (
-          <Path
-            d={`M ${cx - radius * 1.15} ${y + 0.5} Q ${cx} ${y + radius * 0.55} ${cx + radius * 1.15} ${y + 0.5}`}
-            stroke={strokeColor}
-            strokeWidth={2.8}
-            strokeLinecap="round"
-            fill="none"
-          />
-        );
+        return <ShutBlinkEye cx={cx} cy={y} r={radius} stroke={strokeColor} />;
 
       case 'happy':
       case 'blush':

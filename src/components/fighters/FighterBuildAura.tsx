@@ -10,18 +10,18 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
-  Easing,
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { Svg, Circle, Polygon } from 'react-native-svg';
 import { weaponRole, type WeaponRole } from '@/adventure/data/weaponRoles';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { COLORS } from '@/utils/colors';
+import { EASE, IDLE_LOOP } from '@/utils/motion';
 
 export interface BuildAuraTheme {
   dominantRole: WeaponRole;
@@ -86,6 +86,11 @@ export interface FighterBuildAuraProps {
 const EVO_GOLD = '#F59E0B';
 const EVO_BRIGHT = '#FDE047';
 const ARCANA_VIOLET = '#8B5CF6';
+const INK = COLORS.slateCharcoal;
+/** Tokenized seam-free breath half-period derived from `IDLE_LOOP.primePeriodsMs[0]` (2900ms) */
+const AURA_BREATH_HALF_MS = Math.round(IDLE_LOOP.primePeriodsMs[0] / 2);
+/** Slow orbital revolution (3x breath period for harmonic phase lock) */
+const AURA_ORBIT_MS = IDLE_LOOP.primePeriodsMs[0] * 3;
 
 export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
   theme,
@@ -108,16 +113,16 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
       spin.value = 0;
       return;
     }
+    // Symmetric `EASE.drift` ping-pong guarantees C0+C1 zero-slope continuity at both ends
     pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.sin) })
-      ),
-      -1
+      withTiming(1, { duration: AURA_BREATH_HALF_MS, easing: EASE.drift }),
+      -1,
+      true
     );
     spin.value = withRepeat(
-      withTiming(360, { duration: 11000, easing: Easing.linear }),
-      -1
+      withTiming(360, { duration: AURA_ORBIT_MS, easing: EASE.linear }),
+      -1,
+      false
     );
     return () => {
       cancelAnimation(pulse);
@@ -125,9 +130,13 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
     };
   }, [shouldAnimate, pulse, spin]);
 
+  // Organic storybook ring breath: gentle scale expansion + subtle counter-sway + warm luminance breath
   const pulseStyle = useAnimatedStyle(() => ({
-    opacity: 0.72 + pulse.value * 0.24,
-    transform: [{ scale: 1 + pulse.value * 0.045 }],
+    opacity: 0.78 + pulse.value * 0.2,
+    transform: [
+      { scale: 0.97 + pulse.value * 0.06 },
+      { rotate: `${(pulse.value - 0.5) * -7}deg` },
+    ],
   }));
 
   const orbitStyle = useAnimatedStyle(() => ({
@@ -137,11 +146,13 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
   if (!theme) return null;
 
   const palette = ROLE_AURA_STYLE[theme.dominantRole] ?? ROLE_AURA_STYLE.damage;
-  const ringSize = Math.round(size * 1.24);
+  // Generous ring span clears both bare combat fighters AND rounded-square framed Camp portraits
+  const ringSize = Math.round(size * 1.38);
   const offset = -Math.round((ringSize - size) / 2);
   const cx = ringSize / 2;
-  const rOuter = ringSize * 0.45;
-  const rInner = ringSize * 0.39;
+  const rOuter = ringSize * 0.455;
+  const rOrbit = ringSize * 0.435;
+  const rInner = ringSize * 0.4;
   const arcanaNodes = Math.min(3, theme.arcanaCount);
 
   return (
@@ -168,9 +179,9 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
             r={rOuter}
             fill="none"
             stroke={palette.primary}
-            strokeWidth={theme.evolved ? 2.5 : 2}
-            strokeDasharray={theme.evolved ? '8 4' : '5 5'}
-            opacity={0.9}
+            strokeWidth={theme.evolved ? 2.6 : 2.2}
+            strokeDasharray={theme.evolved ? '8 4' : '6 4'}
+            opacity={0.92}
           />
           {theme.evolved && (
             <>
@@ -186,11 +197,11 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
               <Circle
                 cx={cx}
                 cy={cx}
-                r={rOuter + 2.5}
+                r={rOuter + 2.2}
                 fill="none"
                 stroke={EVO_BRIGHT}
-                strokeWidth={1.25}
-                opacity={0.85}
+                strokeWidth={1.35}
+                opacity={0.88}
               />
             </>
           )}
@@ -198,50 +209,51 @@ export const FighterBuildAura: React.FC<FighterBuildAuraProps> = ({
             <Circle
               cx={cx}
               cy={cx}
-              r={rInner - 2.5}
+              r={rOrbit - 2.2}
               fill="none"
               stroke={ARCANA_VIOLET}
-              strokeWidth={1.5}
+              strokeWidth={1.6}
               strokeDasharray="3 4"
-              opacity={0.85}
+              opacity={0.86}
             />
           )}
         </Svg>
       </Animated.View>
 
-      {/* Orbiting glints for Arcana & Evolution flair */}
+      {/* Storybook ink-outlined orbiting glints for Arcana & Evolution flair */}
       {(arcanaNodes > 0 || theme.evolved) && (
         <Animated.View style={[StyleSheet.absoluteFill, shouldAnimate ? orbitStyle : undefined]}>
           <Svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`}>
             {theme.evolved &&
               [0, 90, 180, 270].map(deg => {
                 const rad = (deg * Math.PI) / 180;
-                const gx = cx + Math.cos(rad) * (rOuter + 1);
-                const gy = cx + Math.sin(rad) * (rOuter + 1);
+                const gx = cx + Math.cos(rad) * (rOuter + 0.5);
+                const gy = cx + Math.sin(rad) * (rOuter + 0.5);
                 return (
                   <Polygon
                     key={`evo-${deg}`}
-                    points={`${gx},${gy - 3.5} ${gx + 2.5},${gy} ${gx},${gy + 3.5} ${gx - 2.5},${gy}`}
+                    points={`${gx},${gy - 4} ${gx + 2.8},${gy} ${gx},${gy + 4} ${gx - 2.8},${gy}`}
                     fill={EVO_BRIGHT}
-                    stroke={EVO_GOLD}
-                    strokeWidth={0.8}
+                    stroke={INK}
+                    strokeWidth={1.1}
+                    strokeLinejoin="round"
                   />
                 );
               })}
             {Array.from({ length: arcanaNodes }).map((_, i) => {
               const deg = 45 + i * 120;
               const rad = (deg * Math.PI) / 180;
-              const ax = cx + Math.cos(rad) * rInner;
-              const ay = cx + Math.sin(rad) * rInner;
+              const ax = cx + Math.cos(rad) * rOrbit;
+              const ay = cx + Math.sin(rad) * rOrbit;
               return (
                 <Circle
                   key={`arc-${i}`}
                   cx={ax}
                   cy={ay}
-                  r={2.8}
+                  r={3.4}
                   fill={ARCANA_VIOLET}
-                  stroke={palette.accent}
-                  strokeWidth={1}
+                  stroke={INK}
+                  strokeWidth={1.25}
                 />
               );
             })}
@@ -259,7 +271,7 @@ const st = StyleSheet.create({
     justifyContent: 'center',
   },
   staticOpacity: {
-    opacity: 0.85,
+    opacity: 0.88,
   },
 });
 

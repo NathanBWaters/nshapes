@@ -24,6 +24,7 @@ const BILL_SHADOW = '#CA8A04';
 export const PelicanRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  blinkStage = 0,
   gazeOffset,
   headStyle,
   leftEarStyle,
@@ -32,35 +33,26 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
   pawStyle,
   silhouette = false,
 }) => {
-  const isCheering = expression === 'happy' || expression === 'starry';
   const isStarry = expression === 'starry';
   const isRuffled =
     healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
 
   return (
     <RigLayerStack silhouette={silhouette} facing="right">
-      {/* 1. Far Swept-Back Coastal Wing (uses leftEarStyle, pivots at 24, 54) */}
+      {/* 1. Far Swept-Back Coastal Wing (uses leftEarStyle, pivots at 24, 54; continuously GPU-flapped) */}
       <RigLayer skipAutoLighting style={leftEarStyle}>
         <Defs>
           <TwoToneGradient id="pel-wing-l" lit={PLUMAGE_LIT} base={PLUMAGE_WHITE} shadow={PLUMAGE_SHADOW} />
         </Defs>
         <Path
-          d={
-            isCheering
-              ? 'M 28 53 C 12 41, 4 24, 11 19 C 18 15, 29 31, 33 48 Z'
-              : 'M 27 52 C 11 49, 4 62, 11 72 C 17 79, 28 69, 31 58 Z'
-          }
+          d="M 27 52 C 11 49, 4 62, 11 72 C 17 79, 28 69, 31 58 Z"
           fill="url(#pel-wing-l)"
           stroke={STROKE}
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
         <Path
-          d={
-            isCheering
-              ? 'M 11 19 C 14 17, 19 22, 21 28 L 13 30 Z'
-              : 'M 9 65 L 18 65 L 14 73 C 10 72, 8 69, 9 65 Z'
-          }
+          d="M 9 65 L 18 65 L 14 73 C 10 72, 8 69, 9 65 Z"
           fill={COLORS.logicTeal}
         />
       </RigLayer>
@@ -86,43 +78,31 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
         />
       </RigLayer>
 
-      {/* 3. Near Swept-Back Coastal Wing (uses rightEarStyle, pivots at 33, 56) */}
+      {/* 3. Near Swept-Back Coastal Wing (uses rightEarStyle, pivots at 33, 56; continuously GPU-flapped) */}
       <RigLayer skipAutoLighting style={rightEarStyle}>
         <Defs>
           <TwoToneGradient id="pel-wing-r" lit={PLUMAGE_LIT} base={PLUMAGE_WHITE} shadow={PLUMAGE_SHADOW} />
         </Defs>
         <Path
-          d={
-            isCheering
-              ? 'M 38 56 C 24 46, 15 36, 20 31 C 26 27, 37 40, 42 52 Z'
-              : 'M 37 56 C 22 57, 15 71, 22 79 C 29 84, 41 72, 43 60 Z'
-          }
+          d="M 37 56 C 22 57, 15 71, 22 79 C 29 84, 41 72, 43 60 Z"
           fill="url(#pel-wing-r)"
           stroke={STROKE}
           strokeWidth={3.1}
           strokeLinejoin="round"
         />
         <Path
-          d={
-            isCheering
-              ? 'M 20 31 C 23 30, 27 33, 29 38 L 22 39 Z'
-              : 'M 21 71 L 30 71 L 26 79 C 22 79, 20 75, 21 71 Z'
-          }
+          d="M 21 71 L 30 71 L 26 79 C 22 79, 20 75, 21 71 Z"
           fill={COLORS.logicTeal}
         />
       </RigLayer>
 
-      {/* 4. Signature Oversized Expandable Tangerine Throat Pouch jutting FAR RIGHT (pivots at 54, 50) */}
+      {/* 4. Signature Oversized Expandable Tangerine Throat Pouch jutting FAR RIGHT (pivots at 54, 50; SPRING.loose heave) */}
       <RigLayer skipAutoLighting style={tailStyle}>
         <Defs>
           <TwoToneGradient id="pel-pouch" lit={POUCH_LIT} base={POUCH_ORANGE} shadow={POUCH_SHADOW} />
         </Defs>
         <Path
-          d={
-            isCheering
-              ? 'M 43 42 C 44 71, 90 74, 94 43 Z'
-              : 'M 44 42 C 45 65, 84 67, 92 43 Z'
-          }
+          d="M 44 42 C 45 65, 84 67, 92 43 Z"
           fill="url(#pel-pouch)"
           stroke={STROKE}
           strokeWidth={3.2}
@@ -175,7 +155,9 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
 
         <CreatureEyes
           expression={expression}
+          blinkStage={blinkStage}
           gazeOffset={gazeOffset}
+          lidFill={PLUMAGE_WHITE}
           leftX={33}
           rightX={46}
           y={32.5}
@@ -184,11 +166,7 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
 
         {/* Oversized Sculpted Golden Upper Bill with Pronounced Hooked Tip jutting far right */}
         <Path
-          d={
-            isCheering
-              ? 'M 43 37 L 91 31 C 95 31, 96 36, 92 39 L 43 43 Z'
-              : 'M 43 38 L 91 38 C 95 38, 96 44, 91 47 L 88 43 L 43 44 Z'
-          }
+          d="M 43 38 L 91 38 C 95 38, 96 44, 91 47 L 88 43 L 43 44 Z"
           fill="url(#pel-bill)"
           stroke={STROKE}
           strokeWidth={3}

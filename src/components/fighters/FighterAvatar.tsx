@@ -1,9 +1,19 @@
-import React, { memo, useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { cancelAnimation, withDelay, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { CreatureDamageOverlay } from '@/components/creatures/CreatureDamageOverlay';
 import { CreatureStage } from '@/components/creatures/CreatureStage';
 import { RigVisualProvider } from '@/components/creatures/RigLayers';
+import type { BlinkStage } from '@/components/creatures/types';
 import {
   CreatureMotionConfig,
   useCreatureMotion,
@@ -13,6 +23,7 @@ import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
+  ACCESSIBLE,
   BLINK,
   CHEER,
   CREATURE_ACTING,
@@ -20,8 +31,12 @@ import {
   EASE,
   HIT,
   HitTier,
+  MODAL_MOTION,
   MS,
+  OVERLAP,
+  SCALE,
   SPRING,
+  STAYS,
   SpringSpec,
   THROW,
   cheerIntensity,
@@ -32,13 +47,21 @@ import {
   FIGHTER_MOOD_MOTION,
   FIGHTER_REACTION_HOLD_MS,
   FighterAmbientMood,
+  FighterExpression,
   FighterReactionEvent,
   getFighterHealthState,
   resolveFighterExpression,
 } from '@/utils/fighterAnimations';
 import { FallbackFighterRig } from './creatures/FallbackFighterRig';
 import { FighterEffectsOverlay, FighterOverlayReactionType } from './FighterEffectsOverlay';
-import { getFighterCreature, getFighterPersonality, getFighterPivots } from './fighterRegistry';
+import {
+  getFighterCreature,
+  getFighterMassClass,
+  getFighterPersonality,
+  getFighterPivots,
+  getFighterSpeciesChoreography,
+  getFighterSpeciesFidget,
+} from './fighterRegistry';
 
 export type FighterAvatarReactionType = FighterOverlayReactionType;
 
@@ -71,6 +94,12 @@ export interface FighterAvatarProps {
   /** Whether continuous idle/reaction animations run (default true) */
   animate?: boolean;
   /**
+   * Battery-safe lightweight portrait mode (menus, pickers, story endings, bubbles):
+   * runs GPU-only `withRepeat` breathing with ZERO `useGuardedFrameCallback` loops,
+   * gated strictly on `useAppActive()` & `!useReducedMotion()` & `cancelAnimation` cleanup.
+   */
+  lightweight?: boolean;
+  /**
    * Reactions change the face and show their marks, but the body does not move
    * (the in-game Effects switch is off). Idle life still runs.
    */
@@ -86,6 +115,15 @@ export interface FighterAvatarProps {
   /** Optional testID */
   testID?: string;
 }
+
+const BLINKABLE_EXPRESSIONS: ReadonlySet<FighterExpression> = new Set([
+  'normal',
+  'determined',
+  'eager',
+  'aha',
+  'bruised_grit',
+  'blink',
+]);
 
 /**
  * Builds a 1-frame snap to `center`, decaying 1-frame micro-vibration across `holdMs`
@@ -604,6 +642,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
   streak = 0,
   cheerReleaseMs,
   animate = true,
+  lightweight = false,
   quiet = false,
   interactive = false,
   onPet,
@@ -613,7 +652,8 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
 }) {
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
-  const shouldAnimate = animate && !reducedMotion && appActive;
+  const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
+  const shouldLightweightBreathe = animate && lightweight && !reducedMotion && appActive && !quiet;
 
   const characterName =
     typeof character === 'string'
@@ -623,6 +663,9 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
 
   const personality = useMemo(() => getFighterPersonality(characterName), [characterName]);
   const pivots = getFighterPivots(characterName);
+  const massClass = getFighterMassClass(characterName);
+  const speciesChoreography = getFighterSpeciesChoreography(characterName);
+  const speciesFidget = getFighterSpeciesFidget(characterName);
   const healthState = useMemo(
     () => getFighterHealthState(health, maxHealth),
     [health, maxHealth]
@@ -637,15 +680,54 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
     healthState,
     personality,
     pivots,
+    massClass,
+    speciesChoreography,
+    speciesFidget,
     reaction,
     cheerReleaseMs: effectiveCheerReleaseMs,
     animate: shouldAnimate,
     stillReactions: quiet,
     // A streak makes the cheer for a Set bigger (the same hop, higher)
     reactionIntensity: cheerIntensity(streak),
-    lively: true,
+    lively: !lightweight,
     interactive,
     onTap: onPet as ((reaction: FighterAvatarReactionType) => void) | undefined,
+  });
+
+  // Battery-safe GPU-only breathing for lightweight portraits (0 frame loops, gated on useAppActive + !reducedMotion)
+  const lightweightBreath = useSharedValue(0);
+  useEffect(() => {
+    if (!shouldLightweightBreathe) {
+      cancelAnimation(lightweightBreath);
+      lightweightBreath.value = 0;
+      return;
+    }
+    const phaseShare = FIGHTER_MOTION.initialPhases(characterName).breath / (Math.PI * 2);
+    const halfCycleMs = Math.max(320, Math.round(personality.breathCycleMs / 2));
+    const staggerMs = Math.round(phaseShare * personality.breathCycleMs);
+    lightweightBreath.value = 0;
+    lightweightBreath.value = withDelay(
+      staggerMs,
+      withRepeat(withTiming(1, { duration: halfCycleMs, easing: EASE.drift }), -1, true)
+    );
+    return () => {
+      cancelAnimation(lightweightBreath);
+    };
+  }, [shouldLightweightBreathe, characterName, personality.breathCycleMs, lightweightBreath]);
+
+  const footAnchorY = size * 0.35;
+  const lightweightBreathAmp = personality.breathIntensity;
+  const lightweightRigStyle = useAnimatedStyle(() => {
+    const scaleY = 1 + lightweightBreath.value * lightweightBreathAmp;
+    const scaleX = 1 / scaleY;
+    return {
+      transform: [
+        { translateY: footAnchorY },
+        { scaleX },
+        { scaleY },
+        { translateY: -footAnchorY },
+      ],
+    };
   });
 
   const expression = useMemo(() => {
@@ -656,14 +738,25 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
       healthState,
       mood,
       activeReaction: motion.activeReaction === 'throw' ? null : motion.activeReaction,
-      isBlinking: motion.isBlinking,
+      isBlinking: motion.blinkStage === 2,
     });
-  }, [healthState, mood, motion.activeReaction, motion.isBlinking]);
+  }, [healthState, mood, motion.activeReaction, motion.blinkStage]);
+
+  // Preserve full 3-step organic upper-eyelid sweep (`0` open -> `1` half-lid -> `2` full shut)
+  // while NEVER letting idle blinks make a fighter look drowsy mid-throw or mid-combat reaction!
+  const effectiveBlinkStage: BlinkStage =
+    expression === 'blink'
+      ? 2
+      : !motion.activeReaction && BLINKABLE_EXPRESSIONS.has(expression)
+        ? motion.blinkStage
+        : 0;
 
   const rigProps = {
     size,
     expression,
     healthState,
+    blinkStage: effectiveBlinkStage,
+    lidClose: motion.lidClose,
     gazeOffset: motion.gaze,
     headStyle: motion.headStyle,
     leftEarStyle: motion.leftEarStyle,
@@ -676,6 +769,187 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
 
   const isCriticalFrame = healthState === 'critical' || healthState === 'knocked_out';
   const isStreakFrame = streak >= 3 || mood === 'streak' || mood === 'victory';
+  const hasFrameHighlight = framed && (isCriticalFrame || isStreakFrame);
+  const [highlightKind, setHighlightKind] = useState<'critical' | 'streak' | null>(() =>
+    isCriticalFrame ? 'critical' : isStreakFrame ? 'streak' : null
+  );
+
+  // Smooth GPU-only frame state accent transition (replaces abrupt 1-frame color snap)
+  const frameAccentOpacity = useSharedValue(hasFrameHighlight ? 1 : 0);
+  const frameAccentScale = useSharedValue(1);
+  const frameExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (frameExitTimerRef.current) {
+      clearTimeout(frameExitTimerRef.current);
+      frameExitTimerRef.current = null;
+    }
+    if (hasFrameHighlight) {
+      setHighlightKind(isCriticalFrame ? 'critical' : 'streak');
+      if (reducedMotion || quiet) {
+        frameAccentOpacity.value = withTiming(1, {
+          duration: ACCESSIBLE.fadeMs,
+          easing: EASE.ui,
+          ...STAYS,
+        });
+        frameAccentScale.value = 1;
+      } else {
+        frameAccentOpacity.value = withTiming(1, {
+          duration: MS.quick,
+          easing: EASE.state,
+          ...STAYS,
+        });
+        frameAccentScale.value = withSequence(
+          withTiming(1.03, { duration: MS.feedback, easing: EASE.popSoft }),
+          withSpring(1, SPRING.snappy)
+        );
+      }
+    } else {
+      const exitDur = reducedMotion || quiet ? ACCESSIBLE.fadeMs : MODAL_MOTION.exitMs;
+      // Disney #5 Exit Inversion: streak badge starts exiting first; frame border trails by 2f (32ms)
+      const frameExitDelay = reducedMotion || quiet ? 0 : OVERLAP.primaryMs;
+      const fadeOut = withTiming(0, {
+        duration: exitDur,
+        easing: EASE.exitSoft,
+        ...STAYS,
+      });
+      frameAccentOpacity.value =
+        frameExitDelay > 0 ? withDelay(frameExitDelay, fadeOut) : fadeOut;
+      frameAccentScale.value = 1;
+      frameExitTimerRef.current = setTimeout(() => {
+        frameExitTimerRef.current = null;
+        setHighlightKind(null);
+      }, frameExitDelay + exitDur + 16);
+    }
+    return () => {
+      if (frameExitTimerRef.current) {
+        clearTimeout(frameExitTimerRef.current);
+        frameExitTimerRef.current = null;
+      }
+    };
+  }, [hasFrameHighlight, isCriticalFrame, reducedMotion, quiet, frameAccentOpacity, frameAccentScale]);
+
+  const frameHighlightStyle = useAnimatedStyle(() => ({
+    opacity: frameAccentOpacity.value,
+    transform: [{ scale: frameAccentScale.value }],
+  }));
+
+  // Mount-until-exited animated `3x` streak pill (`MODAL_MOTION` / `EASE.popSoft` enter, `EASE.exitSoft` exit)
+  const showStreakBadge = framed && streak >= 3;
+  const [streakBadgeMounted, setStreakBadgeMounted] = useState(showStreakBadge);
+  const [displayedStreak, setDisplayedStreak] = useState(streak);
+  const prevStreakShownRef = useRef(showStreakBadge);
+  const prevStreakValRef = useRef(streak);
+  const badgeExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const badgeOpacity = useSharedValue(showStreakBadge ? 1 : 0);
+  const badgeScale = useSharedValue(showStreakBadge ? 1 : 0.65);
+  const badgeTy = useSharedValue(showStreakBadge ? 0 : 4);
+
+  if (showStreakBadge && !streakBadgeMounted) {
+    setStreakBadgeMounted(true);
+  }
+  if (showStreakBadge && displayedStreak !== streak) {
+    setDisplayedStreak(streak);
+  }
+
+  useEffect(() => {
+    if (badgeExitTimerRef.current) {
+      clearTimeout(badgeExitTimerRef.current);
+      badgeExitTimerRef.current = null;
+    }
+    const wasShown = prevStreakShownRef.current;
+    const prevVal = prevStreakValRef.current;
+    prevStreakShownRef.current = showStreakBadge;
+    prevStreakValRef.current = streak;
+
+    if (showStreakBadge) {
+      if (!wasShown) {
+        if (reducedMotion || quiet) {
+          badgeScale.value = 1;
+          badgeTy.value = 0;
+          badgeOpacity.value = 0;
+          badgeOpacity.value = withTiming(1, {
+            duration: ACCESSIBLE.fadeMs,
+            easing: EASE.ui,
+            ...STAYS,
+          });
+        } else {
+          // Disney #5 Overlapping Action: frame border illuminates at f0; 3x badge pops in 2f (32ms) later!
+          badgeOpacity.value = 0;
+          badgeScale.value = 0.62;
+          badgeTy.value = 5;
+          badgeOpacity.value = withDelay(
+            OVERLAP.primaryMs,
+            withTiming(1, {
+              duration: MS.feedback,
+              easing: EASE.ui,
+              ...STAYS,
+            })
+          );
+          badgeScale.value = withDelay(
+            OVERLAP.primaryMs,
+            withTiming(1, {
+              duration: MODAL_MOTION.enterMs,
+              easing: EASE.popSoft,
+            })
+          );
+          badgeTy.value = withDelay(
+            OVERLAP.primaryMs,
+            withTiming(0, {
+              duration: MODAL_MOTION.enterMs,
+              easing: EASE.enter,
+            })
+          );
+        }
+      } else if (streak > prevVal && !reducedMotion && !quiet) {
+        // Crisp micro-bump when extending an active streak (3x -> 4x -> 5x)
+        badgeScale.value = withSequence(
+          withTiming(SCALE.pop, { duration: MS.feedback, easing: EASE.popSoft }),
+          withSpring(1, SPRING.snappy)
+        );
+      }
+    } else if (wasShown) {
+      const exitDur = reducedMotion || quiet ? ACCESSIBLE.fadeMs : MODAL_MOTION.exitMs;
+      badgeOpacity.value = withTiming(0, {
+        duration: exitDur,
+        easing: EASE.exitSoft,
+        ...STAYS,
+      });
+      if (!reducedMotion && !quiet) {
+        badgeScale.value = withTiming(0.72, { duration: exitDur, easing: EASE.exitSoft });
+        badgeTy.value = withTiming(3, { duration: exitDur, easing: EASE.exitSoft });
+      }
+      badgeExitTimerRef.current = setTimeout(() => {
+        badgeExitTimerRef.current = null;
+        setStreakBadgeMounted(false);
+      }, exitDur + 16);
+    }
+
+    return () => {
+      if (badgeExitTimerRef.current) {
+        clearTimeout(badgeExitTimerRef.current);
+        badgeExitTimerRef.current = null;
+      }
+    };
+  }, [showStreakBadge, streak, reducedMotion, quiet, badgeOpacity, badgeScale, badgeTy]);
+
+  useEffect(() => {
+    return () => {
+      cancelAnimation(frameAccentOpacity);
+      cancelAnimation(frameAccentScale);
+      cancelAnimation(badgeOpacity);
+      cancelAnimation(badgeScale);
+      cancelAnimation(badgeTy);
+    };
+  }, [frameAccentOpacity, frameAccentScale, badgeOpacity, badgeScale, badgeTy]);
+
+  const streakBadgeAnimStyle = useAnimatedStyle(() => ({
+    opacity: badgeOpacity.value,
+    transform: [{ translateY: badgeTy.value }, { scale: badgeScale.value }],
+  }));
+
+  const frameRadius = Math.max(10, Math.round(size * 0.24));
 
   return (
     <CreatureStage
@@ -683,16 +957,8 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
       frame={
         framed
           ? {
-              borderColor: isCriticalFrame
-                ? COLORS.impactRed
-                : isStreakFrame
-                  ? COLORS.actionYellow
-                  : COLORS.slateCharcoal,
-              backgroundColor: isCriticalFrame
-                ? '#FFF1F2'
-                : isStreakFrame
-                  ? '#FFFBEB'
-                  : COLORS.paperBeige,
+              borderColor: COLORS.slateCharcoal,
+              backgroundColor: COLORS.paperBeige,
             }
           : undefined
       }
@@ -701,16 +967,17 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
       interactive={interactive}
       onPress={motion.handlePress}
       shadow={
-        silhouette
+        lightweight || silhouette
           ? undefined
           : {
               testID: 'fighter-ground-shadow',
               minWidth: 14,
               minHeight: 4,
               style: motion.groundShadowStyle,
+              penumbraStyle: motion.groundPenumbraStyle,
             }
       }
-      rigRootStyle={motion.rigRootStyle}
+      rigRootStyle={lightweight ? lightweightRigStyle : motion.rigRootStyle}
       rig={
         <RigVisualProvider silhouette={silhouette} facing="right">
           {Rig ? <Rig {...rigProps} /> : <FallbackFighterRig {...rigProps} icon={characterIcon} />}
@@ -724,7 +991,24 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
         </RigVisualProvider>
       }
     >
-      {!silhouette && (
+      {/* Smooth GPU-only animated frame border accent (keeps fighter colors 100% pure & un-tinted!) */}
+      {framed && highlightKind && (
+        <Animated.View
+          pointerEvents="none"
+          testID="fighter-frame-highlight"
+          style={[
+            styles.frameHighlight,
+            {
+              borderRadius: frameRadius,
+              borderColor: highlightKind === 'critical' ? COLORS.impactRed : COLORS.actionYellow,
+              backgroundColor: 'transparent',
+            },
+            frameHighlightStyle,
+          ]}
+        />
+      )}
+
+      {!silhouette && !lightweight && (
         <FighterEffectsOverlay
           activeReaction={motion.activeReaction}
           reactionId={motion.reactionKey}
@@ -737,17 +1021,29 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
         />
       )}
 
-      {/* Streak mini-pill when framed in HUD and on a 3+ match streak */}
-      {framed && streak >= 3 && (
-        <View style={styles.streakBadge} pointerEvents="none" testID="fighter-streak-badge">
-          <Text style={styles.streakBadgeText}>{streak}x</Text>
-        </View>
+      {/* Animated streak mini-pill when framed in HUD and on a 3+ match streak */}
+      {streakBadgeMounted && (
+        <Animated.View
+          style={[styles.streakBadge, streakBadgeAnimStyle]}
+          pointerEvents="none"
+          testID="fighter-streak-badge"
+        >
+          <Text style={styles.streakBadgeText}>{displayedStreak}x</Text>
+        </Animated.View>
       )}
     </CreatureStage>
   );
 });
 
 const styles = StyleSheet.create({
+  frameHighlight: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderWidth: 2.5,
+  },
   streakBadge: {
     position: 'absolute',
     bottom: -4,

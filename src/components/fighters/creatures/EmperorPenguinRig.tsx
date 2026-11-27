@@ -23,6 +23,7 @@ const BEAK_ORANGE = '#FF9538';
 export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  blinkStage = 0,
   gazeOffset,
   headStyle,
   leftEarStyle,
@@ -53,17 +54,13 @@ export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
         <Polygon points="22,15 26,19 22,23 18,19" fill={COLORS.logicTeal} opacity={0.85} />
       </RigLayer>
 
-      {/* 2. Trailing Left Flipper swept gracefully back (uses leftEarStyle, pivots at 30, 54) */}
+      {/* 2. Trailing Left Flipper swept gracefully back (uses leftEarStyle, pivots at 30, 54; continuously GPU-animated) */}
       <RigLayer skipAutoLighting style={leftEarStyle}>
         <Defs>
           <TwoToneGradient id="peng-flip-l" lit={TUX_LIT} base={TUX_NAVY} shadow={TUX_SHADOW} />
         </Defs>
         <Path
-          d={
-            isCheering
-              ? 'M 33 52 C 19 44, 12 31, 17 26 C 22 22, 31 36, 35 48 Z'
-              : 'M 33 51 C 19 56, 13 70, 19 75 C 25 78, 32 67, 35 56 Z'
-          }
+          d="M 33 51 C 19 56, 13 70, 19 75 C 25 78, 32 67, 35 56 Z"
           fill="url(#peng-flip-l)"
           stroke={STROKE}
           strokeWidth={3.2}
@@ -109,17 +106,13 @@ export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
         />
       </RigLayer>
 
-      {/* 4. Lead Right Flipper sweeping boldly forward-right casting! (uses rightEarStyle, pivots at 65, 52) */}
+      {/* 4. Lead Right Flipper sweeping boldly forward-right casting! (uses rightEarStyle, pivots at 65, 52; continuously GPU-animated) */}
       <RigLayer skipAutoLighting style={rightEarStyle}>
         <Defs>
           <TwoToneGradient id="peng-flip-r" lit={TUX_LIT} base={TUX_NAVY} shadow={TUX_SHADOW} />
         </Defs>
         <Path
-          d={
-            isCheering
-              ? 'M 64 51 C 77 41, 91 31, 93 38 C 95 45, 81 54, 67 57 Z'
-              : 'M 64 51 C 76 47, 91 48, 92 55 C 93 61, 79 63, 66 59 Z'
-          }
+          d="M 64 51 C 76 47, 91 48, 92 55 C 93 61, 79 63, 66 59 Z"
           fill="url(#peng-flip-r)"
           stroke={STROKE}
           strokeWidth={3.2}
@@ -162,7 +155,9 @@ export const EmperorPenguinRig: React.FC<CreatureRigProps> = ({
 
         <CreatureEyes
           expression={expression}
+          blinkStage={blinkStage}
           gazeOffset={gazeOffset}
+          lidFill="#FFFFFF"
           leftX={45.5}
           rightX={62}
           y={36}

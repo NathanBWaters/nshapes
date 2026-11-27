@@ -22,6 +22,7 @@ const FOX_CREAM_SHADOW = '#E2CFC0';
 export const SlyFoxRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
+  blinkStage = 0,
   gazeOffset,
   headStyle,
   leftEarStyle,
@@ -154,7 +155,9 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
 
         <CreatureEyes
           expression={expression}
+          blinkStage={blinkStage}
           gazeOffset={gazeOffset}
+          lidFill={FOX_ORANGE}
           leftX={49}
           rightX={71}
           y={43.5}
@@ -199,19 +202,12 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Staggered Stealth Dark-Socked Paws */}
+      {/* 6. Staggered Stealth Dark-Socked Paws (continuously GPU-animated; zero 1f JSX teleport) */}
       <RigLayer skipAutoLighting style={pawStyle}>
-        {isCheering ? (
-          <G>
-            <Ellipse cx={39} cy={64} rx={6} ry={4.8} fill={STROKE} />
-            <Ellipse cx={84} cy={61} rx={6.4} ry={5} fill={STROKE} />
-          </G>
-        ) : (
-          <G>
-            <Ellipse cx={43} cy={87} rx={6.8} ry={4.2} fill={STROKE} />
-            <Ellipse cx={74} cy={86.5} rx={7.2} ry={4.4} fill={STROKE} />
-          </G>
-        )}
+        <G>
+          <Ellipse cx={43} cy={87} rx={6.8} ry={4.2} fill={STROKE} />
+          <Ellipse cx={74} cy={86.5} rx={7.2} ry={4.4} fill={STROKE} />
+        </G>
       </RigLayer>
     </RigLayerStack>
   );
