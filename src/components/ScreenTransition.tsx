@@ -24,6 +24,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { EASE, MODAL_MOTION, MS, OVERLAP, STAYS, exitMs, reducedMs } from '@/utils/motion';
+export { MotionModal, type MotionModalProps } from './MotionModal';
 
 /** Which way a change goes: 1 deeper (the new screen comes from the right), -1 back */
 export type ScreenDirection = 1 | -1;
@@ -34,6 +35,9 @@ export type ScreenDirection = 1 | -1;
  */
 const ENTER_SHIFT = 40;
 const EXIT_SHIFT = 26;
+/** Subtle vertical lift for in-screen section swaps (e.g. Camp hub ↔ tabs): zero horizontal viewport drift. */
+const SECTION_ENTER_Y = 14;
+const SECTION_EXIT_Y = 10;
 
 /**
  * Jest renders screen/modal exits at once, so tests that tap and immediately
@@ -59,14 +63,22 @@ export function useScreenTransition({
   instant = SCREEN_INSTANT,
   enterOnMount = true,
   initialDirection = 1,
+  axis = 'x',
+  durationMs = MS.screen,
 }: {
   instant?: boolean;
   enterOnMount?: boolean;
   initialDirection?: ScreenDirection;
+  /** `'x'` for full-screen routes (default); `'y'` for in-screen section swaps (zero horizontal overflow). */
+  axis?: 'x' | 'y';
+  /** Enter duration token from `MS` (default `MS.screen`); exit automatically uses `exitMs(durationMs)`. */
+  durationMs?: number;
 } = {}): ScreenTransitionControl {
   const reduced = useReducedMotion();
+  const enterShift = axis === 'y' ? SECTION_ENTER_Y : ENTER_SHIFT;
+  const exitShift = axis === 'y' ? SECTION_EXIT_Y : EXIT_SHIFT;
   const animateMount = enterOnMount && !instant;
-  const x = useSharedValue(animateMount && !reduced ? initialDirection * ENTER_SHIFT : 0);
+  const shift = useSharedValue(animateMount && !reduced ? initialDirection * enterShift : 0);
   const o = useSharedValue(animateMount ? 0 : 1);
   const [leaving, setLeaving] = useState(false);
   const pending = useRef<{ apply: () => void; direction: ScreenDirection } | null>(null);
@@ -84,22 +96,22 @@ export function useScreenTransition({
   useEffect(() => () => {
     alive.current = false;
     clearSafetyTimer();
-    cancelAnimation(x);
+    cancelAnimation(shift);
     cancelAnimation(o);
-  }, [clearSafetyTimer, x, o]);
+  }, [clearSafetyTimer, shift, o]);
 
   const enter = useCallback((direction: ScreenDirection) => {
-    x.value = reduced ? 0 : direction * ENTER_SHIFT;
+    shift.value = reduced ? 0 : direction * enterShift;
     o.value = 0;
     if (!reduced) {
-      x.value = withTiming(0, { duration: MS.screen, easing: EASE.enter });
+      shift.value = withTiming(0, { duration: durationMs, easing: EASE.enter });
     }
     o.value = withTiming(1, {
-      duration: reduced ? reducedMs(MS.screen) : MS.feedback,
+      duration: reduced ? reducedMs(durationMs) : Math.min(MS.feedback, durationMs),
       easing: EASE.ui,
       ...STAYS,
     });
-  }, [reduced, x, o]);
+  }, [reduced, enterShift, durationMs, shift, o]);
 
   const mounted = useRef(false);
   useEffect(() => {
@@ -134,10 +146,10 @@ export function useScreenTransition({
     exiting.current = true;
     const id = ++exitId.current;
     setLeaving(true);
-    const out = exitMs(reduced ? MS.feedback : MS.screen);
+    const out = exitMs(reduced ? MS.feedback : durationMs);
     // From wherever the values are now (a change can start while the last one is still arriving)
     if (!reduced) {
-      x.value = withTiming(-direction * EXIT_SHIFT, { duration: out, easing: EASE.exitSoft });
+      shift.value = withTiming(-direction * exitShift, { duration: out, easing: EASE.exitSoft });
     }
     // The fade is even (not a move, so not eased): answers on f1 and hits paper right at swap
     o.value = withTiming(0, { duration: out, easing: EASE.linear, ...STAYS }, finished => {
@@ -146,11 +158,11 @@ export function useScreenTransition({
     // If the fade never reports its end (app backgrounded), the change still happens
     clearSafetyTimer();
     safetyTimerRef.current = setTimeout(() => swap(id), out + MS.feedback);
-  }, [instant, reduced, x, o, swap, clearSafetyTimer]);
+  }, [instant, reduced, durationMs, exitShift, shift, o, swap, clearSafetyTimer]);
 
   const style = useAnimatedStyle(() => ({
     opacity: o.value,
-    transform: [{ translateX: x.value }],
+    transform: axis === 'y' ? [{ translateY: shift.value }] : [{ translateX: shift.value }],
   }));
 
   return { go, style, leaving };
@@ -192,7 +204,7 @@ export function useModalMotion(
   const { travelY = 28, sheet = false, instant = SCREEN_INSTANT } = options;
   const reduced = useReducedMotion();
   const [rendered, setRendered] = useState(visible);
-  const [closing, setClosing] = useState(false);
+  const [closingState, setClosingState] = useState(false);
 
   const startOpen = instant && visible;
   const backdropO = useSharedValue(startOpen ? 1 : 0);
@@ -228,7 +240,7 @@ export function useModalMotion(
     if (visible) {
       wasVisible.current = true;
       setRendered(true);
-      setClosing(false);
+      setClosingState(false);
 
       if (instant) {
         backdropO.value = 1;
@@ -288,11 +300,11 @@ export function useModalMotion(
       panelO.value = 0;
       contentO.value = 0;
       setRendered(false);
-      setClosing(false);
+      setClosingState(false);
       return;
     }
 
-    setClosing(true);
+    setClosingState(true);
     const exitDur = sheet ? MODAL_MOTION.sheetExitMs : MODAL_MOTION.exitMs;
     const leadMs = reduced ? 0 : MODAL_MOTION.exitContentLeadMs;
     const totalOutMs = reduced ? reducedMs(exitDur) : exitDur + leadMs;
@@ -300,7 +312,7 @@ export function useModalMotion(
     const finish = () => {
       if (wasVisible.current) return;
       setRendered(false);
-      setClosing(false);
+      setClosingState(false);
     };
 
     if (reduced) {
@@ -346,6 +358,9 @@ export function useModalMotion(
     opacity: contentO.value,
     transform: [{ translateY: contentY.value }],
   }));
+
+  // Synchronous closing flag: flips to `true` on the exact render `visible` turns false so taps pass through immediately
+  const closing = closingState || (rendered && !visible);
 
   return { rendered, closing, backdropStyle, panelStyle, contentStyle };
 }

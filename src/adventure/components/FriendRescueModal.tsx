@@ -20,7 +20,7 @@
  *   `MS.quick`) straight to the settled `FRIEND FREED!` celebration.
  */
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
@@ -33,7 +33,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { band, sfx } from '@/audio';
 import { FighterAvatar } from '@/components/fighters';
-import { useModalMotion } from '@/components/ScreenTransition';
+import { MotionModal, useModalMotion } from '@/components/ScreenTransition';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { COLORS } from '@/utils/colors';
@@ -139,7 +139,7 @@ const FriendRescueModal: React.FC<Props> = ({ keyDef, save, onRescue, onUseFight
   };
 
   return (
-    <Modal visible={rendered} transparent animationType="none" onRequestClose={() => onClose(!rescued)}>
+    <MotionModal visible={rendered} interactive={!closing} transparent onRequestClose={() => onClose(!rescued)}>
       <View
         testID="friend-rescue-modal"
         pointerEvents={closing ? 'none' : 'auto'}
@@ -186,7 +186,7 @@ const FriendRescueModal: React.FC<Props> = ({ keyDef, save, onRescue, onUseFight
           </Animated.View>
         </Animated.View>
       </View>
-    </Modal>
+    </MotionModal>
   );
 };
 

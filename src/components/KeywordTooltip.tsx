@@ -9,7 +9,6 @@ import React, { useRef } from 'react';
 import {
   View,
   Text,
-  Modal,
   TouchableOpacity,
   TouchableWithoutFeedback,
   StyleSheet,
@@ -19,7 +18,7 @@ import {
 import Animated from 'react-native-reanimated';
 import { useKeyword } from '../context/KeywordContext';
 import { COLORS, RADIUS } from '../utils/colors';
-import { useModalMotion } from './ScreenTransition';
+import { MotionModal, useModalMotion } from './ScreenTransition';
 
 /**
  * KeywordTooltip displays a bottom sheet with keyword information.
@@ -60,15 +59,15 @@ const KeywordTooltip: React.FC = () => {
     : '';
 
   return (
-    <Modal
+    <MotionModal
       visible={rendered}
+      interactive={!closing}
       transparent
-      animationType="none"
       onRequestClose={closeKeyword}
       statusBarTranslucent
     >
       {/* Backdrop - tap to dismiss */}
-      <TouchableWithoutFeedback onPress={closeKeyword}>
+      <TouchableWithoutFeedback disabled={closing} onPress={closeKeyword}>
         <View style={styles.overlay} pointerEvents={closing ? 'none' : 'auto'}>
           <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayBackdrop, backdropStyle]} />
           {/* Bottom sheet container - prevent tap through */}
@@ -107,7 +106,7 @@ const KeywordTooltip: React.FC = () => {
           </TouchableWithoutFeedback>
         </View>
       </TouchableWithoutFeedback>
-    </Modal>
+    </MotionModal>
   );
 };
 

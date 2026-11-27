@@ -7,7 +7,7 @@
  * whole fighter). Camp's ScrollView scrolls the map.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, Modal, type LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -20,7 +20,7 @@ import Animated, {
 import Svg, { Line } from 'react-native-svg';
 import Icon from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
-import { useModalMotion } from '@/components/ScreenTransition';
+import { MotionModal, useModalMotion } from '@/components/ScreenTransition';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { BTN_PRESS, EASE, MS, OVERLAP, SCALE, SPRING, STAYS } from '@/utils/motion';
@@ -572,10 +572,10 @@ const NodeDetail: React.FC<{
   const exclusivePartner = node.exclusiveWith ? getSkillNode(node.exclusiveWith) : undefined;
   const spentHere = fighterStarsSpent(save, node.fighter);
   return (
-    <Modal visible={rendered} transparent animationType="none" onRequestClose={onClose}>
+    <MotionModal visible={rendered} interactive={!closing} transparent onRequestClose={onClose}>
       <View style={st.sheetWrap} pointerEvents={closing ? 'none' : 'auto'}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, st.sheetBackdrop, backdropStyle]} />
-        <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close details" />
+        <TouchableOpacity style={StyleSheet.absoluteFill} disabled={closing} onPress={onClose} accessibilityLabel="Close details" />
         <Animated.View style={[st.detail, panelStyle]} testID="skill-detail">
           <Animated.View style={[{ gap: 8 }, contentStyle]}>
             <View style={st.detailHead}>
@@ -620,7 +620,7 @@ const NodeDetail: React.FC<{
           </Animated.View>
         </Animated.View>
       </View>
-    </Modal>
+    </MotionModal>
   );
 };
 

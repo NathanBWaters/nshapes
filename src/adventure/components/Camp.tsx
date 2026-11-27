@@ -214,8 +214,12 @@ const Camp: React.FC<Props> = ({
   const [presetNotice, setPresetNotice] = useState<string | null>(null);
   const reactionSeq = useRef(0);
 
-  // Smooth directional screen transition across Camp menu ↔ sections ↔ SkillTree
-  const viewTransition = useScreenTransition({ enterOnMount: false });
+  // Crisp vertical section transition across Camp menu ↔ sections ↔ SkillTree (exitMs(MS.feedback) + MS.feedback = 199ms, 0px horizontal drift)
+  const viewTransition = useScreenTransition({
+    enterOnMount: false,
+    axis: 'y',
+    durationMs: MS.feedback,
+  });
 
   // Horizontal refusal shake when player tries to equip past max weapon slots
   const slotsShakeX = useSharedValue(0);
@@ -1343,7 +1347,7 @@ const AnimatedBeltSlot: React.FC<{ weaponId: string | null; reduced: boolean; ch
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.walnutFrame },
+  root: { flex: 1, backgroundColor: COLORS.walnutFrame, overflow: 'hidden' },
   top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.ivoryCard, borderBottomWidth: 2, borderBottomColor: INK },
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 18, flexShrink: 1 },

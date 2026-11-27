@@ -7,7 +7,7 @@
  * Every step has to be accepted (Continue / Yes / No); nothing auto-dismisses.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Modal, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import Animated, {
   cancelAnimation,
   useSharedValue,
@@ -19,7 +19,7 @@ import Animated, {
 import Card from '@/components/Card';
 import Icon, { IconName } from '@/components/Icon';
 import { FighterAvatar } from '@/components/fighters';
-import { useModalMotion } from '@/components/ScreenTransition';
+import { MotionModal, useModalMotion } from '@/components/ScreenTransition';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { EASE, MS, SCALE, SHAKE, SPRING, STAYS, geometricShakeKeyframes, reducedMs } from '@/utils/motion';
@@ -265,7 +265,7 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
   };
 
   return (
-    <Modal visible={rendered} transparent animationType="none" onRequestClose={skipAll}>
+    <MotionModal visible={rendered} interactive={!closing} transparent onRequestClose={skipAll}>
       <View style={st.overlay} pointerEvents={closing ? 'none' : 'auto'}>
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, st.overlayBackdrop, backdropStyle]} />
         <Animated.View testID="lesson-modal" style={[st.panel, panelStyle]}>
@@ -372,7 +372,7 @@ const Lesson: React.FC<LessonProps> = ({ steps, speaker = 'Orange Tabby', onDone
           </Animated.View>
         </Animated.View>
       </View>
-    </Modal>
+    </MotionModal>
   );
 };
 

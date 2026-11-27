@@ -11,7 +11,6 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -38,7 +37,7 @@ import {
 import Animated from 'react-native-reanimated';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import Icon from './Icon';
-import { useModalMotion } from './ScreenTransition';
+import { MotionModal, useModalMotion } from './ScreenTransition';
 
 export interface KeybindingSheetProps {
   visible: boolean;
@@ -175,10 +174,10 @@ const KeybindingSheet: React.FC<KeybindingSheetProps> = ({
   if (!rendered) return null;
 
   return (
-    <Modal
+    <MotionModal
       visible={rendered}
+      interactive={!closing}
       transparent
-      animationType="none"
       onRequestClose={handleClose}
     >
       <View style={styles.overlay} testID="keybinding-sheet" pointerEvents={closing ? 'none' : 'auto'}>
@@ -385,7 +384,7 @@ const KeybindingSheet: React.FC<KeybindingSheetProps> = ({
           </Animated.View>
         </Animated.View>
       </View>
-    </Modal>
+    </MotionModal>
   );
 };
 

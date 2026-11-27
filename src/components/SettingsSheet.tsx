@@ -21,7 +21,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Linking,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -68,7 +67,7 @@ import Animated from 'react-native-reanimated';
 import Card, { CardBoardProvider } from './Card';
 import Icon from './Icon';
 import KeybindingSheet from './KeybindingSheet';
-import { useModalMotion } from './ScreenTransition';
+import { MotionModal, useModalMotion } from './ScreenTransition';
 
 /** True whenever `react-native-svg` default export is a valid React element type (always true at runtime; guards legacy Jest mocks). */
 const CAN_RENDER_LIVE_SVG_CARD =
@@ -490,10 +489,10 @@ const SettingsSheetBody: React.FC<SettingsSheetProps> = ({
 
   return (
     <>
-      <Modal
+      <MotionModal
         visible={rendered}
+        interactive={!closing}
         transparent
-        animationType="none"
         onRequestClose={onClose}
       >
         <View style={styles.overlay} testID="settings-sheet" pointerEvents={closing ? 'none' : 'auto'}>
@@ -1130,7 +1129,7 @@ const SettingsSheetBody: React.FC<SettingsSheetProps> = ({
             </Animated.View>
           </Animated.View>
         </View>
-      </Modal>
+      </MotionModal>
 
       <KeybindingSheet visible={showKeybindings} onClose={() => setShowKeybindings(false)} />
     </>

@@ -7,14 +7,14 @@
  * and honoring `useReducedMotion()`).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Card from '@/components/Card';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
-import { useModalMotion } from '@/components/ScreenTransition';
+import { MotionModal, useModalMotion } from '@/components/ScreenTransition';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import {
@@ -179,7 +179,7 @@ const HighlightStageModal: React.FC<Props> = ({
       : 0;
 
   return (
-    <Modal visible={rendered} transparent animationType="none" onRequestClose={onClose} testID={testID}>
+    <MotionModal visible={rendered} interactive={!closing} transparent onRequestClose={onClose} testID={testID}>
       <View
         style={[st.backdrop, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}
         pointerEvents={closing ? 'none' : 'auto'}
@@ -320,7 +320,7 @@ const HighlightStageModal: React.FC<Props> = ({
           </Animated.View>
         </AnchorsProvider>
       </View>
-    </Modal>
+    </MotionModal>
   );
 };
 

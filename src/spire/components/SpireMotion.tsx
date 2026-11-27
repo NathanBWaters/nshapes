@@ -8,7 +8,6 @@
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -29,6 +28,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { MotionModal } from '@/components/ScreenTransition';
 import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import {
@@ -913,7 +913,7 @@ export const SpireModalShell: React.FC<{
   if (!mounted) return null;
 
   return (
-    <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
+    <MotionModal visible={mounted} interactive={visible} transparent onRequestClose={onClose}>
       <Animated.View
         style={[st.modalOverlay, overlayStyle, backdropAnim]}
         testID={overlayTestID}
@@ -921,7 +921,8 @@ export const SpireModalShell: React.FC<{
       >
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
-          onPress={onClose}
+          disabled={!visible}
+          onPress={visible ? onClose : undefined}
           accessibilityLabel={backdropLabel}
         />
         <Animated.View style={[sheetStyle, sheetAnim]} testID={sheetTestID}>
@@ -930,7 +931,7 @@ export const SpireModalShell: React.FC<{
           {footer}
         </Animated.View>
       </Animated.View>
-    </Modal>
+    </MotionModal>
   );
 };
 

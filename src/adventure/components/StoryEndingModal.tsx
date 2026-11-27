@@ -10,7 +10,7 @@
  * reduced-motion safe with `STAYS`.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -25,7 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
-import { useModalMotion } from '@/components/ScreenTransition';
+import { MotionModal, useModalMotion } from '@/components/ScreenTransition';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { COLORS } from '@/utils/colors';
@@ -172,7 +172,7 @@ const StoryEndingModal: React.FC<Props> = ({ visible, save, onDone, onOpenSummit
   if (!modal.rendered) return null;
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={handleSkip}>
+    <MotionModal visible={modal.rendered} interactive={!modal.closing} transparent onRequestClose={handleSkip}>
       <Animated.View
         testID="story-ending-modal"
         pointerEvents={modal.closing ? 'none' : 'auto'}
@@ -304,7 +304,7 @@ const StoryEndingModal: React.FC<Props> = ({ visible, save, onDone, onOpenSummit
           </TouchableOpacity>
         </View>
       </Animated.View>
-    </Modal>
+    </MotionModal>
   );
 };
 
