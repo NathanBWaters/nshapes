@@ -1,20 +1,24 @@
-// NShapes Style Guide Colors - "The Core Stack"
-// Retro-Modern Enterprise aesthetic with high-contrast, geometric design
+// NShapes Style Guide Colors — "Tactile Tabletop Storybook"
+// Warm ivory cardstock, bold #383838 ink strokes, tactile depth ledges, and WCAG-AA accents
 
 import type { WeaponRarity } from '../types';
 
 export const COLORS = {
-  // Primary Colors
+  // Primary Storybook & Ink Tokens
   actionYellow: '#FFDE00',    // Primary CTA, notifications, eyebrow banners
-  slateCharcoal: '#383838',   // Primary text, headers, borders, strokes
-  deepOnyx: '#121212',        // Dark backgrounds, terminal windows
-  canvasWhite: '#FFFFFF',     // Card backgrounds, primary text on dark
+  slateCharcoal: '#383838',   // Primary ink, text, headers, borders, strokes
+  deepOnyx: '#121212',        // High-contrast plates, cut-ins, silhouette fills
+  canvasWhite: '#FFFFFF',     // Active card backgrounds, crisp light text
+  ivoryCard: '#FFFDF7',       // Warm storybook cardstock panels & modals
 
-  // Secondary & Accent Colors
-  paperBeige: '#F4EFEA',      // Layout backgrounds, unfilled progress bars
-  logicTeal: '#16AA98',       // Success states, positive indicators
-  impactOrange: '#FF9538',    // Warnings, secondary highlights
-  impactRed: '#FF7169',       // Errors, damage indicators
+  // Tabletop Surfaces & Secondary Accents
+  paperBeige: '#F4EFEA',      // Warm tabletop canvas, inset panels, tracks
+  walnutFrame: '#322E2B',     // Warm lantern-lit slate-walnut hub backdrop (Camp, Bounties)
+  walnutSurface: '#3E3833',   // Recessed tray inside walnut tabletop hubs
+  walnutBorder: '#6E6257',    // Subtle border inside walnut tabletop hubs
+  logicTeal: '#16AA98',       // Positive fills, progress indicators
+  impactOrange: '#FF9538',    // Campfire glow, secondary highlights
+  impactRed: '#FF7169',       // Hearts, damage indicators
 
   // Tutorial & UI Colors
   tutorialBlue: '#3B82F6',    // Tutorial highlight, new/unviewed state
@@ -52,10 +56,11 @@ export const getRarityColor = (rarity: WeaponRarity): string => {
   }
 };
 
-// Border radius standards
+// Border radius standards (Tactile Tabletop Storybook)
 export const RADIUS = {
-  button: 4,      // CTA buttons
+  button: 6,      // Tactile CTA buttons
   module: 12,     // Cards, modules
+  sheet: 18,      // Bottom sheets & modals
   container: 24,  // Top-level screen containers
 };
 

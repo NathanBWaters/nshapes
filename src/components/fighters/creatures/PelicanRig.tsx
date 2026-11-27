@@ -1,15 +1,26 @@
 import React from 'react';
-import { Circle, Ellipse, Path, Polygon } from 'react-native-svg';
+import { Circle, Defs, Ellipse, Path, Polygon } from 'react-native-svg';
 import { RigLayer, RigLayerStack } from '@/components/creatures/RigLayers';
-import { STROKE } from '@/components/illustration/primitives';
+import { STROKE, TwoToneGradient } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { CreatureEyes } from './FacialFeatures';
 import { CreatureRigProps } from './types';
 
-const PLUMAGE_WHITE = '#FFFFFF';
+const PLUMAGE_LIT = '#FFFFFF';
+const PLUMAGE_WHITE = '#FFFDF7';
+const PLUMAGE_SHADOW = '#CBD5E1';
+const POUCH_LIT = '#FDBA74';
 const POUCH_ORANGE = '#FF9538';
+const POUCH_SHADOW = '#C2410C';
+const BILL_LIT = '#FEF08A';
 const BILL_GOLD = '#FFDE00';
+const BILL_SHADOW = '#CA8A04';
 
+/**
+ * [UI-05] & [UI-07] Pelican — lean coastal silhouette, oversized hooked golden
+ * bill + deep tangerine throat pouch jutting boldly far right, jaunty 3-feather
+ * crest & coastal wings swept asymmetrically back-left, with 2-tone lighting.
+ */
 export const PelicanRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
@@ -19,46 +30,27 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
   rightEarStyle,
   tailStyle,
   pawStyle,
+  silhouette = false,
 }) => {
   const isCheering = expression === 'happy' || expression === 'starry';
   const isStarry = expression === 'starry';
-  const isRuffled = healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
+  const isRuffled =
+    healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
 
   return (
-    <RigLayerStack>
-      {/* 1. Left Coastal Wing with Teal Feather Trim (uses leftEarStyle, pivots at 25, 56) */}
-      <RigLayer style={leftEarStyle}>
+    <RigLayerStack silhouette={silhouette} facing="right">
+      {/* 1. Far Swept-Back Coastal Wing (uses leftEarStyle, pivots at 24, 54) */}
+      <RigLayer skipAutoLighting style={leftEarStyle}>
+        <Defs>
+          <TwoToneGradient id="pel-wing-l" lit={PLUMAGE_LIT} base={PLUMAGE_WHITE} shadow={PLUMAGE_SHADOW} />
+        </Defs>
         <Path
           d={
             isCheering
-              ? 'M 28 56 C 14 45, 7 29, 13 24 C 19 20, 29 35, 32 51 Z'
-              : 'M 27 53 C 15 60, 14 76, 20 80 C 26 82, 30 70, 31 59 Z'
+              ? 'M 28 53 C 12 41, 4 24, 11 19 C 18 15, 29 31, 33 48 Z'
+              : 'M 27 52 C 11 49, 4 62, 11 72 C 17 79, 28 69, 31 58 Z'
           }
-          fill={PLUMAGE_WHITE}
-          stroke={STROKE}
-          strokeWidth={3.2}
-          strokeLinejoin="round"
-        />
-        {/* Teal primary wing tip */}
-        <Path
-          d={
-            isCheering
-              ? 'M 13 24 C 16 22, 21 26, 23 32 L 15 34 Z'
-              : 'M 17 72 L 24 72 L 21 80 C 17 79, 16 76, 17 72 Z'
-          }
-          fill={COLORS.logicTeal}
-        />
-      </RigLayer>
-
-      {/* 2. Right Coastal Wing with Teal Feather Trim (uses rightEarStyle, pivots at 73, 56) */}
-      <RigLayer style={rightEarStyle}>
-        <Path
-          d={
-            isCheering
-              ? 'M 70 56 C 84 45, 91 29, 85 24 C 79 20, 69 35, 66 51 Z'
-              : 'M 71 53 C 83 60, 84 76, 78 80 C 72 82, 68 70, 67 59 Z'
-          }
-          fill={PLUMAGE_WHITE}
+          fill="url(#pel-wing-l)"
           stroke={STROKE}
           strokeWidth={3.2}
           strokeLinejoin="round"
@@ -66,56 +58,86 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
         <Path
           d={
             isCheering
-              ? 'M 85 24 C 82 22, 77 26, 75 32 L 83 34 Z'
-              : 'M 81 72 L 74 72 L 77 80 C 81 79, 82 76, 81 72 Z'
+              ? 'M 11 19 C 14 17, 19 22, 21 28 L 13 30 Z'
+              : 'M 9 65 L 18 65 L 14 73 C 10 72, 8 69, 9 65 Z'
           }
           fill={COLORS.logicTeal}
         />
       </RigLayer>
 
-      {/* 3. Rounded Coastal Pelican Body */}
-      <RigLayer>
+      {/* 2. Tall Lean Coastal Pelican Body */}
+      <RigLayer skipAutoLighting>
+        <Defs>
+          <TwoToneGradient id="pel-body" lit={PLUMAGE_LIT} base={PLUMAGE_WHITE} shadow={PLUMAGE_SHADOW} />
+        </Defs>
         <Path
-          d="M 28 52 C 23 68, 26 85, 38 88 L 60 88 C 72 85, 74 68, 69 52 Z"
-          fill={PLUMAGE_WHITE}
+          d="M 24 49 C 19 65, 23 84, 34 88 L 54 88 C 63 83, 64 66, 58 49 Z"
+          fill="url(#pel-body)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Subtle coastal chest feather arc */}
         <Path
-          d="M 38 72 Q 49 78 60 72"
-          stroke="#CBD5E1"
-          strokeWidth={2.5}
+          d="M 33 70 Q 43 76 53 70"
+          stroke="#94A3B8"
+          strokeWidth={2.4}
           strokeLinecap="round"
           fill="none"
         />
       </RigLayer>
 
-      {/* 4. Signature Expandable Tangerine Gular Throat Pouch! (uses tailStyle, pivots at 55, 52) */}
-      <RigLayer style={tailStyle}>
+      {/* 3. Near Swept-Back Coastal Wing (uses rightEarStyle, pivots at 33, 56) */}
+      <RigLayer skipAutoLighting style={rightEarStyle}>
+        <Defs>
+          <TwoToneGradient id="pel-wing-r" lit={PLUMAGE_LIT} base={PLUMAGE_WHITE} shadow={PLUMAGE_SHADOW} />
+        </Defs>
         <Path
           d={
             isCheering
-              ? 'M 44 43 C 44 68, 84 72, 87 45 Z' // Huge inflated celebratory pouch!
-              : 'M 45 43 C 46 63, 79 65, 85 45 Z'
+              ? 'M 38 56 C 24 46, 15 36, 20 31 C 26 27, 37 40, 42 52 Z'
+              : 'M 37 56 C 22 57, 15 71, 22 79 C 29 84, 41 72, 43 60 Z'
           }
-          fill={POUCH_ORANGE}
+          fill="url(#pel-wing-r)"
+          stroke={STROKE}
+          strokeWidth={3.1}
+          strokeLinejoin="round"
+        />
+        <Path
+          d={
+            isCheering
+              ? 'M 20 31 C 23 30, 27 33, 29 38 L 22 39 Z'
+              : 'M 21 71 L 30 71 L 26 79 C 22 79, 20 75, 21 71 Z'
+          }
+          fill={COLORS.logicTeal}
+        />
+      </RigLayer>
+
+      {/* 4. Signature Oversized Expandable Tangerine Throat Pouch jutting FAR RIGHT (pivots at 54, 50) */}
+      <RigLayer skipAutoLighting style={tailStyle}>
+        <Defs>
+          <TwoToneGradient id="pel-pouch" lit={POUCH_LIT} base={POUCH_ORANGE} shadow={POUCH_SHADOW} />
+        </Defs>
+        <Path
+          d={
+            isCheering
+              ? 'M 43 42 C 44 71, 90 74, 94 43 Z'
+              : 'M 44 42 C 45 65, 84 67, 92 43 Z'
+          }
+          fill="url(#pel-pouch)"
           stroke={STROKE}
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
         <Path
-          d="M 55 47 Q 58 56 64 57 M 65 47 Q 68 55 73 55"
-          stroke="#EA580C"
+          d="M 55 46 Q 59 56 66 57 M 67 46 Q 71 55 77 55"
+          stroke="#C2410C"
           strokeWidth={1.8}
           strokeLinecap="round"
           fill="none"
         />
-        {/* Easter-egg lucky teal fish tail peeking out of the pouch on big matches! */}
         {isStarry && (
           <Polygon
-            points="76,43 85,35 83,43 88,46 78,46"
+            points="81,41 91,33 89,41 94,44 83,44"
             fill={COLORS.logicTeal}
             stroke={STROKE}
             strokeWidth={2}
@@ -124,40 +146,50 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 5. Pelican Head, Jaunty Feather Crest & Golden Upper Bill (pivots at 47, 35) */}
-      <RigLayer style={headStyle}>
-        {/* Jaunty 3-feather head crest */}
+      {/* 5. Pelican Head, Swept 3-Feather Crest & Massive Hooked Golden Bill (pivots at 42, 34) */}
+      <RigLayer skipAutoLighting style={headStyle}>
+        <Defs>
+          <TwoToneGradient id="pel-head" lit={PLUMAGE_LIT} base={PLUMAGE_WHITE} shadow={PLUMAGE_SHADOW} />
+          <TwoToneGradient id="pel-bill" lit={BILL_LIT} base={BILL_GOLD} shadow={BILL_SHADOW} />
+        </Defs>
+        {/* Jaunty swept-back 3-feather head crest */}
         <Path
           d={
             isRuffled
-              ? 'M 36 22 L 24 12 L 33 25 L 20 19 L 33 29 Z'
-              : 'M 38 22 C 31 11, 24 12, 29 21 C 23 16, 19 20, 28 26 Z'
+              ? 'M 33 21 L 16 9 L 28 24 L 12 18 L 28 28 Z'
+              : 'M 34 21 C 25 9, 15 10, 22 20 C 15 15, 10 20, 22 26 Z'
           }
-          fill={PLUMAGE_WHITE}
+          fill="url(#pel-head)"
           stroke={STROKE}
           strokeWidth={2.9}
           strokeLinejoin="round"
         />
         <Circle
-          cx={42}
-          cy={35}
-          r={16.5}
-          fill={PLUMAGE_WHITE}
+          cx={38}
+          cy={34}
+          r={15.5}
+          fill="url(#pel-head)"
           stroke={STROKE}
           strokeWidth={3.3}
         />
 
-        {/* Eyes (Keen Pattern-Spotter pair angled slightly toward the bill!) */}
-        <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={35} rightX={49} y={33.5} radius={4.2} />
+        <CreatureEyes
+          expression={expression}
+          gazeOffset={gazeOffset}
+          leftX={33}
+          rightX={46}
+          y={32.5}
+          radius={4.1}
+        />
 
-        {/* Sculpted Golden Upper Bill with Hooked Tip */}
+        {/* Oversized Sculpted Golden Upper Bill with Pronounced Hooked Tip jutting far right */}
         <Path
           d={
             isCheering
-              ? 'M 45 39 L 87 35 C 90 35, 91 39, 88 41 L 45 44 Z' // Lifted joyful bill!
-              : 'M 45 40 L 87 41 C 90 41, 91 45, 87 46.5 L 45 45 Z'
+              ? 'M 43 37 L 91 31 C 95 31, 96 36, 92 39 L 43 43 Z'
+              : 'M 43 38 L 91 38 C 95 38, 96 44, 91 47 L 88 43 L 43 44 Z'
           }
-          fill={BILL_GOLD}
+          fill="url(#pel-bill)"
           stroke={STROKE}
           strokeWidth={3}
           strokeLinejoin="round"
@@ -165,9 +197,9 @@ export const PelicanRig: React.FC<CreatureRigProps> = ({
       </RigLayer>
 
       {/* 6. Webbed Coastal Feet */}
-      <RigLayer style={pawStyle}>
-        <Ellipse cx={38} cy={88.5} rx={7.5} ry={4} fill={POUCH_ORANGE} stroke={STROKE} strokeWidth={2.8} />
-        <Ellipse cx={59} cy={88.5} rx={7.5} ry={4} fill={POUCH_ORANGE} stroke={STROKE} strokeWidth={2.8} />
+      <RigLayer skipAutoLighting style={pawStyle}>
+        <Ellipse cx={34} cy={88.5} rx={7.5} ry={4} fill={POUCH_ORANGE} stroke={STROKE} strokeWidth={2.8} />
+        <Ellipse cx={53} cy={88.5} rx={8} ry={4} fill={POUCH_ORANGE} stroke={STROKE} strokeWidth={2.8} />
       </RigLayer>
     </RigLayerStack>
   );

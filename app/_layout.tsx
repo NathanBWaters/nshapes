@@ -12,9 +12,12 @@ import KeywordTooltip from "@/components/KeywordTooltip";
 import { initAudio, preloadAllSounds } from "@/utils/sounds";
 import { installPerfWatchdog } from "@/utils/perfWatchdog";
 import { LevelProgressStorage } from "@/utils/storage";
+import { useAppFonts } from "@/utils/fonts";
 import { startAnalytics } from "@/analytics/posthog";
 
 export default function RootLayout() {
+  useAppFonts();
+
   // Initialize audio system, preload sounds, migrate old save data, and arm the perf watchdog
   useEffect(() => {
     const stopWatchdog = installPerfWatchdog();

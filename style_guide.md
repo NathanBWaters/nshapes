@@ -1,399 +1,156 @@
-This comprehensive style guide for **NShapes** is based on a "Retro-Modern Enterprise" aesthetic—highly technical, high-contrast, and geometric. It utilizes a bold "construction" color palette (Yellow/Black) grounded by warm off-whites and clean teals.
+# NShapes Art Direction & UI Style Guide: "Tactile Tabletop Storybook"
+
+> **North Star:** Every screen, card, creature, icon, and menu in **NShapes** belongs to one cohesive world — a **Tactile Tabletop Storybook** where chunky inked woodland critters battle across hand-painted paper-cut dioramas and crisp, ultra-readable geometric puzzle cards sit on warm ivory cardstock.
 
 ---
 
-# NShapes UI Style Guide: "The Core Stack"
+## 1. Visual North Star & World Cohesion
 
-## 1. Core Color Palette
+Every element in NShapes follows four non-negotiable visual pillars:
 
-The visual identity relies on sharp contrast to guide the player's eye. Use these hex codes for consistent UI rendering.
-
-### Primary Colors
-
-* **Action Yellow:** `#FFDE00`
-* *Usage:* Primary Call-to-Action (CTA) buttons, critical notification badges, active state indicators, and top-level "Eyebrow" banners.
-
-
-* **Slate Charcoal:** `#383838`
-* *Usage:* Primary text, headers, button borders, iconography strokes, and "Dark Mode" interactive elements.
-
-
-* **Deep Onyx:** `#121212`
-* *Usage:* Main footer backgrounds, terminal windows, and high-intensity contrast areas.
-
-
-* **Canvas White:** `#FFFFFF`
-* *Usage:* Main card backgrounds, modal windows, and primary text when layered over dark colors.
-
-
-
-### Secondary & Accent Colors
-
-* **Paper Beige:** `#F4EFEA`
-* *Usage:* Layout section backgrounds, alternating row colors in tables, and "unfilled" progress bars.
-
-
-* **Logic Teal:** `#16AA98`
-* *Usage:* Success states, positive data trends, and "Flow" indicators in logic diagrams.
-
-
-* **Impact Orange:** `#FF9538` (Secondary: `#FF7169`)
-* *Usage:* Warnings, logic connectors, and secondary highlights.
-
-
+1. **Warm Ivory Cardstock & Inked Outlines:** Interactive cards, buttons, and panels sit on warm ivory/canvas stock (`#FFFDF7` / `#FFFFFF`) over warm paper beige (`#F4EFEA`) or lantern-lit tabletop walnut-slate (`#322E2B`). Every interactive edge is framed by a confident Slate Charcoal ink stroke (`#383838` — `2px` on UI chrome, `3px` on cards and creatures).
+2. **Tactile Tabletop Depth Ledges:** Buttons, hero cards, and interactive tiles use a physical bottom ledge (`borderBottomWidth: 3–5px`) that compresses cleanly on press instead of generic soft CSS blurs.
+3. **Restrained Background, Luminous Gameplay:** Non-interactive scenery (map props, biome hills, distant ridges) is desaturated 35–45% relative to interactive nodes and battle cards so the player's eye locks immediately onto playable SETs, Parry telegraphs, and active fighters.
+4. **Painted Light, Not Flat Material Fills:** Creatures, biome props, and battle stages share a consistent upper-left warm light source (`#FFFDF5` highlight) and cool bottom-right bounce shadow (`#1E293B`), anchored by directional elliptical grounding shadows.
 
 ---
 
-## 2. Typography
+## 2. Core Color Palette
 
-The interface uses a mix of high-legibility sans-serif for navigation and a precise monospace for data.
+### Tabletop Surface & Ink Tokens (`src/utils/colors.ts`)
 
-### Typeface A: `Inter` (Sans-Serif)
+| Token | Hex | Role & Usage |
+|---|---|---|
+| **Canvas White** (`canvasWhite`) | `#FFFFFF` | Active cards, crisp pop-out sheets, high-contrast light text |
+| **Ivory Cardstock** (`ivoryCard`) | `#FFFDF7` | Storybook modals, hero cards, tabletop ledger surfaces |
+| **Paper Beige** (`paperBeige`) | `#F4EFEA` | Default tabletop surface, inset panels, recessed trays |
+| **Slate Charcoal** (`slateCharcoal`) | `#383838` | Primary ink strokes, body text, headers, button borders |
+| **Deep Onyx** (`deepOnyx`) | `#121212` | High-contrast dark plates, cut-in overlays, silhouette audit fills |
+| **Tabletop Walnut** (`walnutFrame`) | `#322E2B` | Evening tabletop backdrop for Camp, Bounties, and Summit hubs |
+| **Walnut Surface** (`walnutSurface`) | `#3E3833` | Recessed trays and tool shelves inside lantern-lit dark hubs |
 
-* **Role:** Primary UI Font (Menus, Headers, Body text).
-* **Weights & Game Usage:**
-* **Light (300):** Metadata, subtle tooltips.
-* **Regular (400):** Standard body text, lore descriptions.
-* **Semi-Bold (600):** Sub-headers, secondary buttons.
-* **Bold (700):** Level titles, H1/H2 headers.
+### Storybook Accents & WCAG-AA Interactive Surfaces
 
+| Token | Hex | Contrast on `#FFFFFF` / Ink | Usage |
+|---|---|---|---|
+| **Action Yellow** (`actionYellow`) | `#FFDE00` | High vs `#383838` | Primary CTA buttons, Play/Continue hero cards, eyebrow banners, selection borders |
+| **Deep Teal Surface** (`tealSurface`) | `#0F766E` | `5.47:1` with `#FFFFFF` | Secondary hero buttons (Starfall Summit), AA-compliant teal pills, upside callouts |
+| **Logic Teal** (`logicTeal`) | `#16AA98` | Decorative / badge accent | Progress fills, positive indicators, mystic accents |
+| **Crimson Surface** (`redSurface`) | `#DC2626` | `4.83:1` with `#FFFFFF` | Critical warnings, danger buttons, parry alerts |
+| **Burnt Orange Surface** (`orangeSurface`) | `#C2410C` | `5.18:1` with `#FFFFFF` | Warning pills, ember accents, tradeoff highlights |
+| **Impact Orange** (`impactOrange`) | `#FF9538` | Decorative / badge accent | Warm campfire glow, streak accents |
+| **Impact Red** (`impactRed`) | `#FF7169` | Decorative / heart accent | Hearts, blush cheeks, hit callouts |
 
+### Evening Card-Table Wing (Prism Deck — `src/prism/components/prismTheme.ts`)
 
-### Typeface B: `AeonikMono` (Monospace)
-
-* **Role:** Numerical data tables, coordinates, logic block labels, and terminal outputs.
-* **Styling:** Always regular weight. High contrast (Black on White or White on Black).
-
----
-
-## 3. UI Component Library
-
-### A. Buttons & Interactables
-
-Favor sharp geometry and solid fills over gradients.
-
-**1. Primary CTA ("The Action Button")**
-
-* **Background:** `Action Yellow (#FFDE00)`
-* **Text Color:** `Slate Charcoal (#383838)`
-* **Typography:** Bold (700), All Caps.
-* **Border:** 1px solid `#383838`.
-* **Hover State:** Lighten background by 5%; add 2px offset shadow.
-* **Shape:** Rectangular with a 4px border-radius.
-
-**2. System/Secondary Button**
-
-* **Background:** Transparent.
-* **Border:** 2px Solid `Slate Charcoal (#383838)`.
-* **Text Color:** `Slate Charcoal (#383838)`.
-* **Hover State:** Invert (Background becomes charcoal, text becomes white).
-
-### B. Cards & Modules
-
-Used for inventory, system upgrades, or mission briefings.
-
-**1. Data Module**
-
-* **Background:** `#FFFFFF`.
-* **Border:** 1px Solid `#383838`.
-* **Radius:** `12px`.
-* **Content:** Hero image at the top, followed by a Bold H3 header and regular body text.
-
-**2. Terminal Overlay**
-
-* **Background:** `Deep Onyx (#121212)`.
-* **Border:** Top-weighted bezel in `#383838`.
-* **Text:** `#FFFFFF` Monospace.
-
-### C. Iconography & Geometry
-
-* **Style:** Stroke-based (Outline) art.
-* **Weight:** 1.5pt to 2pt line width.
-* **Shapes:** Heavily geometric. Icons should fit within a square or circular container with consistent padding.
+Prism Deck harmonizes with the Tabletop Storybook language as an evening ink-teal felt wing:
+- **Felt Backdrop:** `#102B26` (surface `#163A36`, elevated `#1E4942`, border `#385E56`)
+- **Card Stock & Ink:** `#FFFDF7` ivory cards with `#383838` Storybook ink borders
+- **Brass Accent:** `#FFDE00` / `#F2C94C` warm tabletop gold
 
 ---
 
-## 4. Visual Decorations
+## 3. Card Visual Identity (`src/utils/cardVisuals.ts`)
 
-### The "Eyebrow" Banner
+Cards are the core interactive puzzle piece. Their shape, color, and stock identity is scientifically calibrated for universal color-vision deficiency (CVD) legibility and grayscale luminance separation:
 
-* **Visual:** A thin 30px-40px high strip at the top of a screen.
-* **Color:** `Action Yellow (#FFDE00)`.
-* **Text:** Centered, All Caps, Black (`#000000`).
+### Shapes (`24×30` SVG viewBox, `1.9` stroke, round joins, `-45°` diagonal hatch)
+- **Circle** (`oval` slot): smooth symmetric convex ring (`r = 9.4`)
+- **Triangle** (`diamond` slot): crisp straight-edge apex pointing up
+- **Bolt** (`squiggle` slot): chunky 8-vertex diagonal lightning bolt
 
-### Connection Logic (Skill Trees / Pipelines)
+### Universal CVD-Safe Shape Colors
+- **Orange / Tangerine** (`red` slot · badge `O`): `#DF5A00` on light/mist · `#FFAC24` on charcoal
+- **Blue / Electric Sky** (`green` slot · badge `B`): `#007ED9` on light/mist · `#7CE4FF` on charcoal
+- **Pink / Berry Rose** (`purple` slot · badge `P`): `#940E65` on light/mist · `#E6459E` on charcoal
 
-* **Lines:** Solid `#383838`, 2px width.
-* **Connectors:** 90-degree "Pipe" turns. Avoid soft diagonals to maintain the technical "NShapes" feel.
-* **Flow Indicators:** Use `Logic Teal` animated dots moving along lines to represent active data/resource flow.
-
-### Graphic Motifs
-
-* **Corner Accents:** 45-degree corner cuts on large containers.
-* **Stamps:** Small circular or hexagonal icons used as badges or "Certified" stamps for completed objectives.
-
----
-
-## 5. Layout Standards
-
-### System Menu (Main Menu)
-
-* **Alignment:** Center-justified text blocks.
-* **Visual weight:** 60% White space / 40% High-contrast modules.
-* **Action:** Prominent Yellow CTA centered or bottom-aligned.
-
-### Resource Grid (HUD/Inventory)
-
-* **Structure:** Square grid system.
-* **Rounded Corners:** Grid items should use a `24px` radius for a "friendly-tech" look.
-* **Interaction:** Scale up 1.1x on selection/hover.
+### Card Stocks (5-Attribute Mode)
+- **White** (`white`): `#FFFFFF`
+- **Blueprint Mist** (`beige`): `#E2ECF7` with `#6489B8` cool blueprint ink border (maintains `>= 3.12:1` graphical contrast for all 3 colors)
+- **Charcoal** (`charcoal`): `#383838` paired with luminous dark-card shape colors
 
 ---
 
-## 6. Implementation Checklist
+## 4. Typography (`src/utils/fonts.ts`)
 
-1. **High Contrast:** Ensure all interactive elements have a clear outline or solid fill in a primary color.
-2. **Corner Consistency:** Use `4px` for buttons, `12px` for modules, and `24px` for top-level screen containers.
-3. **Border Logic:** Use `#383838` for all strokes to simulate a technical "blueprinted" look.
-4. **Shadows:** Use only subtle, non-colored drop shadows to provide depth to modules.
-5. **Tooltips:**
-* Background: `#383838`.
-* Text: Canvas White.
-* Typography: Inter Light (300).
+All typography flows through semantic font tokens in `src/utils/fonts.ts` (never raw `'monospace'`, which triggers missing-font warnings on iOS and fails `npm run validate:store`):
 
+| Token | Web Stack | iOS | Android | Role |
+|---|---|---|---|---|
+| `DISPLAY_FONT` | `'Plus Jakarta Sans', 'Inter', system-ui` | `AvenirNext-Heavy` | `sans-serif-black` | Screen titles, world banners, victory callouts |
+| `BODY_FONT` | `'Inter', system-ui, -apple-system` | `System` | `sans-serif` | Body copy, tooltips, weapon explainers, buttons |
+| `MONO_FONT` | `'JetBrains Mono', ui-monospace, Menlo, monospace` | `Menlo` | `monospace` | Timers, damage math, tabular counters, Player IDs |
 
-
----
-
-## 7. Sample Module Markdown
-
-*(For internal documentation and prototype testing)*
-
-```markdown
-<div style="border: 2px solid #383838; border-radius: 12px; padding: 20px; background: #FFFFFF; max-width: 320px; font-family: 'Inter', sans-serif;">
-  <div style="background: #F4EFEA; height: 120px; border-radius: 8px; margin-bottom: 12px; border: 1px dashed #383838; display: flex; align-items: center; justify-content: center;">
-    <span style="color: #383838; font-weight: 700;">N-SHAPE PREVIEW</span>
-  </div>
-  <h3 style="color: #383838; margin: 0 0 5px 0; font-weight: 700; text-transform: uppercase;">Standard Logic Module</h3>
-  <p style="color: #383838; font-size: 14px; line-height: 1.4; margin-bottom: 15px;">
-    Optimized for handling core data throughput and basic logic transformations.
-  </p>
-  <button style="background: #FFDE00; color: #383838; border: 1px solid #383838; padding: 12px; font-weight: 700; border-radius: 4px; cursor: pointer; width: 100%; text-transform: uppercase;">
-    Initialize Module
-  </button>
-</div>
-
-```
-
-Would you like me to create specific variations for the HUD (Heads-Up Display) or a Pause Menu based on these styles?
-
----
-
-## 8. Spacing Scale (8px Grid System)
-
-All spacing should use these tokens for consistency:
-
-| Token | Value | Usage |
-|-------|-------|-------|
-| `xs` | 4px | Tight spacing, icon gaps |
-| `sm` | 8px | Default inner padding, small gaps |
-| `md` | 16px | Standard padding, section gaps |
-| `lg` | 24px | Large gaps, card padding |
-| `xl` | 32px | Section spacing, modal padding |
-| `2xl` | 48px | Major section dividers |
-| `3xl` | 64px | Screen-level spacing |
-
----
-
-## 9. Typography Scale
+### Typography Scale & Legibility Floor
 
 | Token | Size | Weight | Line Height | Usage |
-|-------|------|--------|-------------|-------|
-| `caption` | 11px | 400 | 1.2 | Badges, metadata |
-| `body-sm` | 13px | 400 | 1.4 | Secondary text, descriptions |
-| `body` | 15px | 400 | 1.5 | Standard body text |
-| `body-lg` | 17px | 400 | 1.5 | Emphasized body text |
-| `h4` | 19px | 600 | 1.3 | Section sub-headers |
-| `h3` | 22px | 600 | 1.3 | Card titles, section headers |
-| `h2` | 28px | 700 | 1.2 | Screen sub-titles |
-| `h1` | 36px | 700 | 1.1 | Screen titles |
-| `display` | 48px | 900 | 1.0 | Hero text, victory screens |
+|---|---|---|---|---|
+| `caption` | `11px` | `700` | `1.25` | Hard minimum floor for all readable HUD badges & metadata |
+| `body-sm` | `13px` | `500` | `1.4` | Secondary descriptions, tooltips |
+| `body` | `15px` | `500` | `1.5` | Standard body text, weapon explainers |
+| `h3` | `18px` | `800` | `1.3` | Section headers, modal titles |
+| `h2` | `24px` | `900` | `1.2` | Screen subtitles, biome headers |
+| `h1` | `32px` | `900` | `1.1` | Screen titles |
+| `display` | `44px` | `900` | `1.0` | Hero title (`NSHAPES`), victory & boss callouts |
+
+Use `fontVariant: ['tabular-nums']` alongside `MONO_FONT` for any live timer, HP readout, coin counter, or damage equation so digits never jitter horizontally.
 
 ---
 
-## 10. Animation Guidelines
+## 5. Iconography & Zero Raw OS Emojis
 
-### Timing Tokens
-
-| Token | Duration | Easing | Usage |
-|-------|----------|--------|-------|
-| `instant` | 100ms | linear | Immediate feedback |
-| `fast` | 150ms | easeOut | Micro-interactions, button press |
-| `normal` | 250ms | easeOutExpo | Standard transitions |
-| `slow` | 400ms | easeOutExpo | Page transitions, reveals |
-| `slower` | 600ms | spring | Celebrations, emphasis |
-
-### Easing Curves
-
-```
-easeOutExpo: cubic-bezier(0.16, 1, 0.3, 1)     // Snappy, professional
-easeOutBack: cubic-bezier(0.34, 1.56, 0.64, 1) // Playful overshoot
-spring: { tension: 120, friction: 6 }           // Bouncy, delightful
-bounce: { tension: 180, friction: 12 }          // Quick bounce
-```
-
-### Animation Principles
-
-1. **Purpose:** Every animation should communicate something
-2. **100ms Rule:** All interactions must show feedback within 100ms
-3. **Stagger Pattern:** Animate list items 50-100ms apart
-4. **Reduced Motion:** Always respect user preferences
-5. **Performance:** Use native driver for all animations
+- **Single Registry:** Every UI icon MUST use `<Icon name="..." />` backed by `ICON_REGISTRY` in `src/components/Icon.tsx`, validated by `npm run validate:icons`.
+- **Zero Raw OS Emojis:** Never render raw OS pictographic emojis (`📊`, `⚔️`, `⚙️`, `🛠️`, `🔥`, `⚡`, `⚠`, `🎁`, `💥`, `🍀`, `🔗`, `⏱`, `⬆`, `✦`, etc.) in live UI components. Replace them with registered vector icons (`delapouite/chart`, `lorc/crossed-swords`, `lorc/gear-hammer`, `lorc/fireball`, `sbed/electric`, `lorc/laser-warning`, `delapouite/present`, `lorc/bright-explosion`, `lorc/clover`, `lorc/linked-rings`, `lorc/stopwatch`, `delapouite/upgrade`, `lorc/crystal-shine`).
+- **Map Scenery:** World map backdrops use dedicated hand-crafted 2-tone SVG props in `src/adventure/components/BiomeScenery.tsx` rather than monochrome `lorc/` icon stamps.
 
 ---
 
-## 11. Shadow System
+## 6. Component Geometry & Elevation
 
-### Elevation Levels
+### Border Radii (`RADIUS` in `src/utils/colors.ts`)
+- **Buttons & Pills:** `6px` (or `999px` for status pills), `borderWidth: 2`, `borderBottomWidth: 3–4`
+- **Cards & Modules:** `12px`, `borderWidth: 2–2.5`, `borderBottomWidth: 4–5`
+- **Sheets & Top-Level Containers:** `18–24px`, `borderWidth: 2.5–3`
 
-| Level | Shadow | Usage |
-|-------|--------|-------|
-| `shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle cards |
-| `shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Raised elements |
-| `shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
-| `shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Focused elements |
+### Spacing Scale (8px Grid)
 
-### Glow Effects (Rarity-Based)
+| Token | Value | Usage |
+|---|---|---|
+| `xs` | `4px` | Tight icon gaps, micro badges |
+| `sm` | `8px` | Inner padding, chip gaps |
+| `md` | `16px` | Standard panel padding, section gaps |
+| `lg` | `24px` | Major card padding, group separation |
+| `xl` | `32px` | Modal margins, screen-level breathing room |
 
-```
-glow-common:    0 0 8px rgba(56, 56, 56, 0.3)
-glow-rare:      0 0 12px rgba(25, 118, 210, 0.4)
-glow-legendary: 0 0 16px rgba(255, 149, 56, 0.5)
-glow-selection: 0 0 12px rgba(255, 222, 0, 0.6)
-```
-
----
-
-## 12. Platform-Specific Guidelines
-
-### Desktop Optimizations
-
-* **Hover States:** All interactive elements must have hover feedback
-  * Buttons: Lighten 5%, lift 2px, increase shadow
-  * Cards: Scale 1.02, add glow
-  * Links: Underline, color shift
-
-* **Keyboard Navigation:**
-  * Visible focus ring (2px offset, Action Yellow)
-  * Tab order follows visual hierarchy
-  * Enter/Space for activation
-  * Escape to dismiss modals
-
-* **Tooltips:**
-  * Delay: 400ms before showing
-  * Duration: 150ms fade in
-  * Position: Above element, centered
-
-* **Cursor:** Always `pointer` on clickable elements
-
-### Mobile Optimizations
-
-* **Touch Targets:** Minimum 48x48px hit area
-* **Haptic Feedback:**
-  * Light: Selection, hover-equivalent
-  * Medium: Success, confirmation
-  * Heavy: Error, failure, damage
-
-* **Gestures:**
-  * Swipe to dismiss notifications
-  * Long-press for details (hover alternative)
-  * Pull-to-refresh where applicable
-
-* **Modals:** Use bottom sheets on mobile (slide up from bottom)
-* **Safe Areas:** Respect notch and home indicator areas
+### Tap Targets & Accessibility
+- **Touch Targets:** Minimum `44×44px` interactive hit area (use `hitSlop` on compact chrome icons).
+- **Contrast Minimums:** `>= 4.5:1` for text on buttons/surfaces; `>= 3.0:1` for graphical card symbols and UI boundaries.
+- **Reduced Motion:** Honor `useReducedMotion()` and `useAppActive()` on every infinite loop; animate GPU-composited `transform` and `opacity` only.
 
 ---
 
-## 13. Micro-Interaction Patterns
+## 7. Character Craft, 2-Tone Lighting & Silhouette Standards
 
-### Button Press Sequence
+### Overhead 2-Tone Directional Lighting
+- Light falls from **upper-left** (`x1=0.15, y1=0.05` → `x2=0.85, y2=0.95`) using warm sunlit top highlights (`#FFFDF5`) and cool slate-indigo bounce shadows (`#1E293B`) via SVG `<LinearGradient>` definitions in `src/components/illustration/primitives.tsx` and each bespoke creature rig.
+- Biome maps and battle stages use smooth vertical sky-to-horizon gradients with atmospheric perspective ridges so foreground silhouettes pop cleanly.
 
-```
-1. Press Start (0ms):   scale(0.95), shadow reduce, slight darken
-2. Press Hold:          maintain pressed state
-3. Release (150ms):     scale(1.02) overshoot, shadow increase
-4. Settle (100ms):      scale(1.0), return to default
-```
+### Asymmetric 3/4 Combat Stances & Solid-Black Silhouette Test
+- **Fighters face 3/4 right** toward the foe while keeping both eyes clearly readable to the camera; **combat foes face 3/4 left** toward the fighter.
+- Every one of the 6 Fighters must remain instantly distinguishable when filled solid `#121212` black at both `36px` (compact battle stage) and `80px` (studio/boss stage), auditable via the **Silhouette Audit** toggle in `/dev/fighters` (`CritterGallery.tsx`):
+  1. **Orange Tabby:** arched forward pounce, high S-curve striped tail counterbalancing left, raised swipe paw right.
+  2. **Sly Fox:** low crouched horizontal rogue silhouette, sweeping oversized flame-tail far left, sharp triangular cheek ruffs.
+  3. **Badger:** wide low-center-of-gravity brawler hunch, staggered raised boxing fists (lead guard right, rear uppercut cocked left).
+  4. **Corgi:** elongated horizontal loaf-sprint stance, tall splayed radar ears tilted forward-right, fluffy rump nub-tail left, kicked-back paw.
+  5. **Emperor Penguin:** tall slender regal column, tilted golden crown on top, mystic halo offset behind-left, casting flipper sweeping right.
+  6. **Pelican:** lean coastal silhouette, oversized hooked golden bill + tangerine throat pouch jutting far right, swept-back coastal wings & 3-feather crest.
 
-### Card Selection Sequence
-
-```
-1. Touch Start:         scale(1.02), add selection shadow
-2. Selection Confirm:   Yellow border appears, subtle pulse
-3. Third Card Select:   All 3 cards pulse together
-4. Match Success:       Burst animation, particles, screen flash
-5. Match Failure:       Shake animation, red flash, settle down
-```
-
-### Number Counter Animation
-
-```
-Duration: 600ms
-Easing: easeOutExpo
-Steps: Tick through intermediate values
-Sound: Satisfying tick on each step
-Final: Slight scale pulse on completion
-```
+### Boss Scale Differential & Grounding Shadows (`CreatureStage.tsx`)
+- Grounding shadows scale by `scaleTier` (`standard` / `elite` / `boss`): bosses project a wider, weightier dual-layer elliptical contact shadow (`0.74×` width, `0.145×` height) plus a subtle cool atmospheric rim halo behind them so huge foes read with real physical mass.
 
 ---
 
-## 14. Sound Design Guidelines
+## 8. Motion & Audio Alignment
 
-### Volume Hierarchy
-
-| Category | Volume | Notes |
-|----------|--------|-------|
-| Effects | 70% | Game actions, explosions |
-| UI | 50% | Button clicks, navigation |
-| Music | 40% | Background, ducks during effects |
-
-### Sound Characteristics
-
-* **Style:** Clean, technical, satisfying
-* **Duration:** Short (50-200ms for UI, 300-800ms for effects)
-* **Layering:** Multiple sounds can play simultaneously
-* **Variation:** Slight pitch/timing variations prevent repetition fatigue
-
-### Key Sounds Needed
-
-* Button click (soft, satisfying)
-* Card select (subtle pop)
-* Match success (triumphant chime)
-* Match failure (gentle error)
-* Explosion (impactful boom)
-* Laser (sci-fi beam)
-* Coin collect (satisfying clink)
-* Level up (celebratory jingle)
-* Victory (fanfare)
-* Timer warning (escalating tension)
-
----
-
-## 15. Particle Effect Guidelines
-
-### Particle Types
-
-| Type | Use Case | Physics |
-|------|----------|---------|
-| Sparkle | Success, highlights | Float upward, fade |
-| Confetti | Victory, celebrations | Fall with gravity, rotate |
-| Explosion | Card destruction | Burst outward, fade |
-| Smoke | Fire effects | Rise slowly, expand, fade |
-| Coin | Rewards | Arc toward counter |
-
-### Performance Guidelines
-
-* Pool particles (reuse, don't recreate)
-* Limit simultaneous particles (50 max)
-* Use native driver for all particle animations
-* Reduce particle count on low-end devices
+- **Motion Tokens:** All durations, springs, easing curves, hitstop holds, and monotonic `×0.7` combat shakes live in `src/utils/motion.ts` (never raw magic numbers). Every animation change follows the `motion-loop` before/after capture workflow.
+- **Audio Gateway:** All sound effects and adaptive music route through `src/audio/` and `src/audio/chip.ts` (single `AudioContext` gateway, iOS-safe `.m4a` assets).

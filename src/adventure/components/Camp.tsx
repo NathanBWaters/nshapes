@@ -134,9 +134,9 @@ const armoryWeapons = (save: AdventureSave): Weapon[] =>
 /** Workshop items that change the loadout itself, listed first. */
 const LOADOUT_UPGRADES = ['charm_belt', 'tarot_deck', 'evolution_lab'];
 
-const QUICK_FILTERS: { id: ArmoryQuickFilter; label: string }[] = [
+const QUICK_FILTERS: { id: ArmoryQuickFilter; label: string; icon?: IconName }[] = [
   { id: 'all', label: 'All' },
-  { id: 'fuses', label: '✦ Fuses' },
+  { id: 'fuses', label: 'Fuses', icon: 'lorc/crystal-shine' },
   { id: 'equipped', label: 'Equipped' },
   { id: 'lv2plus', label: 'Lv 2+' },
 ];
@@ -393,7 +393,10 @@ const Camp: React.FC<Props> = ({
         <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
         <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? `slot ${slot + 1}` : `level ${wLevel}`}</Text>
         {!equipped && charmSynergyWithEquipped(save, w.id) && (
-          <Text style={{ fontSize: 10, fontWeight: '900', color: TONE.combo }}>✦ FUSES</Text>
+          <View style={st.fusesBadge}>
+            <Icon name="lorc/crystal-shine" size={10} color={TONE.combo} noShadow />
+            <Text style={{ fontSize: 10, fontWeight: '900', color: TONE.combo }}>FUSES</Text>
+          </View>
         )}
         <Text style={st.armoryDesc} numberOfLines={3}>{shown?.shortDescription}</Text>
       </TouchableOpacity>
@@ -964,6 +967,7 @@ const Camp: React.FC<Props> = ({
                       onPress={() => { sfx('click'); setQuickFilter(f.id); }}
                       style={[st.filterChip, quickFilter === f.id && st.filterChipOn]}
                     >
+                      {f.icon && <Icon name={f.icon} size={11} color={INK} noShadow />}
                       <Text style={[st.filterChipText, quickFilter === f.id && st.filterChipTextOn]}>{f.label}</Text>
                     </TouchableOpacity>
                   ))}
@@ -1090,15 +1094,15 @@ const Camp: React.FC<Props> = ({
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#2B2118' },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK },
+  root: { flex: 1, backgroundColor: COLORS.walnutFrame },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.ivoryCard, borderBottomWidth: 2, borderBottomColor: INK },
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 18, flexShrink: 1 },
   testLoadoutBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 8, paddingVertical: 5, minHeight: 34 },
   testLoadoutText: { flexShrink: 1, fontSize: 11, fontWeight: '900', letterSpacing: 0.8, color: INK },
-  nextGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 1.5, borderColor: '#6B5A49', paddingHorizontal: 10, paddingVertical: 8 },
+  nextGoalBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.walnutSurface, borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.walnutBorder, paddingHorizontal: 10, paddingVertical: 8 },
   nextGoalText: { flex: 1, flexShrink: 1, fontSize: 12, fontWeight: '700', color: COLORS.actionYellow, lineHeight: 16 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, paddingVertical: 10, paddingHorizontal: 12 },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.ivoryCard, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, paddingVertical: 10, paddingHorizontal: 12 },
   menuRowLocked: { backgroundColor: '#E9E4DC', borderColor: '#8E877D', opacity: 0.8 },
   menuIcon: { width: 50, height: 50, borderRadius: 10, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.paperBeige, alignItems: 'center', justifyContent: 'center' },
   menuBadge: { position: 'absolute', top: -5, right: -5, width: 14, height: 14, borderRadius: 7, backgroundColor: COLORS.impactRed, borderWidth: 2, borderColor: COLORS.canvasWhite },
@@ -1106,7 +1110,7 @@ const st = StyleSheet.create({
   menuSub: { fontSize: 12, color: INK, opacity: 0.8 },
   menuChevron: { fontSize: 26, fontWeight: '900', color: INK, opacity: 0.5 },
   settings: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  dock: { borderTopWidth: 2, borderTopColor: INK, backgroundColor: '#3A2D21', paddingTop: 8 },
+  dock: { borderTopWidth: 2, borderTopColor: INK, backgroundColor: COLORS.walnutSurface, paddingTop: 8 },
   dockBody: { paddingHorizontal: 12, maxWidth: 560, width: '100%', alignSelf: 'center' },
   dockClose: { position: 'absolute', top: -14, right: 12, zIndex: 2, width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: INK, backgroundColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
   dockCloseText: { fontWeight: '900', color: INK, fontSize: 12 },
@@ -1130,9 +1134,9 @@ const st = StyleSheet.create({
   nextTier: { fontSize: 11, color: TONE.upside, fontWeight: '700' },
   slotLine: { color: TONE.onDusk, fontSize: 12, fontWeight: '700' },
   slotRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 6, flexWrap: 'wrap' },
-  slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: '#6B5A49', alignItems: 'center', justifyContent: 'center' },
+  slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.walnutBorder, alignItems: 'center', justifyContent: 'center' },
   slotSelected: { borderColor: COLORS.actionYellow, borderWidth: 3, backgroundColor: '#FFFBEB' },
-  slotEmpty: { color: '#6B5A49', fontWeight: '900', fontSize: 18 },
+  slotEmpty: { color: COLORS.walnutBorder, fontWeight: '900', fontSize: 18 },
   slotCount: { color: TONE.onDusk, fontWeight: '900', marginLeft: 4, marginTop: 12 },
   nudgeRow: { flexDirection: 'row', gap: 3, marginTop: 2 },
   nudgeBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 4, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 5, paddingVertical: 1 },
@@ -1142,28 +1146,29 @@ const st = StyleSheet.create({
   understudyWarnText: { flex: 1, flexShrink: 1, fontSize: 11.5, fontWeight: '800', color: '#92400E' },
   understudyLink: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#CCFBF1', borderRadius: 8, borderWidth: 1.5, borderColor: '#0F766E', paddingHorizontal: 10, paddingVertical: 5 },
   understudyLinkText: { flex: 1, flexShrink: 1, fontSize: 11.5, fontWeight: '800', color: '#0F766E' },
-  loadoutTools: { backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 1.5, borderColor: '#6B5A49', padding: 8, gap: 6 },
+  loadoutTools: { backgroundColor: COLORS.walnutSurface, borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.walnutBorder, padding: 8, gap: 6 },
   toolRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   autoEquipBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: COLORS.actionYellow, borderRadius: 8, borderWidth: 2, borderBottomWidth: 3, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
   autoEquipText: { flexShrink: 1, fontSize: 12, fontWeight: '900', color: INK },
-  undoBtn: { backgroundColor: COLORS.canvasWhite, borderRadius: 8, borderWidth: 2, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
+  undoBtn: { backgroundColor: COLORS.ivoryCard, borderRadius: 8, borderWidth: 2, borderColor: INK, paddingHorizontal: 10, paddingVertical: 7 },
   undoText: { fontSize: 12, fontWeight: '900', color: INK },
   toolNote: { fontSize: 11, fontWeight: '700', color: COLORS.actionYellow, textAlign: 'center' },
   presetRow: { flexDirection: 'row', gap: 6 },
   presetSlot: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 3 },
-  presetLoadBtn: { flex: 1, backgroundColor: '#2B2118', borderRadius: 7, borderWidth: 1.5, borderColor: '#6B5A49', paddingHorizontal: 6, paddingVertical: 5 },
-  presetLoadBtnSaved: { backgroundColor: COLORS.canvasWhite, borderColor: INK },
+  presetLoadBtn: { flex: 1, backgroundColor: COLORS.walnutFrame, borderRadius: 7, borderWidth: 1.5, borderColor: COLORS.walnutBorder, paddingHorizontal: 6, paddingVertical: 5 },
+  presetLoadBtnSaved: { backgroundColor: COLORS.ivoryCard, borderColor: INK },
   presetName: { fontSize: 11, fontWeight: '900', color: COLORS.actionYellow },
   presetMeta: { fontSize: 9.5, fontWeight: '700', color: '#9CA3AF' },
   presetSaveBtn: { backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 6, paddingVertical: 6 },
   presetSaveText: { fontSize: 10, fontWeight: '900', color: INK },
-  filterPanel: { backgroundColor: COLORS.canvasWhite, borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 8, gap: 6 },
+  filterPanel: { backgroundColor: COLORS.ivoryCard, borderRadius: 10, borderWidth: 2, borderColor: INK, padding: 8, gap: 6 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#C5BCB0', paddingHorizontal: 8, paddingVertical: 4 },
   searchInput: { flex: 1, fontSize: 13, fontWeight: '600', color: INK, paddingVertical: 3 },
   clearText: { fontSize: 13, fontWeight: '900', color: INK, paddingHorizontal: 4 },
   chipStrip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   chipDivider: { width: 1.5, height: 18, backgroundColor: '#D8D0C4', marginHorizontal: 2 },
-  filterChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige },
+  fusesBadge: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   filterChipOn: { backgroundColor: COLORS.actionYellow },
   filterChipText: { fontSize: 11, fontWeight: '800', color: INK },
   filterChipTextOn: { fontWeight: '900', color: INK },

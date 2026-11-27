@@ -1,17 +1,26 @@
 import React from 'react';
-import { Circle, Ellipse, G, Line, Path, Polygon } from 'react-native-svg';
+import { Circle, Defs, Ellipse, G, Line, Path, Polygon } from 'react-native-svg';
 import { RigLayer, RigLayerStack } from '@/components/creatures/RigLayers';
 import { isHurtExpression } from '@/components/creatures/expressions';
-import { STROKE } from '@/components/illustration/primitives';
+import { STROKE, TwoToneGradient } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { CreatureEyes } from './FacialFeatures';
 import { CreatureRigProps } from './types';
 
+const TABBY_LIT = '#FFB866';
 const TABBY_ORANGE = '#FF9538';
-const TABBY_STRIPE = '#C2410C';
-const TABBY_CREAM = '#FFF7ED';
+const TABBY_SHADOW = '#C95814';
+const TABBY_STRIPE = '#B43E09';
+const TABBY_CREAM_LIT = '#FFFDF7';
+const TABBY_CREAM = '#FFF5E6';
+const TABBY_CREAM_SHADOW = '#E6CFAF';
 const NOSE_PINK = '#FF7169';
 
+/**
+ * [UI-05] & [UI-07] Orange Tabby — asymmetric 3/4 right-facing springy pounce,
+ * high S-curve striped tail counterbalancing left, raised swipe paw forward-right,
+ * and 2-tone overhead directional lighting gradients.
+ */
 export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
@@ -21,118 +30,163 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
   rightEarStyle,
   tailStyle,
   pawStyle,
+  silhouette = false,
 }) => {
   const isCheering = expression === 'happy' || expression === 'starry';
   const isHurt = isHurtExpression(expression);
-  const isRuffled = healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
+  const isRuffled =
+    healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
 
   return (
-    <RigLayerStack>
-      {/* 1. Striped Curling Tail (pivots at 70, 78) */}
-      <RigLayer style={tailStyle}>
+    <RigLayerStack silhouette={silhouette} facing="right">
+      {/* 1. High S-Curve Striped Cat Tail counterbalancing on the far LEFT (pivots at 26, 74) */}
+      <RigLayer skipAutoLighting style={tailStyle}>
+        <Defs>
+          <TwoToneGradient id="tabby-tail" lit={TABBY_LIT} base={TABBY_ORANGE} shadow={TABBY_SHADOW} />
+        </Defs>
         <Path
-          d="M 68 80 C 84 79, 93 66, 89 50 C 87 42, 79 41, 78 48 C 77 54, 83 56, 83 63 C 83 70, 75 74, 67 75 Z"
-          fill={TABBY_ORANGE}
+          d="M 32 77 C 14 75, 7 60, 11 40 C 13 28, 22 22, 27 28 C 31 33, 25 39, 22 44 C 19 52, 23 64, 34 68 Z"
+          fill="url(#tabby-tail)"
           stroke={STROKE}
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
-        <Path d="M 82 69 L 88 67" stroke={TABBY_STRIPE} strokeWidth={2.8} strokeLinecap="round" />
-        <Path d="M 84 58 L 90 56" stroke={TABBY_STRIPE} strokeWidth={2.8} strokeLinecap="round" />
+        <Path d="M 11 54 L 19 52" stroke={TABBY_STRIPE} strokeWidth={2.7} strokeLinecap="round" />
+        <Path d="M 12 42 L 20 42" stroke={TABBY_STRIPE} strokeWidth={2.7} strokeLinecap="round" />
+        <Path d="M 17 31 L 23 34" stroke={TABBY_STRIPE} strokeWidth={2.5} strokeLinecap="round" />
       </RigLayer>
 
-      {/* 2. Plump Sitting Body + Teal Collar & Gold Bell */}
-      <RigLayer>
+      {/* 2. Arched Forward-Leaning Pounce Body + Teal Collar & Gold Bell */}
+      <RigLayer skipAutoLighting>
+        <Defs>
+          <TwoToneGradient id="tabby-body" lit={TABBY_LIT} base={TABBY_ORANGE} shadow={TABBY_SHADOW} />
+          <TwoToneGradient id="tabby-belly" lit={TABBY_CREAM_LIT} base={TABBY_CREAM} shadow={TABBY_CREAM_SHADOW} />
+        </Defs>
         <Path
-          d="M 31 58 C 25 69, 26 86, 36 89 L 64 89 C 74 86, 75 69, 69 58 Z"
-          fill={TABBY_ORANGE}
+          d="M 33 56 C 24 66, 25 83, 35 88 L 65 88 C 75 84, 77 69, 71 57 Z"
+          fill="url(#tabby-body)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        <Ellipse cx={50} cy={76} rx={12.5} ry={10.5} fill={TABBY_CREAM} />
-        <Path d="M 29 70 L 35 71 M 28 77 L 35 77" stroke={TABBY_STRIPE} strokeWidth={2.6} strokeLinecap="round" />
-        <Path d="M 71 70 L 65 71 M 72 77 L 65 77" stroke={TABBY_STRIPE} strokeWidth={2.6} strokeLinecap="round" />
+        <Ellipse cx={55} cy={75} rx={12} ry={10.5} fill="url(#tabby-belly)" />
+        {/* Overhead sunlit back rim */}
         <Path
-          d="M 34 61 Q 50 67 66 61"
+          d="M 30 67 C 31 61, 35 58, 40 57"
+          stroke="#FFFDF5"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.55}
+        />
+        <Path d="M 29 69 L 37 70 M 28 76 L 36 77" stroke={TABBY_STRIPE} strokeWidth={2.6} strokeLinecap="round" />
+        {/* Teal collar & gold bell angled 3/4 right */}
+        <Path
+          d="M 37 59 Q 55 66 71 59"
           stroke={COLORS.logicTeal}
           strokeWidth={5.2}
           strokeLinecap="round"
           fill="none"
         />
         <Path
-          d="M 34 61 Q 50 67 66 61"
+          d="M 37 59 Q 55 66 71 59"
           stroke={STROKE}
           strokeWidth={1.6}
           strokeLinecap="round"
           fill="none"
         />
-        <Circle cx={50} cy={66.5} r={4.2} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.2} />
-        <Circle cx={50} cy={67.5} r={1.1} fill={STROKE} />
+        <Circle cx={58} cy={65.5} r={4.2} fill={COLORS.actionYellow} stroke={STROKE} strokeWidth={2.2} />
+        <Circle cx={58.6} cy={66.5} r={1.1} fill={STROKE} />
       </RigLayer>
 
-      {/* 3. Left Ear (pivots at 33, 29) */}
-      <RigLayer style={leftEarStyle}>
+      {/* 3. Rear Left Ear angled alertly forward (pivots at 42, 28) */}
+      <RigLayer skipAutoLighting style={leftEarStyle}>
+        <Defs>
+          <TwoToneGradient id="tabby-ear-l" lit={TABBY_LIT} base={TABBY_ORANGE} shadow={TABBY_SHADOW} />
+        </Defs>
         <Path
           d={
             isRuffled
-              ? 'M 24 35 L 20 12 L 32 18 L 29 21 L 41 25 Z' // Battle-nicked ear when beat up!
-              : 'M 24 35 L 20 12 L 41 25 Z'
+              ? 'M 33 34 L 31 11 L 42 18 L 39 21 L 50 24 Z'
+              : 'M 33 34 L 31 11 L 50 24 Z'
           }
-          fill={TABBY_ORANGE}
+          fill="url(#tabby-ear-l)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        <Polygon points="25,31 23,17 36,25" fill={NOSE_PINK} />
+        <Polygon points="35,30 34,16 45,24" fill={NOSE_PINK} />
       </RigLayer>
 
-      {/* 4. Right Ear (pivots at 67, 29) */}
-      <RigLayer style={rightEarStyle}>
+      {/* 4. Lead Right Ear canted forward toward foe (pivots at 69, 29) */}
+      <RigLayer skipAutoLighting style={rightEarStyle}>
+        <Defs>
+          <TwoToneGradient id="tabby-ear-r" lit={TABBY_LIT} base={TABBY_ORANGE} shadow={TABBY_SHADOW} />
+        </Defs>
         <Path
-          d="M 76 35 L 80 12 L 59 25 Z"
-          fill={TABBY_ORANGE}
+          d="M 79 34 L 83 12 L 62 24 Z"
+          fill="url(#tabby-ear-r)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        <Polygon points="75,31 77,17 64,25" fill={NOSE_PINK} />
+        <Polygon points="77,30 79,17 67,24" fill={NOSE_PINK} />
       </RigLayer>
 
-      {/* 5. Expressive Tabby Head & Whiskers (pivots at 50, 48) */}
-      <RigLayer style={headStyle}>
+      {/* 5. 3/4 Right-Facing Expressive Tabby Head & Whiskers (pivots at 56, 45) */}
+      <RigLayer skipAutoLighting style={headStyle}>
+        <Defs>
+          <TwoToneGradient id="tabby-head" lit={TABBY_LIT} base={TABBY_ORANGE} shadow={TABBY_SHADOW} />
+          <TwoToneGradient id="tabby-muzzle" lit={TABBY_CREAM_LIT} base={TABBY_CREAM} shadow={TABBY_CREAM_SHADOW} />
+        </Defs>
         <Path
           d={
             isRuffled
-              ? 'M 24 44 C 24 27, 36 22, 50 22 C 64 22, 76 27, 76 44 L 79 47 L 75 50 C 73 59, 63 63, 50 63 C 37 63, 27 59, 25 50 L 21 47 Z'
-              : 'M 24 45 C 24 27, 36 22, 50 22 C 64 22, 76 27, 76 45 C 77 56, 65 63, 50 63 C 35 63, 23 56, 24 45 Z'
+              ? 'M 30 43 C 30 26, 42 21, 56 21 C 70 21, 81 27, 81 44 L 84 47 L 80 50 C 78 58, 68 62, 56 62 C 42 62, 32 58, 30 49 L 27 46 Z'
+              : 'M 30 44 C 30 26, 42 21, 56 21 C 70 21, 81 27, 81 44 C 81 55, 70 62, 56 62 C 41 62, 29 55, 30 44 Z'
           }
-          fill={TABBY_ORANGE}
+          fill="url(#tabby-head)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Forehead classic tabby 'M' stripes */}
+        {/* Warm top-left rim sheen */}
         <Path
-          d="M 43 24 L 45 31 M 50 23 L 50 32 M 57 24 L 55 31"
+          d="M 36 30 C 42 24, 51 23, 59 24"
+          stroke="#FFFDF5"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.55}
+        />
+        {/* Classic tabby 'M' forehead stripes shifted 3/4 right */}
+        <Path
+          d="M 49 23 L 51 30 M 56 22 L 56 31 M 63 23 L 61 30"
           stroke={TABBY_STRIPE}
           strokeWidth={2.8}
           strokeLinecap="round"
         />
-        <Ellipse cx={50} cy={52.5} rx={12.5} ry={7.5} fill={TABBY_CREAM} />
+        <Ellipse cx={58} cy={51.5} rx={12.5} ry={7.5} fill="url(#tabby-muzzle)" />
 
         <G stroke={STROKE} strokeWidth={2.1} strokeLinecap="round">
-          <Line x1={17} y1={46} x2={28} y2={48} />
-          <Line x1={16} y1={52} x2={28} y2={52} />
-          <Line x1={83} y1={46} x2={72} y2={48} />
-          <Line x1={84} y1={52} x2={72} y2={52} />
+          <Line x1={23} y1={45} x2={34} y2={47} />
+          <Line x1={22} y1={51} x2={34} y2={51} />
+          <Line x1={89} y1={44} x2={77} y2={47} />
+          <Line x1={90} y1={51} x2={77} y2={51} />
         </G>
 
-        <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={38.5} rightX={61.5} y={42.5} radius={4.6} />
+        <CreatureEyes
+          expression={expression}
+          gazeOffset={gazeOffset}
+          leftX={46}
+          rightX={68}
+          y={41.5}
+          radius={4.6}
+        />
 
-        {/* Cute pink triangle nose */}
+        {/* Cute pink triangle nose shifted right */}
         <Polygon
-          points="46.8,48.5 53.2,48.5 50,52.2"
+          points="54.8,47.5 61.2,47.5 58,51.2"
           fill={NOSE_PINK}
           stroke={STROKE}
           strokeWidth={1.6}
@@ -140,29 +194,26 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
         />
 
         {isCheering ? (
-          // Big joyful 'meow!' open mouth
           <Path
-            d="M 44.5 53 Q 50 61.5 55.5 53 Z"
+            d="M 52.5 52 Q 58 60.5 63.5 52 Z"
             fill={NOSE_PINK}
             stroke={STROKE}
             strokeWidth={2.2}
             strokeLinejoin="round"
           />
         ) : isHurt ? (
-          // Wavy 'nyaa!' pain grimace
           <Path
-            d="M 43.5 55.5 Q 46.8 52.5 50 55.5 Q 53.2 52.5 56.5 55.5"
+            d="M 51.5 54.5 Q 54.8 51.5 58 54.5 Q 61.2 51.5 64.5 54.5"
             stroke={STROKE}
             strokeWidth={2.4}
             strokeLinecap="round"
             fill="none"
           />
         ) : expression === 'panic' ? (
-          <Circle cx={50} cy={55.5} r={3} fill={NOSE_PINK} stroke={STROKE} strokeWidth={2} />
+          <Circle cx={58} cy={54.5} r={3} fill={NOSE_PINK} stroke={STROKE} strokeWidth={2} />
         ) : (
-          // Classic ':3' cat smile!
           <Path
-            d="M 43.8 53.8 Q 47 57.5 50 53.5 Q 53 57.5 56.2 53.8"
+            d="M 51.8 52.8 Q 55 56.5 58 52.5 Q 61 56.5 64.2 52.8"
             stroke={STROKE}
             strokeWidth={2.4}
             strokeLinecap="round"
@@ -171,20 +222,25 @@ export const OrangeTabbyRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Cream Front Paws (cheer up in the air on match!) */}
-      <RigLayer style={pawStyle}>
+      {/* 6. Asymmetric Swipe Paw Forward-Right + Braced Rear Paw */}
+      <RigLayer skipAutoLighting style={pawStyle}>
+        <Defs>
+          <TwoToneGradient id="tabby-paw" lit={TABBY_CREAM_LIT} base={TABBY_CREAM} shadow={TABBY_CREAM_SHADOW} />
+        </Defs>
         {isCheering ? (
           <G>
-            {/* Raised cheering paws with pink toe-beans! */}
-            <Ellipse cx={26} cy={60} rx={6.5} ry={5.5} fill={TABBY_CREAM} stroke={STROKE} strokeWidth={2.8} />
-            <Circle cx={26} cy={60.5} r={2} fill={NOSE_PINK} />
-            <Ellipse cx={74} cy={60} rx={6.5} ry={5.5} fill={TABBY_CREAM} stroke={STROKE} strokeWidth={2.8} />
-            <Circle cx={74} cy={60.5} r={2} fill={NOSE_PINK} />
+            <Ellipse cx={34} cy={62} rx={6.4} ry={5.2} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
+            <Circle cx={34} cy={62.5} r={2} fill={NOSE_PINK} />
+            <Ellipse cx={82} cy={56} rx={6.8} ry={5.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
+            <Circle cx={82} cy={56.5} r={2.1} fill={NOSE_PINK} />
           </G>
         ) : (
           <G>
-            <Ellipse cx={41} cy={87} rx={7} ry={4.6} fill={TABBY_CREAM} stroke={STROKE} strokeWidth={2.8} />
-            <Ellipse cx={59} cy={87} rx={7} ry={4.6} fill={TABBY_CREAM} stroke={STROKE} strokeWidth={2.8} />
+            {/* Grounded back support paw */}
+            <Ellipse cx={40} cy={87} rx={7.2} ry={4.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
+            {/* Raised asymmetrical combat swipe paw reaching right */}
+            <Ellipse cx={77} cy={71} rx={7.2} ry={5.6} fill="url(#tabby-paw)" stroke={STROKE} strokeWidth={2.8} />
+            <Circle cx={79} cy={71.5} r={2} fill={NOSE_PINK} />
           </G>
         )}
       </RigLayer>

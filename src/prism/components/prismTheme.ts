@@ -1,35 +1,38 @@
 /**
- * Prism Deck shared velvet-emerald & brass theme, number formatters,
- * Charm/Edition visual metadata, Colorblind shape palette, and SFX gateway.
+ * [UI-04] Prism Deck shared evening tabletop ink-teal & Storybook brass theme,
+ * number formatters, Charm/Edition visual metadata, Colorblind shape palette,
+ * and SFX gateway. Harmonized with NShapes' Tactile Tabletop Storybook ink
+ * (`#383838`), ivory cardstock (`#FFFDF7`), and warm Action Yellow brass.
  */
 import { COLOR_BADGE_LETTER, getCardShapeColor } from '@/utils/cardVisuals';
+import { COLORS } from '@/utils/colors';
 import { playSound, type SoundCategory } from '@/utils/sounds';
 import { selectionHaptic, triggerHaptic, type HapticType } from '@/utils/haptics';
 import { SoundStorage, MusicStorage } from '@/utils/storage';
 import type { CardEdition, CharmRole, PrismColor } from '../types';
 
 export const PRISM_COLORS = {
-  // Core contract palette (shared with ui-meta)
-  feltBg: '#0B1F19',
-  feltSurface: '#132B24',
-  feltElevated: '#1A3A30',
-  feltBorder: '#2C594B',
-  gold: '#F2C94C',
-  goldDark: '#B8891E',
+  // Core contract palette — harmonized evening Storybook ink-teal tabletop
+  feltBg: '#102B26',
+  feltSurface: '#163A36',
+  feltElevated: '#1E4942',
+  feltBorder: '#385E56',
+  gold: COLORS.actionYellow,
+  goldDark: '#C89B1E',
   chipsBlue: '#38BDF8',
   multRed: '#F43F5E',
   xMultPurple: '#C084FC',
   econGreen: '#34D399',
-  textPrimary: '#F8FAFC',
-  textMuted: '#9FB8AE',
-  danger: '#EF4444',
-  cardWhite: '#FFFDF7',
-  cardBorder: '#25332E',
+  textPrimary: '#FFFDF7',
+  textMuted: '#B2C8C0',
+  danger: '#DC2626',
+  cardWhite: COLORS.ivoryCard,
+  cardBorder: COLORS.slateCharcoal,
 
-  // Extended casino-velvet accents
-  feltDeep: '#071611',
-  brassLight: '#FDE68A',
-  brassBg: 'rgba(242, 201, 76, 0.14)',
+  // Extended tabletop-ink accents
+  feltDeep: '#0B1F1C',
+  brassLight: '#FEF08A',
+  brassBg: 'rgba(255, 222, 0, 0.14)',
   chipsBg: '#0C344D',
   multBg: '#4C1124',
   xMultBg: '#361554',

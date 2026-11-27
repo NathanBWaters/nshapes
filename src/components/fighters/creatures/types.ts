@@ -10,4 +10,6 @@ export interface CreatureRigProps extends CreaturePartStyles {
   healthState: FighterHealthState;
   /** Optional micro-saccade / gaze look offset (`-1..1`) for living eye tracking */
   gazeOffset?: GazeOffset;
+  /** [UI-07] Solid-black Silhouette Audit mode */
+  silhouette?: boolean;
 }

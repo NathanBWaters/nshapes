@@ -537,10 +537,15 @@ const PrismTutorial: React.FC<PrismTutorialProps> = ({ onComplete }) => {
 
           {!stepCleared && previewMath && (
             <View style={styles.previewScoreCard}>
-              <Text style={styles.previewHandLabel}>
-                {previewMath.handName}
-                {previewMath.rainbowTriggered ? '  ✦ Rainbow Charm ×2!' : ''}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, flexWrap: 'wrap' }}>
+                <Text style={styles.previewHandLabel}>{previewMath.handName}</Text>
+                {previewMath.rainbowTriggered && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <Icon name="lorc/crystal-shine" size={12} color={PRISM_COLORS.gold} noShadow />
+                    <Text style={styles.previewHandLabel}>Rainbow Charm ×2!</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.mathRow}>
                 <View style={styles.chipsBox}>
                   <Text style={styles.chipsText}>{previewMath.finalChips}</Text>

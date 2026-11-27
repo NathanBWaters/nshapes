@@ -1,10 +1,11 @@
-/** Small shared UI primitives for Adventure screens (Retro-Modern style guide). */
+/** Small shared UI primitives for Adventure screens (Tactile Tabletop Storybook). */
 import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, cancelAnimation, Easing } from 'react-native-reanimated';
 import Icon, { IconName } from '@/components/Icon';
 import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
+import { DISPLAY_FONT, MONO_FONT } from '@/utils/fonts';
 import { MS } from '@/utils/motion';
 
 export const INK = COLORS.slateCharcoal;
@@ -30,8 +31,12 @@ export const TONE = {
   /** Shading Surge: the ×5 window */
   surge: '#DB2777',
   surgePale: '#FDF2F8',
-  /** Text on the dark Camp and Bounty Board backdrops */
-  onDusk: '#E9DCCB',
+  /** Text on the lantern-lit tabletop walnut Camp and Bounty Board backdrops */
+  onDusk: '#F3EAE0',
+  /** Warm slate-walnut tabletop backdrop & surface (harmonized with Paper Beige cardstock) */
+  walnutFrame: COLORS.walnutFrame,
+  walnutSurface: COLORS.walnutSurface,
+  walnutBorder: COLORS.walnutBorder,
 } as const;
 
 /** The dark cards used for lessons, in-fight tips and unlock reveals. */
@@ -186,7 +191,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 4,
   },
   btnSmall: { paddingVertical: 6, paddingHorizontal: 10, borderBottomWidth: 3 },
-  btnText: { fontWeight: '800', fontSize: 15, letterSpacing: 1, textTransform: 'uppercase' },
+  btnText: { fontFamily: DISPLAY_FONT, fontWeight: '800', fontSize: 15, letterSpacing: 1, textTransform: 'uppercase' },
   btnTextSmall: { fontSize: 12 },
   pill: {
     flexDirection: 'row',
@@ -205,8 +210,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1.5,
   },
-  pillText: { fontWeight: '800', color: INK, fontSize: 14, fontVariant: ['tabular-nums'] },
+  pillText: { fontFamily: MONO_FONT, fontWeight: '800', color: INK, fontSize: 14, fontVariant: ['tabular-nums'] },
   pillTextCompact: { fontSize: 11, fontWeight: '900' },
-  eyebrow: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 3, borderWidth: 1.5, borderColor: INK },
-  eyebrowText: { fontWeight: '800', fontSize: 11, letterSpacing: 1.5, color: INK, textTransform: 'uppercase' },
+  eyebrow: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, borderWidth: 1.5, borderColor: INK },
+  eyebrowText: { fontFamily: DISPLAY_FONT, fontWeight: '800', fontSize: 11, letterSpacing: 1.5, color: INK, textTransform: 'uppercase' },
 });

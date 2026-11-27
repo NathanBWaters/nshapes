@@ -37,16 +37,17 @@ const SpireTreasure: React.FC<Props> = ({ run, treasure, onClaim, onLeave }) => 
   const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, treasure.weaponOffer.weaponId);
   const badges: OfferBadge[] = [];
   if (isUpgrade) {
-    badges.push({ text: `⬆ LV ${heldLv} → ${treasure.weaponOffer.level}`, bg: '#D97706' });
+    badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${treasure.weaponOffer.level}`, bg: '#D97706' });
   }
   if (newEvos.length > 0) {
     badges.push({
-      text: newEvos.length > 1 ? `⚡ ${newEvos[0].name} +${newEvos.length - 1}` : `⚡ ${newEvos[0].name}`,
+      icon: 'sbed/electric',
+      text: newEvos.length > 1 ? `${newEvos[0].name} +${newEvos.length - 1}` : newEvos[0].name,
       bg: TONE.evoReady,
     });
   }
   if (clashes.length > 0) {
-    badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+    badges.push({ icon: 'lorc/laser-warning', text: 'CLASH', bg: '#B91C1C' });
   }
   const availArcana =
     treasure.arcanaOffer && !run.arcana.includes(treasure.arcanaOffer)

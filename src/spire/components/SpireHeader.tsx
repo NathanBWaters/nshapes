@@ -80,9 +80,13 @@ const SpireHeader: React.FC<Props> = ({
               {run.hearts}/{run.maxHearts}
             </Text>
             {armedCount > 0 && (
-              <Text style={st.evoText} numberOfLines={1}>
-                · ⚡{armedCount}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                <Text style={st.evoText}>·</Text>
+                <Icon name="sbed/electric" size={11} color={TONE.evoReady} noShadow />
+                <Text style={st.evoText} numberOfLines={1}>
+                  {armedCount}
+                </Text>
+              </View>
             )}
           </View>
         </View>

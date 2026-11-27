@@ -206,23 +206,25 @@ const SpireRewardScreen: React.FC<Props> = ({
                 const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, opt.weaponId);
                 const badges: OfferBadge[] = [];
                 if (isUpgrade) {
-                  badges.push({ text: `⬆ LV ${heldLv} → ${opt.level}`, bg: '#D97706' });
+                  badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${opt.level}`, bg: '#D97706' });
                 }
                 if (newEvos.length > 0) {
                   badges.push({
+                    icon: 'sbed/electric',
                     text:
                       newEvos.length > 1
-                        ? `⚡ ARMS ${newEvos[0].name} +${newEvos.length - 1}`
-                        : `⚡ ARMS ${newEvos[0].name}`,
+                        ? `ARMS ${newEvos[0].name} +${newEvos.length - 1}`
+                        : `ARMS ${newEvos[0].name}`,
                     bg: TONE.evoReady,
                   });
                 }
                 if (clashes.length > 0) {
                   badges.push({
+                    icon: 'lorc/laser-warning',
                     text:
                       clashes.length > 1
-                        ? `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()} +${clashes.length - 1}`
-                        : `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()}`,
+                        ? `CLASHES WITH ${clashes[0].partnerName.toUpperCase()} +${clashes.length - 1}`
+                        : `CLASHES WITH ${clashes[0].partnerName.toUpperCase()}`,
                     bg: '#B45309',
                   });
                 }
@@ -282,9 +284,12 @@ const SpireRewardScreen: React.FC<Props> = ({
                     {clashes.length > 0 && (
                       <View style={st.clashBox} testID={`spire-draft-clash-${i}`}>
                         {clashes.map(c => (
-                          <Text key={c.partnerId} style={st.clashText}>
-                            ⚠ Clash with {c.partnerName}: {c.reason}
-                          </Text>
+                          <View key={c.partnerId} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <Icon name="lorc/laser-warning" size={12} color="#92400E" noShadow />
+                            <Text style={[st.clashText, { flex: 1 }]}>
+                              Clash with {c.partnerName}: {c.reason}
+                            </Text>
+                          </View>
                         ))}
                       </View>
                     )}

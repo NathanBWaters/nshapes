@@ -2208,7 +2208,7 @@ describe('[GP-25] & [TP-19] Parry Ramp, 80/20 Theme Packs, Amber Clash Pills, Be
         onContinue={() => {}}
       />
     );
-    expect(assertZeroSpire(rewardView.toJSON())).toContain('⚠ CLASHES WITH CHAIN GANG');
+    expect(assertZeroSpire(rewardView.toJSON())).toContain('CLASHES WITH CHAIN GANG');
 
     // 3. SpireSetup Daily Climb tab + Theme Packs picker + SpireEndScreen Summit Rating & Share Card
     const onStartNew = jest.fn();

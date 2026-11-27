@@ -22,7 +22,7 @@ import { recordComponentRender } from '@/utils/perfWatchdog';
 import { band, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { CharacterName } from '@/types';
-import type { AdventureSave, BiomeDef, LevelDef } from '../types';
+import type { AdventureSave, LevelDef } from '../types';
 import { MAIN_LEVELS, branchesOf } from '../data/levels';
 import { MAP_KEYS, isMapKeyClaimed, isMapKeyReached, lockedFighters, mapKeyAfter, readyMapKeys, type MapKeyDef } from '../data/mapKeys';
 import { BIOMES } from '../data/biomes';
@@ -33,6 +33,7 @@ import { getFighter } from '../data/fighters';
 import { isFighterTrial, starRewards, unlockablesOf } from '../data/rewards';
 import { freshPaths, hasUnspentStars, getFrontierLevel, getLockReason, isMechanicKnown, maxStars, openPaths, refundableCoins, totalStars, isBiomeOpen } from '../progress';
 import { companionMapGreeting } from '../coach';
+import { BiomeScenery } from './BiomeScenery';
 import CompanionBubble from './CompanionBubble';
 import { GoldenKeyArt } from './RescueArt';
 import { Bob, CoinPill, INK, StarRow, TONE } from './ui';
@@ -307,7 +308,7 @@ const AdventureMap: React.FC<Props> = ({
             const earned = here.reduce((sum, l) => sum + (save.stars[l.id] ?? 0), 0);
             return (
               <View key={biome.id} style={[s.band, { top: b.y, height: b.height, backgroundColor: biome.colors.sky }]}>
-                <Scenery biome={biome} width={width} height={b.height} />
+                <BiomeScenery biome={biome} width={width} height={b.height} />
                 <View style={s.bannerWrap}>
                   <View style={[s.banner, { borderColor: biome.colors.ink }]}>
                     <Text style={[s.bannerTitle, { color: biome.colors.ink }]}>{biome.name.toUpperCase()}</Text>
@@ -450,39 +451,6 @@ const AdventureMap: React.FC<Props> = ({
     </View>
   );
 };
-
-/** Where the scenery of a region sits, as fractions of its band: [x, y, size, edge]. The path runs down the middle, so everything hugs the sides. */
-const SCENERY_SPOTS: [number, number, number][] = [
-  [0.04, 0.2, 34], [0.86, 0.27, 30], [0.1, 0.4, 26], [0.9, 0.48, 38], [0.03, 0.6, 30], [0.84, 0.68, 26], [0.12, 0.8, 36], [0.88, 0.88, 30],
-];
-const HILLS: [number, number, number][] = [[-0.25, 0.3, 0.7], [0.6, 0.55, 0.75], [-0.2, 0.82, 0.8]];
-
-/**
- * The land a region's path runs through: soft hills, its plants or rocks down
- * both sides, and something in its sky. All of it stands still (the map is a
- * screen people leave open), so it costs nothing after the first paint.
- */
-const Scenery: React.FC<{ biome: BiomeDef; width: number; height: number }> = memo(function Scenery({ biome, width, height }) {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {HILLS.map(([x, y, w], i) => {
-        // A circle stretched sideways: a low, round hill
-        const d = w * width * 0.42;
-        return <View key={i} style={[s.hill, { left: x * width + (w * width - d) / 2, top: y * height, width: d, height: d, borderRadius: d / 2, backgroundColor: biome.colors.ground }]} />;
-      })}
-      {biome.skyIcon && (
-        <View style={s.skyIcon}>
-          <Icon name={biome.skyIcon.icon} size={44} color={biome.skyIcon.color} />
-        </View>
-      )}
-      {SCENERY_SPOTS.map(([x, y, size], i) => (
-        <View key={i} style={[s.decor, { left: x * width, top: y * height }]}>
-          <Icon name={biome.decor[i % biome.decor.length]} size={size} color={biome.colors.ink} />
-        </View>
-      ))}
-    </View>
-  );
-});
 
 const DockButton: React.FC<{ testID?: string; icon: React.ComponentProps<typeof Icon>['name']; label: string; onPress: () => void; disabled?: boolean; badge?: boolean }> = ({ testID, icon, label, onPress, disabled, badge }) => (
   <TouchableOpacity testID={testID} onPress={onPress} disabled={disabled} accessibilityState={{ disabled: !!disabled }} style={[s.dockBtn, disabled && { opacity: 0.35 }]} accessibilityLabel={label}>
@@ -840,9 +808,6 @@ const s = StyleSheet.create({
     zIndex: 9,
   },
   band: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
-  hill: { position: 'absolute', opacity: 0.4, transform: [{ scaleX: 2.4 }] },
-  skyIcon: { position: 'absolute', top: 18, right: 14, opacity: 0.9 },
-  decor: { position: 'absolute', opacity: 0.28 },
   worldProgress: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   worldTrack: { width: 96, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: INK, backgroundColor: COLORS.paperBeige, overflow: 'hidden' },
   worldFill: { height: '100%', backgroundColor: '#F5B800' },

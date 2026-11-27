@@ -184,19 +184,21 @@ const SpireShop: React.FC<Props> = ({
               const badges: OfferBadge[] = [];
               if (offer.locked && !offer.sold) badges.push({ text: 'LOCKED', bg: '#2563EB' });
               if (offer.onSale && !offer.sold) badges.push({ text: 'SALE', bg: '#DC2626' });
-              if (isUpgrade) badges.push({ text: `⬆ LV ${heldLv} → ${offer.level}`, bg: '#D97706' });
+              if (isUpgrade) badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${offer.level}`, bg: '#D97706' });
               if (evos.length > 0) {
                 badges.push({
-                  text: evos.length > 1 ? `⚡ ${evos[0].name} +${evos.length - 1}` : `⚡ ${evos[0].name}`,
+                  icon: 'sbed/electric',
+                  text: evos.length > 1 ? `${evos[0].name} +${evos.length - 1}` : evos[0].name,
                   bg: TONE.evoReady,
                 });
               }
               if (clashes.length > 0) {
                 badges.push({
+                  icon: 'lorc/laser-warning',
                   text:
                     clashes.length > 1
-                      ? `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()} +${clashes.length - 1}`
-                      : `⚠ CLASHES WITH ${clashes[0].partnerName.toUpperCase()}`,
+                      ? `CLASHES WITH ${clashes[0].partnerName.toUpperCase()} +${clashes.length - 1}`
+                      : `CLASHES WITH ${clashes[0].partnerName.toUpperCase()}`,
                   bg: '#B45309',
                 });
               }
@@ -205,7 +207,7 @@ const SpireShop: React.FC<Props> = ({
                 : needsSwap
                   ? `Swap ${offer.price}¢`
                   : isUpgrade
-                    ? `⬆ ${offer.price}¢`
+                    ? `UP ${offer.price}¢`
                     : `${offer.price}¢`;
               return (
                 <View key={`${offer.weaponId}-${i}`} style={{ gap: 5 }}>
@@ -273,9 +275,12 @@ const SpireShop: React.FC<Props> = ({
                   {clashes.length > 0 && (
                     <View style={st.clashBox} testID={`spire-shop-clash-${i}`}>
                       {clashes.map(c => (
-                        <Text key={c.partnerId} style={st.clashText}>
-                          ⚠ Clash with {c.partnerName}: {c.reason}
-                        </Text>
+                        <View key={c.partnerId} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Icon name="lorc/laser-warning" size={12} color="#92400E" noShadow />
+                          <Text style={[st.clashText, { flex: 1 }]}>
+                            Clash with {c.partnerName}: {c.reason}
+                          </Text>
+                        </View>
                       ))}
                     </View>
                   )}

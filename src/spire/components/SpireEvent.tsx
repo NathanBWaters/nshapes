@@ -146,14 +146,15 @@ const SpireEvent: React.FC<Props> = ({
                   const newEvos = isUpgrade ? [] : newEvolutionRecipesArmedBy(run, o.weaponId);
                   const clashes = isUpgrade ? [] : clashesWithBelt(run.weapons, o.weaponId);
                   const badges: OfferBadge[] = [];
-                  if (isUpgrade) badges.push({ text: `⬆ LV ${heldLv} → ${o.level}`, bg: '#D97706' });
+                  if (isUpgrade) badges.push({ icon: 'delapouite/upgrade', text: `LV ${heldLv} → ${o.level}`, bg: '#D97706' });
                   if (newEvos.length > 0) {
                     badges.push({
-                      text: newEvos.length > 1 ? `⚡ ${newEvos[0].name} +${newEvos.length - 1}` : `⚡ ${newEvos[0].name}`,
+                      icon: 'sbed/electric',
+                      text: newEvos.length > 1 ? `${newEvos[0].name} +${newEvos.length - 1}` : newEvos[0].name,
                       bg: TONE.evoReady,
                     });
                   }
-                  if (clashes.length > 0) badges.push({ text: '⚠ CLASH', bg: '#B91C1C' });
+                  if (clashes.length > 0) badges.push({ icon: 'lorc/laser-warning', text: 'CLASH', bg: '#B91C1C' });
                   const handlePick = () => {
                     if (needsSwap) {
                       sfx('click');

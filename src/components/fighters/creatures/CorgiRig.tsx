@@ -1,15 +1,24 @@
 import React from 'react';
-import { Circle, Ellipse, G, Path } from 'react-native-svg';
+import { Circle, Defs, Ellipse, G, Path } from 'react-native-svg';
 import { RigLayer, RigLayerStack } from '@/components/creatures/RigLayers';
-import { STROKE } from '@/components/illustration/primitives';
+import { STROKE, TwoToneGradient } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
 import { CreatureEyes } from './FacialFeatures';
 import { CreatureRigProps } from './types';
 
+const CORGI_LIT = '#FCD34D';
 const CORGI_FAWN = '#F59E0B';
-const CORGI_CREAM = '#FFFFFF';
+const CORGI_SHADOW = '#B45309';
+const CORGI_CREAM_LIT = '#FFFFFF';
+const CORGI_CREAM = '#FFFDF7';
+const CORGI_CREAM_SHADOW = '#E2D9CC';
 const TONGUE_PINK = '#FF7169';
 
+/**
+ * [UI-05] & [UI-07] Corgi — elongated horizontal loaf-sprint stance, giant
+ * splayed radar ears tilted forward-right, fluffy rump nub-tail on far left,
+ * kicked-back rear stubby paw + lunging front paw, and 2-tone overhead lighting.
+ */
 export const CorgiRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
@@ -19,6 +28,7 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
   rightEarStyle,
   tailStyle,
   pawStyle,
+  silhouette = false,
 }) => {
   const isCheering = expression === 'happy' || expression === 'starry';
   const isDroopyEars = expression === 'sad' || expression === 'wince' || expression === 'ko';
@@ -29,42 +39,59 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
     expression === 'eager' ||
     expression === 'blush' ||
     expression === 'relieved';
-  const isScruffy = healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
+  const isScruffy =
+    healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
 
   return (
-    <RigLayerStack>
-      {/* 1. Hyper-Speed Fluffy Corgi Loaf Nub-Tail (pivots at 73, 75) */}
-      <RigLayer style={tailStyle}>
+    <RigLayerStack silhouette={silhouette} facing="right">
+      {/* 1. Hyper-Speed Fluffy Corgi Loaf Nub-Tail high on the FAR LEFT rump (pivots at 18, 66) */}
+      <RigLayer skipAutoLighting style={tailStyle}>
+        <Defs>
+          <TwoToneGradient id="corgi-tail" lit={CORGI_LIT} base={CORGI_FAWN} shadow={CORGI_SHADOW} />
+        </Defs>
         <Circle
-          cx={78}
-          cy={74}
-          r={8.5}
-          fill={CORGI_FAWN}
+          cx={13}
+          cy={64}
+          r={8.6}
+          fill="url(#corgi-tail)"
           stroke={STROKE}
           strokeWidth={3.1}
         />
-        <Circle cx={80} cy={72} r={4.2} fill={CORGI_CREAM} />
+        <Circle cx={11.5} cy={62} r={4.2} fill={CORGI_CREAM_LIT} />
       </RigLayer>
 
-      {/* 2. Sturdy Loaf Body + Ultra-Fluffy Scalloped Chest Ruff */}
-      <RigLayer>
+      {/* 2. Low Elongated Corgi Loaf-Sprint Body + Fluffy White Chest Ruff */}
+      <RigLayer skipAutoLighting>
+        <Defs>
+          <TwoToneGradient id="corgi-body" lit={CORGI_LIT} base={CORGI_FAWN} shadow={CORGI_SHADOW} />
+          <TwoToneGradient id="corgi-chest" lit={CORGI_CREAM_LIT} base={CORGI_CREAM} shadow={CORGI_CREAM_SHADOW} />
+        </Defs>
         <Path
-          d="M 29 58 C 23 68, 24 85, 34 89 L 66 89 C 76 85, 77 68, 71 58 Z"
-          fill={CORGI_FAWN}
+          d="M 18 65 C 14 75, 19 86, 30 87 L 69 87 C 79 84, 81 70, 74 59 L 46 60 C 33 59, 22 60, 18 65 Z"
+          fill="url(#corgi-body)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Fluffy white royal chest floof */}
+        {/* Sunlit upper-left loaf back rim */}
         <Path
-          d="M 35 60 C 31 67, 33 78, 41 81 C 45 84, 55 84, 59 81 C 67 78, 69 67, 65 60 Z"
-          fill={CORGI_CREAM}
+          d="M 23 64 Q 36 61 50 62"
+          stroke="#FFFDF5"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.62}
+        />
+        {/* Fluffy white royal chest floof on the right front */}
+        <Path
+          d="M 48 60 C 46 68, 49 79, 57 82 C 62 84, 71 83, 75 78 C 80 73, 79 64, 73 59 Z"
+          fill="url(#corgi-chest)"
           stroke={STROKE}
           strokeWidth={2.4}
           strokeLinejoin="round"
         />
         <Path
-          d="M 35 60 Q 50 65 65 60"
+          d="M 46 60 Q 61 65 74 59"
           stroke={COLORS.logicTeal}
           strokeWidth={4.5}
           strokeLinecap="round"
@@ -72,105 +99,117 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
         />
       </RigLayer>
 
-      {/* 3. Giant Rounded Corgi Left Radar Ear (pivots at 30, 30) */}
-      <RigLayer style={leftEarStyle}>
+      {/* 3. Exaggerated Giant Left Radar Ear tilted forward (pivots at 40, 29) */}
+      <RigLayer skipAutoLighting style={leftEarStyle}>
+        <Defs>
+          <TwoToneGradient id="corgi-ear-l" lit={CORGI_LIT} base={CORGI_FAWN} shadow={CORGI_SHADOW} />
+        </Defs>
         <Path
           d={
             isDroopyEars
-              ? 'M 28 33 C 12 31, 6 41, 13 48 C 19 52, 27 45, 34 37 Z' // Airplane droopy ear!
-              : 'M 23 36 C 14 21, 16 7, 25 8 C 33 9, 39 20, 41 27 Z'
+              ? 'M 36 33 C 18 30, 12 40, 20 48 C 26 52, 35 45, 42 37 Z'
+              : 'M 31 35 C 19 18, 20 3, 31 4 C 41 5, 47 17, 49 26 Z'
           }
-          fill={CORGI_FAWN}
+          fill="url(#corgi-ear-l)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
         {!isDroopyEars && (
           <Path
-            d="M 25 32 C 20 22, 21 13, 26 14 C 31 15, 35 22, 36 27 Z"
+            d="M 33 31 C 26 20, 26 10, 32 10 C 38 11, 43 19, 44 26 Z"
             fill={TONGUE_PINK}
             opacity={0.85}
           />
         )}
       </RigLayer>
 
-      {/* 4. Giant Rounded Corgi Right Radar Ear (pivots at 70, 30) */}
-      <RigLayer style={rightEarStyle}>
+      {/* 4. Exaggerated Giant Right Radar Ear splayed forward-right (pivots at 72, 29) */}
+      <RigLayer skipAutoLighting style={rightEarStyle}>
+        <Defs>
+          <TwoToneGradient id="corgi-ear-r" lit={CORGI_LIT} base={CORGI_FAWN} shadow={CORGI_SHADOW} />
+        </Defs>
         <Path
           d={
             isDroopyEars
-              ? 'M 72 33 C 88 31, 94 41, 87 48 C 81 52, 73 45, 66 37 Z'
-              : 'M 77 36 C 86 21, 84 7, 75 8 C 67 9, 61 20, 59 27 Z'
+              ? 'M 76 34 C 92 31, 97 41, 90 48 C 84 52, 76 45, 70 37 Z'
+              : 'M 79 36 C 91 21, 93 6, 82 6 C 72 6, 65 18, 63 26 Z'
           }
-          fill={CORGI_FAWN}
+          fill="url(#corgi-ear-r)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
         {!isDroopyEars && (
           <Path
-            d="M 75 32 C 80 22, 79 13, 74 14 C 69 15, 65 22, 64 27 Z"
+            d="M 77 31 C 84 21, 86 12, 80 12 C 74 12, 69 20, 68 26 Z"
             fill={TONGUE_PINK}
             opacity={0.85}
           />
         )}
       </RigLayer>
 
-      {/* 5. Sunny Corgi Head, Forehead Blaze & Happy Panting Tongue (pivots at 50, 47) */}
-      <RigLayer style={headStyle}>
+      {/* 5. Sunny 3/4 Right-Facing Corgi Head, Blaze & Happy Tongue (pivots at 58, 44) */}
+      <RigLayer skipAutoLighting style={headStyle}>
+        <Defs>
+          <TwoToneGradient id="corgi-head" lit={CORGI_LIT} base={CORGI_FAWN} shadow={CORGI_SHADOW} />
+          <TwoToneGradient id="corgi-blaze" lit={CORGI_CREAM_LIT} base={CORGI_CREAM} shadow={CORGI_CREAM_SHADOW} />
+        </Defs>
         <Path
           d={
             isScruffy
-              ? 'M 24 45 C 24 27, 35 22, 50 22 C 65 22, 76 27, 76 45 L 79 49 L 75 53 C 72 60, 62 63, 50 63 C 38 63, 28 60, 25 53 L 21 49 Z'
-              : 'M 24 46 C 24 27, 35 22, 50 22 C 65 22, 76 27, 76 46 C 76 57, 65 63, 50 63 C 35 63, 24 57, 24 46 Z'
+              ? 'M 33 44 C 33 26, 44 21, 58 21 C 72 21, 83 27, 83 45 L 86 49 L 82 53 C 79 60, 70 62, 58 62 C 46 62, 36 59, 34 52 L 30 48 Z'
+              : 'M 33 45 C 33 26, 44 21, 58 21 C 72 21, 83 27, 83 45 C 83 56, 72 62, 58 62 C 44 62, 33 56, 33 45 Z'
           }
-          fill={CORGI_FAWN}
+          fill="url(#corgi-head)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Iconic white Corgi forehead blaze + snout */}
+        {/* Iconic white Corgi forehead blaze + snout shifted right */}
         <Path
-          d="M 50 24 C 53 30, 54 38, 57 45 C 63 47, 64 58, 50 60 C 36 58, 37 47, 43 45 C 46 38, 47 30, 50 24 Z"
-          fill={CORGI_CREAM}
+          d="M 60 23 C 63 29, 64 37, 67 44 C 73 46, 74 57, 60 59 C 46 57, 47 46, 53 44 C 56 37, 57 29, 60 23 Z"
+          fill="url(#corgi-blaze)"
         />
-        {/* Expressive cream eyebrow pips */}
-        <Ellipse cx={38} cy={35} rx={3.2} ry={2} fill="#FEF3C7" />
-        <Ellipse cx={62} cy={35} rx={3.2} ry={2} fill="#FEF3C7" />
+        <Ellipse cx={48} cy={34} rx={3.2} ry={2} fill="#FEF3C7" />
+        <Ellipse cx={71} cy={34} rx={3.2} ry={2} fill="#FEF3C7" />
 
-        <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={37.5} rightX={62.5} y={42.5} radius={4.7} />
+        <CreatureEyes
+          expression={expression}
+          gazeOffset={gazeOffset}
+          leftX={48}
+          rightX={71}
+          y={41.5}
+          radius={4.7}
+        />
 
-        {/* Shiny oval dog nose */}
-        <Ellipse cx={50} cy={49} rx={4.6} ry={3.3} fill={STROKE} />
-        <Ellipse cx={48.6} cy={48} rx={1.4} ry={0.9} fill="#FFFFFF" />
+        <Ellipse cx={61} cy={48.5} rx={4.6} ry={3.3} fill={STROKE} />
+        <Ellipse cx={59.6} cy={47.5} rx={1.4} ry={0.9} fill="#FFFFFF" />
 
-        {/* Happy Pink Panting Tongue or Grimace */}
         {showTongue ? (
           <G>
-            {/* Happy 'W' doggy smile */}
             <Path
-              d="M 42.5 53.5 Q 46.5 57.5 50 53.5 Q 53.5 57.5 57.5 53.5"
+              d="M 53.5 53 Q 57.5 57 61 53 Q 64.5 57 68.5 53"
               stroke={STROKE}
               strokeWidth={2.5}
               strokeLinecap="round"
               fill="none"
             />
-            {/* Little pink tongue lolling out! */}
             <Path
               d={
                 isCheering
-                  ? 'M 46 55 C 46 64, 54 64, 54 55 Z'
-                  : 'M 46.8 55 C 46.8 61.5, 53.2 61.5, 53.2 55 Z'
+                  ? 'M 57 54.5 C 57 63.5, 65 63.5, 65 54.5 Z'
+                  : 'M 57.8 54.5 C 57.8 61, 64.2 61, 64.2 54.5 Z'
               }
               fill={TONGUE_PINK}
               stroke={STROKE}
               strokeWidth={2}
             />
-            <Path d="M 50 55.5 L 50 59.5" stroke={STROKE} strokeWidth={1.3} strokeLinecap="round" />
+            <Path d="M 61 55 L 61 59" stroke={STROKE} strokeWidth={1.3} strokeLinecap="round" />
           </G>
         ) : expression === 'wince' || expression === 'ko' ? (
           <Path
-            d="M 43 56 Q 46.5 53 50 56 Q 53.5 53 57 56"
+            d="M 54 55.5 Q 57.5 52.5 61 55.5 Q 64.5 52.5 68 55.5"
             stroke={STROKE}
             strokeWidth={2.4}
             strokeLinecap="round"
@@ -178,7 +217,7 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
           />
         ) : (
           <Path
-            d="M 44 55.5 Q 50 53 56 55.5"
+            d="M 55 55 Q 61 52.5 67 55"
             stroke={STROKE}
             strokeWidth={2.4}
             strokeLinecap="round"
@@ -187,18 +226,24 @@ export const CorgiRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Stubby White-Socked Corgi Tippy-Tap Paws */}
-      <RigLayer style={pawStyle}>
+      {/* 6. Kicked-Back Rear Loaf Paw + Forward-Lunging Sprint Paw */}
+      <RigLayer skipAutoLighting style={pawStyle}>
+        <Defs>
+          <TwoToneGradient id="corgi-paw" lit={CORGI_CREAM_LIT} base={CORGI_CREAM} shadow={CORGI_CREAM_SHADOW} />
+        </Defs>
         {isCheering ? (
           <G>
-            {/* Zoomie leap front paws! */}
-            <Ellipse cx={27} cy={63} rx={6.8} ry={5.2} fill={CORGI_CREAM} stroke={STROKE} strokeWidth={2.8} />
-            <Ellipse cx={73} cy={63} rx={6.8} ry={5.2} fill={CORGI_CREAM} stroke={STROKE} strokeWidth={2.8} />
+            <Ellipse cx={24} cy={83} rx={7} ry={4.6} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
+            <Ellipse cx={82} cy={65} rx={7} ry={5.2} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
           </G>
         ) : (
           <G>
-            <Ellipse cx={39} cy={87.5} rx={7.2} ry={4.6} fill={CORGI_CREAM} stroke={STROKE} strokeWidth={2.8} />
-            <Ellipse cx={61} cy={87.5} rx={7.2} ry={4.6} fill={CORGI_CREAM} stroke={STROKE} strokeWidth={2.8} />
+            {/* Kicked-back stubby rear loaf paw */}
+            <Ellipse cx={20} cy={86.5} rx={7.4} ry={4.5} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
+            {/* Mid support paw */}
+            <Ellipse cx={48} cy={87.5} rx={6.4} ry={4.2} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.7} />
+            {/* Forward lunging tippy-tap paw */}
+            <Ellipse cx={76} cy={84} rx={7.5} ry={4.8} fill="url(#corgi-paw)" stroke={STROKE} strokeWidth={2.8} />
           </G>
         )}
       </RigLayer>

@@ -24,11 +24,11 @@ const FIGHTER_CREATURES: Record<string, FighterCreature> = {
   'Orange Tabby': {
     Rig: OrangeTabbyRig,
     pivots: {
-      head: { x: 50, y: 48 },
-      leftEar: { x: 33, y: 29 },
-      rightEar: { x: 67, y: 29 },
-      tail: { x: 70, y: 78 },
-      paws: { x: 50, y: 76 },
+      head: { x: 56, y: 45 },
+      leftEar: { x: 42, y: 28 },
+      rightEar: { x: 69, y: 29 },
+      tail: { x: 26, y: 74 },
+      paws: { x: 58, y: 76 },
     },
     personality: {
       name: 'Orange Tabby',
@@ -45,11 +45,11 @@ const FIGHTER_CREATURES: Record<string, FighterCreature> = {
   'Sly Fox': {
     Rig: SlyFoxRig,
     pivots: {
-      head: { x: 50, y: 48 },
-      leftEar: { x: 31, y: 28 },
-      rightEar: { x: 69, y: 28 },
-      tail: { x: 68, y: 78 },
-      paws: { x: 50, y: 77 },
+      head: { x: 58, y: 46 },
+      leftEar: { x: 43, y: 29 },
+      rightEar: { x: 70, y: 29 },
+      tail: { x: 32, y: 74 },
+      paws: { x: 58, y: 80 },
     },
     personality: {
       name: 'Sly Fox',
@@ -66,11 +66,11 @@ const FIGHTER_CREATURES: Record<string, FighterCreature> = {
   'Emperor Penguin': {
     Rig: EmperorPenguinRig,
     pivots: {
-      head: { x: 50, y: 39 },
-      leftEar: { x: 24, y: 54 }, // Left flipper shoulder
-      rightEar: { x: 76, y: 54 }, // Right flipper shoulder
-      tail: { x: 50, y: 36 }, // Mystic oracle halo center
-      paws: { x: 50, y: 86 },
+      head: { x: 52, y: 36 },
+      leftEar: { x: 30, y: 54 }, // Trailing left flipper shoulder
+      rightEar: { x: 65, y: 52 }, // Casting right flipper shoulder
+      tail: { x: 38, y: 36 }, // Offset mystic oracle halo center
+      paws: { x: 50, y: 88 },
     },
     personality: {
       name: 'Emperor Penguin',
@@ -87,11 +87,11 @@ const FIGHTER_CREATURES: Record<string, FighterCreature> = {
   'Corgi': {
     Rig: CorgiRig,
     pivots: {
-      head: { x: 50, y: 47 },
-      leftEar: { x: 30, y: 30 },
-      rightEar: { x: 70, y: 30 },
-      tail: { x: 73, y: 75 }, // Corgi nub-tail rump
-      paws: { x: 50, y: 80 },
+      head: { x: 58, y: 44 },
+      leftEar: { x: 40, y: 29 },
+      rightEar: { x: 72, y: 29 },
+      tail: { x: 18, y: 66 }, // Corgi nub-tail rump on far left
+      paws: { x: 50, y: 82 },
     },
     personality: {
       name: 'Corgi',
@@ -108,11 +108,11 @@ const FIGHTER_CREATURES: Record<string, FighterCreature> = {
   'Pelican': {
     Rig: PelicanRig,
     pivots: {
-      head: { x: 47, y: 35 },
-      leftEar: { x: 25, y: 56 }, // Left wing shoulder
-      rightEar: { x: 73, y: 56 }, // Right wing shoulder
-      tail: { x: 55, y: 52 }, // Gular throat pouch hinge
-      paws: { x: 48, y: 86 },
+      head: { x: 42, y: 34 },
+      leftEar: { x: 24, y: 54 }, // Far coastal wing shoulder
+      rightEar: { x: 33, y: 56 }, // Near coastal wing shoulder
+      tail: { x: 54, y: 50 }, // Oversized gular throat pouch hinge
+      paws: { x: 42, y: 88 },
     },
     personality: {
       name: 'Pelican',
@@ -129,11 +129,11 @@ const FIGHTER_CREATURES: Record<string, FighterCreature> = {
   'Badger': {
     Rig: BadgerRig,
     pivots: {
-      head: { x: 50, y: 48 },
-      leftEar: { x: 29, y: 29 },
-      rightEar: { x: 71, y: 29 },
-      tail: { x: 73, y: 77 },
-      paws: { x: 50, y: 76 },
+      head: { x: 55, y: 44 },
+      leftEar: { x: 34, y: 26 },
+      rightEar: { x: 75, y: 26 },
+      tail: { x: 20, y: 74 },
+      paws: { x: 54, y: 68 },
     },
     personality: {
       name: 'Badger',

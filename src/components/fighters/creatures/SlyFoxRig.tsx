@@ -1,15 +1,24 @@
 import React from 'react';
-import { Circle, Ellipse, G, Path, Polygon } from 'react-native-svg';
+import { Circle, Defs, Ellipse, G, Path, Polygon } from 'react-native-svg';
 import { RigLayer, RigLayerStack } from '@/components/creatures/RigLayers';
 import { isHurtExpression } from '@/components/creatures/expressions';
-import { STROKE } from '@/components/illustration/primitives';
+import { STROKE, TwoToneGradient } from '@/components/illustration/primitives';
 import { CreatureEyes } from './FacialFeatures';
 import { CreatureRigProps } from './types';
 
-const FOX_RUSSET = '#EA580C';
+const FOX_LIT = '#FFA552';
 const FOX_ORANGE = '#FF7A1A';
+const FOX_RUSSET = '#EA580C';
+const FOX_SHADOW = '#9A3412';
+const FOX_CREAM_LIT = '#FFFFFF';
 const FOX_CREAM = '#FFFBF5';
+const FOX_CREAM_SHADOW = '#E2CFC0';
 
+/**
+ * [UI-05] & [UI-07] Sly Fox — low crouched horizontal rogue silhouette,
+ * sweeping oversized flame-tail extending far left, sharp triangular cheek ruffs,
+ * forward-right vulpine snout, and 2-tone overhead directional lighting.
+ */
 export const SlyFoxRig: React.FC<CreatureRigProps> = ({
   expression,
   healthState,
@@ -19,132 +28,160 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
   rightEarStyle,
   tailStyle,
   pawStyle,
+  silhouette = false,
 }) => {
   const isCheering = expression === 'happy' || expression === 'starry';
   const isHurt = isHurtExpression(expression);
-  const isRuffled = healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
+  const isRuffled =
+    healthState === 'battered' || healthState === 'critical' || healthState === 'knocked_out';
 
   return (
-    <RigLayerStack>
-      {/* 1. Giant Bushy White-Tipped Flame Tail (pivots at 68, 78) */}
-      <RigLayer style={tailStyle}>
+    <RigLayerStack silhouette={silhouette} facing="right">
+      {/* 1. Giant Sweeping Horizontal White-Tipped Flame Tail extending FAR LEFT (pivots at 32, 74) */}
+      <RigLayer skipAutoLighting style={tailStyle}>
+        <Defs>
+          <TwoToneGradient id="fox-tail" lit={FOX_LIT} base={FOX_RUSSET} shadow={FOX_SHADOW} />
+          <TwoToneGradient id="fox-tip" lit={FOX_CREAM_LIT} base={FOX_CREAM} shadow={FOX_CREAM_SHADOW} />
+        </Defs>
         <Path
-          d="M 64 81 C 80 84, 96 70, 93 48 C 91 37, 81 33, 76 41 C 71 49, 71 65, 62 74 Z"
-          fill={FOX_RUSSET}
+          d="M 38 77 C 20 84, 3 77, 4 60 C 5 49, 17 44, 26 52 C 32 58, 34 65, 42 70 Z"
+          fill="url(#fox-tail)"
           stroke={STROKE}
           strokeWidth={3.2}
           strokeLinejoin="round"
         />
-        {/* Jagged cream tail tip */}
+        {/* Swept flame-jagged cream tail tip on far left */}
         <Path
-          d="M 93 49 C 91 37, 81 33, 76 41 C 74 45, 74 50, 74 53 L 80 49 L 84 54 L 88 49 Z"
-          fill={FOX_CREAM}
+          d="M 4 61 C 5 49, 17 44, 24 51 L 19 56 L 23 61 L 15 63 L 17 70 C 9 72, 4 67, 4 61 Z"
+          fill="url(#fox-tip)"
           stroke={STROKE}
           strokeWidth={2.4}
           strokeLinejoin="round"
         />
       </RigLayer>
 
-      {/* 2. Agile Rogue Body + Fluffy Cream Bib */}
-      <RigLayer>
+      {/* 2. Low Crouched Horizontal Rogue Body + Fluffy Cream Bib */}
+      <RigLayer skipAutoLighting>
+        <Defs>
+          <TwoToneGradient id="fox-body" lit={FOX_ORANGE} base={FOX_RUSSET} shadow={FOX_SHADOW} />
+          <TwoToneGradient id="fox-bib" lit={FOX_CREAM_LIT} base={FOX_CREAM} shadow={FOX_CREAM_SHADOW} />
+        </Defs>
         <Path
-          d="M 33 57 C 28 69, 29 85, 37 89 L 63 89 C 71 85, 72 69, 67 57 Z"
-          fill={FOX_RUSSET}
+          d="M 34 63 C 29 73, 33 85, 44 87 L 72 87 C 80 83, 81 69, 73 60 Z"
+          fill="url(#fox-body)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Jagged fluffy cream chest ruff */}
         <Path
-          d="M 39 59 L 50 61 L 61 59 L 58 72 L 54 69 L 50 76 L 46 69 L 42 72 Z"
-          fill={FOX_CREAM}
+          d="M 37 64 Q 48 61 59 63"
+          stroke="#FFFDF5"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.5}
+        />
+        {/* Jagged fluffy cream chest ruff shifted forward-right */}
+        <Path
+          d="M 52 62 L 63 63 L 74 62 L 72 74 L 67 71 L 63 79 L 58 72 L 54 75 Z"
+          fill="url(#fox-bib)"
           stroke={STROKE}
           strokeWidth={2.2}
           strokeLinejoin="round"
         />
       </RigLayer>
 
-      {/* 3. Left Vulpine Ear with Dark Tip (pivots at 31, 28) */}
-      <RigLayer style={leftEarStyle}>
+      {/* 3. Swept-Back Left Vulpine Ear with Charcoal Tip (pivots at 43, 29) */}
+      <RigLayer skipAutoLighting style={leftEarStyle}>
+        <Defs>
+          <TwoToneGradient id="fox-ear-l" lit={FOX_LIT} base={FOX_RUSSET} shadow={FOX_SHADOW} />
+        </Defs>
         <Path
-          d="M 23 34 L 15 9 L 40 24 Z"
-          fill={FOX_RUSSET}
+          d="M 34 36 L 23 11 L 51 25 Z"
+          fill="url(#fox-ear-l)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Charcoal rogue ear tip */}
-        <Polygon points="15,9 21,21 26,16" fill={STROKE} />
-        <Polygon points="24,30 21,19 34,25" fill={FOX_CREAM} />
+        <Polygon points="23,11 30,23 35,17" fill={STROKE} />
+        <Polygon points="35,32 31,21 45,27" fill={FOX_CREAM} />
       </RigLayer>
 
-      {/* 4. Right Vulpine Ear with Dark Tip (pivots at 69, 28) */}
-      <RigLayer style={rightEarStyle}>
+      {/* 4. Alert Right Vulpine Ear angled forward (pivots at 70, 29) */}
+      <RigLayer skipAutoLighting style={rightEarStyle}>
+        <Defs>
+          <TwoToneGradient id="fox-ear-r" lit={FOX_LIT} base={FOX_RUSSET} shadow={FOX_SHADOW} />
+        </Defs>
         <Path
-          d="M 77 34 L 85 9 L 60 24 Z"
-          fill={FOX_RUSSET}
+          d="M 79 37 L 87 12 L 61 26 Z"
+          fill="url(#fox-ear-r)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        <Polygon points="85,9 79,21 74,16" fill={STROKE} />
-        <Polygon points="76,30 79,19 66,25" fill={FOX_CREAM} />
+        <Polygon points="87,12 80,24 75,18" fill={STROKE} />
+        <Polygon points="77,32 80,22 67,27" fill={FOX_CREAM} />
       </RigLayer>
 
-      {/* 5. Angular Fox Head & Sly Smirk (pivots at 50, 48) */}
-      <RigLayer style={headStyle}>
-        {/* Swept cheek-tuft diamond head */}
+      {/* 5. Low Angular Diamond Rogue Head & Sharp Cheek Ruffs (pivots at 58, 46) */}
+      <RigLayer skipAutoLighting style={headStyle}>
+        <Defs>
+          <TwoToneGradient id="fox-head" lit={FOX_LIT} base={FOX_ORANGE} shadow={FOX_RUSSET} />
+          <TwoToneGradient id="fox-cheek" lit={FOX_CREAM_LIT} base={FOX_CREAM} shadow={FOX_CREAM_SHADOW} />
+        </Defs>
         <Path
           d={
             isRuffled
-              ? 'M 50 21 C 64 21, 74 28, 76 39 L 85 45 L 77 49 L 81 53 L 50 63 L 19 53 L 23 49 L 15 45 L 24 39 C 26 28, 36 21, 50 21 Z'
-              : 'M 50 21 C 64 21, 74 28, 76 40 L 84 46 L 75 53 L 50 63 L 25 53 L 16 46 L 24 40 C 26 28, 36 21, 50 21 Z'
+              ? 'M 58 24 C 71 24, 80 31, 82 41 L 94 47 L 83 52 L 88 56 L 63 65 L 33 55 L 37 51 L 26 47 L 36 41 C 38 31, 46 24, 58 24 Z'
+              : 'M 58 24 C 71 24, 80 31, 82 42 L 94 48 L 82 55 L 63 65 L 36 55 L 26 48 L 36 41 C 38 31, 46 24, 58 24 Z'
           }
-          fill={FOX_ORANGE}
+          fill="url(#fox-head)"
           stroke={STROKE}
           strokeWidth={3.3}
           strokeLinejoin="round"
         />
-        {/* Cream lower cheek mask leaving orange nose-bridge V */}
         <Path
-          d="M 18 46.5 Q 34 45 45 53 L 50 61.5 L 25 52.5 Z"
-          fill={FOX_CREAM}
+          d="M 43 30 C 49 26, 58 25, 66 27"
+          stroke="#FFFDF5"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+          fill="none"
+          opacity={0.55}
         />
-        <Path
-          d="M 82 46.5 Q 66 45 55 53 L 50 61.5 L 75 52.5 Z"
-          fill={FOX_CREAM}
+        {/* Swept cream cheek masks framing the sly orange snout bridge */}
+        <Path d="M 29 48.5 Q 46 47 57 55 L 62 63.5 L 37 54.5 Z" fill="url(#fox-cheek)" />
+        <Path d="M 91 48.5 Q 77 47 68 55 L 64 63.5 L 82 54.5 Z" fill="url(#fox-cheek)" />
+
+        <CreatureEyes
+          expression={expression}
+          gazeOffset={gazeOffset}
+          leftX={49}
+          rightX={71}
+          y={43.5}
+          radius={4.5}
         />
 
-        <CreatureEyes expression={expression} gazeOffset={gazeOffset} leftX={38} rightX={62} y={42} radius={4.5} />
-
-        {/* Signature sly slanted brow when calm */}
         {expression === 'normal' && (
-          <Path
-            d="M 57 35.5 L 67 33.5"
-            stroke={STROKE}
-            strokeWidth={2.5}
-            strokeLinecap="round"
-          />
+          <Path d="M 65 36.5 L 76 34.5" stroke={STROKE} strokeWidth={2.5} strokeLinecap="round" />
         )}
 
-        <Ellipse cx={50} cy={52.5} rx={3.8} ry={2.8} fill={STROKE} />
-        <Circle cx={48.8} cy={51.6} r={1} fill="#FFFFFF" />
+        <Ellipse cx={64} cy={54} rx={3.8} ry={2.8} fill={STROKE} />
+        <Circle cx={62.8} cy={53.1} r={1} fill="#FFFFFF" />
 
-        {/* Sly Mouth / Fang Grin */}
         {isCheering ? (
           <G>
             <Path
-              d="M 42.5 55.5 Q 50 62.5 58.5 54.5 Z"
+              d="M 55.5 57 Q 63 64 71.5 56 Z"
               fill="#FF7169"
               stroke={STROKE}
               strokeWidth={2.2}
               strokeLinejoin="round"
             />
-            <Polygon points="54,55.5 56.5,55.2 55.2,58.5" fill="#FFFFFF" />
+            <Polygon points="67,57 69.5,56.7 68.2,60" fill="#FFFFFF" />
           </G>
         ) : isHurt ? (
           <Path
-            d="M 43 57.5 L 47 55.5 L 50 57.5 L 53 55.5 L 57 57.5"
+            d="M 56 59 L 60 57 L 63 59 L 66 57 L 70 59"
             stroke={STROKE}
             strokeWidth={2.3}
             strokeLinecap="round"
@@ -152,9 +189,8 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
             fill="none"
           />
         ) : (
-          // Lopsided confident sly smirk!
           <Path
-            d="M 45 56.5 Q 52 58.5 58.5 53.5"
+            d="M 58 58 Q 65 60 72 54.5"
             stroke={STROKE}
             strokeWidth={2.4}
             strokeLinecap="round"
@@ -163,17 +199,17 @@ export const SlyFoxRig: React.FC<CreatureRigProps> = ({
         )}
       </RigLayer>
 
-      {/* 6. Dark-Socked Fox Paws */}
-      <RigLayer style={pawStyle}>
+      {/* 6. Staggered Stealth Dark-Socked Paws */}
+      <RigLayer skipAutoLighting style={pawStyle}>
         {isCheering ? (
           <G>
-            <Ellipse cx={25} cy={60} rx={6} ry={5} fill={STROKE} />
-            <Ellipse cx={75} cy={60} rx={6} ry={5} fill={STROKE} />
+            <Ellipse cx={39} cy={64} rx={6} ry={4.8} fill={STROKE} />
+            <Ellipse cx={84} cy={61} rx={6.4} ry={5} fill={STROKE} />
           </G>
         ) : (
           <G>
-            <Ellipse cx={41} cy={87.5} rx={6.5} ry={4.3} fill={STROKE} />
-            <Ellipse cx={59} cy={87.5} rx={6.5} ry={4.3} fill={STROKE} />
+            <Ellipse cx={43} cy={87} rx={6.8} ry={4.2} fill={STROKE} />
+            <Ellipse cx={74} cy={86.5} rx={7.2} ry={4.4} fill={STROKE} />
           </G>
         )}
       </RigLayer>

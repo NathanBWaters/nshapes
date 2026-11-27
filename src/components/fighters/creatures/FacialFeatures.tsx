@@ -7,6 +7,7 @@ import {
   WinceChevronEye,
   eyeGazeShift,
 } from '@/components/creatures/eyes';
+import { useRigVisual } from '@/components/creatures/RigLayers';
 import { GazeOffset } from '@/components/creatures/types';
 import { StarBurst } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
@@ -40,6 +41,9 @@ export const CreatureEyes: React.FC<CreatureEyesProps> = ({
   irisColor = COLORS.slateCharcoal,
   darkMask = false,
 }) => {
+  const { silhouette } = useRigVisual();
+  if (silhouette) return null;
+
   const strokeColor = darkMask ? '#FFFFFF' : COLORS.slateCharcoal;
   const { gx, gy, hx, hy } = eyeGazeShift(gazeOffset, radius);
 

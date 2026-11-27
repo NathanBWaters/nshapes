@@ -1,6 +1,6 @@
 import React from 'react';
 import { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
-import { RigLayer, RigLayerStack } from '@/components/creatures/RigLayers';
+import { RigLayer, RigLayerStack, useRigVisual } from '@/components/creatures/RigLayers';
 import { isBattleWorn, isFierceExpression, isHurtExpression } from '@/components/creatures/expressions';
 import { STROKE } from '@/components/illustration/primitives';
 import { COLORS } from '@/utils/colors';
@@ -30,6 +30,8 @@ const PredatorMaw: React.FC<PredatorMawProps> = ({
   manicGrin = false,
   strokeColor = STROKE,
 }) => {
+  const { silhouette } = useRigVisual();
+  if (silhouette) return null;
   const isFierce = isFierceExpression(expression);
   const isHurt = isHurtExpression(expression);
   const isSleepy = expression === 'sleepy';

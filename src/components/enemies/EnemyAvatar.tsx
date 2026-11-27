@@ -12,6 +12,7 @@ import {
 import { IconName } from '@/components/Icon';
 import { CreatureDamageOverlay } from '@/components/creatures/CreatureDamageOverlay';
 import { CreatureStage } from '@/components/creatures/CreatureStage';
+import { CreatureScaleTier, RigVisualProvider } from '@/components/creatures/RigLayers';
 import {
   CreatureMotionConfig,
   useCreatureMotion,
@@ -99,6 +100,12 @@ export interface EnemyAvatarProps {
   onPoke?: (reactionType: 'poke' | 'rage_spin') => void;
   /** Render inside a tactile NShapes portrait frame badge */
   framed?: boolean;
+  /** [UI-06] Scale mass tier (`'boss'` scales grounding shadow & atmospheric rim halo) */
+  scaleTier?: CreatureScaleTier;
+  /** [UI-07] Combat facing posture (`'left'` on battle stage, `'front'` for centered portraits) */
+  facing?: 'front' | 'left';
+  /** [UI-07] Render the rig in solid-black `#121212` Silhouette Audit mode */
+  silhouette?: boolean;
   /** Optional testID */
   testID?: string;
 }
@@ -512,6 +519,9 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
   interactive = false,
   onPoke,
   framed = false,
+  scaleTier,
+  facing,
+  silhouette = false,
   testID,
 }) {
   const appActive = useAppActive();
@@ -605,10 +615,18 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
   );
 
   const isCorneredFrame = healthState === 'critical' || healthState === 'knocked_out';
+  const resolvedScaleTier: CreatureScaleTier =
+    scaleTier ?? (resolvedTier >= 4 ? 'boss' : resolvedTier >= 2 ? 'elite' : 'standard');
+  const resolvedFacing: 'front' | 'left' =
+    facing ??
+    (effectiveMood === 'menacing' || effectiveMood === 'enraged' || effectiveMood === 'cornered'
+      ? 'left'
+      : 'front');
 
   return (
     <CreatureStage
       size={size}
+      scaleTier={resolvedScaleTier}
       frame={
         framed
           ? {
@@ -622,25 +640,33 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
       interactive={interactive}
       onPress={motion.handlePress}
       shadow={
-        lightweight
+        lightweight || silhouette
           ? undefined
           : { testID: 'enemy-ground-shadow', minWidth: 12, minHeight: 3, style: motion.groundShadowStyle }
       }
       rigRootStyle={lightweight ? lightweightRigStyle : motion.rigRootStyle}
       rig={
-        <>
+        <RigVisualProvider
+          silhouette={silhouette}
+          facing={resolvedFacing}
+          overheadLighting={!lightweight}
+          scaleTier={resolvedScaleTier}
+        >
           <EnemyCreatureRig
             enemyName={enemyName}
             expression={expression}
             healthState={healthState}
             gazeOffset={motion.gaze}
+            facing={resolvedFacing}
+            scaleTier={resolvedScaleTier}
+            silhouette={silhouette}
             headStyle={motion.headStyle}
             leftEarStyle={motion.leftEarStyle}
             rightEarStyle={motion.rightEarStyle}
             tailStyle={motion.tailStyle}
             pawStyle={motion.pawStyle}
           />
-          {!lightweight && (
+          {!lightweight && !silhouette && (
             <CreatureDamageOverlay
               healthState={healthState}
               headStyle={motion.headStyle}
@@ -648,10 +674,10 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
               testID="enemy-damage-overlay"
             />
           )}
-        </>
+        </RigVisualProvider>
       }
     >
-      {!lightweight && (
+      {!lightweight && !silhouette && (
         <EnemyEffectsOverlay
           activeReaction={motion.activeReaction}
           reactionId={motion.reactionKey}

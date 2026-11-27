@@ -7,6 +7,7 @@ import {
   WinceChevronEye,
   eyeGazeShift,
 } from '@/components/creatures/eyes';
+import { useRigVisual } from '@/components/creatures/RigLayers';
 import { GazeOffset } from '@/components/creatures/types';
 import { COLORS } from '@/utils/colors';
 import { EnemyExpression } from '@/utils/enemyAnimations';
@@ -45,6 +46,9 @@ export const EnemyEyes: React.FC<EnemyEyesProps> = ({
   variant = 'pair',
   slitPupil = false,
 }) => {
+  const { silhouette } = useRigVisual();
+  if (silhouette) return null;
+
   const strokeColor = darkMask ? '#FFFFFF' : COLORS.slateCharcoal;
   const { gx, gy, hx, hy } = eyeGazeShift(gazeOffset, radius);
 

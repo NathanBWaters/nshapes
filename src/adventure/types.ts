@@ -113,7 +113,18 @@ export interface BiomeDef {
   subtitle: string;
   /** Total stars needed to enter this biome (Angry Birds style gate) */
   starGate: number;
-  colors: { sky: string; ground: string; path: string; accent: string; ink: string };
+  colors: {
+    sky: string;
+    ground: string;
+    path: string;
+    accent: string;
+    ink: string;
+    /** [UI-05] Atmospheric sky-to-horizon & ridge gradient tones */
+    skyTop?: string;
+    skyHorizon?: string;
+    hillFar?: string;
+    hillNear?: string;
+  };
   /** Music variation key for the chip sequencer */
   music: string;
   decor: IconName[];

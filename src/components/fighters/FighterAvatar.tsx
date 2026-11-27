@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { cancelAnimation, withDelay, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { CreatureDamageOverlay } from '@/components/creatures/CreatureDamageOverlay';
 import { CreatureStage } from '@/components/creatures/CreatureStage';
+import { RigVisualProvider } from '@/components/creatures/RigLayers';
 import {
   CreatureMotionConfig,
   useCreatureMotion,
@@ -80,6 +81,8 @@ export interface FighterAvatarProps {
   onPet?: (reactionType: 'pet' | 'dizzy_joy') => void;
   /** Render inside a tactile NShapes portrait frame badge (ideal for HUD & headers) */
   framed?: boolean;
+  /** [UI-07] Render the rig in solid-black `#121212` Silhouette Audit mode */
+  silhouette?: boolean;
   /** Optional testID */
   testID?: string;
 }
@@ -605,6 +608,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
   interactive = false,
   onPet,
   framed = false,
+  silhouette = false,
   testID,
 }) {
   const appActive = useAppActive();
@@ -666,6 +670,7 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
     rightEarStyle: motion.rightEarStyle,
     tailStyle: motion.tailStyle,
     pawStyle: motion.pawStyle,
+    silhouette,
   };
   const Rig = getFighterCreature(characterName)?.Rig;
 
@@ -695,34 +700,42 @@ export const FighterAvatar: React.FC<FighterAvatarProps> = memo(function Fighter
       accessibilityLabel={`${characterName} fighter (${healthState})`}
       interactive={interactive}
       onPress={motion.handlePress}
-      shadow={{
-        testID: 'fighter-ground-shadow',
-        minWidth: 14,
-        minHeight: 4,
-        style: motion.groundShadowStyle,
-      }}
+      shadow={
+        silhouette
+          ? undefined
+          : {
+              testID: 'fighter-ground-shadow',
+              minWidth: 14,
+              minHeight: 4,
+              style: motion.groundShadowStyle,
+            }
+      }
       rigRootStyle={motion.rigRootStyle}
       rig={
-        <>
+        <RigVisualProvider silhouette={silhouette} facing="right">
           {Rig ? <Rig {...rigProps} /> : <FallbackFighterRig {...rigProps} icon={characterIcon} />}
-          <CreatureDamageOverlay
-            healthState={healthState}
-            headStyle={motion.headStyle}
-            animate={shouldAnimate}
-          />
-        </>
+          {!silhouette && (
+            <CreatureDamageOverlay
+              healthState={healthState}
+              headStyle={motion.headStyle}
+              animate={shouldAnimate}
+            />
+          )}
+        </RigVisualProvider>
       }
     >
-      <FighterEffectsOverlay
-        activeReaction={motion.activeReaction}
-        reactionId={motion.reactionKey}
-        mood={mood}
-        personality={personality}
-        animate={shouldAnimate}
-        stillBurst={quiet}
-        intensity={cheerIntensity(streak)}
-        cheerReleaseMs={effectiveCheerReleaseMs}
-      />
+      {!silhouette && (
+        <FighterEffectsOverlay
+          activeReaction={motion.activeReaction}
+          reactionId={motion.reactionKey}
+          mood={mood}
+          personality={personality}
+          animate={shouldAnimate}
+          stillBurst={quiet}
+          intensity={cheerIntensity(streak)}
+          cheerReleaseMs={effectiveCheerReleaseMs}
+        />
+      )}
 
       {/* Streak mini-pill when framed in HUD and on a 3+ match streak */}
       {framed && streak >= 3 && (

@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { CardReward } from '@/types';
 import { COLORS, RADIUS } from '@/utils/colors';
+import Icon, { type IconName } from './Icon';
 
 interface RewardRevealProps {
   reward: CardReward;
@@ -49,42 +50,42 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
   };
 
   // Build reward items to display
-  const rewardItems: { icon: string; value: string; color: string }[] = [];
+  const rewardItems: { icon?: string; iconName?: IconName; value: string; color: string }[] = [];
 
-  // For weapon effects, show effect name prominently
+  // For weapon effects, show effect name prominently using registered vector icons ([UI-03])
   if (isExplosion) {
     rewardItems.push({
-      icon: '💥',
+      iconName: 'lorc/bright-explosion',
       value: 'BOOM!',
       color: '#FFFFFF',
     });
   } else if (isLaser) {
     rewardItems.push({
-      icon: '⚡',
+      iconName: 'lorc/laser-blast',
       value: 'ZAP!',
       color: '#FFFFFF',
     });
   } else if (isFire) {
     rewardItems.push({
-      icon: '🔥',
+      iconName: 'lorc/fireball',
       value: 'BURN!',
       color: '#FFFFFF',
     });
   } else if (isGrace) {
     rewardItems.push({
-      icon: '🍀',
+      iconName: 'lorc/clover',
       value: 'GRACE!',
       color: '#FFFFFF',
     });
   } else if (isRicochet) {
     rewardItems.push({
-      icon: '⚡',
+      iconName: 'sbed/electric',
       value: 'RICOCHET!',
       color: '#FFFFFF',
     });
   } else if (isConnected) {
     rewardItems.push({
-      icon: '🔗',
+      iconName: 'lorc/linked-rings',
       value: 'LINKED!',
       color: '#FFFFFF',
     });
@@ -161,9 +162,13 @@ const RewardReveal: React.FC<RewardRevealProps> = ({ reward }) => {
       <View style={styles.rewardsContainer}>
         {rewardItems.map((item, index) => (
           <View key={index} style={styles.rewardItem}>
-            <Text style={[styles.rewardIcon, { color: item.color }]}>
-              {item.icon}
-            </Text>
+            {item.iconName ? (
+              <Icon name={item.iconName} size={16} color={item.color} noShadow />
+            ) : item.icon ? (
+              <Text style={[styles.rewardIcon, { color: item.color }]}>
+                {item.icon}
+              </Text>
+            ) : null}
             {item.value ? (
               <Text style={[styles.rewardValue, { color: item.color }]}>
                 {item.value}

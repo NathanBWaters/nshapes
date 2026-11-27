@@ -287,6 +287,7 @@ export interface OfferBadge {
   text: string;
   bg: string;
   fg?: string;
+  icon?: IconName;
 }
 
 /**
@@ -332,6 +333,14 @@ export const WeaponOfferRow: React.FC<{
           <Text style={st.cardTitle} numberOfLines={1}>{label}</Text>
           {badges?.map((b, i) => (
             <View key={i} style={[st.badge, { backgroundColor: b.bg }]}>
+              {b.icon && (
+                <Icon
+                  name={b.icon}
+                  size={10}
+                  color={b.fg ?? COLORS.canvasWhite}
+                  noShadow
+                />
+              )}
               <Text style={[st.badgeText, b.fg ? { color: b.fg } : null]}>{b.text}</Text>
             </View>
           ))}
@@ -471,7 +480,7 @@ const st = StyleSheet.create({
   weaponRowFocused: { borderColor: INK, backgroundColor: TONE.selected },
   weaponLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   nameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 5 },
-  badge: { borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1.5 },
   badgeText: { fontSize: 8.5, fontWeight: '900', color: COLORS.canvasWhite, letterSpacing: 0.4 },
   weaponChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.paperBeige, borderWidth: 2, borderColor: '#C9C2B8', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, maxWidth: '100%' },
   weaponChipActive: { backgroundColor: TONE.selected, borderColor: INK },

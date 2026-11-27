@@ -143,13 +143,13 @@ const BountyBoard: React.FC<Props> = ({ save, onClose, backLabel = 'Back to map'
 };
 
 const st = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#231D18' },
-  top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.canvasWhite, borderBottomWidth: 2, borderBottomColor: INK },
+  root: { flex: 1, backgroundColor: COLORS.walnutFrame },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, backgroundColor: COLORS.ivoryCard, borderBottomWidth: 2, borderBottomColor: INK },
   back: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paperBeige },
   title: { fontWeight: '900', letterSpacing: 2, color: INK, fontSize: 17 },
   count: { fontWeight: '900', fontSize: 13, color: TONE.spent },
   filters: { flexDirection: 'row', gap: 5, paddingHorizontal: 10, paddingTop: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },
-  filterBtn: { flex: 1, paddingVertical: 7, borderRadius: 6, borderWidth: 2, borderColor: '#6B5A49', alignItems: 'center' },
+  filterBtn: { flex: 1, paddingVertical: 7, borderRadius: 6, borderWidth: 2, borderColor: COLORS.walnutBorder, alignItems: 'center' },
   filterBtnOn: { backgroundColor: COLORS.actionYellow, borderColor: INK },
   filterText: { fontSize: 10, fontWeight: '900', letterSpacing: 1, color: TONE.onDusk },
   body: { padding: 12, gap: 10, maxWidth: 560, width: '100%', alignSelf: 'center' },

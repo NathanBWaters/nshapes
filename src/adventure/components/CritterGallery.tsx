@@ -179,6 +179,8 @@ const StudioView: React.FC = () => {
   const [weaponRarity, setWeaponRarity] = useState<WeaponRarity | 'default'>('default');
   const [autoCycle, setAutoCycle] = useState(false);
   const [effectsOff, setEffectsOff] = useState(false);
+  const [silhouetteAudit, setSilhouetteAudit] = useState(false);
+  const [enemyFacing, setEnemyFacing] = useState<'left' | 'front'>('left');
   const [streak, setStreak] = useState(0);
 
   const reactionIdRef = useRef(0);
@@ -289,6 +291,18 @@ const StudioView: React.FC = () => {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                testID="studio-silhouette-toggle"
+                style={[styles.autoBtn, silhouetteAudit && styles.silhouetteBtnActive]}
+                onPress={() => setSilhouetteAudit(v => !v)}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: silhouetteAudit }}
+                accessibilityLabel="Toggle solid-black Silhouette Audit"
+              >
+                <Text style={[styles.autoBtnText, silhouetteAudit && styles.chipTextActive]}>
+                  {silhouetteAudit ? 'Silhouette ON' : 'Silhouette Audit'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
                 testID="studio-effects-off"
                 style={[styles.autoBtn, effectsOff && styles.autoBtnActive]}
                 onPress={() => setEffectsOff(v => !v)}
@@ -330,6 +344,48 @@ const StudioView: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {tab === 'fighters' && (
           <>
+            {silhouetteAudit && (
+              <View style={styles.panel} testID="studio-silhouette-strip">
+                <Text style={styles.panelTitle}>
+                  SOLID-BLACK SILHOUETTE AUDIT (36PX STAGE VS 80PX STUDIO)
+                </Text>
+                <View style={styles.silhouetteStripRow}>
+                  {CHARACTERS.map((char, idx) => (
+                    <View
+                      key={char.name}
+                      testID={`studio-silhouette-fighter-${idx}`}
+                      style={styles.silhouetteCell}
+                    >
+                      <View style={styles.silhouettePair}>
+                        <FighterAvatar
+                          character={char}
+                          size={36}
+                          health={hp.health}
+                          maxHealth={hp.maxHealth}
+                          mood={fighterMood}
+                          animate={false}
+                          silhouette
+                          testID={`studio-silhouette-36-${idx}`}
+                        />
+                        <FighterAvatar
+                          character={char}
+                          size={80}
+                          health={hp.health}
+                          maxHealth={hp.maxHealth}
+                          mood={fighterMood}
+                          animate={false}
+                          silhouette
+                          testID={`studio-silhouette-80-${idx}`}
+                        />
+                      </View>
+                      <Text style={styles.fighterName}>{char.name}</Text>
+                      <Text style={styles.petHint}>36px · 80px</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
             <View style={styles.grid}>
               {CHARACTERS.map((char, idx) => (
                 <View key={char.name} testID={`studio-fighter-card-${idx}`} style={styles.fighterCard}>
@@ -342,11 +398,14 @@ const StudioView: React.FC = () => {
                     reaction={fighterReaction}
                     streak={streak || (fighterMood === 'streak' ? 4 : 0)}
                     quiet={effectsOff}
+                    silhouette={silhouetteAudit}
                     framed
                     interactive
                   />
                   <Text style={styles.fighterName}>{char.name}</Text>
-                  <Text style={styles.petHint}>Tap 1x or 5x to pet!</Text>
+                  <Text style={styles.petHint}>
+                    {silhouetteAudit ? 'Solid #121212 silhouette' : 'Tap 1x or 5x to pet!'}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -426,6 +485,15 @@ const StudioView: React.FC = () => {
                 ENEMY ROSTER PAGE {enemyPage + 1} / {enemyPageCount}
               </Text>
               <View style={styles.chipRow}>
+                <TouchableOpacity
+                  testID="studio-facing-toggle"
+                  style={[styles.chip, enemyFacing === 'left' && styles.chipActive]}
+                  onPress={() => setEnemyFacing(f => (f === 'left' ? 'front' : 'left'))}
+                >
+                  <Text style={[styles.chipText, enemyFacing === 'left' && styles.chipTextActive]}>
+                    Facing: {enemyFacing === 'left' ? '3/4 Left (Battle)' : 'Front (Portrait)'}
+                  </Text>
+                </TouchableOpacity>
                 {Array.from({ length: enemyPageCount }).map((_, idx) => (
                   <TouchableOpacity
                     key={idx}
@@ -440,6 +508,48 @@ const StudioView: React.FC = () => {
               </View>
             </View>
 
+            {silhouetteAudit && (
+              <View style={styles.panel} testID="studio-silhouette-strip">
+                <Text style={styles.panelTitle}>
+                  ENEMY SOLID-BLACK SILHOUETTE AUDIT (36PX STAGE VS 80PX BOSS)
+                </Text>
+                <View style={styles.silhouetteStripRow}>
+                  {visibleEnemies.slice(0, 6).map((enemyName, idx) => (
+                    <View
+                      key={enemyName}
+                      testID={`studio-silhouette-enemy-${idx}`}
+                      style={styles.silhouetteCell}
+                    >
+                      <View style={styles.silhouettePair}>
+                        <EnemyAvatar
+                          enemy={enemyName}
+                          size={36}
+                          hp={hp.health}
+                          maxHp={hp.maxHealth}
+                          mood={enemyMood}
+                          facing={enemyFacing}
+                          animate={false}
+                          silhouette
+                        />
+                        <EnemyAvatar
+                          enemy={enemyName}
+                          size={80}
+                          hp={hp.health}
+                          maxHp={hp.maxHealth}
+                          mood={enemyMood}
+                          facing={enemyFacing}
+                          animate={false}
+                          silhouette
+                        />
+                      </View>
+                      <Text style={styles.fighterName} numberOfLines={1}>{enemyName}</Text>
+                      <Text style={styles.petHint}>36px · 80px</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
             <View style={styles.grid}>
               {visibleEnemies.map((enemyName, idx) => (
                 <View key={enemyName} testID={`studio-enemy-card-${idx}`} style={styles.fighterCard}>
@@ -450,12 +560,16 @@ const StudioView: React.FC = () => {
                     maxHp={hp.maxHealth}
                     mood={enemyMood}
                     reaction={enemyReaction}
+                    facing={enemyFacing}
                     quiet={effectsOff}
+                    silhouette={silhouetteAudit}
                     framed
                     interactive
                   />
                   <Text style={styles.fighterName}>{enemyName}</Text>
-                  <Text style={styles.petHint}>Tap 1x or 5x to poke!</Text>
+                  <Text style={styles.petHint}>
+                    {silhouetteAudit ? 'Solid #121212 silhouette' : 'Tap 1x or 5x to poke!'}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -981,6 +1095,31 @@ const styles = StyleSheet.create({
   },
   autoBtnActive: {
     backgroundColor: COLORS.logicTeal,
+  },
+  silhouetteBtnActive: {
+    backgroundColor: COLORS.deepOnyx,
+  },
+  silhouetteStripRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  silhouetteCell: {
+    backgroundColor: COLORS.ivoryCard,
+    borderRadius: RADIUS.module,
+    borderWidth: 1.5,
+    borderColor: COLORS.slateCharcoal,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 142,
+  },
+  silhouettePair: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
   },
   autoBtnText: {
     fontSize: 11,

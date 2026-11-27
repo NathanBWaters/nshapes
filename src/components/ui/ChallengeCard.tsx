@@ -111,9 +111,17 @@ export const EnemyChallengeCard: React.FC<EnemyChallengeCardProps> = ({
 
         {/* Reward Info - Clear messaging about what the player gets */}
         <View style={[styles.rewardSection, { backgroundColor: enemyDefeated ? '#FEF3C7' : COLORS.slateCharcoal + '10' }]}>
-          <Text style={[styles.rewardLabel, { color: enemyDefeated ? '#D97706' : COLORS.slateCharcoal }]}>
-            {enemyDefeated ? '🎁 BONUS REWARDS EARNED!' : '💔 REWARDS MISSED'}
-          </Text>
+          <View style={styles.rewardHeaderRow}>
+            <Icon
+              name={enemyDefeated ? 'delapouite/present' : 'lorc/broken-heart'}
+              size={14}
+              color={enemyDefeated ? '#D97706' : COLORS.slateCharcoal}
+              noShadow
+            />
+            <Text style={[styles.rewardLabel, { color: enemyDefeated ? '#D97706' : COLORS.slateCharcoal }]}>
+              {enemyDefeated ? 'BONUS REWARDS EARNED!' : 'REWARDS MISSED'}
+            </Text>
+          </View>
           {stretchGoalReward ? (
             <View style={styles.rewardWeaponRow}>
               <WeaponAvatar
@@ -210,9 +218,12 @@ export const DifficultyChallengeCard: React.FC<DifficultyChallengeCardProps> = (
       </View>
 
       {showAchievement && (
-        <Text style={styles.rewardText}>
-          🎉 Reward: Character unlock progress increased!
-        </Text>
+        <View style={styles.rewardHeaderRow}>
+          <Icon name="delapouite/party-popper" size={14} color={COLORS.orangeSurface} noShadow />
+          <Text style={styles.rewardText}>
+            Reward: Character unlock progress increased!
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -381,6 +392,12 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 4,
     marginTop: 4,
+  },
+  rewardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
   },
   rewardLabel: {
     fontSize: 10,

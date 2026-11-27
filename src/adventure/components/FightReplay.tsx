@@ -161,13 +161,13 @@ const shortMoveLabel = (e: FightLogEntry, setNo: number): string => {
   }
 };
 
-const MARK: Partial<Record<FightLogEntry['kind'], { glyph: string; color: string }>> = {
+const MARK: Partial<Record<FightLogEntry['kind'], { glyph?: string; vector?: 'burn' | 'time'; color: string }>> = {
   mistake: { glyph: '✕', color: CRITICAL },
   pick: { glyph: '★', color: INK },
   buy: { glyph: '¢', color: INK },
   hint: { glyph: '?', color: MUTED },
-  burn: { glyph: '🔥', color: CRITICAL },
-  time: { glyph: '⏱', color: MUTED },
+  burn: { vector: 'burn', color: CRITICAL },
+  time: { vector: 'time', color: MUTED },
 };
 
 const toCard = (c: FightLogCard, i: number): CardType => ({
@@ -661,6 +661,26 @@ const FightReplay: React.FC<Props> = ({ run, replay, recording, save, visible, o
                       const dim = i === sel ? 1 : 0.72;
                       if (e.damage <= 0) {
                         const m = MARK[e.kind] ?? (e.heartsDelta < 0 ? { glyph: '♥', color: CRITICAL } : { glyph: '·', color: MUTED });
+                        if (m.vector === 'burn') {
+                          const my = baselineY - 13;
+                          return (
+                            <Path
+                              key={`mk-${i}`}
+                              d={`M ${cx} ${my - 5} C ${cx + 4} ${my - 1}, ${cx + 4} ${my + 4}, ${cx} ${my + 5} C ${cx - 4} ${my + 4}, ${cx - 4} ${my - 1}, ${cx} ${my - 5} Z`}
+                              fill={m.color}
+                              opacity={dim}
+                            />
+                          );
+                        }
+                        if (m.vector === 'time') {
+                          const my = baselineY - 12;
+                          return (
+                            <React.Fragment key={`mk-${i}`}>
+                              <Circle cx={cx} cy={my} r={4.2} stroke={m.color} strokeWidth={1.5} fill="none" opacity={dim} />
+                              <Path d={`M ${cx} ${my - 2.4} L ${cx} ${my} L ${cx + 2} ${my + 1.2}`} stroke={m.color} strokeWidth={1.4} strokeLinecap="round" fill="none" opacity={dim} />
+                            </React.Fragment>
+                          );
+                        }
                         return (
                           <SvgText
                             key={`mk-${i}`}

@@ -1,3 +1,4 @@
+import { CreatureScaleTier } from '@/components/creatures/RigLayers';
 import { CreaturePartStyles, GazeOffset } from '@/components/creatures/types';
 import { EnemyExpression, EnemyHealthState } from '@/utils/enemyAnimations';
 
@@ -14,4 +15,10 @@ export interface EnemyRigProps<V extends string = never> extends CreaturePartSty
   healthState: EnemyHealthState;
   /** Eye gaze offset (-1..1) with corneal parallax */
   gazeOffset?: GazeOffset;
+  /** [UI-07] Combat posture orientation (`'left'` squares off against the fighter; `'front'` for portraits) */
+  facing?: 'front' | 'left';
+  /** [UI-06] Scale tier for boss outline vs internal line-weight density */
+  scaleTier?: CreatureScaleTier;
+  /** [UI-07] Solid-black Silhouette Audit mode */
+  silhouette?: boolean;
 }
