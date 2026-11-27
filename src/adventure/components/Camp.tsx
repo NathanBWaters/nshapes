@@ -10,15 +10,36 @@
  * Every purchase is refundable at 100%.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TouchableOpacity, TextInput } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon, { type IconName } from '@/components/Icon';
+import { useScreenTransition } from '@/components/ScreenTransition';
 import { FightEffectsStorage, SettingsSheet } from '@/components/SettingsSheet';
 import { FighterAvatar } from '@/components/fighters';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { WeaponAvatar } from '@/components/weapons';
 import type { FighterReactionEvent, FighterReactionType } from '@/utils/fighterAnimations';
 import { COLORS } from '@/utils/colors';
+import {
+  BTN_PRESS,
+  EASE,
+  MS,
+  SCALE,
+  SHAKE,
+  SPRING,
+  STAGGER,
+  STAYS,
+  geometricShakeKeyframes,
+  staggerDelay,
+} from '@/utils/motion';
 import type { CharacterName, Weapon } from '@/types';
 import { band, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -86,6 +107,8 @@ import CompanionBubble from './CompanionBubble';
 import { ArcanaCard, FighterPassivesList } from './SharedCards';
 import { companionVoice } from '../coach';
 import { Btn, CoinPill, INK, PopIn, TONE } from './ui';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export type CampTab = 'fighters' | 'armory' | 'arcana' | 'workshop' | 'bounties' | 'history';
 
@@ -177,6 +200,7 @@ const Camp: React.FC<Props> = ({
   const [reactions, setReactions] = useState<Partial<Record<CharacterName, FighterReactionEvent>>>({});
   const [armoryTapCounts, setArmoryTapCounts] = useState<Record<string, number>>({});
   const [slotsFullNote, setSlotsFullNote] = useState<'charms' | null>(null);
+  const [slotsFullSeq, setSlotsFullSeq] = useState(0);
   /** The Armory weapon tapped last: explained in full under the slots */
   const [armoryFocus, setArmoryFocus] = useState<string | null>(null);
   /** [GP-21] Armory filter, search, sort, belt swap selection, Auto-Equip undo, and 3 Presets */
@@ -189,6 +213,31 @@ const Camp: React.FC<Props> = ({
   const [presets, setPresets] = useState<(LoadoutPreset | null)[]>(() => loadLoadoutPresets());
   const [presetNotice, setPresetNotice] = useState<string | null>(null);
   const reactionSeq = useRef(0);
+
+  // Smooth directional screen transition across Camp menu ↔ sections ↔ SkillTree
+  const viewTransition = useScreenTransition({ enterOnMount: false });
+
+  // Horizontal refusal shake when player tries to equip past max weapon slots
+  const slotsShakeX = useSharedValue(0);
+  useEffect(() => {
+    if (slotsFullSeq === 0 || reducedMotion) {
+      slotsShakeX.value = 0;
+      return;
+    }
+    const legs = geometricShakeKeyframes(10, 4, SHAKE.decay, -1);
+    slotsShakeX.value = withSequence(
+      ...legs.map((v, idx) =>
+        withTiming(v, {
+          duration: idx === 0 ? SHAKE.firstLegMs : idx === legs.length - 1 ? SHAKE.settleMs : SHAKE.legMs,
+          easing: EASE.ui,
+        })
+      )
+    );
+  }, [slotsFullSeq, reducedMotion, slotsShakeX]);
+  useEffect(() => () => cancelAnimation(slotsShakeX), [slotsShakeX]);
+  const slotsShakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: slotsShakeX.value }],
+  }));
 
   useEffect(() => {
     setTab(initialTab ?? null);
@@ -207,10 +256,21 @@ const Camp: React.FC<Props> = ({
   }, []);
 
   const open = (next: CampTab | null) => {
-    setTab(next);
-    setTreeFighter(null);
-    setSlotsFullNote(null);
-    setSelectedSlot(null);
+    const dir = next === null ? -1 : 1;
+    viewTransition.go(() => {
+      setTab(next);
+      setTreeFighter(null);
+      setSlotsFullNote(null);
+      setSelectedSlot(null);
+    }, dir);
+  };
+
+  const openSkillTree = (name: CharacterName) => {
+    viewTransition.go(() => setTreeFighter(name), 1);
+  };
+
+  const closeSkillTree = () => {
+    viewTransition.go(() => setTreeFighter(null), -1);
   };
 
   const fireFighterReaction = (name: CharacterName, type: FighterReactionType) => {
@@ -322,12 +382,14 @@ const Camp: React.FC<Props> = ({
     setSelectedSlot(null);
   };
 
-  const renderUpgrade = (u: UpgradeDef) => {
+  const totalWorkshopCards = loadoutUpgrades.length + mechanicUpgrades.length + save.armory.length;
+
+  const renderUpgrade = (u: UpgradeDef, staggerIndex: number) => {
     const tier = upgradeTier(save, u.id);
     const cost = upgradeCost(save, u.id);
     const spent = upgradeSpentCoins(save, u.id);
     return (
-      <PopIn key={u.id} style={st.upgrade}>
+      <PopIn key={u.id} delay={staggerDelay(staggerIndex, Math.max(1, totalWorkshopCards), STAGGER.card)} style={st.upgrade}>
         <View testID={`camp-upgrade-${u.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
           <View style={st.portrait}><Icon name={u.icon} size={30} color={INK} /></View>
           <View style={{ flex: 1, gap: 2 }}>
@@ -335,7 +397,7 @@ const Camp: React.FC<Props> = ({
             <Text style={st.fighterBlurb}>{tier > 0 ? `Now: ${u.description(tier)}` : u.description(1)}</Text>
             {tier > 0 && cost !== null && <Text style={st.nextTier}>Next: {u.description(tier + 1)}</Text>}
             <View style={{ flexDirection: 'row', gap: 3, marginTop: 2 }}>
-              {u.costs.map((_, i) => <View key={i} style={[st.tierPip, i < tier && st.tierPipOn]} />)}
+              {u.costs.map((_, i) => <AnimatedPip key={i} filled={i < tier} style={st.tierPip} reduced={reducedMotion} />)}
             </View>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
@@ -368,47 +430,49 @@ const Camp: React.FC<Props> = ({
     );
   };
 
-  const renderArmoryTile = (w: Weapon) => {
+  const renderArmoryTile = (w: Weapon, idx: number, count: number) => {
     const slot = charms.indexOf(w.id);
     const equipped = slot >= 0;
     const wLevel = weaponLevel(save, w.id);
     const shown = equipped ? charmWeapons(charms, builds)[slot] : getArmoryWeapon(w.id, builds);
     return (
-      <TouchableOpacity
-        key={w.id}
-        testID={`camp-armory-${w.id}`}
-        onPress={() => {
-          setArmoryTapCounts(prev => ({ ...prev, [w.id]: (prev[w.id] ?? 0) + 1 }));
-          setArmoryFocus(w.id);
-          if (!equipped && charms.length >= slots) {
-            sfx('back');
-            setSlotsFullNote('charms');
-            return;
-          }
-          band.audition(w.id);
-          setSlotsFullNote(null);
-          setSelectedSlot(null);
-          onChange(toggleCharm(save, w.id));
-        }}
-        activeOpacity={0.85}
-        accessibilityState={{ selected: equipped }}
-        style={[
-          st.armoryItem,
-          { borderColor: equipped ? COLORS.actionYellow : TONE.spentEdge },
-          equipped && { backgroundColor: TONE.selected },
-        ]}
-      >
-        <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
-        <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
-        <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? `slot ${slot + 1}` : `level ${wLevel}`}</Text>
-        {!equipped && charmSynergyWithEquipped(save, w.id) && (
-          <View style={st.fusesBadge}>
-            <Icon name="lorc/crystal-shine" size={10} color={TONE.combo} noShadow />
-            <Text style={{ fontSize: 10, fontWeight: '900', color: TONE.combo }}>FUSES</Text>
-          </View>
-        )}
-        <Text style={st.armoryDesc} numberOfLines={3}>{shown?.shortDescription}</Text>
-      </TouchableOpacity>
+      <PopIn key={w.id} delay={staggerDelay(idx, Math.max(1, count), STAGGER.card)}>
+        <TouchableOpacity
+          testID={`camp-armory-${w.id}`}
+          onPress={() => {
+            setArmoryTapCounts(prev => ({ ...prev, [w.id]: (prev[w.id] ?? 0) + 1 }));
+            setArmoryFocus(w.id);
+            if (!equipped && charms.length >= slots) {
+              sfx('back');
+              setSlotsFullNote('charms');
+              setSlotsFullSeq(n => n + 1);
+              return;
+            }
+            band.audition(w.id);
+            setSlotsFullNote(null);
+            setSelectedSlot(null);
+            onChange(toggleCharm(save, w.id));
+          }}
+          activeOpacity={0.85}
+          accessibilityState={{ selected: equipped }}
+          style={[
+            st.armoryItem,
+            { borderColor: equipped ? COLORS.actionYellow : TONE.spentEdge },
+            equipped && { backgroundColor: TONE.selected },
+          ]}
+        >
+          <WeaponAvatar weapon={w} size={36} triggerKey={armoryTapCounts[w.id]} />
+          <Text style={st.armoryName} numberOfLines={1}>{w.name}{weaponLevelSuffix(wLevel)}</Text>
+          <Text style={[st.armoryRarity, { color: TONE.spent }]}>{equipped ? `slot ${slot + 1}` : `level ${wLevel}`}</Text>
+          {!equipped && charmSynergyWithEquipped(save, w.id) && (
+            <View style={st.fusesBadge}>
+              <Icon name="lorc/crystal-shine" size={10} color={TONE.combo} noShadow />
+              <Text style={{ fontSize: 10, fontWeight: '900', color: TONE.combo }}>FUSES</Text>
+            </View>
+          )}
+          <Text style={st.armoryDesc} numberOfLines={3}>{shown?.shortDescription}</Text>
+        </TouchableOpacity>
+      </PopIn>
     );
   };
 
@@ -444,13 +508,22 @@ const Camp: React.FC<Props> = ({
   };
 
   // Bounties bring their own screen; its back button returns to the menu
-  if (tab === 'bounties') return <BountyBoard save={save} onClose={() => open(null)} backLabel="Back to camp" />;
+  if (tab === 'bounties') {
+    return (
+      <View style={st.root}>
+        <Animated.View style={[{ flex: 1 }, viewTransition.style]} pointerEvents={viewTransition.leaving ? 'none' : 'auto'}>
+          <BountyBoard save={save} onClose={() => open(null)} backLabel="Back to camp" />
+        </Animated.View>
+      </View>
+    );
+  }
 
   const section = SECTIONS.find(x => x.id === tab);
   const showTestLoadoutBtn = Boolean(onTestLoadout) && (tab === null || LOADOUT_TABS.has(tab));
 
   return (
     <View style={[st.root, { paddingTop: insets.top }]}>
+    <Animated.View style={[{ flex: 1 }, viewTransition.style]} pointerEvents={viewTransition.leaving ? 'none' : 'auto'}>
       <View style={st.top}>
         <TouchableOpacity
           onPress={() => { sfx('back'); if (tab) open(null); else onClose(); }}
@@ -506,30 +579,19 @@ const Camp: React.FC<Props> = ({
               <Text style={st.nextGoalText} numberOfLines={2}>{nextGoal}</Text>
             </View>
 
-            {SECTIONS.map(x => {
+            {SECTIONS.map((x, idx) => {
               const status = statusOf(x.id);
               return (
-                <TouchableOpacity
-                  key={x.id}
-                  testID={`camp-tab-${x.id}`}
-                  disabled={status.locked}
-                  onPress={() => { sfx('click'); open(x.id); }}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${x.title}: ${status.sub}`}
-                  accessibilityState={{ disabled: !!status.locked }}
-                  style={[st.menuRow, status.locked && st.menuRowLocked]}
-                >
-                  <View style={st.menuIcon}>
-                    <Icon name={status.locked ? 'lorc/padlock' : x.icon} size={28} color={INK} />
-                    {status.badge && <View style={st.menuBadge} testID={`camp-badge-${x.id}`} />}
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={st.menuTitle}>{x.title}</Text>
-                    <Text style={st.menuSub} numberOfLines={2}>{status.sub}</Text>
-                  </View>
-                  {!status.locked && <Text style={st.menuChevron}>›</Text>}
-                </TouchableOpacity>
+                <PopIn key={x.id} delay={staggerDelay(idx, SECTIONS.length, STAGGER.card)}>
+                  <CampMenuRow
+                    id={x.id}
+                    title={x.title}
+                    icon={x.icon}
+                    status={status}
+                    reduced={reducedMotion}
+                    onPress={() => { sfx('click'); open(x.id); }}
+                  />
+                </PopIn>
               );
             })}
 
@@ -587,7 +649,7 @@ const Camp: React.FC<Props> = ({
         {tab === 'history' && <BattleHistory history={history} onRateBattle={onRateBattle} />}
 
         {tab === 'fighters' && treeFighter && (
-          <SkillTree save={save} fighter={treeFighter} onChange={onChange} onBack={() => setTreeFighter(null)} />
+          <SkillTree save={save} fighter={treeFighter} onChange={onChange} onBack={closeSkillTree} />
         )}
 
         {tab === 'fighters' && !treeFighter && (
@@ -607,77 +669,79 @@ const Camp: React.FC<Props> = ({
                 </View>
               </TouchableOpacity>
             )}
-            {FIGHTERS.map(f => {
+            {FIGHTERS.map((f, fIdx) => {
               const unlocked = save.unlockedFighters.includes(f.name);
               const selected = save.selectedFighter === f.name;
               const spent = fighterStarsSpent(save, f.name);
               return (
-                <View
+                <PopIn
                   key={f.name}
-                  testID={`camp-fighter-${f.name}`}
+                  delay={staggerDelay(fIdx, FIGHTERS.length, STAGGER.card)}
                   style={[st.fighter, !unlocked && { opacity: 0.55 }, selected && { borderColor: COLORS.deepOnyx, backgroundColor: TONE.selected }]}
                 >
-                  <View style={st.fighterHead}>
-                    {unlocked ? (
-                      <View style={{ position: 'relative' }}>
-                        {selected && (
-                          <FighterBuildAura
-                            theme={buildTheme}
+                  <View testID={`camp-fighter-${f.name}`} style={{ gap: 8 }}>
+                    <View style={st.fighterHead}>
+                      {unlocked ? (
+                        <View style={{ position: 'relative' }}>
+                          {selected && (
+                            <FighterBuildAura
+                              theme={buildTheme}
+                              size={50}
+                              quiet={!save.effectsOn}
+                              testID="camp-fighter-build-aura"
+                            />
+                          )}
+                          <FighterAvatar
+                            testID={`camp-fighter-avatar-${f.name}`}
+                            character={f.name}
                             size={50}
-                            quiet={!save.effectsOn}
-                            testID="camp-fighter-build-aura"
+                            mood={selected ? 'anticipation' : 'idle'}
+                            reaction={reactions[f.name] ?? null}
+                            animate={selected || Boolean(reactions[f.name])}
+                            framed
+                            interactive
                           />
-                        )}
-                        <FighterAvatar
-                          testID={`camp-fighter-avatar-${f.name}`}
-                          character={f.name}
-                          size={50}
-                          mood={selected ? 'anticipation' : 'idle'}
-                          reaction={reactions[f.name] ?? null}
-                          animate={selected || Boolean(reactions[f.name])}
-                          framed
-                          interactive
-                        />
+                        </View>
+                      ) : (
+                        <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={st.fighterName}>{unlocked ? f.name : 'Caged Friend'}</Text>
+                        <Text style={st.fighterBlurb}>
+                          {unlocked ? f.blurb : `${unlockHint({ kind: 'fighter', id: f.name }, save) ?? 'Find a Golden Key on the map to free this friend.'}`}
+                        </Text>
                       </View>
-                    ) : (
-                      <View style={st.portrait}><Icon name="lorc/padlock" size={30} color={INK} /></View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.fighterName}>{unlocked ? f.name : 'Caged Friend'}</Text>
-                      <Text style={st.fighterBlurb}>
-                        {unlocked ? f.blurb : `${unlockHint({ kind: 'fighter', id: f.name }, save) ?? 'Find a Golden Key on the map to free this friend.'}`}
-                      </Text>
+                      {unlocked && !selected && (
+                        <Btn
+                          small
+                          variant="secondary"
+                          label="Use"
+                          onPress={() => {
+                            sfx('confirm');
+                            fireFighterReaction(f.name, 'joy');
+                            onChange({ ...save, selectedFighter: f.name });
+                          }}
+                        />
+                      )}
+                      {selected && <View style={st.usingTag}><Text style={st.usingText}>USING</Text></View>}
                     </View>
-                    {unlocked && !selected && (
-                      <Btn
-                        small
-                        variant="secondary"
-                        label="Use"
-                        onPress={() => {
-                          sfx('confirm');
-                          fireFighterReaction(f.name, 'joy');
-                          onChange({ ...save, selectedFighter: f.name });
-                        }}
-                      />
+                    {unlocked && (
+                      <>
+                        <FighterPassivesList fighter={f.name} itemTestIdPrefix="camp-passive" />
+                        <TouchableOpacity
+                          testID={`camp-open-tree-${f.name}`}
+                          onPress={() => { sfx('confirm'); fireFighterReaction(f.name, 'powerup'); openSkillTree(f.name); }}
+                          style={st.treeBtn}
+                          activeOpacity={0.85}
+                        >
+                          <Icon name="lorc/tree-branch" size={16} color={INK} />
+                          <Text style={st.treeBtnText}>Skill tree</Text>
+                          <Text style={st.treeBtnSub}>{`${availableStars(save, f.name)}★ left`}{spent > 0 ? ` · ${spent}★ spent` : ''}</Text>
+                        </TouchableOpacity>
+                      </>
                     )}
-                    {selected && <View style={st.usingTag}><Text style={st.usingText}>USING</Text></View>}
                   </View>
-                  {unlocked && (
-                    <>
-                      <FighterPassivesList fighter={f.name} itemTestIdPrefix="camp-passive" />
-                      <TouchableOpacity
-                        testID={`camp-open-tree-${f.name}`}
-                        onPress={() => { sfx('confirm'); fireFighterReaction(f.name, 'powerup'); setTreeFighter(f.name); }}
-                        style={st.treeBtn}
-                        activeOpacity={0.85}
-                      >
-                        <Icon name="lorc/tree-branch" size={16} color={INK} />
-                        <Text style={st.treeBtnText}>Skill tree</Text>
-                        <Text style={st.treeBtnSub}>{`${availableStars(save, f.name)}★ left`}{spent > 0 ? ` · ${spent}★ spent` : ''}</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
+                </PopIn>
               );
             })}
           </>
@@ -710,7 +774,7 @@ const Camp: React.FC<Props> = ({
                 <>
                   <Text style={st.sectionLabel}>LOADOUT</Text>
                   <Text style={st.slotLine}>Weapon slots {slots}/6 · Arcana slots {arcanaSlots(save)}/3</Text>
-                  {loadoutUpgrades.map(renderUpgrade)}
+                  {loadoutUpgrades.map((u, idx) => renderUpgrade(u, idx))}
                 </>
               )}
 
@@ -718,7 +782,7 @@ const Camp: React.FC<Props> = ({
               {mechanicUpgrades.length === 0 ? (
                 <Text style={st.blurb}>Play further in the campaign to unlock mechanics to upgrade.</Text>
               ) : (
-                mechanicUpgrades.map(renderUpgrade)
+                mechanicUpgrades.map((u, idx) => renderUpgrade(u, loadoutUpgrades.length + idx))
               )}
 
               <Text style={st.sectionLabel}>WEAPON TUNING</Text>
@@ -728,14 +792,18 @@ const Camp: React.FC<Props> = ({
               {save.armory.length === 0 ? (
                 <Text style={st.blurb}>Unlock weapons in your Armory to tune them here.</Text>
               ) : (
-                armoryWeapons(save).map(base => {
+                armoryWeapons(save).map((base, idx) => {
                   const build = weaponBuild(save, base.id);
                   const w = getArmoryWeapon(base.id, { [base.id]: build }) ?? base;
                   const level = weaponLevel(save, base.id);
                   const inWorld = weaponLevelsInWorld(base.id);
                   const spent = tuningSpent(save, base.id);
                   return (
-                    <PopIn key={base.id} style={[st.upgrade, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                    <PopIn
+                      key={base.id}
+                      delay={staggerDelay(loadoutUpgrades.length + mechanicUpgrades.length + idx, Math.max(1, totalWorkshopCards), STAGGER.card)}
+                      style={[st.upgrade, { flexDirection: 'column', alignItems: 'stretch' }]}
+                    >
                       <View testID={`camp-weapon-upgrade-${base.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <View style={st.portrait}>
                           <WeaponAvatar weapon={w} size={34} interactive />
@@ -744,7 +812,12 @@ const Camp: React.FC<Props> = ({
                           <Text style={st.fighterName}>{w.name} · Lv {level}</Text>
                           <View style={{ flexDirection: 'row', gap: 3 }} accessibilityLabel={`Level ${level} of ${MAX_WEAPON_LEVEL}`}>
                             {Array.from({ length: MAX_WEAPON_LEVEL }).map((_, i) => (
-                              <View key={i} style={[st.tierPip, i < level && st.tierPipOn, i >= inWorld && st.tierPipAbsent]} />
+                              <AnimatedPip
+                                key={i}
+                                filled={i < level}
+                                style={[st.tierPip, i >= inWorld && st.tierPipAbsent]}
+                                reduced={reducedMotion}
+                              />
                             ))}
                           </View>
                           <Text style={st.fighterBlurb}>
@@ -780,7 +853,7 @@ const Camp: React.FC<Props> = ({
                               <View style={{ alignItems: 'flex-end', gap: 3 }}>
                                 <View style={{ flexDirection: 'row', gap: 2 }}>
                                   {Array.from({ length: MAX_TUNING_TIER }).map((_, i) => (
-                                    <View key={i} style={[st.tunePip, i < line.tier && st.tierPipOn]} />
+                                    <AnimatedPip key={i} filled={i < line.tier} style={st.tunePip} reduced={reducedMotion} />
                                   ))}
                                 </View>
                                 {cost !== null ? (
@@ -815,28 +888,31 @@ const Camp: React.FC<Props> = ({
               Tap a weapon to equip or inspect. Tap an equipped belt slot to reorder (◀ / ▶) so Understudy copies its left partner!
             </Text>
 
-            {/* Interactive reorderable Weapon Belt */}
-            <View style={st.slotRow} testID="camp-charm-slots">
+            {/* Interactive reorderable Weapon Belt (shakes horizontally on slots-full refusal!) */}
+            <View testID="camp-belt-zone" style={{ gap: 6 }}>
+            <Animated.View style={[st.slotRow, slotsShakeStyle]} testID="camp-charm-slots">
               {Array.from({ length: slots }).map((_, i) => {
                 const id = charms[i];
                 const w = id ? getArmoryWeapon(id, builds) : undefined;
                 const isSel = selectedSlot === i;
                 return (
                   <View key={i} style={st.slotWrap}>
-                    <TouchableOpacity
-                      testID={`camp-slot-${i}`}
-                      disabled={!w}
-                      onPress={() => handleSlotTap(i)}
-                      activeOpacity={0.85}
-                      accessibilityLabel={w ? `Slot ${i + 1}: ${w.name}. Tap to reorder` : `Empty slot ${i + 1}`}
-                      style={[
-                        st.slot,
-                        w && { borderColor: INK, borderStyle: 'solid', backgroundColor: COLORS.canvasWhite },
-                        isSel && st.slotSelected,
-                      ]}
-                    >
-                      {w ? <WeaponAvatar weapon={w} size={26} /> : <Text style={st.slotEmpty}>+</Text>}
-                    </TouchableOpacity>
+                    <AnimatedBeltSlot weaponId={id ?? null} reduced={reducedMotion}>
+                      <TouchableOpacity
+                        testID={`camp-slot-${i}`}
+                        disabled={!w}
+                        onPress={() => handleSlotTap(i)}
+                        activeOpacity={0.85}
+                        accessibilityLabel={w ? `Slot ${i + 1}: ${w.name}. Tap to reorder` : `Empty slot ${i + 1}`}
+                        style={[
+                          st.slot,
+                          w && { borderColor: INK, borderStyle: 'solid', backgroundColor: COLORS.canvasWhite },
+                          isSel && st.slotSelected,
+                        ]}
+                      >
+                        {w ? <WeaponAvatar weapon={w} size={26} /> : <Text style={st.slotEmpty}>+</Text>}
+                      </TouchableOpacity>
+                    </AnimatedBeltSlot>
                     <Text style={st.slotNo}>{i + 1}</Text>
                     {w && isSel && (
                       <View style={st.nudgeRow}>
@@ -864,7 +940,7 @@ const Camp: React.FC<Props> = ({
                 );
               })}
               <Text style={st.slotCount}>{charms.length}/{slots}</Text>
-            </View>
+            </Animated.View>
 
             {understudyIdx === 0 && (
               <View style={st.understudyWarn} testID="camp-understudy-warning">
@@ -880,8 +956,11 @@ const Camp: React.FC<Props> = ({
             )}
 
             {slotsFullNote === 'charms' && (
-              <Text testID="camp-charms-full" style={st.fullNote}>All {slots} weapon slots are full. Tap an equipped weapon to take it off{slots < 6 ? ', or add a slot with the Charm Belt in the Workshop' : ''}.</Text>
+              <Animated.View style={slotsShakeStyle}>
+                <Text testID="camp-charms-full" style={st.fullNote}>All {slots} weapon slots are full. Tap an equipped weapon to take it off{slots < 6 ? ', or add a slot with the Charm Belt in the Workshop' : ''}.</Text>
+              </Animated.View>
             )}
+            </View>
 
             {/* [GP-21] Auto-Equip + 3 Named Loadout Presets */}
             {save.armory.length > 0 && (
@@ -1036,13 +1115,13 @@ const Camp: React.FC<Props> = ({
                       <Text style={st.shelfTitle}>{role.label}</Text>
                       <Text style={st.shelfBlurb}>{role.blurb}</Text>
                     </View>
-                    <View style={st.armory}>{shelf.map(renderArmoryTile)}</View>
+                    <View style={st.armory}>{shelf.map((w, idx) => renderArmoryTile(w, idx, shelf.length))}</View>
                   </View>
                 );
               })
             ) : (
               <View style={st.armory} testID="camp-armory-sorted-grid">
-                {filteredArmory.map(renderArmoryTile)}
+                {filteredArmory.map((w, idx) => renderArmoryTile(w, idx, filteredArmory.length))}
               </View>
             )}
             <Text style={st.blurb}>More weapons are out there…</Text>
@@ -1054,24 +1133,25 @@ const Camp: React.FC<Props> = ({
             <Text style={st.blurb}>
               Equip up to {arcanaSlots(save)} Arcana to twist the rules of a fight ({arcana.length}/{arcanaSlots(save)} equipped). Tap an equipped Arcana again to take it off.
             </Text>
-            {ARCANA.map(a => {
+            {ARCANA.map((a, idx) => {
               const unlocked = save.unlockedArcana.includes(a.id);
               const equipped = arcana.includes(a.id);
               return (
-                <ArcanaCard
-                  key={a.id}
-                  arcanaId={a.id}
-                  tarot
-                  showTagline
-                  selected={equipped}
-                  badgeText={equipped ? 'ACTIVE' : undefined}
-                  lockedText={!unlocked ? `Unlock: ${unlockHint({ kind: 'arcana', id: a.id }, save)}` : undefined}
-                  testID={`camp-arcana-${a.id}`}
-                  onPress={() => {
-                    sfx('confirm');
-                    onChange(toggleArcana(save, a.id));
-                  }}
-                />
+                <PopIn key={a.id} delay={staggerDelay(idx, ARCANA.length, STAGGER.card)}>
+                  <ArcanaCard
+                    arcanaId={a.id}
+                    tarot
+                    showTagline
+                    selected={equipped}
+                    badgeText={equipped ? 'ACTIVE' : undefined}
+                    lockedText={!unlocked ? `Unlock: ${unlockHint({ kind: 'arcana', id: a.id }, save)}` : undefined}
+                    testID={`camp-arcana-${a.id}`}
+                    onPress={() => {
+                      sfx('confirm');
+                      onChange(toggleArcana(save, a.id));
+                    }}
+                  />
+                </PopIn>
               );
             })}
           </>
@@ -1104,21 +1184,160 @@ const Camp: React.FC<Props> = ({
         </View>
       )}
 
-      {/* [UI-21] Global SettingsSheet; save.musicOn / save.effectsOn stay mirrored for older saves */}
-      {settingsOpen && (
-        <SettingsSheet
-          visible
-          onClose={() => setSettingsOpen(false)}
-          showReset={false}
-          effectsOn={save.effectsOn}
-          onToggleEffects={() => onChange({ ...save, effectsOn: !save.effectsOn })}
-          onMusicChange={enabled => {
-            if (save.musicOn !== enabled) onChange({ ...save, musicOn: enabled });
-          }}
-          onReplayWalkthrough={onReplayWalkthrough}
-          onSaveRestored={onSaveRestored}
-        />
-      )}
+      {/* [UI-21] Global SettingsSheet kept mounted so `useModalMotion` plays clean enter & exit transitions */}
+      <SettingsSheet
+        visible={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        showReset={false}
+        effectsOn={save.effectsOn}
+        onToggleEffects={() => onChange({ ...save, effectsOn: !save.effectsOn })}
+        onMusicChange={enabled => {
+          if (save.musicOn !== enabled) onChange({ ...save, musicOn: enabled });
+        }}
+        onReplayWalkthrough={onReplayWalkthrough}
+        onSaveRestored={onSaveRestored}
+      />
+    </Animated.View>
+    </View>
+  );
+};
+
+/** Tactile Camp hub menu row with `BTN_PRESS` push-down & rebound. */
+const CampMenuRow: React.FC<{
+  id: CampTab;
+  title: string;
+  icon: IconName;
+  status: SectionStatus;
+  reduced: boolean;
+  onPress: () => void;
+}> = ({ id, title, icon, status, reduced, onPress }) => {
+  const pressed = useSharedValue(0);
+  useEffect(() => () => cancelAnimation(pressed), [pressed]);
+  const animStyle = useAnimatedStyle(() =>
+    reduced
+      ? { opacity: status.locked ? 0.8 : 1 - pressed.value * (1 - BTN_PRESS.reducedOpacity) }
+      : {
+          transform: [
+            { translateY: pressed.value * BTN_PRESS.smallTranslateY },
+            { scale: 1 - pressed.value * (1 - BTN_PRESS.scale) },
+          ],
+        }
+  );
+  return (
+    <AnimatedPressable
+      testID={`camp-tab-${id}`}
+      disabled={status.locked}
+      onPress={onPress}
+      onPressIn={() => {
+        if (status.locked) return;
+        pressed.value = withTiming(1, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...(reduced ? STAYS : {}) });
+      }}
+      onPressOut={() => {
+        pressed.value = reduced
+          ? withTiming(0, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...STAYS })
+          : withSpring(0, SPRING.snappy);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}: ${status.sub}`}
+      accessibilityState={{ disabled: !!status.locked }}
+      style={[st.menuRow, status.locked && st.menuRowLocked, animStyle]}
+    >
+      <View style={st.menuIcon}>
+        <Icon name={status.locked ? 'lorc/padlock' : icon} size={28} color={INK} />
+        {status.badge && <View style={st.menuBadge} testID={`camp-badge-${id}`} />}
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={st.menuTitle}>{title}</Text>
+        <Text style={st.menuSub} numberOfLines={2}>{status.sub}</Text>
+      </View>
+      {!status.locked && <Text style={st.menuChevron}>›</Text>}
+    </AnimatedPressable>
+  );
+};
+
+/** Upgrade / tuning pip that pops joyfully when newly filled on purchase. */
+const AnimatedPip: React.FC<{ filled: boolean; style: any; reduced: boolean }> = ({ filled, style, reduced }) => {
+  const prevFilled = useRef(filled);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    if (filled && !prevFilled.current && !reduced) {
+      scale.value = withSequence(
+        withTiming(1.42, { duration: MS.feedback, easing: EASE.enter }),
+        withSpring(1, SPRING.playful)
+      );
+    }
+    prevFilled.current = filled;
+  }, [filled, reduced, scale]);
+
+  useEffect(() => () => cancelAnimation(scale), [scale]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return <Animated.View style={[style, filled && st.tierPipOn, animStyle]} />;
+};
+
+/** Weapon belt slot wrapper that pops with `SPRING.playful` + golden ring burst when a weapon equips into it. */
+const AnimatedBeltSlot: React.FC<{ weaponId: string | null; reduced: boolean; children: React.ReactNode }> = ({
+  weaponId,
+  reduced,
+  children,
+}) => {
+  const prevId = useRef(weaponId);
+  const scale = useSharedValue(1);
+  const ringS = useSharedValue(0.8);
+  const ringO = useSharedValue(0);
+
+  useEffect(() => {
+    if (weaponId && weaponId !== prevId.current && !reduced) {
+      scale.value = withSequence(
+        withTiming(SCALE.reward, { duration: MS.feedback, easing: EASE.enter }),
+        withSpring(1, SPRING.playful)
+      );
+      ringS.value = 0.82;
+      ringS.value = withTiming(1.48, { duration: MS.move, easing: EASE.enterSoft });
+      ringO.value = withSequence(
+        withTiming(0.92, { duration: MS.feedback / 2, easing: EASE.ui }),
+        withTiming(0, { duration: MS.move, easing: EASE.enterSoft })
+      );
+    }
+    prevId.current = weaponId;
+  }, [weaponId, reduced, scale, ringS, ringO]);
+
+  useEffect(() => () => {
+    cancelAnimation(scale);
+    cancelAnimation(ringS);
+    cancelAnimation(ringO);
+  }, [scale, ringS, ringO]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: ringO.value,
+    transform: [{ scale: ringS.value }],
+  }));
+
+  return (
+    <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: 'absolute',
+            width: 42,
+            height: 42,
+            borderRadius: 10,
+            borderWidth: 3,
+            borderColor: COLORS.actionYellow,
+          },
+          ringStyle,
+        ]}
+      />
+      <Animated.View style={animStyle}>{children}</Animated.View>
     </View>
   );
 };
@@ -1168,7 +1387,7 @@ const st = StyleSheet.create({
   slot: { width: 42, height: 42, borderRadius: 8, borderWidth: 2, borderStyle: 'dashed', borderColor: COLORS.walnutBorder, alignItems: 'center', justifyContent: 'center' },
   slotSelected: { borderColor: COLORS.actionYellow, borderWidth: 3, backgroundColor: '#FFFBEB' },
   slotEmpty: { color: COLORS.walnutBorder, fontWeight: '900', fontSize: 18 },
-  slotCount: { color: TONE.onDusk, fontWeight: '900', marginLeft: 4, marginTop: 12 },
+  slotCount: { color: TONE.onDusk, fontWeight: '900', marginLeft: 4, marginTop: 12, fontVariant: ['tabular-nums'] },
   nudgeRow: { flexDirection: 'row', gap: 3, marginTop: 2 },
   nudgeBtn: { backgroundColor: COLORS.actionYellow, borderRadius: 4, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 5, paddingVertical: 1 },
   nudgeBtnDisabled: { opacity: 0.35 },

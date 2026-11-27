@@ -3,11 +3,21 @@
  * Merges directly into the staged `fight_ended` event while the player reviews results,
  * or updates historical battle records from Camp -> History.
  */
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Icon from '@/components/Icon';
+import React, { useEffect } from 'react';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import Icon, { type IconName } from '@/components/Icon';
+import { PopIn } from '@/adventure/components/ui';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { sfx } from '@/audio';
 import { COLORS } from '@/utils/colors';
+import { BTN_PRESS, EASE, SPRING, STAGGER, STAYS, staggerDelay } from '@/utils/motion';
 import { triggerHaptic } from '@/utils/haptics';
 import {
   NEGATIVE_FUN_TAGS,
@@ -15,6 +25,8 @@ import {
   type FunRating,
   type FunTag,
 } from '@/analytics/fightEvent';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const INK = COLORS.slateCharcoal;
 const POSITIVE_IDS = new Set<FunTag>(POSITIVE_FUN_TAGS.map(t => t.id));
@@ -28,6 +40,62 @@ interface Props {
   title?: string;
   testIDPrefix?: string;
 }
+
+const FunThumbButton: React.FC<{
+  testID: string;
+  accessibilityLabel: string;
+  selected: boolean;
+  compact: boolean;
+  activeStyle: object;
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+}> = ({ testID, accessibilityLabel, selected, compact, activeStyle, icon, label, onPress }) => {
+  const reduced = useReducedMotion();
+  const pressed = useSharedValue(0);
+  useEffect(() => () => cancelAnimation(pressed), [pressed]);
+  const animStyle = useAnimatedStyle(() =>
+    reduced
+      ? { opacity: 1 - pressed.value * (1 - BTN_PRESS.reducedOpacity) }
+      : {
+          transform: [
+            { translateY: pressed.value * BTN_PRESS.smallTranslateY },
+            { scale: 1 - pressed.value * (1 - BTN_PRESS.scale) },
+          ],
+        }
+  );
+  return (
+    <AnimatedPressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      onPressIn={() => {
+        pressed.value = withTiming(1, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...(reduced ? STAYS : {}) });
+      }}
+      onPressOut={() => {
+        pressed.value = reduced
+          ? withTiming(0, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...STAYS })
+          : withSpring(0, SPRING.snappy);
+      }}
+      style={[
+        st.thumbBtn,
+        compact && st.thumbBtnCompact,
+        selected && activeStyle,
+        animStyle,
+      ]}
+    >
+      <Icon
+        name={icon}
+        size={compact ? 18 : 20}
+        color={selected ? COLORS.canvasWhite : INK}
+        noShadow
+      />
+      <Text style={[st.thumbLabel, selected && st.thumbLabelActive]}>{label}</Text>
+    </AnimatedPressable>
+  );
+};
 
 const RoundFunPrompt: React.FC<Props> = ({
   rating,
@@ -64,78 +132,57 @@ const RoundFunPrompt: React.FC<Props> = ({
       <View style={st.headerRow}>
         <Text style={[st.question, compact && st.questionCompact]}>{title}</Text>
         {rating !== null && (
-          <View style={st.savedBadge} testID={`${testIDPrefix}-saved`}>
-            <Text style={st.savedText}>Saved</Text>
-          </View>
+          <PopIn key={rating} style={st.savedBadge}>
+            <Text style={st.savedText} testID={`${testIDPrefix}-saved`}>Saved</Text>
+          </PopIn>
         )}
       </View>
 
       <View style={st.thumbsRow}>
-        <TouchableOpacity
+        <FunThumbButton
           testID={`${testIDPrefix}-up`}
-          accessibilityRole="button"
           accessibilityLabel="Thumbs up: this round was fun"
-          accessibilityState={{ selected: rating === 'up' }}
-          activeOpacity={0.8}
+          selected={rating === 'up'}
+          compact={compact}
+          activeStyle={st.thumbUpActive}
+          icon="delapouite/thumb-up"
+          label="Fun"
           onPress={() => handleVote('up')}
-          style={[
-            st.thumbBtn,
-            compact && st.thumbBtnCompact,
-            rating === 'up' && st.thumbUpActive,
-          ]}
-        >
-          <Icon
-            name="delapouite/thumb-up"
-            size={compact ? 18 : 20}
-            color={rating === 'up' ? COLORS.canvasWhite : INK}
-            noShadow
-          />
-          <Text style={[st.thumbLabel, rating === 'up' && st.thumbLabelActive]}>Fun</Text>
-        </TouchableOpacity>
+        />
 
-        <TouchableOpacity
+        <FunThumbButton
           testID={`${testIDPrefix}-down`}
-          accessibilityRole="button"
           accessibilityLabel="Thumbs down: this round was not fun"
-          accessibilityState={{ selected: rating === 'down' }}
-          activeOpacity={0.8}
+          selected={rating === 'down'}
+          compact={compact}
+          activeStyle={st.thumbDownActive}
+          icon="delapouite/thumb-down"
+          label="Not fun"
           onPress={() => handleVote('down')}
-          style={[
-            st.thumbBtn,
-            compact && st.thumbBtnCompact,
-            rating === 'down' && st.thumbDownActive,
-          ]}
-        >
-          <Icon
-            name="delapouite/thumb-down"
-            size={compact ? 18 : 20}
-            color={rating === 'down' ? COLORS.canvasWhite : INK}
-            noShadow
-          />
-          <Text style={[st.thumbLabel, rating === 'down' && st.thumbLabelActive]}>Not fun</Text>
-        </TouchableOpacity>
+        />
       </View>
 
       {availableTags.length > 0 && (
         <View style={st.tagsWrap} testID={`${testIDPrefix}-tags`}>
-          {availableTags.map(tag => {
+          {availableTags.map((tag, idx) => {
             const selected = tags.includes(tag.id);
             return (
-              <TouchableOpacity
-                key={tag.id}
-                testID={`${testIDPrefix}-tag-${tag.id}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                activeOpacity={0.8}
-                onPress={() => handleTag(tag.id)}
-                style={[
-                  st.tagChip,
-                  compact && st.tagChipCompact,
-                  selected && (rating === 'up' ? st.tagChipUp : st.tagChipDown),
-                ]}
-              >
-                <Text style={[st.tagText, selected && st.tagTextActive]}>{tag.label}</Text>
-              </TouchableOpacity>
+              <PopIn key={`${rating}-${tag.id}`} delay={staggerDelay(idx, availableTags.length, STAGGER.card)}>
+                <TouchableOpacity
+                  testID={`${testIDPrefix}-tag-${tag.id}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  activeOpacity={0.8}
+                  onPress={() => handleTag(tag.id)}
+                  style={[
+                    st.tagChip,
+                    compact && st.tagChipCompact,
+                    selected && (rating === 'up' ? st.tagChipUp : st.tagChipDown),
+                  ]}
+                >
+                  <Text style={[st.tagText, selected && st.tagTextActive]}>{tag.label}</Text>
+                </TouchableOpacity>
+              </PopIn>
             );
           })}
         </View>

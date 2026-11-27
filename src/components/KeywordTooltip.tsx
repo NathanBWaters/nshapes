@@ -5,7 +5,7 @@
  * Shows brief definition at top, detailed explanation below.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -13,47 +13,47 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   StyleSheet,
-  Animated,
-  Dimensions,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useKeyword } from '../context/KeywordContext';
 import { COLORS, RADIUS } from '../utils/colors';
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { useModalMotion } from './ScreenTransition';
 
 /**
  * KeywordTooltip displays a bottom sheet with keyword information.
  * Place this component once at the root of your app (inside KeywordProvider).
+ * Uses `useWindowDimensions()` (fixes stale module-load `SCREEN_HEIGHT`) and
+ * `useModalMotion` for smooth Disney-12 enter/exit choreography.
  */
 const KeywordTooltip: React.FC = () => {
   const { isOpen, activeKeyword, activeDefinition, closeKeyword } = useKeyword();
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const { height: windowHeight } = useWindowDimensions();
 
-  useEffect(() => {
-    if (isOpen) {
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 65,
-        friction: 11,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [isOpen, slideAnim]);
+  const lastKeywordRef = useRef(activeKeyword);
+  const lastDefinitionRef = useRef(activeDefinition);
+  if (activeDefinition) {
+    lastKeywordRef.current = activeKeyword;
+    lastDefinitionRef.current = activeDefinition;
+  }
 
-  if (!activeDefinition) {
+  const showing = isOpen && Boolean(activeDefinition);
+  const { rendered, closing, backdropStyle, panelStyle, contentStyle } = useModalMotion(showing, {
+    travelY: 96,
+    sheet: true,
+  });
+
+  const shownKeyword = activeDefinition ? activeKeyword : lastKeywordRef.current;
+  const shownDefinition = activeDefinition ?? lastDefinitionRef.current;
+
+  if (!rendered || !shownDefinition) {
     return null;
   }
 
   // Format keyword ID to display name (camelCase -> Title Case)
-  const displayName = activeKeyword
-    ? activeKeyword
+  const displayName = shownKeyword
+    ? shownKeyword
         .replace(/([A-Z])/g, ' $1')
         .replace(/^./, (str) => str.toUpperCase())
         .trim()
@@ -61,44 +61,48 @@ const KeywordTooltip: React.FC = () => {
 
   return (
     <Modal
-      visible={isOpen}
+      visible={rendered}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={closeKeyword}
       statusBarTranslucent
     >
       {/* Backdrop - tap to dismiss */}
       <TouchableWithoutFeedback onPress={closeKeyword}>
-        <View style={styles.overlay}>
+        <View style={styles.overlay} pointerEvents={closing ? 'none' : 'auto'}>
+          <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayBackdrop, backdropStyle]} />
           {/* Bottom sheet container - prevent tap through */}
           <TouchableWithoutFeedback>
             <Animated.View
               style={[
                 styles.bottomSheet,
-                { transform: [{ translateY: slideAnim }] },
+                { maxHeight: Math.round(windowHeight * 0.6) },
+                panelStyle,
               ]}
             >
               <View style={styles.handleBar} />
 
-              <View style={styles.header}>
-                <Text style={styles.title}>{displayName}</Text>
-                <TouchableOpacity
-                  onPress={closeKeyword}
-                  style={styles.closeButton}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Text style={styles.closeButtonText}>Done</Text>
-                </TouchableOpacity>
-              </View>
+              <Animated.View style={contentStyle}>
+                <View style={styles.header}>
+                  <Text style={styles.title}>{displayName}</Text>
+                  <TouchableOpacity
+                    onPress={closeKeyword}
+                    style={styles.closeButton}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.closeButtonText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
 
-              <View style={styles.content}>
-                {/* Brief - one liner at top */}
-                <Text style={styles.brief}>{activeDefinition.brief}</Text>
+                <View style={styles.content}>
+                  {/* Brief - one liner at top */}
+                  <Text style={styles.brief}>{shownDefinition.brief}</Text>
 
-                <View style={styles.divider} />
+                  <View style={styles.divider} />
 
-                <Text style={styles.detailed}>{activeDefinition.detailed}</Text>
-              </View>
+                  <Text style={styles.detailed}>{shownDefinition.detailed}</Text>
+                </View>
+              </Animated.View>
             </Animated.View>
           </TouchableWithoutFeedback>
         </View>
@@ -110,8 +114,10 @@ const KeywordTooltip: React.FC = () => {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(18, 18, 18, 0.6)',
     justifyContent: 'flex-end',
+  },
+  overlayBackdrop: {
+    backgroundColor: 'rgba(18, 18, 18, 0.6)',
   },
   bottomSheet: {
     backgroundColor: COLORS.canvasWhite,
@@ -122,7 +128,6 @@ const styles = StyleSheet.create({
     borderRightWidth: 2,
     borderColor: COLORS.slateCharcoal,
     paddingBottom: Platform.OS === 'ios' ? 34 : 24, // Safe area for home indicator
-    maxHeight: SCREEN_HEIGHT * 0.6,
   },
   handleBar: {
     width: 40,

@@ -20,9 +20,10 @@
  *   `MS.quick`) straight to the settled `FRIEND FREED!` celebration.
  */
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -32,29 +33,48 @@ import Animated, {
 } from 'react-native-reanimated';
 import { band, sfx } from '@/audio';
 import { FighterAvatar } from '@/components/fighters';
+import { useModalMotion } from '@/components/ScreenTransition';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import { COLORS } from '@/utils/colors';
-import { EASE, exitMs, MS, SCALE, SPRING, STAGGER, STAYS } from '@/utils/motion';
+import {
+  ARC,
+  BTN_PRESS,
+  EASE,
+  MS,
+  OVERLAP,
+  SCALE,
+  SPRING,
+  STAGGER,
+  STAYS,
+  exitMs,
+  reducedMs,
+  sampleArcPoint,
+  sampleJumpArcY,
+  staggerDelay,
+  volumeScale,
+} from '@/utils/motion';
 import type { CharacterName } from '@/types';
 import type { AdventureSave, FighterDef } from '../types';
 import { getFighter } from '../data/fighters';
 import { lockedFighters, type MapKeyDef } from '../data/mapKeys';
 import { companionVoice } from '../coach';
-import CompanionBubble from './CompanionBubble';
+import CompanionBubble, { LivingBreath } from './CompanionBubble';
 import { CageBarsSvg, CagePadlockSvg, GoldenKeyArt } from './RescueArt';
 import { FighterPassivesList } from './SharedCards';
-import { DARK, INK } from './ui';
+import { DARK, INK, PopIn } from './ui';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const NO_INSETS = { top: 0, bottom: 0, left: 0, right: 0 };
 
 /** Timing table for Phase 2 (Key-Turn → Split-Cage Shatter) in ms, built from `motion.ts` tokens */
-const KEY_SLIDE_MS = MS.move;        // 280 ms: key rises into brass padlock
-const KEY_HOLD_MS = 32;              // 2 frames: mechanical seat before turn
+const KEY_SLIDE_MS = MS.move;                // 280 ms: key rises on subtle arc into brass padlock
+const KEY_HOLD_MS = OVERLAP.primaryMs;       // 2 frames (32 ms): mechanical seat before turn
 const KEY_TURN_AT = KEY_SLIDE_MS + KEY_HOLD_MS;
-const KEY_TURN_MS = MS.quick;        // 180 ms: key cranks 0° → 90°
-const BREAK_AT = KEY_TURN_AT + KEY_TURN_MS; // 492 ms (~f31): bars burst + sound lands + friend leaps!
-const DETAIL_AT = (k: number) => BREAK_AT + 140 + k * STAGGER.item;
+const KEY_TURN_MS = MS.quick;                // 180 ms: key cranks 0° → 90°
+const BREAK_AT = KEY_TURN_AT + KEY_TURN_MS;  // 492 ms (~f31): bars burst on gravity arcs + sound lands + friend leaps!
+const DETAIL_AT = (k: number) => BREAK_AT + MS.feedback + OVERLAP.primaryMs + k * STAGGER.item;
 
 interface Props {
   keyDef: MapKeyDef | null;
@@ -74,16 +94,13 @@ const FriendRescueModal: React.FC<Props> = ({ keyDef, save, onRescue, onUseFight
   const [rescued, setRescued] = useState<CharacterName | null>(null);
   const [selected, setSelected] = useState<CharacterName | null>(null);
   const [cagedList, setCagedList] = useState<FighterDef[]>([]);
+  const lastKeyDefRef = useRef<MapKeyDef | null>(keyDef);
+  if (keyDef) lastKeyDefRef.current = keyDef;
 
   // Reset modal session cleanly whenever a new key opens
   const openKeyId = keyDef?.id ?? null;
   useEffect(() => {
-    if (!openKeyId) {
-      setRescued(null);
-      setSelected(null);
-      setCagedList([]);
-      return;
-    }
+    if (!openKeyId) return;
     const caged = lockedFighters(save);
     setCagedList(caged);
     setRescued(null);
@@ -92,84 +109,81 @@ const FriendRescueModal: React.FC<Props> = ({ keyDef, save, onRescue, onUseFight
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openKeyId]);
 
-  // Modal backdrop & entrance animation
-  const backdrop = useSharedValue(0);
-  const panelY = useSharedValue(reduced ? 0 : 28);
-  const panelO = useSharedValue(0);
+  // Modal presence & enter/exit choreography (`MODAL_MOTION`, instant in Jest)
+  const isOpen = Boolean(keyDef && (rescued || cagedList.length > 0));
+  const { rendered, closing, backdropStyle, panelStyle, contentStyle } = useModalMotion(isOpen, {
+    travelY: 28,
+  });
 
+  // Clear local snapshot once exit transition finishes unmounting
   useEffect(() => {
-    if (!openKeyId) {
-      backdrop.value = 0;
-      panelO.value = 0;
-      panelY.value = reduced ? 0 : 28;
-      return;
+    if (!rendered && !openKeyId) {
+      setRescued(null);
+      setSelected(null);
+      setCagedList([]);
     }
-    backdrop.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS });
-    panelO.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS });
-    panelY.value = reduced ? 0 : withTiming(0, { duration: MS.move, easing: EASE.enterSoft });
-  }, [openKeyId, reduced, backdrop, panelO, panelY]);
+  }, [rendered, openKeyId]);
 
-  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdrop.value }));
-  const panelStyle = useAnimatedStyle(() => ({
-    opacity: panelO.value,
-    transform: [{ translateY: panelY.value }],
-  }));
-
-  if (!keyDef) return null;
+  const activeKeyDef = keyDef ?? lastKeyDefRef.current;
+  if (!rendered || !activeKeyDef) return null;
   // Guard: if all friends are already unlocked and we aren't celebrating a rescue right now, render nothing
   if (!rescued && cagedList.length === 0) return null;
 
   const chosenFighter = selected ? getFighter(selected) : cagedList[0];
 
   const handleConfirmRescue = () => {
-    if (!chosenFighter) return;
+    if (!chosenFighter || closing) return;
     sfx('confirm');
-    onRescue(keyDef.id, chosenFighter.name);
+    onRescue(activeKeyDef.id, chosenFighter.name);
     setRescued(chosenFighter.name);
   };
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={() => onClose(!rescued)}>
+    <Modal visible={rendered} transparent animationType="none" onRequestClose={() => onClose(!rescued)}>
       <View
         testID="friend-rescue-modal"
+        pointerEvents={closing ? 'none' : 'auto'}
         style={[st.overlay, { paddingTop: Math.max(insets.top + 8, 16), paddingBottom: Math.max(insets.bottom + 10, 16) }]}
       >
         <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, st.backdrop, backdropStyle]} />
 
         <Animated.View style={[st.frame, panelStyle]}>
-          {rescued ? (
-            <RescueCelebration
-              key={rescued}
-              fighter={rescued}
-              currentFighter={save.selectedFighter}
-              location={keyDef.location}
-              reduced={reduced}
-              onUse={() => {
-                sfx('confirm');
-                onUseFighter(rescued);
-                onClose(false);
-              }}
-              onKeep={() => {
-                sfx('click');
-                onClose(false);
-              }}
-            />
-          ) : (
-            <RescuePicker
-              keyDef={keyDef}
-              caged={cagedList}
-              selected={chosenFighter?.name ?? null}
-              onSelect={name => {
-                sfx('click');
-                setSelected(name);
-              }}
-              onConfirm={handleConfirmRescue}
-              onLater={() => {
-                sfx('click');
-                onClose(true);
-              }}
-            />
-          )}
+          <Animated.View style={[st.frameContent, contentStyle]}>
+            {rescued ? (
+              <RescueCelebration
+                key={rescued}
+                fighter={rescued}
+                currentFighter={save.selectedFighter}
+                location={activeKeyDef.location}
+                reduced={reduced}
+                onUse={() => {
+                  sfx('confirm');
+                  onUseFighter(rescued);
+                  onClose(false);
+                }}
+                onKeep={() => {
+                  sfx('click');
+                  onClose(false);
+                }}
+              />
+            ) : (
+              <RescuePicker
+                keyDef={activeKeyDef}
+                caged={cagedList}
+                selected={chosenFighter?.name ?? null}
+                reduced={reduced}
+                onSelect={name => {
+                  sfx('click');
+                  setSelected(name);
+                }}
+                onConfirm={handleConfirmRescue}
+                onLater={() => {
+                  sfx('click');
+                  onClose(true);
+                }}
+              />
+            )}
+          </Animated.View>
         </Animated.View>
       </View>
     </Modal>
@@ -180,14 +194,158 @@ const FriendRescueModal: React.FC<Props> = ({ keyDef, save, onRescue, onUseFight
 // Phase 1: Choose ANY Caged Friend to Free
 // ---------------------------------------------------------------------------
 
+/** Tactile storybook press button matching `BTN_PRESS` tokens. */
+const TactileGoldButton: React.FC<{
+  testID: string;
+  onPress: () => void;
+  accessibilityLabel?: string;
+  reduced: boolean;
+  children: React.ReactNode;
+}> = ({ testID, onPress, accessibilityLabel, reduced, children }) => {
+  const pressed = useSharedValue(0);
+  useEffect(() => () => cancelAnimation(pressed), [pressed]);
+  const animStyle = useAnimatedStyle(() =>
+    reduced
+      ? { opacity: 1 - pressed.value * (1 - BTN_PRESS.reducedOpacity) }
+      : {
+          transform: [
+            { translateY: pressed.value * BTN_PRESS.translateY },
+            { scale: 1 - pressed.value * (1 - BTN_PRESS.scale) },
+          ],
+        }
+  );
+  return (
+    <AnimatedPressable
+      testID={testID}
+      onPress={onPress}
+      onPressIn={() => {
+        pressed.value = withTiming(1, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...(reduced ? STAYS : {}) });
+      }}
+      onPressOut={() => {
+        pressed.value = reduced
+          ? withTiming(0, { duration: BTN_PRESS.pressInMs, easing: EASE.ui, ...STAYS })
+          : withSpring(0, SPRING.snappy);
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={[st.confirmBtn, animStyle]}
+    >
+      {children}
+    </AnimatedPressable>
+  );
+};
+
+/** One caged friend picker row with living GPU breath and eager select lean. */
+const RescuePickerCard: React.FC<{
+  fighter: FighterDef;
+  index: number;
+  count: number;
+  isSelected: boolean;
+  reduced: boolean;
+  onSelect: (name: CharacterName) => void;
+}> = ({ fighter: f, index, count, isSelected, reduced, onSelect }) => {
+  const pressed = useSharedValue(0);
+  const lean = useSharedValue(isSelected ? 1 : 0);
+
+  useEffect(() => {
+    lean.value = reduced
+      ? isSelected
+        ? 1
+        : 0
+      : withSpring(isSelected ? 1 : 0, SPRING.snappy);
+  }, [isSelected, reduced, lean]);
+
+  useEffect(() => () => {
+    cancelAnimation(pressed);
+    cancelAnimation(lean);
+  }, [pressed, lean]);
+
+  const cardAnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: reduced ? 1 : 1 - pressed.value * (1 - BTN_PRESS.scale) },
+    ],
+  }));
+
+  const portraitLeanStyle = useAnimatedStyle(() => ({
+    transform: reduced
+      ? []
+      : [
+          { translateY: -lean.value * 2.5 },
+          { scale: 1 + lean.value * 0.06 },
+        ],
+  }));
+
+  return (
+    <PopIn delay={staggerDelay(index, count, STAGGER.card)}>
+      <AnimatedPressable
+        testID={`rescue-option-${f.name}`}
+        onPress={() => onSelect(f.name)}
+        onPressIn={() => {
+          pressed.value = withTiming(1, { duration: BTN_PRESS.pressInMs, easing: EASE.ui });
+        }}
+        onPressOut={() => {
+          pressed.value = withSpring(0, SPRING.snappy);
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isSelected }}
+        accessibilityLabel={`Select ${f.name} to rescue: ${f.blurb}`}
+        style={[st.card, isSelected && st.cardSelected, cardAnimStyle]}
+      >
+        <View style={st.cardTop}>
+          {/* Caged friend portrait — living GPU breath (0 frame loops) + eager lean on select */}
+          <View style={[st.cageThumb, isSelected && st.cageThumbSelected]}>
+            <Animated.View style={portraitLeanStyle}>
+              <LivingBreath seedKey={`rescue-pick-${f.name}`} size={52}>
+                <FighterAvatar
+                  character={f.name}
+                  size={52}
+                  mood={isSelected ? 'anticipation' : 'urgent'}
+                  animate={false}
+                />
+              </LivingBreath>
+            </Animated.View>
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <CageBarsSvg width={66} height={66} side="full" />
+            </View>
+            <View style={st.miniLock} pointerEvents="none">
+              <CagePadlockSvg size={18} />
+            </View>
+          </View>
+
+          <View style={st.cardInfo}>
+            <View style={st.cardNameRow}>
+              <Text style={st.cardName}>{f.name}</Text>
+              {isSelected && (
+                <View style={st.selectedPill}>
+                  <Text style={st.selectedPillText}>PICKED</Text>
+                </View>
+              )}
+            </View>
+            <Text style={st.cardBlurb}>{f.blurb}</Text>
+          </View>
+        </View>
+
+        {/* Reuse shared passives card (zero duplicate markup) */}
+        <FighterPassivesList
+          fighter={f.name}
+          compact
+          itemTestIdPrefix="rescue-passive"
+          style={st.passivesInset}
+        />
+      </AnimatedPressable>
+    </PopIn>
+  );
+};
+
 const RescuePicker: React.FC<{
   keyDef: MapKeyDef;
   caged: FighterDef[];
   selected: CharacterName | null;
+  reduced: boolean;
   onSelect: (name: CharacterName) => void;
   onConfirm: () => void;
   onLater: () => void;
-}> = ({ keyDef, caged, selected, onSelect, onConfirm, onLater }) => {
+}> = ({ keyDef, caged, selected, reduced, onSelect, onConfirm, onLater }) => {
   const chosen = caged.find(f => f.name === selected) ?? caged[0];
 
   // [UI-23]: Web keyboard controls for Friend Rescue picker (Arrow cycle, Enter/Space confirm, Esc defer)
@@ -229,76 +387,32 @@ const RescuePicker: React.FC<{
         contentContainerStyle={st.listContent}
         showsVerticalScrollIndicator={false}
       >
-        {caged.map(f => {
-          const isSelected = f.name === chosen?.name;
-          return (
-            <TouchableOpacity
-              key={f.name}
-              testID={`rescue-option-${f.name}`}
-              onPress={() => onSelect(f.name)}
-              activeOpacity={0.86}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`Select ${f.name} to rescue: ${f.blurb}`}
-              style={[st.card, isSelected && st.cardSelected]}
-            >
-              <View style={st.cardTop}>
-                {/* Caged friend portrait */}
-                <View style={[st.cageThumb, isSelected && st.cageThumbSelected]}>
-                  <FighterAvatar
-                    character={f.name}
-                    size={52}
-                    mood={isSelected ? 'anticipation' : 'urgent'}
-                    animate={false}
-                  />
-                  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                    <CageBarsSvg width={66} height={66} side="full" />
-                  </View>
-                  <View style={st.miniLock} pointerEvents="none">
-                    <CagePadlockSvg size={18} />
-                  </View>
-                </View>
-
-                <View style={st.cardInfo}>
-                  <View style={st.cardNameRow}>
-                    <Text style={st.cardName}>{f.name}</Text>
-                    {isSelected && (
-                      <View style={st.selectedPill}>
-                        <Text style={st.selectedPillText}>PICKED</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={st.cardBlurb}>{f.blurb}</Text>
-                </View>
-              </View>
-
-              {/* Reuse shared passives card (zero duplicate markup) */}
-              <FighterPassivesList
-                fighter={f.name}
-                compact
-                itemTestIdPrefix="rescue-passive"
-                style={st.passivesInset}
-              />
-            </TouchableOpacity>
-          );
-        })}
+        {caged.map((f, idx) => (
+          <RescuePickerCard
+            key={f.name}
+            fighter={f}
+            index={idx}
+            count={caged.length}
+            isSelected={f.name === chosen?.name}
+            reduced={reduced}
+            onSelect={onSelect}
+          />
+        ))}
       </ScrollView>
 
       {/* Pinned action bar */}
       <View style={st.footer}>
-        <TouchableOpacity
+        <TactileGoldButton
           testID="rescue-confirm-btn"
           onPress={onConfirm}
-          activeOpacity={0.85}
-          accessibilityRole="button"
+          reduced={reduced}
           accessibilityLabel={chosen ? `Free ${chosen.name}` : 'Free friend'}
-          style={st.confirmBtn}
         >
           <GoldenKeyArt size={24} />
           <Text style={st.confirmBtnText}>
             {chosen ? `FREE ${chosen.name.toUpperCase()}!` : 'FREE FRIEND!'}
           </Text>
-        </TouchableOpacity>
+        </TactileGoldButton>
         <TouchableOpacity
           testID="rescue-later-btn"
           onPress={onLater}
@@ -314,7 +428,7 @@ const RescuePicker: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Phase 2: Key-Turn → Split-Cage Shatter → Joyous Leap Celebration
+// Phase 2: Key-Turn → Parabolic Split-Cage Shatter → Joyous Leap Celebration
 // ---------------------------------------------------------------------------
 
 const RescueCelebration: React.FC<{
@@ -338,26 +452,23 @@ const RescueCelebration: React.FC<{
     onCancel: onKeep,
   });
 
-  // Animated values (strictly GPU transform + opacity)
-  const keyY = useSharedValue(reduced ? 0 : 22);
+  // Animated values (strictly GPU transform + opacity, true Disney arcs & volume conservation)
+  const keyT = useSharedValue(reduced ? 1 : 0);
   const keyRot = useSharedValue(0);
   const keyO = useSharedValue(reduced ? 0 : 1);
 
-  const leftBarX = useSharedValue(0);
-  const leftBarRot = useSharedValue(0);
-  const rightBarX = useSharedValue(0);
-  const rightBarRot = useSharedValue(0);
+  const barsT = useSharedValue(0);
   const barsO = useSharedValue(reduced ? 0 : 1);
 
-  const lockY = useSharedValue(0);
-  const lockRot = useSharedValue(0);
+  const lockT = useSharedValue(0);
+  const lockWiggle = useSharedValue(0);
   const lockO = useSharedValue(reduced ? 0 : 1);
 
   const ringScale = useSharedValue(0.5);
   const ringO = useSharedValue(0);
 
   const heroY = useSharedValue(0);
-  const heroScale = useSharedValue(reduced ? 1 : 0.92);
+  const heroScaleY = useSharedValue(reduced ? 1 : 0.94);
   const heroO = useSharedValue(reduced ? 0 : 1);
 
   const d0O = useSharedValue(0);
@@ -367,65 +478,80 @@ const RescueCelebration: React.FC<{
   const d2O = useSharedValue(0);
   const d2Y = useSharedValue(reduced ? 0 : 12);
 
+  // Pre-break status line (fills the lower body during f0–f29 and tucks upward cleanly before RESCUED! rises)
+  const unlockingO = useSharedValue(reduced ? 0 : 1);
+  const unlockingY = useSharedValue(0);
+
   useEffect(() => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
 
     if (reduced) {
       // Reduced motion: calm opacity cross-fade straight into settled unlocked state
-      heroO.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS });
-      d0O.value = withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS });
-      d1O.value = withDelay(40, withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
-      d2O.value = withDelay(80, withTiming(1, { duration: MS.quick, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
+      const fadeDur = reducedMs(MS.quick);
+      heroO.value = withTiming(1, { duration: fadeDur, easing: EASE.ui, ...STAYS });
+      d0O.value = withTiming(1, { duration: fadeDur, easing: EASE.ui, ...STAYS });
+      d1O.value = withDelay(OVERLAP.uiContentMs, withTiming(1, { duration: fadeDur, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
+      d2O.value = withDelay(OVERLAP.tertiaryMs, withTiming(1, { duration: fadeDur, easing: EASE.ui, ...STAYS }), STAYS.reduceMotion);
       band.cue('friendRescued');
       return;
     }
 
-    // 1. Key glides up into padlock (0 → KEY_SLIDE_MS)
-    keyY.value = withTiming(0, { duration: KEY_SLIDE_MS, easing: EASE.enter });
+    // 1. Key glides along a subtle curved arc up into brass padlock (0 → KEY_SLIDE_MS)
+    keyT.value = withTiming(1, { duration: KEY_SLIDE_MS, easing: EASE.enter });
 
-    // 2. Mechanical seat (2 frames), then crank 90° (KEY_TURN_AT → BREAK_AT)
+    // 2. Mechanical seat (2 frames), then crank 90° while brass padlock rattles under tension & friend crouches
     keyRot.value = withDelay(KEY_TURN_AT, withTiming(90, { duration: KEY_TURN_MS, easing: EASE.ui }));
+    lockWiggle.value = withDelay(
+      KEY_TURN_AT,
+      withSequence(
+        withTiming(-7, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+        withTiming(7, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+        withTiming(-5, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
+        withTiming(0, { duration: OVERLAP.primaryMs, easing: EASE.ui })
+      )
+    );
     timers.current.push(setTimeout(() => band.cue('keyFound'), KEY_TURN_AT));
+
+    // Pre-break label tucks upward + exits OVERLAP.exitContentLeadMs BEFORE break
+    const unlockOutAt = Math.max(0, BREAK_AT - OVERLAP.exitContentLeadMs);
+    const unlockOutDur = exitMs(MS.feedback);
+    unlockingO.value = withDelay(unlockOutAt, withTiming(0, { duration: unlockOutDur, easing: EASE.exitSoft }));
+    unlockingY.value = withDelay(unlockOutAt, withTiming(-10, { duration: unlockOutDur, easing: EASE.exitSoft }));
 
     // 3. Key pops out cleanly right as cage bursts
     keyO.value = withDelay(BREAK_AT, withTiming(0, { duration: exitMs(MS.quick), easing: EASE.exitSoft }));
 
-    // 4. HERO MOMENT (BREAK_AT): forged iron cage splits cleanly apart + padlock drops + one gold ring + friend leaps!
-    leftBarX.value = withDelay(BREAK_AT, withTiming(-84, { duration: MS.move, easing: EASE.enter }));
-    leftBarRot.value = withDelay(BREAK_AT, withTiming(-20, { duration: MS.move, easing: EASE.enter }));
-    rightBarX.value = withDelay(BREAK_AT, withTiming(84, { duration: MS.move, easing: EASE.enter }));
-    rightBarRot.value = withDelay(BREAK_AT, withTiming(20, { duration: MS.move, easing: EASE.enter }));
-    barsO.value = withDelay(BREAK_AT + 70, withTiming(0, { duration: exitMs(MS.move), easing: EASE.exitSoft }));
+    // 4. HERO MOMENT (BREAK_AT): forged iron cage halves launch fast on true parabolic gravity arcs + tumble!
+    barsT.value = withDelay(BREAK_AT, withTiming(1, { duration: MS.move, easing: EASE.enterSoft }));
+    barsO.value = withDelay(BREAK_AT + MS.feedback, withTiming(0, { duration: exitMs(MS.move), easing: EASE.exitSoft }));
 
-    lockY.value = withDelay(BREAK_AT, withTiming(42, { duration: MS.quick, easing: EASE.exitSoft }));
-    lockRot.value = withDelay(BREAK_AT, withTiming(24, { duration: MS.quick, easing: EASE.exitSoft }));
-    lockO.value = withDelay(BREAK_AT, withTiming(0, { duration: MS.quick, easing: EASE.exitSoft }));
+    lockT.value = withDelay(BREAK_AT, withTiming(1, { duration: MS.move, easing: EASE.enter }));
+    lockO.value = withDelay(BREAK_AT + OVERLAP.secondaryMs, withTiming(0, { duration: exitMs(MS.move), easing: EASE.exitSoft }));
 
     ringO.value = withDelay(
       BREAK_AT,
       withSequence(
-        withTiming(0.85, { duration: 48, easing: EASE.ui }),
+        withTiming(0.88, { duration: OVERLAP.uiContentMs, easing: EASE.ui }),
         withTiming(0, { duration: MS.panel, easing: EASE.enterSoft })
       )
     );
-    ringScale.value = withDelay(BREAK_AT, withTiming(1.85, { duration: MS.panel, easing: EASE.enterSoft }));
+    ringScale.value = withDelay(BREAK_AT, withTiming(1.9, { duration: MS.panel, easing: EASE.enterSoft }));
 
-    // Freed friend leaps lightly on the exact cage-break frame (FighterAvatar's own
-    // ecstatic reaction carries the full joyful hop, so keep wrapper lift restrained to avoid top-edge clipping)
-    heroY.value = withDelay(
-      BREAK_AT,
-      withSequence(
-        withTiming(-8, { duration: MS.feedback, easing: EASE.enter }),
-        withSpring(0, SPRING.snappy)
-      )
+    // Anticipation crouch during key crank → volume-preserving stretch leap on exact break frame → joyful settle!
+    heroY.value = withSequence(
+      withDelay(KEY_TURN_AT, withTiming(3, { duration: Math.round(KEY_TURN_MS * 0.7), easing: EASE.ui })),
+      withDelay(Math.round(KEY_TURN_MS * 0.3), withTiming(-11, { duration: MS.feedback, easing: EASE.enter })),
+      withSpring(0, SPRING.snappy)
     );
-    heroScale.value = withDelay(
-      BREAK_AT,
-      withSequence(
-        withTiming(SCALE.pop, { duration: MS.feedback, easing: EASE.enter }),
-        withSpring(1, SPRING.snappy)
-      )
+    heroScaleY.value = withSequence(
+      withDelay(KEY_TURN_AT, withTiming(SCALE.windup, { duration: Math.round(KEY_TURN_MS * 0.7), easing: EASE.ui })),
+      withDelay(
+        Math.round(KEY_TURN_MS * 0.3),
+        withTiming(1.12, { duration: Math.round(MS.feedback * 0.8), easing: EASE.enter })
+      ),
+      withTiming(0.93, { duration: OVERLAP.secondaryMs, easing: EASE.ui }),
+      withSpring(1, SPRING.playful)
     );
 
     timers.current.push(
@@ -446,43 +572,81 @@ const RescueCelebration: React.FC<{
     return () => {
       timers.current.forEach(clearTimeout);
       timers.current = [];
+      cancelAnimation(keyT);
+      cancelAnimation(keyRot);
+      cancelAnimation(keyO);
+      cancelAnimation(barsT);
+      cancelAnimation(barsO);
+      cancelAnimation(lockT);
+      cancelAnimation(lockWiggle);
+      cancelAnimation(lockO);
+      cancelAnimation(ringScale);
+      cancelAnimation(ringO);
+      cancelAnimation(heroY);
+      cancelAnimation(heroScaleY);
+      cancelAnimation(heroO);
+      cancelAnimation(unlockingO);
+      cancelAnimation(unlockingY);
+      cancelAnimation(d0O);
+      cancelAnimation(d0Y);
+      cancelAnimation(d1O);
+      cancelAnimation(d1Y);
+      cancelAnimation(d2O);
+      cancelAnimation(d2Y);
     };
     // Run once per rescued fighter
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fighter, reduced]);
 
-  // Pre-break status line (fills the lower body during f0–f30 so there is zero empty black hole)
-  const unlockingO = useSharedValue(reduced ? 0 : 1);
-  useEffect(() => {
-    if (reduced) return;
-    unlockingO.value = withDelay(BREAK_AT - 40, withTiming(0, { duration: exitMs(MS.feedback), easing: EASE.exitSoft }));
-  }, [reduced, unlockingO]);
-  const unlockingStyle = useAnimatedStyle(() => ({ opacity: unlockingO.value }));
+  const unlockingStyle = useAnimatedStyle(() => ({
+    opacity: unlockingO.value,
+    transform: [{ translateY: unlockingY.value }],
+  }));
 
-  const keyStyle = useAnimatedStyle(() => ({
-    opacity: keyO.value,
-    transform: [{ translateY: keyY.value }, { rotate: `${keyRot.value}deg` }],
-  }));
-  const leftBarStyle = useAnimatedStyle(() => ({
-    opacity: barsO.value,
-    transform: [{ translateX: leftBarX.value }, { rotate: `${leftBarRot.value}deg` }],
-  }));
-  const rightBarStyle = useAnimatedStyle(() => ({
-    opacity: barsO.value,
-    transform: [{ translateX: rightBarX.value }, { rotate: `${rightBarRot.value}deg` }],
-  }));
-  const lockStyle = useAnimatedStyle(() => ({
-    opacity: lockO.value,
-    transform: [{ translateY: lockY.value }, { rotate: `${lockRot.value}deg` }],
-  }));
+  const keyStyle = useAnimatedStyle(() => {
+    const pt = sampleArcPoint(14, 26, 0, 0, keyT.value, -10, -0.15);
+    return {
+      opacity: keyO.value,
+      transform: [{ translateX: pt.x }, { translateY: pt.y }, { rotate: `${keyRot.value}deg` }],
+    };
+  });
+  const leftBarStyle = useAnimatedStyle(() => {
+    const t = barsT.value;
+    const arcY = sampleJumpArcY(t, 28, ARC.jumpApexT) + 46 * t * t;
+    const rot = -(26 * t + 12 * t * t);
+    return {
+      opacity: barsO.value,
+      transform: [{ translateX: -88 * t }, { translateY: arcY }, { rotate: `${rot}deg` }],
+    };
+  });
+  const rightBarStyle = useAnimatedStyle(() => {
+    const t = barsT.value;
+    const arcY = sampleJumpArcY(t, 28, ARC.jumpApexT) + 46 * t * t;
+    const rot = 26 * t + 12 * t * t;
+    return {
+      opacity: barsO.value,
+      transform: [{ translateX: 88 * t }, { translateY: arcY }, { rotate: `${rot}deg` }],
+    };
+  });
+  const lockStyle = useAnimatedStyle(() => {
+    const t = lockT.value;
+    const arcY = sampleJumpArcY(t, 12, 0.34) + 58 * t * t;
+    return {
+      opacity: lockO.value,
+      transform: [{ translateX: 14 * t }, { translateY: arcY }, { rotate: `${lockWiggle.value + 32 * t}deg` }],
+    };
+  });
   const ringStyle = useAnimatedStyle(() => ({
     opacity: ringO.value,
     transform: [{ scale: ringScale.value }],
   }));
-  const heroStyle = useAnimatedStyle(() => ({
-    opacity: heroO.value,
-    transform: [{ translateY: heroY.value }, { scale: heroScale.value }],
-  }));
+  const heroStyle = useAnimatedStyle(() => {
+    const vs = volumeScale(heroScaleY.value, 0.85, 0.82, 1.18);
+    return {
+      opacity: heroO.value,
+      transform: [{ translateY: heroY.value }, { scaleX: vs.scaleX }, { scaleY: vs.scaleY }],
+    };
+  });
   const d0Style = useAnimatedStyle(() => ({ opacity: d0O.value, transform: [{ translateY: d0Y.value }] }));
   const d1Style = useAnimatedStyle(() => ({ opacity: d1O.value, transform: [{ translateY: d1Y.value }] }));
   const d2Style = useAnimatedStyle(() => ({ opacity: d2O.value, transform: [{ translateY: d2Y.value }] }));
@@ -558,22 +722,21 @@ const RescueCelebration: React.FC<{
           character={fighter}
           text={`${voice.hello} ${voice.cheer} Thanks for springing me!`}
           mood="victory"
-          animate={false}
+          animate={!reduced}
           avatarSize={34}
         />
         <FighterPassivesList fighter={fighter} style={st.celPassives} />
       </Animated.View>
 
       <Animated.View style={[st.celActions, d2Style]}>
-        <TouchableOpacity
+        <TactileGoldButton
           testID="rescue-use-fighter"
           onPress={onUse}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          style={st.confirmBtn}
+          reduced={reduced}
+          accessibilityLabel={`Play as ${def.name}`}
         >
           <Text style={st.confirmBtnText}>PLAY AS {def.name.toUpperCase()}!</Text>
-        </TouchableOpacity>
+        </TactileGoldButton>
         <TouchableOpacity
           testID="rescue-keep-fighter"
           onPress={onKeep}
@@ -608,6 +771,9 @@ const st = StyleSheet.create({
     borderBottomWidth: 6,
     borderColor: DARK.gold,
     overflow: 'hidden',
+  },
+  frameContent: {
+    maxHeight: '100%',
   },
   pickerRoot: {
     maxHeight: '100%',

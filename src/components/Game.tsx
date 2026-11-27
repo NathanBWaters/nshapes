@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import AdventureMode from '@/adventure/AdventureMode';
 import SpireMode from '@/spire/components/SpireMode';
 import PrismMode from '@/prism/components/PrismMode';
@@ -8,6 +9,7 @@ import type { StarterDeckId } from '@/prism/types';
 import type { CharacterName } from '@/types';
 import { useTutorial } from '@/context/TutorialContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
+import { COLORS } from '@/utils/colors';
 import {
   FreePlayDifficultyStorage,
   FreePlayRecordsStorage,
@@ -16,6 +18,7 @@ import {
 import MainMenu from './MainMenu';
 import FreePlayMode from './FreePlayMode';
 import OptionsMenu from './OptionsMenu';
+import { useScreenTransition, type ScreenDirection } from './ScreenTransition';
 
 interface GameProps {
   autoPlayer?: boolean;
@@ -113,8 +116,19 @@ const Game: React.FC<GameProps> = ({
       : null
   );
   const [phase, setPhase] = useState<AppPhase>(() => initialPhaseFor(initialMode));
+  const transition = useScreenTransition({ enterOnMount: false });
 
   const { resetTutorial } = useTutorial();
+
+  const goPhase = useCallback(
+    (next: AppPhase, direction: ScreenDirection, beforeSwap?: () => void) => {
+      transition.go(() => {
+        beforeSwap?.();
+        setPhase(next);
+      }, direction);
+    },
+    [transition]
+  );
 
   // Android hardware back button handling for Main Menu / Options modal (sub-modes own their own back stack)
   useAndroidBackHandler(
@@ -128,9 +142,9 @@ const Game: React.FC<GameProps> = ({
     phase === 'main_menu'
   );
 
-  const exitToMenu = useCallback(() => {
-    setPhase('main_menu');
-  }, []);
+  const exitToMenu = useCallback((clearParams?: () => void) => {
+    goPhase('main_menu', -1, clearParams);
+  }, [goPhase]);
 
   const handleResetGame = useCallback(() => {
     resetTutorial();
@@ -149,21 +163,17 @@ const Game: React.FC<GameProps> = ({
             <MainMenu
               key={`menu-${resetRevision}`}
               onSelectAdventure={() => {
-                setAdventureLaunchParams(null);
-                setPhase('adventure');
+                goPhase('adventure', 1, () => setAdventureLaunchParams(null));
               }}
               onSelectSpire={() => {
-                setSummitLaunchParams(null);
-                setPhase('spire');
+                goPhase('spire', 1, () => setSummitLaunchParams(null));
               }}
               onSelectPrism={() => {
-                setPrismLaunchParams(null);
-                setPhase('prism');
+                goPhase('prism', 1, () => setPrismLaunchParams(null));
               }}
               showPrismLabs={labsEnabled}
               onSelectFreeplay={() => {
-                setFreePlayLaunchParams(null);
-                setPhase('free_play');
+                goPhase('free_play', 1, () => setFreePlayLaunchParams(null));
               }}
               onSelectOptions={() => setShowOptionsModal(true)}
             />
@@ -179,13 +189,12 @@ const Game: React.FC<GameProps> = ({
         return (
           <AdventureMode
             key={`adv-${resetRevision}-${adventureLaunchParams?.levelId ?? ''}-${adventureLaunchParams?.seed ?? ''}`}
+            hostTransition
             onExit={() => {
-              setAdventureLaunchParams(null);
-              exitToMenu();
+              exitToMenu(() => setAdventureLaunchParams(null));
             }}
             onOpenSummit={() => {
-              setSummitLaunchParams(null);
-              setPhase('spire');
+              goPhase('spire', 1, () => setSummitLaunchParams(null));
             }}
             autoPlayer={autoPlayer}
             devLevelId={adventureLaunchParams?.levelId}
@@ -198,8 +207,7 @@ const Game: React.FC<GameProps> = ({
           <SpireMode
             key={`spire-${resetRevision}-${summitLaunchParams?.seed ?? ''}-${summitLaunchParams?.daily ? '1' : '0'}`}
             onExit={() => {
-              setSummitLaunchParams(null);
-              exitToMenu();
+              exitToMenu(() => setSummitLaunchParams(null));
             }}
             autoPlayer={autoPlayer}
             initialSeed={summitLaunchParams?.seed}
@@ -215,8 +223,7 @@ const Game: React.FC<GameProps> = ({
           <PrismMode
             key={`prism-${resetRevision}-${prismLaunchParams?.seed ?? ''}-${prismLaunchParams?.daily ? '1' : '0'}`}
             onExit={() => {
-              setPrismLaunchParams(null);
-              exitToMenu();
+              exitToMenu(() => setPrismLaunchParams(null));
             }}
             initialSeed={prismLaunchParams?.seed}
             initialDaily={prismLaunchParams?.daily}
@@ -230,8 +237,7 @@ const Game: React.FC<GameProps> = ({
           <FreePlayMode
             key={`freeplay-${resetRevision}-${freePlayLaunchParams?.daily ? freePlayLaunchParams.dailyDate ?? '1' : '0'}`}
             onExit={() => {
-              setFreePlayLaunchParams(null);
-              exitToMenu();
+              exitToMenu(() => setFreePlayLaunchParams(null));
             }}
             autoPlayer={autoPlayer}
             initialSubMode={freePlayLaunchParams?.daily ? 'daily' : undefined}
@@ -241,7 +247,21 @@ const Game: React.FC<GameProps> = ({
     }
   };
 
-  return <View className="flex-1">{renderPhase()}</View>;
+  return (
+    <View style={styles.root}>
+      <Animated.View
+        style={[styles.screen, transition.style]}
+        pointerEvents={transition.leaving ? 'none' : 'auto'}
+      >
+        {renderPhase()}
+      </Animated.View>
+    </View>
+  );
 };
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: COLORS.paperBeige },
+  screen: { flex: 1 },
+});
 
 export default Game;

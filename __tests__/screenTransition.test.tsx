@@ -7,8 +7,13 @@ import React from 'react';
 import { Text, View } from 'react-native';
 import { act, render } from '@testing-library/react-native';
 import Animated from 'react-native-reanimated';
-import { SCREEN_INSTANT, useScreenTransition, type ScreenTransitionControl } from '@/components/ScreenTransition';
-import { MS, exitMs } from '@/utils/motion';
+import {
+  SCREEN_INSTANT,
+  useModalMotion,
+  useScreenTransition,
+  type ScreenTransitionControl,
+} from '@/components/ScreenTransition';
+import { MODAL_MOTION, MS, exitMs } from '@/utils/motion';
 
 let control: ScreenTransitionControl;
 const Host: React.FC<{ instant: boolean; screen: string }> = ({ instant, screen }) => {
@@ -56,5 +61,62 @@ describe('ScreenTransition', () => {
     expect(view.queryByText('camp')).toBeNull();
     expect(view.getByText('fight')).toBeTruthy();
     expect(view.getByTestId('layer').props.pointerEvents).toBe('auto');
+  });
+});
+
+const ModalHost: React.FC<{ visible: boolean; instant?: boolean; sheet?: boolean }> = ({
+  visible,
+  instant,
+  sheet,
+}) => {
+  const modal = useModalMotion(visible, { instant, sheet });
+  if (!modal.rendered) return null;
+  return (
+    <Animated.View testID="modal-backdrop" style={modal.backdropStyle}>
+      <Animated.View testID="modal-panel" style={modal.panelStyle}>
+        <Animated.View testID="modal-content" style={modal.contentStyle}>
+          <Text>Modal Body</Text>
+        </Animated.View>
+      </Animated.View>
+    </Animated.View>
+  );
+};
+
+describe('useModalMotion', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('mounts and unmounts immediately under jest (instant mode)', () => {
+    const view = render(<ModalHost visible={false} instant />);
+    expect(view.queryByTestId('modal-panel')).toBeNull();
+    view.rerender(<ModalHost visible instant />);
+    expect(view.getByTestId('modal-panel')).toBeTruthy();
+    expect(view.getByText('Modal Body')).toBeTruthy();
+    view.rerender(<ModalHost visible={false} instant />);
+    expect(view.queryByTestId('modal-panel')).toBeNull();
+  });
+
+  it('played for real: stays mounted while content-leads-exit finishes, then unmounts cleanly', () => {
+    jest.useFakeTimers();
+    const view = render(<ModalHost visible instant={false} sheet />);
+    expect(view.getByTestId('modal-panel')).toBeTruthy();
+
+    view.rerender(<ModalHost visible={false} instant={false} sheet />);
+    // Still mounted during exit choreography (content leaves first, then panel collapses)
+    act(() => { jest.advanceTimersByTime(MODAL_MOTION.exitContentLeadMs); });
+    expect(view.getByTestId('modal-panel')).toBeTruthy();
+
+    // Unmounts once full sheet exit window completes
+    act(() => { jest.advanceTimersByTime(MODAL_MOTION.sheetExitMs + 40); });
+    expect(view.queryByTestId('modal-panel')).toBeNull();
+  });
+
+  it('cancels pending unmount when reopened mid-exit', () => {
+    jest.useFakeTimers();
+    const view = render(<ModalHost visible instant={false} />);
+    view.rerender(<ModalHost visible={false} instant={false} />);
+    act(() => { jest.advanceTimersByTime(MODAL_MOTION.exitContentLeadMs); });
+    view.rerender(<ModalHost visible instant={false} />);
+    act(() => { jest.advanceTimersByTime(MODAL_MOTION.sheetExitMs + 100); });
+    expect(view.getByTestId('modal-panel')).toBeTruthy();
   });
 });

@@ -35,8 +35,10 @@ import {
   type KeyAction,
   type KeybindingPresetId,
 } from '@/utils/keybindings';
+import Animated from 'react-native-reanimated';
 import { KEY_PRIORITY, useKeyboardNav } from '@/hooks/useKeyboardNav';
 import Icon from './Icon';
+import { useModalMotion } from './ScreenTransition';
 
 export interface KeybindingSheetProps {
   visible: boolean;
@@ -165,17 +167,23 @@ const KeybindingSheet: React.FC<KeybindingSheetProps> = ({
   const hasSharedKeysForAction = (action: KeyAction): boolean =>
     (bindings[action] ?? []).some(k => (duplicateMap[k]?.length ?? 0) > 1);
 
-  if (!visible) return null;
+  const { rendered, closing, backdropStyle, panelStyle, contentStyle } = useModalMotion(visible, {
+    travelY: 32,
+    sheet: true,
+  });
+
+  if (!rendered) return null;
 
   return (
     <Modal
-      visible={visible}
+      visible={rendered}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay} testID="keybinding-sheet">
-        <View style={styles.container}>
+      <View style={styles.overlay} testID="keybinding-sheet" pointerEvents={closing ? 'none' : 'auto'}>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayBackdrop, backdropStyle]} />
+        <Animated.View style={[styles.container, panelStyle]}>
           <View style={styles.header}>
             <View style={styles.headerTitleRow}>
               <Icon name="lorc/gear-hammer" size={20} color={COLORS.canvasWhite} noShadow />
@@ -192,6 +200,7 @@ const KeybindingSheet: React.FC<KeybindingSheetProps> = ({
             </TouchableOpacity>
           </View>
 
+          <Animated.View style={[{ flexShrink: 1 }, contentStyle]}>
           {listeningAction && (
             <View style={styles.listeningBanner} testID="keybinding-listening-banner">
               <View style={styles.listeningCol}>
@@ -373,7 +382,8 @@ const KeybindingSheet: React.FC<KeybindingSheetProps> = ({
           >
             <Text style={styles.doneButtonText}>DONE</Text>
           </TouchableOpacity>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -382,10 +392,12 @@ const KeybindingSheet: React.FC<KeybindingSheetProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(18, 18, 18, 0.74)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 12,
+  },
+  overlayBackdrop: {
+    backgroundColor: 'rgba(18, 18, 18, 0.74)',
   },
   container: {
     backgroundColor: COLORS.canvasWhite,

@@ -1,6 +1,15 @@
-import React, { useEffect } from 'react';
-import { Text, StyleSheet, Animated } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Text, StyleSheet } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS, RADIUS } from '@/utils/colors';
+import { EASE, MS, STAYS, exitMs, reducedMs } from '@/utils/motion';
 
 interface NotificationProps {
   message: string;
@@ -13,30 +22,54 @@ const Notification: React.FC<NotificationProps> = ({
   message,
   type,
   onClose,
-  duration = 500
+  duration = 500,
 }) => {
-  const opacity = React.useRef(new Animated.Value(0)).current;
+  const reduced = useReducedMotion();
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(reduced ? 0 : 10);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 150,
-      useNativeDriver: true,
-    }).start();
+    const enterDur = reduced ? reducedMs(MS.quick) : MS.quick;
+    const outDur = reduced ? reducedMs(exitMs(MS.quick)) : exitMs(MS.quick);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      onCloseRef.current();
+    };
 
-    // Auto close after duration
+    opacity.value = 0;
+    translateY.value = reduced ? 0 : 10;
+    opacity.value = withTiming(1, { duration: enterDur, easing: EASE.ui, ...STAYS });
+    if (!reduced) {
+      translateY.value = withTiming(0, { duration: enterDur, easing: EASE.enter });
+    }
+
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
     const timer = setTimeout(() => {
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      }).start(() => {
-        onClose();
+      if (!reduced) {
+        translateY.value = withTiming(6, { duration: outDur, easing: EASE.exitSoft });
+      }
+      opacity.value = withTiming(0, { duration: outDur, easing: EASE.exitSoft, ...STAYS }, finished => {
+        if (finished) runOnJS(finish)();
       });
+      fallbackTimer = setTimeout(finish, outDur + 48);
     }, duration);
 
-    return () => clearTimeout(timer);
-  }, [message, duration, onClose, opacity]);
+    return () => {
+      clearTimeout(timer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      cancelAnimation(opacity);
+      cancelAnimation(translateY);
+    };
+  }, [message, duration, reduced, opacity, translateY]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
 
   const getTypeStyles = () => {
     switch (type) {
@@ -53,7 +86,7 @@ const Notification: React.FC<NotificationProps> = ({
   };
 
   return (
-    <Animated.View style={[styles.container, getTypeStyles(), { opacity }]}>
+    <Animated.View style={[styles.container, getTypeStyles(), animStyle]}>
       <Text style={styles.text}>{message}</Text>
     </Animated.View>
   );
