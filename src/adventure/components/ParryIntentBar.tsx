@@ -7,6 +7,12 @@
  * interpolated smoothly over `TICK_MS` (250 ms) with zero layout `width` thrash.
  * [FX-14] All animations are gated on `useAppActive()`, `effects`, and
  * `useReducedMotion()` with `cancelAnimation(...)` cleanup.
+ *
+ * Lane 3 polish:
+ * - Zero text scaling jitter: bar text stays rock-steady at scale 1 with `tabular-nums`,
+ *   while an absolute GPU border/rim accent ring pulses cleanly on Perfect/Staggered.
+ * - Crisp phase-swap punch (icon spring pop + brief tint flash) across calm → windup → gold → staggered.
+ * - `STALL +3s` badge animates in/out cleanly as an anchored pill without shifting bar text.
  */
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -16,6 +22,7 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
@@ -24,13 +31,15 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { useColorblind } from '@/utils/cardColors';
 import { formatParryCounterMeta } from '@/utils/cardVisuals';
-import { EASE } from '@/utils/motion';
+import { ACCESSIBLE, EASE, MS, SPRING, STAYS, exitMs } from '@/utils/motion';
 import type { ParryState } from '../types';
 import { isInPerfectWindow } from '../engine/parry';
 import { INK } from './ui';
 
 /** Matches AdventureRun's 250 ms simulation tick for seamless 60fps GPU interpolation ([FX-24]) */
 const PARRY_TICK_MS = 250;
+
+type VisualPhase = 'calm' | 'windup' | 'perfect' | 'staggered';
 
 interface Props {
   parry: ParryState;
@@ -59,6 +68,7 @@ const ParryIntentBar: React.FC<Props> = ({
   const perfect = isInPerfectWindow(parry);
   const staggered = parry.phase === 'staggered';
   const windup = parry.phase === 'windup';
+  const visualPhase: VisualPhase = staggered ? 'staggered' : perfect ? 'perfect' : windup ? 'windup' : 'calm';
   const secs = Math.max(0.1, parry.msLeft / 1000);
   const secsText = secs < 4 ? `${secs.toFixed(1)}s` : `${Math.ceil(secs)}s`;
 
@@ -89,7 +99,21 @@ const ParryIntentBar: React.FC<Props> = ({
       return;
     }
 
-    if (phaseChanged || Math.abs(fillSv.value - progress) > 0.14) {
+    if (phaseChanged) {
+      cancelAnimation(fillSv);
+      // Smoothly ease into the new phase fill before resuming linear countdown glide (avoids 1-frame hard-stop jump)
+      const delta = PARRY_TICK_MS / parry.durationMs;
+      const nextProgress = windup
+        ? Math.min(1, progress + delta)
+        : Math.max(0, progress - delta);
+      fillSv.value = withSequence(
+        withTiming(progress, { duration: MS.feedback, easing: EASE.enter }),
+        withTiming(nextProgress, { duration: Math.max(40, PARRY_TICK_MS - MS.feedback), easing: EASE.linear })
+      );
+      return () => cancelAnimation(fillSv);
+    }
+
+    if (Math.abs(fillSv.value - progress) > 0.14) {
       cancelAnimation(fillSv);
       fillSv.value = progress;
     }
@@ -108,23 +132,103 @@ const ParryIntentBar: React.FC<Props> = ({
     transform: [{ scaleX: Math.max(0.0001, fillSv.value) }],
   }));
 
-  // [FX-14] Gate infinite pulse strictly on active && appActive && effects && !reducedMotion
-  const pulse = useSharedValue(1);
+  // Border/rim accent pulse overlay (GPU opacity only — NEVER scales the bar text!)
+  const rimPulse = useSharedValue(0);
   const shouldPulse = active && appActive && effects && !reducedMotion && (perfect || staggered);
   useEffect(() => {
     if (!shouldPulse) {
-      cancelAnimation(pulse);
-      pulse.value = 1;
+      cancelAnimation(rimPulse);
+      rimPulse.value = perfect || staggered ? 0.45 : 0;
       return;
     }
-    pulse.value = withRepeat(
-      withSequence(withTiming(1.035, { duration: 220 }), withTiming(1, { duration: 220 })),
-      -1
+    rimPulse.value = 0.2;
+    rimPulse.value = withRepeat(
+      withTiming(1, { duration: MS.move, easing: EASE.drift }),
+      -1,
+      true
     );
-    return () => cancelAnimation(pulse);
-  }, [shouldPulse, pulse]);
+    return () => cancelAnimation(rimPulse);
+  }, [shouldPulse, perfect, staggered, rimPulse]);
 
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+  const rimStyle = useAnimatedStyle(() => ({
+    opacity: rimPulse.value,
+  }));
+
+  // Crisp phase-swap punch: icon spring pop + short surface tint flash across calm → windup → gold → staggered
+  const prevVisualPhaseRef = useRef<VisualPhase>(visualPhase);
+  const iconScale = useSharedValue(1);
+  const iconOp = useSharedValue(1);
+  const phaseFlash = useSharedValue(0);
+  useEffect(() => {
+    const changed = prevVisualPhaseRef.current !== visualPhase;
+    prevVisualPhaseRef.current = visualPhase;
+    if (!changed) return;
+
+    cancelAnimation(iconScale);
+    cancelAnimation(iconOp);
+    cancelAnimation(phaseFlash);
+
+    if (!effects || reducedMotion) {
+      iconScale.value = 1;
+      iconOp.value = 1;
+      phaseFlash.value = 0.24;
+      phaseFlash.value = withTiming(0, { duration: ACCESSIBLE.fadeMs, easing: EASE.exitSoft, ...STAYS });
+      return;
+    }
+
+    const punchScale = visualPhase === 'perfect' || visualPhase === 'staggered' ? 1.28 : 1.18;
+    iconOp.value = 0.4;
+    iconOp.value = withTiming(1, { duration: 64, easing: EASE.ui });
+    iconScale.value = 0.84;
+    iconScale.value = withSequence(
+      withTiming(punchScale, { duration: 72, easing: EASE.enter }),
+      withSpring(1, SPRING.snappy)
+    );
+    phaseFlash.value = visualPhase === 'perfect' || visualPhase === 'staggered' ? 0.44 : 0.28;
+    phaseFlash.value = withTiming(0, { duration: MS.quick, easing: EASE.exitSoft });
+
+    return () => {
+      cancelAnimation(iconScale);
+      cancelAnimation(iconOp);
+      cancelAnimation(phaseFlash);
+    };
+  }, [visualPhase, effects, reducedMotion, iconScale, iconOp, phaseFlash]);
+
+  const iconAnimStyle = useAnimatedStyle(() => ({
+    opacity: iconOp.value,
+    transform: [{ scale: iconScale.value }],
+  }));
+  const flashAnimStyle = useAnimatedStyle(() => ({
+    opacity: phaseFlash.value,
+  }));
+
+  // Animate STALL +3s badge smoothly without shifting centered bar text
+  const showStall = windup && parry.spec.counter.kind !== 'any' && !counterAvailable;
+  const stallProg = useSharedValue(showStall ? 1 : 0);
+  useEffect(() => {
+    cancelAnimation(stallProg);
+    if (!effects || reducedMotion) {
+      stallProg.value = withTiming(showStall ? 1 : 0, {
+        duration: ACCESSIBLE.fadeMs,
+        easing: showStall ? EASE.ui : EASE.exitSoft,
+        ...STAYS,
+      });
+      return;
+    }
+    stallProg.value = withTiming(showStall ? 1 : 0, {
+      duration: showStall ? MS.quick : exitMs(MS.quick),
+      easing: showStall ? EASE.popSoft : EASE.exitSoft,
+    });
+    return () => cancelAnimation(stallProg);
+  }, [showStall, effects, reducedMotion, stallProg]);
+
+  const stallStyle = useAnimatedStyle(() => ({
+    opacity: Math.max(0, Math.min(1, stallProg.value)),
+    transform: [
+      { translateX: reducedMotion ? 0 : (1 - Math.min(1, stallProg.value)) * 6 },
+      { scale: reducedMotion ? 1 : 0.88 + 0.12 * stallProg.value },
+    ],
+  }));
 
   const fullLabel = staggered
     ? `STAGGERED · ×2 DMG · ${secsText}`
@@ -146,6 +250,7 @@ const ParryIntentBar: React.FC<Props> = ({
 
   const iconName = staggered ? 'lorc/shield-reflect' : perfect ? 'lorc/sword-clash' : parry.spec.icon;
   const iconColor = staggered ? '#0F766E' : perfect ? INK : windup ? '#991B1B' : meta.color;
+  const flashColor = staggered ? '#5EEAD4' : perfect ? '#FFF6C2' : windup ? '#FCA5A5' : '#FFFFFF';
 
   return (
     <TouchableOpacity
@@ -157,14 +262,13 @@ const ParryIntentBar: React.FC<Props> = ({
       accessibilityLabel={fullLabel}
       style={compact ? st.wrapCompact : st.wrap}
     >
-      <Animated.View
+      <View
         style={[
           st.bar,
           compact && st.barCompact,
           windup && st.barWindup,
           perfect && st.barPerfect,
           staggered && st.barStaggered,
-          animStyle,
         ]}
       >
         {(windup || staggered) && (
@@ -183,7 +287,25 @@ const ParryIntentBar: React.FC<Props> = ({
         {perfectMarkerPct !== null && !perfect && (
           <View pointerEvents="none" style={[st.perfectZone, { left: `${perfectMarkerPct}%` }]} />
         )}
-        <Icon name={iconName} size={compact ? 12 : 13} color={iconColor} />
+        <Animated.View
+          pointerEvents="none"
+          testID="parry-bar-phase-flash"
+          style={[st.phaseFlash, { backgroundColor: flashColor }, flashAnimStyle]}
+        />
+        {(perfect || staggered) && (
+          <Animated.View
+            pointerEvents="none"
+            testID="parry-bar-pulse-ring"
+            style={[
+              st.pulseRing,
+              perfect ? st.pulseRingPerfect : st.pulseRingStaggered,
+              rimStyle,
+            ]}
+          />
+        )}
+        <Animated.View style={iconAnimStyle}>
+          <Icon name={iconName} size={compact ? 12 : 13} color={iconColor} />
+        </Animated.View>
         <Text
           style={[
             st.text,
@@ -196,12 +318,12 @@ const ParryIntentBar: React.FC<Props> = ({
         >
           {label}
         </Text>
-        {windup && parry.spec.counter.kind !== 'any' && !counterAvailable && (
-          <View style={st.stallBadge}>
+        {showStall && (
+          <Animated.View pointerEvents="none" testID="parry-stall-badge" style={[st.stallBadge, stallStyle]}>
             <Text style={st.stallText}>{compact ? '+3s' : 'STALL +3s'}</Text>
-          </View>
+          </Animated.View>
         )}
-      </Animated.View>
+      </View>
     </TouchableOpacity>
   );
 };
@@ -260,6 +382,21 @@ const st = StyleSheet.create({
   fillStaggered: {
     backgroundColor: '#5EEAD4',
   },
+  phaseFlash: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+  },
+  pulseRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+    borderWidth: 2,
+  },
+  pulseRingPerfect: {
+    borderColor: '#FFFDF5',
+  },
+  pulseRingStaggered: {
+    borderColor: '#0F766E',
+  },
   perfectZone: {
     position: 'absolute',
     top: 0,
@@ -294,17 +431,20 @@ const st = StyleSheet.create({
     letterSpacing: 0.3,
   },
   stallBadge: {
+    position: 'absolute',
+    right: 3,
     backgroundColor: COLORS.canvasWhite,
-    borderRadius: 4,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: '#B91C1C',
-    paddingHorizontal: 4,
+    paddingHorizontal: 5,
     paddingVertical: 1,
   },
   stallText: {
     fontSize: 8,
     fontWeight: '900',
     color: '#B91C1C',
+    fontVariant: ['tabular-nums'],
   },
 });
 

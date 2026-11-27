@@ -10,9 +10,8 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, Platform } from 'react-native';
-import Animated, { cancelAnimation, useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { cancelAnimation, useSharedValue, useAnimatedStyle, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Svg, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import { CardBoardProvider, type CardBoardOverlay } from '@/components/Card';
 import GameBoard from '@/components/GameBoard';
 import Icon, { type IconName } from '@/components/Icon';
@@ -37,14 +36,14 @@ import {
   triggerParryHaptic,
 } from '@/utils/haptics';
 import { formatCardTraitValue, formatChallengeText, getColorblindMode, useColorblind } from '@/utils/cardColors';
-import { EASE, MS } from '@/utils/motion';
+import { ACCESSIBLE, EASE, MS, OVERLAP, SPRING, STAYS, exitMs } from '@/utils/motion';
 import { recordComponentRender, registerInterval } from '@/utils/perfWatchdog';
 import { scaleText, useTextScale } from '@/utils/textSizeStorage';
 import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import { getAdjacentIndices, type WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, BiomeId, EvolutionRecipe, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
+import type { AdventureSave, EvolutionRecipe, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { activeEnemyCounters, computeStars, createRun, isSacrificeUnlocked, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
 import { formatPowerGain } from '../data/weaponPower';
@@ -83,6 +82,7 @@ import {
   showsTraitChecks,
   traitAddedBy,
 } from '../coach';
+import StageBackdrop from './StageBackdrop';
 import StageBubble from './StageBubble';
 import TraitChecks, { TRAIT_CHECKS_HEIGHT } from './TraitChecks';
 import { EVOLUTION_RULES, getRecipe } from '../engine/sources';
@@ -436,21 +436,32 @@ const AdventureRun: React.FC<Props> = ({
 
   // The bell: a banner across the board as the fight opens (skipped on instant retries per [OB-13])
   const [opening, setOpening] = useState(!initialIsRetry);
+  const openingBellFiredRef = useRef(false);
   useEffect(() => {
     if (isRetry) {
       setOpening(false);
       return;
     }
-    // (rung a moment in, once the band has taken the stage)
-    const bell = setTimeout(() => {
-      if (!effectiveLevel.rules.sandbox) band.cue('wave');
-    }, 260);
-    const t = setTimeout(() => setOpening(false), 1500);
+    openingBellFiredRef.current = false;
+    const t = setTimeout(() => setOpening(false), 1100);
     return () => {
-      clearTimeout(bell);
       clearTimeout(t);
     };
-  }, [isRetry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isRetry, attemptKey]);
+
+  const openingBoardRect = anchors.rect('board');
+  const hasOpeningBoardRect = Boolean(openingBoardRect);
+  useEffect(() => {
+    if (!opening || isRetry || practice || openingBellFiredRef.current) return;
+    if (effects && !hasOpeningBoardRect) return;
+    openingBellFiredRef.current = true;
+    // Sync opening bell chime to the exact visual slam frame of the FIGHT! banner (delay 120ms + 48ms slam arrival)
+    const slamDelayMs = effects ? 168 : 0;
+    const bell = setTimeout(() => {
+      band.cue('wave');
+    }, slamDelayMs);
+    return () => clearTimeout(bell);
+  }, [opening, isRetry, practice, effects, hasOpeningBoardRect, attemptKey]);
 
   // Dev only: expose the live run so browser scripts can play end-to-end
   useEffect(() => {
@@ -547,8 +558,10 @@ const AdventureRun: React.FC<Props> = ({
   const { triggerReaction: triggerEnemyReaction } = enemyConductor;
   useEffect(() => {
     triggerEntrance();
-    triggerEnemyReaction('entrance');
-  }, [triggerEntrance, triggerEnemyReaction]);
+    // Stagger foe arrival behind fighter (`OVERLAP.secondaryMs` = 64ms) for clean left-to-right staging
+    const t = setTimeout(() => triggerEnemyReaction('entrance'), OVERLAP.secondaryMs);
+    return () => clearTimeout(t);
+  }, [triggerEntrance, triggerEnemyReaction, attemptKey]);
 
   // [FX-01] Foe impact transform collision removed: EnemyAvatar is the single transform owner.
   // [FX-18] Unified deterministic, viewport-scaled, ScreenShakeStorage- & ReducedMotion-gated combat shake + victory push-in.
@@ -588,7 +601,7 @@ const AdventureRun: React.FC<Props> = ({
     }
 
     const shakeKind = combatShakeKindOf(evType, tier);
-    if (shakeKind) {
+    if (!beat.quiet && shakeKind) {
       triggerCombatShake(shakeKind, stageWidthRef.current);
     }
     if (tier === 3 && effects && !reducedMotion && runRef.current.status === 'playing') setMegaFlash(f => f + 1);
@@ -1537,6 +1550,7 @@ const AdventureRun: React.FC<Props> = ({
       kind="foe"
       tail={roomyStage ? 'down-right' : 'right'}
       compact={compactStage}
+      enterDelayMs={opening && !isRetry && taunting && effects ? 200 : 0}
     />
   ) : null;
 
@@ -1769,7 +1783,7 @@ const AdventureRun: React.FC<Props> = ({
       >
         <ParryIntentBar
           parry={run.parry}
-          active={playing && appActive}
+          active={ticking}
           counterAvailable={parryCounterAvailable}
           compact={dualThreat}
           effects={effects}
@@ -1778,7 +1792,7 @@ const AdventureRun: React.FC<Props> = ({
     ) : (
       <ParryIntentBar
         parry={run.parry}
-        active={playing && appActive}
+        active={ticking}
         counterAvailable={parryCounterAvailable}
         compact={dualThreat}
         effects={effects}
@@ -1794,7 +1808,7 @@ const AdventureRun: React.FC<Props> = ({
           <View style={st.threatRowSlot}>
             <ParryIntentBar
               parry={run.parry}
-              active={playing && appActive}
+              active={ticking}
               counterAvailable={parryCounterAvailable}
               effects={effects}
               onPress={() => openHudInspect({ kind: 'foe' })}
@@ -1803,14 +1817,14 @@ const AdventureRun: React.FC<Props> = ({
         )}
         {run.surge && (
           <View style={st.threatRowSlot}>
-            <SurgeBar surge={run.surge} active={playing && appActive} effects={effects} />
+            <SurgeBar surge={run.surge} active={ticking} effects={effects} />
           </View>
         )}
       </View>
     ) : (
       <View style={st.threatRail}>
         {parryBarNode}
-        {run.surge && <SurgeBar surge={run.surge} active={playing && appActive} compact={dualThreat} effects={effects} />}
+        {run.surge && <SurgeBar surge={run.surge} active={ticking} compact={dualThreat} effects={effects} />}
       </View>
     )
   ) : null;
@@ -1891,10 +1905,10 @@ const AdventureRun: React.FC<Props> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Battle stage (with atmospheric SVG gradient sky + distant biome silhouette + XP progress rim) */}
+        {/* Battle stage (painted paper-cut tabletop diorama backdrop + embedded XP progress rim) */}
         <View testID="run-stage" style={[st.stage, compactStage && st.stageCompact, run.features.has('xp') && st.stageWithXp, { height: stageH, backgroundColor: biome.colors.sky }]}>
           <View pointerEvents="none" style={st.stageClip}>
-            <StageSkyBackdrop
+            <StageBackdrop
               biomeId={effectiveLevel.biome}
               skyColor={biome.colors.sky}
               groundColor={biome.colors.ground}
@@ -2218,6 +2232,8 @@ const AdventureRun: React.FC<Props> = ({
                               name={recipe?.name ?? a.id}
                               remainingMs={a.remainingMs}
                               durationMs={a.durationMs}
+                              active={ticking}
+                              effects={effects}
                               compact
                             />
                           </TouchableOpacity>
@@ -2723,27 +2739,34 @@ const AdventureRun: React.FC<Props> = ({
 
 /** Transient floating `+0.25` Power gain badge beside PowerMeter ([GP-01]). */
 const PowerDeltaBadge: React.FC<{ text: string; animate: boolean }> = ({ text, animate }) => {
-  const op = useSharedValue(1);
-  const y = useSharedValue(0);
+  const op = useSharedValue(0);
+  const y = useSharedValue(animate ? 4 : 0);
+  const scale = useSharedValue(animate ? 0.88 : 1);
   useEffect(() => {
     if (!animate) {
-      op.value = 1;
       y.value = 0;
-      return;
+      scale.value = 1;
+      op.value = withSequence(
+        withTiming(1, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS }),
+        withDelay(640, withTiming(0, { duration: ACCESSIBLE.fadeMs, easing: EASE.exitSoft, ...STAYS }), STAYS.reduceMotion)
+      );
+      return () => cancelAnimation(op);
     }
     op.value = withSequence(
-      withTiming(1, { duration: 120 }),
-      withDelay(600, withTiming(0, { duration: 320, easing: Easing.out(Easing.quad) }))
+      withTiming(1, { duration: MS.feedback, easing: EASE.ui }),
+      withDelay(620, withTiming(0, { duration: exitMs(MS.move), easing: EASE.exitSoft }))
     );
-    y.value = withTiming(-5, { duration: 950, easing: Easing.out(Easing.quad) });
+    scale.value = withTiming(1, { duration: MS.quick, easing: EASE.popSoft });
+    y.value = withTiming(-6, { duration: 920, easing: EASE.enterSoft });
     return () => {
       cancelAnimation(op);
       cancelAnimation(y);
+      cancelAnimation(scale);
     };
-  }, [animate, op, y]);
+  }, [animate, op, y, scale]);
   const animStyle = useAnimatedStyle(() => ({
     opacity: op.value,
-    transform: [{ translateY: y.value }],
+    transform: [{ translateY: y.value }, { scale: scale.value }],
   }));
   return (
     <Animated.View testID="run-power-delta" pointerEvents="none" style={[st.powerDelta, animStyle]}>
@@ -2839,59 +2862,6 @@ const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, m
   );
 };
 
-/** [UI-05] Atmospheric 2-stop sky gradient + distant biome horizon silhouette + shaded ground curve. */
-const BIOME_SKY_STOPS: Readonly<Record<BiomeId, [string, string, string]>> = {
-  meadow: ['#C9EBC0', '#F2FAEC', '#8FC97E'],
-  woods: ['#B7D6BE', '#E5F2E4', '#5F966D'],
-  canyon: ['#F2C69E', '#FFF1E0', '#D98E52'],
-  peaks: ['#C0D9F0', '#EEF6FC', '#87AFD4'],
-  summit: ['#C9BCEB', '#F2ECFA', '#8D7EC2'],
-};
-
-const BIOME_HORIZON_PATH: Readonly<Record<BiomeId, string>> = {
-  meadow: 'M0,78 Q60,52 130,66 T260,60 T400,68 L400,100 L0,100 Z',
-  woods: 'M0,80 L28,54 L46,72 L78,46 L104,70 L146,52 L176,72 L220,44 L254,70 L300,50 L334,70 L372,54 L400,76 L400,100 L0,100 Z',
-  canyon: 'M0,78 L36,78 L46,54 L106,54 L116,76 L174,76 L186,48 L256,48 L268,74 L322,74 L334,58 L382,58 L400,74 L400,100 L0,100 Z',
-  peaks: 'M0,82 L56,44 L106,74 L172,38 L228,72 L292,42 L348,70 L400,48 L400,100 L0,100 Z',
-  summit: 'M0,80 L48,54 L82,70 L138,42 L176,66 L210,36 L248,66 L310,46 L354,68 L400,52 L400,100 L0,100 Z',
-};
-
-const StageSkyBackdrop: React.FC<{
-  biomeId: BiomeId;
-  skyColor: string;
-  groundColor: string;
-  inkColor: string;
-  compact: boolean;
-}> = ({ biomeId, skyColor, groundColor, inkColor, compact }) => {
-  const [skyTop, skyHorizon, groundDeep] = BIOME_SKY_STOPS[biomeId] ?? [skyColor, skyColor, groundColor];
-  const horizonPath = BIOME_HORIZON_PATH[biomeId] ?? BIOME_HORIZON_PATH.meadow;
-  const gradSkyId = `stageSky-${biomeId}`;
-  const gradGroundId = `stageGround-${biomeId}`;
-  return (
-    <View testID="run-stage-backdrop" pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%" viewBox="0 0 400 100" preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id={gradSkyId} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={skyTop} stopOpacity="1" />
-            <Stop offset="0.72" stopColor={skyHorizon} stopOpacity="1" />
-            <Stop offset="1" stopColor={skyColor} stopOpacity="1" />
-          </LinearGradient>
-          <LinearGradient id={gradGroundId} x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={groundColor} stopOpacity={compact ? '0.78' : '0.88'} />
-            <Stop offset="1" stopColor={groundDeep} stopOpacity={compact ? '0.86' : '0.96'} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="400" height="100" fill={`url(#${gradSkyId})`} />
-        <Path d={horizonPath} fill={inkColor} opacity={compact ? 0.14 : 0.19} />
-        <Path
-          d={compact ? 'M-20,76 Q200,56 420,76 L420,105 L-20,105 Z' : 'M-20,70 Q200,48 420,70 L420,105 L-20,105 Z'}
-          fill={`url(#${gradGroundId})`}
-        />
-      </Svg>
-    </View>
-  );
-};
-
 /**
  * The ★★★ goal, under the fight. It jumps each time it moves forward ("1/2"),
  * and turns teal with a tick when it is met, so progress toward the third
@@ -2905,6 +2875,7 @@ const ChallengeStrip: React.FC<{
   noBottomBleed?: boolean;
   onPress?: () => void;
 }> = ({ text, met, failed, guardPress = false, noBottomBleed = false, onPress }) => {
+  const reducedMotion = useReducedMotion();
   const textScale = useTextScale();
   const pop = useSharedValue(1);
   const first = useRef(true);
@@ -2915,9 +2886,16 @@ const ChallengeStrip: React.FC<{
       return;
     }
     if (failed) return;
-    pop.value = withSequence(withTiming(met ? 1.12 : 1.06, { duration: 90, easing: Easing.out(Easing.quad) }), withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) }));
+    if (!reducedMotion) {
+      cancelAnimation(pop);
+      pop.value = withSequence(
+        withTiming(met ? 1.1 : 1.05, { duration: 80, easing: EASE.enter }),
+        withSpring(1, SPRING.snappy)
+      );
+    }
     if (met) band.cue('star', { amount: 3 });
-  }, [text, met, failed, pop]);
+    return () => cancelAnimation(pop);
+  }, [text, met, failed, reducedMotion, pop]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
   return (
     <TouchableOpacity
@@ -3012,18 +2990,22 @@ const PassiveChip: React.FC<{
   );
 };
 
-/** Soft pulsing glow behind the board while an evolution runs ([FX-14] gated on effects & reducedMotion). */
+/** Soft pulsing glow behind the board while an evolution runs ([FX-14] gated on appActive, effects & reducedMotion). */
 const EvolutionGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ active, effects = true }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
-  const shouldPulse = active && effects && !reducedMotion;
-  const o = useSharedValue(0.32);
+  const shouldPulse = active && appActive && effects && !reducedMotion;
+  const o = useSharedValue(0);
   useEffect(() => {
+    cancelAnimation(o);
     if (!shouldPulse) {
-      cancelAnimation(o);
-      o.value = 0.32;
-      return;
+      o.value = withTiming(0.32, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS });
+      return () => cancelAnimation(o);
     }
-    o.value = withRepeat(withSequence(withTiming(0.6, { duration: 500 }), withTiming(0.25, { duration: 500 })), -1);
+    o.value = withSequence(
+      withTiming(0.24, { duration: MS.quick, easing: EASE.ui }),
+      withRepeat(withTiming(0.54, { duration: 680, easing: EASE.drift }), -1, true)
+    );
     return () => cancelAnimation(o);
   }, [shouldPulse, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
@@ -3032,7 +3014,8 @@ const EvolutionGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ activ
 
 /**
  * Shading Surge meter: [FX-24] 60fps GPU `scaleX` fill interpolated over `TICK_MS`,
- * plus [FX-14] pulse gated strictly on `active && effects && !reducedMotion`.
+ * plus [FX-14] border-accent rim pulse gated strictly on `active && appActive && effects && !reducedMotion`
+ * (zero text scaling jitter).
  */
 const SurgeBar: React.FC<{
   surge: NonNullable<RunState['surge']>;
@@ -3045,6 +3028,7 @@ const SurgeBar: React.FC<{
   compact = false,
   effects = true,
 }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const secs = Math.ceil(surge.msLeft / 1000);
   const durationMs = surge.active ? SURGE_RULES.surgeMs : SURGE_RULES.calmMs;
@@ -3053,7 +3037,7 @@ const SurgeBar: React.FC<{
 
   const fillSv = useSharedValue(fill);
   const prevSurgeActiveRef = useRef(surge.active);
-  const glideActive = active && effects && !reducedMotion && durationMs > 0;
+  const glideActive = active && appActive && effects && !reducedMotion && durationMs > 0;
 
   useEffect(() => {
     const phaseChanged = prevSurgeActiveRef.current !== surge.active;
@@ -3082,18 +3066,21 @@ const SurgeBar: React.FC<{
     transform: [{ scaleX: Math.max(0.0001, fillSv.value) }],
   }));
 
-  const pulse = useSharedValue(1);
-  const shouldPulse = active && effects && !reducedMotion && (imminent || surge.active);
+  // Border-accent pulse overlay (GPU opacity only — never scales bar text!)
+  const rimPulse = useSharedValue(0);
+  const shouldPulse = active && appActive && effects && !reducedMotion && (imminent || surge.active);
   useEffect(() => {
     if (!shouldPulse) {
-      cancelAnimation(pulse);
-      pulse.value = 1;
+      cancelAnimation(rimPulse);
+      rimPulse.value = imminent || surge.active ? 0.45 : 0;
       return;
     }
-    pulse.value = withRepeat(withSequence(withTiming(1.04, { duration: 260 }), withTiming(1, { duration: 260 })), -1);
-    return () => cancelAnimation(pulse);
-  }, [shouldPulse, pulse]);
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+    rimPulse.value = 0.2;
+    rimPulse.value = withRepeat(withTiming(0.95, { duration: MS.move, easing: EASE.drift }), -1, true);
+    return () => cancelAnimation(rimPulse);
+  }, [shouldPulse, imminent, surge.active, rimPulse]);
+  const rimStyle = useAnimatedStyle(() => ({ opacity: rimPulse.value }));
+
   const fullLabel = surge.active
     ? `SHADING SURGE · SETS ×${SURGE_RULES.multiplier} · ${secs}s`
     : imminent
@@ -3107,7 +3094,7 @@ const SurgeBar: React.FC<{
         : `Surge ${secs}s`
     : fullLabel;
   return (
-    <Animated.View
+    <View
       testID="run-surge-bar"
       accessibilityLabel={fullLabel}
       style={[
@@ -3115,7 +3102,6 @@ const SurgeBar: React.FC<{
         compact && st.surgeBarCompact,
         surge.active && st.surgeBarLive,
         imminent && st.surgeBarSoon,
-        style,
       ]}
     >
       <Animated.View
@@ -3123,23 +3109,34 @@ const SurgeBar: React.FC<{
         pointerEvents="none"
         style={[st.surgeFill, surge.active && st.surgeFillLive, fillStyle]}
       />
+      {(imminent || surge.active) && (
+        <Animated.View
+          pointerEvents="none"
+          testID="surge-bar-pulse-ring"
+          style={[st.surgePulseRing, surge.active && st.surgePulseRingLive, rimStyle]}
+        />
+      )}
       <Icon name="lorc/stone-block" size={compact ? 11 : 13} color={surge.active ? '#FFFFFF' : TONE.surge} />
       <Text style={[st.surgeText, compact && st.surgeTextCompact, surge.active && { color: '#FFFFFF' }]} numberOfLines={1}>{label}</Text>
-    </Animated.View>
+    </View>
   );
 };
 
 const SurgeGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ active, effects = true }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
-  const shouldPulse = active && effects && !reducedMotion;
-  const o = useSharedValue(0.3);
+  const shouldPulse = active && appActive && effects && !reducedMotion;
+  const o = useSharedValue(0);
   useEffect(() => {
+    cancelAnimation(o);
     if (!shouldPulse) {
-      cancelAnimation(o);
-      o.value = 0.3;
-      return;
+      o.value = withTiming(0.28, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS });
+      return () => cancelAnimation(o);
     }
-    o.value = withRepeat(withSequence(withTiming(0.5, { duration: 380 }), withTiming(0.2, { duration: 380 })), -1);
+    o.value = withSequence(
+      withTiming(0.2, { duration: MS.quick, easing: EASE.ui }),
+      withRepeat(withTiming(0.48, { duration: 540, easing: EASE.drift }), -1, true)
+    );
     return () => cancelAnimation(o);
   }, [shouldPulse, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
@@ -3384,6 +3381,8 @@ const st = StyleSheet.create({
   surgeBarLive: { borderColor: TONE.surge, backgroundColor: '#9D174D' },
   surgeFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: '#FBCFE8', transformOrigin: 'left center' },
   surgeFillLive: { backgroundColor: TONE.surge },
+  surgePulseRing: { ...StyleSheet.absoluteFillObject, borderRadius: 999, borderWidth: 2, borderColor: TONE.surge },
+  surgePulseRingLive: { borderColor: '#FFFDF5' },
   surgeText: { flexShrink: 1, fontSize: 11, fontWeight: '900', color: INK, letterSpacing: 0.2, fontVariant: ['tabular-nums'] },
   surgeTextCompact: { fontSize: 11, letterSpacing: 0.1 },
   tipDim: { position: 'absolute', left: 0, right: 0, zIndex: 299, backgroundColor: 'rgba(10,10,10,0.5)' },

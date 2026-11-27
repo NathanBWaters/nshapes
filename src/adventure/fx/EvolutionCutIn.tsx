@@ -9,12 +9,20 @@
  * [FX-17] Uses `ChiaroscuroFlash` (gated on `ScreenFlashStorage` & `useReducedMotion()`)
  * instead of a pure-white full-screen washout, while preserving Wave 3's [OB-08] 200 ms
  * tap guard and [AU-13] mount audio call.
+ *
+ * Lane 3 polish:
+ * - Tokenized `motion.ts` curves (`EASE.enter`, `EASE.pop`, `EASE.popSoft`, `EASE.enterSoft`,
+ *   `EASE.drift`, `EASE.exitSoft`, `OVERLAP`, `STAGGER`, `STAYS`).
+ * - Staggered internal `RecipeRow` reveal (medal → title/fused → body/chips) + per-row stagger.
+ * - Symmetric `EASE.drift` breathing on the `TAP TO CONTINUE` prompt (`reverse: true`).
+ * - Content-lead, callback-driven exit via `runOnJS` (content clears before band collapses,
+ *   zero text squash, zero timer drift).
  */
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
-  Easing,
+  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -22,13 +30,14 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
 import type { Weapon } from '@/types';
 import { COLORS } from '@/utils/colors';
-import { EASE, STAYS } from '@/utils/motion';
+import { ACCESSIBLE, EASE, MS, OVERLAP, STAGGER, STAYS } from '@/utils/motion';
 import { band } from '@/audio';
 import type { EvolutionRecipe } from '../types';
 import { fxMs } from './clock';
@@ -42,14 +51,16 @@ const SLANT_DEG = -9;
 /** Taps before this are ignored, so the tap that made the Set cannot close it ([OB-08]: tightened to 200ms) */
 const GUARD_MS = 200;
 const CLOSE_MS = 110;
+const BAND_OPEN_DELAY_MS = 96;
+const BAND_CLOSE_LAG_MS = 32;
 /** Reveal the TAP TO CONTINUE prompt briskly once the band opens ([OB-08]: 320ms) */
 const PROMPT_REVEAL_MS = 320;
 
 const SPEED_LINES = [
-  { top: '12%', width: 220, ms: 760, delay: 0 },
-  { top: '34%', width: 120, ms: 620, delay: 180 },
-  { top: '58%', width: 280, ms: 900, delay: 90 },
-  { top: '80%', width: 160, ms: 700, delay: 260 },
+  { top: '12%', width: 220, ms: 580, delay: 0 },
+  { top: '34%', width: 150, ms: 710, delay: 140 },
+  { top: '58%', width: 270, ms: 830, delay: 290 },
+  { top: '80%', width: 180, ms: 970, delay: 440 },
 ] as const;
 
 const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: number; delay: number }> = ({ span, top, width, ms, delay }) => {
@@ -62,7 +73,7 @@ const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: 
       return;
     }
     x.value = 0;
-    x.value = withDelay(fxMs(delay), withRepeat(withTiming(1, { duration: fxMs(ms), easing: Easing.linear }), -1));
+    x.value = withDelay(fxMs(delay), withRepeat(withTiming(1, { duration: fxMs(ms), easing: EASE.linear }), -1));
     return () => cancelAnimation(x);
   }, [appActive, reducedMotion, x, ms, delay]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: span - (span + width) * x.value }] }));
@@ -74,37 +85,112 @@ const SpeedLine: React.FC<{ span: number; top: `${number}%`; width: number; ms: 
 const fusedWeapons = (recipe: EvolutionRecipe, held: readonly Weapon[]): Weapon[] =>
   recipe.families.map(family => held.find(w => inFamily(w.id, family))).filter((w): w is Weapon => !!w);
 
-const RecipeRow: React.FC<{ recipe: EvolutionRecipe; weapons: readonly Weapon[]; seconds: number; first: boolean; hint?: string }> = ({ recipe, weapons, seconds, first, hint }) => {
+const RecipeRow: React.FC<{
+  recipe: EvolutionRecipe;
+  weapons: readonly Weapon[];
+  seconds: number;
+  index: number;
+  appActive: boolean;
+  reducedMotion: boolean;
+  contentOut: SharedValue<number>;
+  hint?: string;
+}> = ({ recipe, weapons, seconds, index, appActive, reducedMotion, contentOut, hint }) => {
   const fused = fusedWeapons(recipe, weapons);
+  const medalP = useSharedValue(reducedMotion ? 1 : 0);
+  const medalGlow = useSharedValue(1);
+  const headP = useSharedValue(reducedMotion ? 1 : 0);
+  const bodyP = useSharedValue(reducedMotion ? 1 : 0);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      medalP.value = 1;
+      headP.value = 1;
+      bodyP.value = 1;
+      return;
+    }
+    const baseDelay = BAND_OPEN_DELAY_MS + OVERLAP.uiContentMs + index * STAGGER.item;
+    medalP.value = withDelay(fxMs(baseDelay), withTiming(1, { duration: fxMs(MS.quick), easing: EASE.popSoft }));
+    headP.value = withDelay(fxMs(baseDelay + STAGGER.card), withTiming(1, { duration: fxMs(MS.move - 40), easing: EASE.enterSoft }));
+    bodyP.value = withDelay(fxMs(baseDelay + STAGGER.card * 2), withTiming(1, { duration: fxMs(MS.move - 40), easing: EASE.enterSoft }));
+    return () => {
+      cancelAnimation(medalP);
+      cancelAnimation(headP);
+      cancelAnimation(bodyP);
+    };
+  }, [index, reducedMotion, medalP, headP, bodyP]);
+
+  // Subtle Disney #12 moving hold on the golden medal while awaiting player tap (zero static dead-stretch)
+  useEffect(() => {
+    if (!appActive || reducedMotion) {
+      cancelAnimation(medalGlow);
+      medalGlow.value = 1;
+      return;
+    }
+    const settleDelay = BAND_OPEN_DELAY_MS + OVERLAP.uiContentMs + index * STAGGER.item + MS.quick;
+    medalGlow.value = withDelay(
+      fxMs(settleDelay),
+      withRepeat(withTiming(1.045, { duration: 720, easing: EASE.drift }), -1, true)
+    );
+    return () => cancelAnimation(medalGlow);
+  }, [appActive, reducedMotion, index, medalGlow]);
+
+  const medalStyle = useAnimatedStyle(() => {
+    const outMul = 1 - contentOut.value;
+    return {
+      opacity: Math.min(1, medalP.value * 1.4) * outMul,
+      transform: [{ scale: (reducedMotion ? 1 : 0.72 + 0.28 * medalP.value) * medalGlow.value }],
+    };
+  });
+
+  const headStyle = useAnimatedStyle(() => {
+    const outMul = 1 - contentOut.value;
+    return {
+      opacity: headP.value * outMul,
+      transform: [{ translateX: reducedMotion ? 0 : (1 - headP.value) * -28 }],
+    };
+  });
+
+  const bodyStyle = useAnimatedStyle(() => {
+    const outMul = 1 - contentOut.value;
+    return {
+      opacity: bodyP.value * outMul,
+      transform: [{ translateY: reducedMotion ? 0 : (1 - bodyP.value) * 8 }],
+    };
+  });
+
   return (
-    <View style={[st.row, !first && st.rowNext]} testID="evolution-banner">
+    <View style={[st.row, index > 0 && st.rowNext]} testID="evolution-banner">
       <View style={st.head}>
-        <View style={st.medal}><Icon name={recipe.icon} size={38} color={INK} /></View>
-        <View style={{ flex: 1 }}>
+        <Animated.View style={[st.medal, medalStyle]}>
+          <Icon name={recipe.icon} size={38} color={INK} />
+        </Animated.View>
+        <Animated.View style={[{ flex: 1 }, headStyle]}>
           <Text style={st.eyebrow}>EVOLUTION</Text>
           <Text style={st.name} numberOfLines={2} adjustsFontSizeToFit>{recipe.name}</Text>
           <View style={st.fused}>
             {fused.length === 2 ? (
               <>
-                <WeaponAvatar weapon={fused[0]} size={20} />
+                <WeaponAvatar weapon={fused[0]} size={20} interactive={false} />
                 <Text style={st.fusedText} numberOfLines={1}>{fused[0].name}</Text>
                 <Text style={st.plus}>+</Text>
-                <WeaponAvatar weapon={fused[1]} size={20} />
+                <WeaponAvatar weapon={fused[1]} size={20} interactive={false} />
                 <Text style={st.fusedText} numberOfLines={1}>{fused[1].name}</Text>
               </>
             ) : (
               <Text style={st.fusedText} numberOfLines={1}>{recipe.familyText}</Text>
             )}
           </View>
+        </Animated.View>
+      </View>
+      <Animated.View style={[st.bodyGroup, bodyStyle]}>
+        <Text style={st.what}>{recipe.activeText}</Text>
+        <View style={st.chips}>
+          <View style={st.chip}><Text style={st.chipText}>Sets ×{EVOLUTION_RULES.setMultiplier}</Text></View>
+          <View style={st.chip}><Text style={st.chipText}>+{EVOLUTION_RULES.setDamage} every Set</Text></View>
+          <View style={[st.chip, st.chipTime]}><Text style={st.chipText}>{seconds} seconds</Text></View>
         </View>
-      </View>
-      <Text style={st.what}>{recipe.activeText}</Text>
-      <View style={st.chips}>
-        <View style={st.chip}><Text style={st.chipText}>Sets ×{EVOLUTION_RULES.setMultiplier}</Text></View>
-        <View style={st.chip}><Text style={st.chipText}>+{EVOLUTION_RULES.setDamage} every Set</Text></View>
-        <View style={[st.chip, st.chipTime]}><Text style={st.chipText}>{seconds} seconds</Text></View>
-      </View>
-      {hint && <Text style={st.hint}>{hint}</Text>}
+        {hint && <Text style={st.hint}>{hint}</Text>}
+      </Animated.View>
     </View>
   );
 };
@@ -128,33 +214,46 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   const reducedMotion = useReducedMotion();
   const slash = useSharedValue(reducedMotion ? 1 : 0);
   const open = useSharedValue(reducedMotion ? 1 : 0);
-  const content = useSharedValue(reducedMotion ? 1 : 0);
-  const prompt = useSharedValue(reducedMotion ? 1 : 0);
+  const reducedIn = useSharedValue(reducedMotion ? 0 : 1);
+  const contentOut = useSharedValue(0);
+  const prompt = useSharedValue(0);
   const out = useSharedValue(0);
   const born = useRef(Date.now());
   const closing = useRef(false);
+  const finishedRef = useRef(false);
   // (kept in a ref so `close` stays the same function when the parent re-renders)
   const done = useRef(onDone);
   done.current = onDone;
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const finishClose = useCallback(() => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    if (fallbackTimer.current) {
+      clearTimeout(fallbackTimer.current);
+      fallbackTimer.current = null;
+    }
+    done.current();
+  }, []);
 
   useEffect(() => {
     if (reducedMotion) {
       slash.value = 1;
       open.value = 1;
-      content.value = 1;
-      return;
+      reducedIn.value = withTiming(1, { duration: fxMs(ACCESSIBLE.fadeMs), easing: EASE.ui, ...STAYS });
+      return () => cancelAnimation(reducedIn);
     }
-    slash.value = withTiming(1, { duration: fxMs(120), easing: EASE.ui });
-    open.value = withDelay(fxMs(110), withTiming(1, { duration: fxMs(260), easing: Easing.out(Easing.back(1.5)) }));
-    content.value = withDelay(fxMs(230), withTiming(1, { duration: fxMs(280), easing: EASE.enterSoft }));
+    reducedIn.value = 1;
+    slash.value = withTiming(1, { duration: fxMs(110), easing: EASE.enter });
+    open.value = withDelay(fxMs(BAND_OPEN_DELAY_MS), withTiming(1, { duration: fxMs(220), easing: EASE.pop }));
     return () => {
       cancelAnimation(slash);
       cancelAnimation(open);
-      cancelAnimation(content);
+      cancelAnimation(reducedIn);
+      cancelAnimation(contentOut);
       cancelAnimation(out);
     };
-  }, [reducedMotion, slash, open, content, out]);
+  }, [reducedMotion, slash, open, reducedIn, contentOut, out]);
 
   // [AU-13] Fire evolution fanfare synced to cut-in mount (90ms riser hits exact slash-flash frame!)
   const firstRecipeId = recipes[0]?.id;
@@ -171,15 +270,23 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   }, [firstRecipeId]);
 
   useEffect(() => {
-    if (!appActive || reducedMotion) {
+    if (reducedMotion) {
       cancelAnimation(prompt);
-      prompt.value = reducedMotion ? 1 : 0.7;
+      prompt.value = withTiming(1, { duration: fxMs(ACCESSIBLE.fadeMs), easing: EASE.ui, ...STAYS });
+      return () => cancelAnimation(prompt);
+    }
+    if (!appActive) {
+      cancelAnimation(prompt);
+      prompt.value = 0.75;
       return;
     }
     prompt.value = 0;
     prompt.value = withDelay(
       fxMs(PROMPT_REVEAL_MS),
-      withRepeat(withSequence(withTiming(1, { duration: 500 }), withTiming(0.35, { duration: 500 })), -1)
+      withSequence(
+        withTiming(1, { duration: fxMs(MS.quick), easing: EASE.ui }),
+        withRepeat(withTiming(0.42, { duration: 640, easing: EASE.drift }), -1, true)
+      )
     );
     return () => cancelAnimation(prompt);
   }, [appActive, reducedMotion, prompt]);
@@ -187,16 +294,46 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   const close = useCallback(() => {
     if (closing.current || Date.now() - born.current < fxMs(GUARD_MS)) return;
     closing.current = true;
-    // Snap band fully visible if tapped between 200–510ms before briskly sliding shut
+    // Snap band open if tapped mid-entrance before briskly clearing content then collapsing band
     if (open.value < 1) open.value = 1;
-    if (content.value < 1) content.value = 1;
     const closeDuration = fxMs(CLOSE_MS);
-    out.value = withTiming(1, { duration: closeDuration, easing: EASE.exitSoft, ...STAYS });
-    timer.current = setTimeout(() => done.current(), closeDuration);
-  }, [open, content, out]);
+
+    if (reducedMotion) {
+      contentOut.value = withTiming(1, { duration: closeDuration, easing: EASE.exitSoft, ...STAYS });
+      out.value = withTiming(
+        1,
+        { duration: closeDuration, easing: EASE.exitSoft, ...STAYS },
+        finished => {
+          'worklet';
+          if (finished) runOnJS(finishClose)();
+        }
+      );
+    } else {
+      const contentLeadMs = fxMs(OVERLAP.exitContentLeadMs + 16);
+      const bandDelayMs = fxMs(BAND_CLOSE_LAG_MS);
+      const bandCloseMs = Math.max(16, closeDuration - bandDelayMs);
+      // Content leads exit so text clears cleanly before the band collapses (zero vertical text squash)
+      contentOut.value = withTiming(1, { duration: contentLeadMs, easing: EASE.exitSoft, ...STAYS });
+      out.value = withDelay(
+        bandDelayMs,
+        withTiming(
+          1,
+          { duration: bandCloseMs, easing: EASE.exitSoft, ...STAYS },
+          finished => {
+            'worklet';
+            if (finished) runOnJS(finishClose)();
+          }
+        ),
+        STAYS.reduceMotion
+      );
+    }
+
+    // Idempotent safety fallback for Jest fake-timer environments where mocked Reanimated skips completion callbacks
+    fallbackTimer.current = setTimeout(finishClose, closeDuration + 4);
+  }, [open, contentOut, out, reducedMotion, finishClose]);
 
   useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
+    if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
   }, []);
 
   useEffect(() => {
@@ -209,14 +346,20 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
   const span = Math.ceil(Math.hypot(size.w, size.h) * 1.1);
   const contentWidth = Math.min(size.w - 28, 480);
 
-  const dimStyle = useAnimatedStyle(() => ({ opacity: 0.66 * Math.min(1, slash.value * 2) * (1 - out.value) }));
-  const slashStyle = useAnimatedStyle(() => ({ opacity: 1 - open.value, transform: [{ scaleX: slash.value }] }));
-  const bandStyle = useAnimatedStyle(() => ({ opacity: open.value > 0 ? 1 : 0, transform: [{ scaleY: Math.max(0.001, open.value * (1 - out.value)) }] }));
-  const headStyle = useAnimatedStyle(() => ({
-    opacity: content.value,
-    transform: [{ translateX: reducedMotion ? 0 : (1 - content.value) * -90 }],
+  const dimStyle = useAnimatedStyle(() => ({
+    opacity: 0.66 * Math.min(1, slash.value * 2) * reducedIn.value * (1 - out.value),
   }));
-  const promptStyle = useAnimatedStyle(() => ({ opacity: prompt.value * (1 - out.value) }));
+  const slashStyle = useAnimatedStyle(() => ({
+    opacity: reducedMotion ? 0 : 1 - open.value,
+    transform: [{ scaleX: slash.value }],
+  }));
+  const bandStyle = useAnimatedStyle(() => ({
+    opacity: (open.value > 0 ? 1 : 0) * reducedIn.value * (reducedMotion ? 1 - out.value : 1),
+    transform: [{ scaleY: reducedMotion ? 1 : Math.max(0.001, open.value * (1 - out.value)) }],
+  }));
+  const promptStyle = useAnimatedStyle(() => ({
+    opacity: prompt.value * (1 - contentOut.value),
+  }));
 
   return (
     <Pressable
@@ -230,9 +373,21 @@ export const EvolutionCutIn: React.FC<Props> = ({ recipes, weapons, seconds, siz
       <View style={[st.slanted, { width: span, height: span, left: (size.w - span) / 2, top: (size.h - span) / 2 }]} pointerEvents="none">
         <Animated.View style={[st.band, bandStyle]}>
           {SPEED_LINES.map((l, i) => <SpeedLine key={i} span={span} {...l} />)}
-          <Animated.View style={[{ width: contentWidth }, headStyle]}>
-            {recipes.map((r, i) => <RecipeRow key={r.id} recipe={r} weapons={weapons} seconds={seconds} first={i === 0} hint={i === 0 ? hint : undefined} />)}
-          </Animated.View>
+          <View style={{ width: contentWidth }}>
+            {recipes.map((r, i) => (
+              <RecipeRow
+                key={r.id}
+                recipe={r}
+                weapons={weapons}
+                seconds={seconds}
+                index={i}
+                appActive={appActive}
+                reducedMotion={reducedMotion}
+                contentOut={contentOut}
+                hint={i === 0 ? hint : undefined}
+              />
+            ))}
+          </View>
         </Animated.View>
         <Animated.View style={[st.slash, slashStyle]} />
       </View>
@@ -264,6 +419,7 @@ const st = StyleSheet.create({
   row: { gap: 10 },
   rowNext: { marginTop: 14, paddingTop: 14, borderTopWidth: 2, borderTopColor: DARK.goldEdge(0.35) },
   head: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  bodyGroup: { gap: 10 },
   medal: { width: 68, height: 68, borderRadius: 34, backgroundColor: COLORS.actionYellow, borderWidth: 3, borderColor: COLORS.canvasWhite, alignItems: 'center', justifyContent: 'center' },
   eyebrow: { color: COLORS.actionYellow, fontWeight: '900', fontSize: 12, letterSpacing: 4 },
   name: { color: COLORS.canvasWhite, fontWeight: '900', fontSize: 27, lineHeight: 30, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -274,7 +430,7 @@ const st = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { backgroundColor: COLORS.actionYellow, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   chipTime: { backgroundColor: COLORS.canvasWhite },
-  chipText: { color: INK, fontSize: 12, fontWeight: '900', letterSpacing: 0.3 },
+  chipText: { color: INK, fontSize: 12, fontWeight: '900', letterSpacing: 0.3, fontVariant: ['tabular-nums'] },
   hint: { color: DARK.muted, fontSize: 13, lineHeight: 18 },
   prompt: { position: 'absolute', left: 0, right: 0, bottom: 28, alignItems: 'center' },
   promptText: { color: COLORS.actionYellow, backgroundColor: DARK.panel, fontWeight: '900', letterSpacing: 3, fontSize: 13, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, overflow: 'hidden' },

@@ -10,7 +10,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  Easing,
   cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
@@ -30,6 +29,7 @@ import {
   CARD_SVG_WIDTH,
 } from '@/utils/cardVisuals';
 import { COLORS } from '@/utils/colors';
+import { EASE } from '@/utils/motion';
 import { INK } from './ui';
 
 export type WeaponDemoArchetype =
@@ -414,7 +414,7 @@ const WeaponDemoClip: React.FC<Props> = ({ weaponId, compact = false, testID }) 
     }
     phase.value = 0;
     phase.value = withRepeat(
-      withTiming(1, { duration: LOOP_MS, easing: Easing.linear }),
+      withTiming(1, { duration: LOOP_MS, easing: EASE.linear }),
       -1
     );
     return () => {

@@ -8,6 +8,8 @@ import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import Icon from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import { useAppActive } from '@/hooks/useAppActive';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { formatChallengeText, useColorblind } from '@/utils/cardColors';
 import { scaleText, useTextScale } from '@/utils/textSizeStorage';
@@ -45,9 +47,12 @@ interface Props {
 }
 
 const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownEvolutions, showGuardTip = false, onClose }) => {
+  const appActive = useAppActive();
+  const reducedMotion = useReducedMotion();
   const colorblind = useColorblind();
   const textScale = useTextScale();
   if (!target) return null;
+  const allowPortraitMotion = appActive && !reducedMotion;
 
   const titleStyle = [st.title, { fontSize: scaleText(19, textScale) }];
   const bodyStyle = [st.body, { fontSize: scaleText(14, textScale), lineHeight: Math.round(scaleText(14, textScale) * 1.42) }];
@@ -65,7 +70,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
         return (
           <>
             <View style={st.headerRow}>
-              <EnemyAvatar enemy={foeInfo} size={52} hp={shownHp} maxHp={run.foeMaxHp} mood="menacing" lightweight animate={false} framed />
+              <EnemyAvatar enemy={foeInfo} size={52} hp={shownHp} maxHp={run.foeMaxHp} mood="menacing" lightweight animate={allowPortraitMotion} framed />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text={run.level.isBoss ? 'Boss Foe' : 'Current Foe'} />
                 <Text style={titleStyle}>{run.foeName}</Text>
@@ -92,7 +97,7 @@ const HudInspector: React.FC<Props> = ({ target, run, shownHp, challenge, knownE
         return (
           <>
             <View style={st.headerRow}>
-              <FighterAvatar character={run.fighter} size={44} mood="anticipation" animate={false} framed />
+              <FighterAvatar character={run.fighter} size={44} mood="anticipation" animate={allowPortraitMotion} quiet={reducedMotion} framed />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <Eyebrow text="Fighter Passives" />
                 <Text style={titleStyle}>{run.fighter}</Text>

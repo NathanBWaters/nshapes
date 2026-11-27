@@ -688,6 +688,64 @@ describe('Live Multiplier Ignition & Pre-Battle Parry UI', () => {
     expect(flat.transformOrigin).toBe('left center');
   });
 
+  it('ParryIntentBar pulses border rim instead of scaling text and anchors STALL +3s without text reflow', () => {
+    const spec = {
+      attackName: 'Test Cleave',
+      icon: 'lorc/sword-clash' as const,
+      counter: { kind: 'color' as const, color: 'red' as const },
+      cooldownMs: 12000,
+      windupMs: 12000,
+      perfectWindowMs: 3500,
+      penalty: 'heart' as const,
+    };
+
+    const view = render(
+      <ParryIntentBar
+        active
+        effects
+        counterAvailable={false}
+        parry={{
+          phase: 'windup',
+          msLeft: 2200, // inside perfect window
+          durationMs: 12000,
+          warned: true,
+          stallsUsed: 0,
+          parries: 0,
+          perfectParries: 0,
+          spec,
+        }}
+      />
+    );
+
+    // Border pulse overlay exists; main bar container has NO scale transform that would jitter text
+    expect(view.getByTestId('parry-bar-pulse-ring')).toBeTruthy();
+    expect(view.getByTestId('parry-bar-phase-flash')).toBeTruthy();
+    const stallBadge = view.getByTestId('parry-stall-badge');
+    const stallFlat = StyleSheet.flatten(stallBadge.props.style);
+    expect(stallFlat.position).toBe('absolute');
+
+    // Transition to staggered cleanly mounts pulse ring and updates label
+    view.rerender(
+      <ParryIntentBar
+        active
+        effects
+        counterAvailable
+        parry={{
+          phase: 'staggered',
+          msLeft: 5000,
+          durationMs: 6000,
+          warned: false,
+          stallsUsed: 0,
+          parries: 1,
+          perfectParries: 1,
+          spec,
+        }}
+      />
+    );
+    expect(view.getByTestId('parry-bar-pulse-ring')).toBeTruthy();
+    expect(view.queryByTestId('parry-stall-badge')).toBeNull();
+  });
+
   it('[FX-23] MultiplierIgnition holds LIVE tally until lead Beat.onLand (landSeq) instead of spoiling at 70ms', () => {
     jest.useFakeTimers();
     try {

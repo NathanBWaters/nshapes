@@ -878,6 +878,7 @@ describe('Wave 4 Lane B VFX, Explosions, Flashes, Shakes & Beams ([FX-03,11,15,1
     it('snaps Beam in 24–32 ms with 30 Hz flicker and mounts endpoint Ticks sparks on FxStage', () => {
       expect(BEAM_TIMING.growMs).toBeGreaterThanOrEqual(24);
       expect(BEAM_TIMING.growMs).toBeLessThanOrEqual(32);
+      expect(BEAM_TIMING.zapGrowMs).toBeGreaterThan(BEAM_TIMING.growMs);
       expect(BEAM_TIMING.flickerHz).toBe(30);
 
       const anchors = makeMockAnchors({
