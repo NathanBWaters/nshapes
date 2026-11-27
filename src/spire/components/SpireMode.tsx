@@ -639,10 +639,10 @@ const SpireMode: React.FC<Props> = ({
 };
 
 const st = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: '#2B2118' },
+  shell: { flex: 1, backgroundColor: '#2B2118', overflow: 'hidden' },
   screenWrap: { flex: 1 },
   root: { flex: 1, backgroundColor: '#2B2118' },
-  roomViewport: { flex: 1 },
+  roomViewport: { flex: 1, overflow: 'hidden' },
 });
 
 export default SpireMode;

@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Circle, G, Line, Path, Polygon, Svg } from 'react-native-svg';
 import { Sparkle4 } from '@/components/illustration/primitives';
+import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Weapon, WeaponRarity } from '@/types';
 import { COLORS } from '@/utils/colors';
@@ -431,6 +432,7 @@ export const WeaponAvatar: React.FC<WeaponAvatarProps> = ({
   style,
   testID,
 }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
 
   const weaponName =
@@ -469,7 +471,30 @@ export const WeaponAvatar: React.FC<WeaponAvatarProps> = ({
     cancelAnimation(reducedGlint);
   }, [tx, ty, scaleX, scaleY, rot, rotY, burstPrimary, burstSecondary, reducedGlint]);
 
+  useEffect(() => {
+    if (appActive) return;
+    cancelAnimation(tx);
+    cancelAnimation(ty);
+    cancelAnimation(scaleX);
+    cancelAnimation(scaleY);
+    cancelAnimation(rot);
+    cancelAnimation(rotY);
+    cancelAnimation(burstPrimary);
+    cancelAnimation(burstSecondary);
+    cancelAnimation(reducedGlint);
+    tx.value = 0;
+    ty.value = 0;
+    scaleX.value = 1;
+    scaleY.value = 1;
+    rot.value = 0;
+    rotY.value = 0;
+    burstPrimary.value = 0;
+    burstSecondary.value = 0;
+    reducedGlint.value = 0;
+  }, [appActive, tx, ty, scaleX, scaleY, rot, rotY, burstPrimary, burstSecondary, reducedGlint]);
+
   const playTapAnimation = useCallback(() => {
+    if (!appActive) return;
     cancelAnimation(tx);
     cancelAnimation(ty);
     cancelAnimation(scaleX);
@@ -731,6 +756,7 @@ export const WeaponAvatar: React.FC<WeaponAvatarProps> = ({
       }
     }
   }, [
+    appActive,
     reducedMotion,
     size,
     tapStyle,

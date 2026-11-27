@@ -21,5 +21,15 @@ export function useGuardedFrameCallback(
     return registerFrameLoop(debugLabel);
   }, [shouldRun, debugLabel]);
 
-  return useFrameCallback(callback, shouldRun);
+  const frameCallback = useFrameCallback(callback, shouldRun);
+
+  // Reanimated's `useFrameCallback(cb, autostart)` only reads `autostart` on initial
+  // mount and re-applies stale `ref.current.isActive` on subsequent renders, so we
+  // must explicitly synchronize `setActive(shouldRun)` to actually halt rAF loops
+  // when backgrounded or deactivated.
+  useEffect(() => {
+    frameCallback?.setActive?.(shouldRun);
+  }, [frameCallback, shouldRun]);
+
+  return frameCallback;
 }

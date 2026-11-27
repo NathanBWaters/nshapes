@@ -480,7 +480,20 @@ export function useCreatureMotion<Mood extends string, Reaction extends string>(
     targets.value = { rates, pose, bounce: blends.bounce, tremor: blends.tremor };
 
     if (!animate) {
-      // Reduced-motion / static mode: settle directly into the resting pose and cancel impulse channels
+      // Reduced-motion / backgrounded / static mode: halt pending reaction release timers,
+      // settle directly into the resting pose, and cancel impulse channels
+      if (reactionTimerRef.current) {
+        clearTimeout(reactionTimerRef.current);
+        reactionTimerRef.current = null;
+      }
+      if (reactionLeadTimerRef.current) {
+        clearTimeout(reactionLeadTimerRef.current);
+        reactionLeadTimerRef.current = null;
+      }
+      if (reactionFinishTimerRef.current) {
+        clearTimeout(reactionFinishTimerRef.current);
+        reactionFinishTimerRef.current = null;
+      }
       cancelAnimation(bodyTx);
       cancelAnimation(bodyTy);
       cancelAnimation(reactionScaleY);

@@ -8,6 +8,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
+import { useAppActive } from '@/hooks/useAppActive';
 import type { Anchors } from './anchors';
 import { FX_COLOR } from './catalog';
 import type { AnchorName, Beat, HitTier, Point, Rect } from './types';
@@ -323,8 +324,13 @@ export const FxStage: React.FC<{
   suppressKoBanner?: boolean;
   effects?: boolean;
 }> = ({ fx, anchors, size, hideWeaponNameTags, suppressKoBanner, effects = true }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const showSwishes = effects && !reducedMotion;
+
+  if (!appActive) {
+    return <View style={st.stage} pointerEvents="none" testID="fx-stage" />;
+  }
 
   return (
     <View style={st.stage} pointerEvents="box-none" testID="fx-stage">

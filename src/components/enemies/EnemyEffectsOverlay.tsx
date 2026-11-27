@@ -17,6 +17,7 @@ import {
   useEffectsDriver,
 } from '@/components/creatures/useEffectsDriver';
 import { STROKE, StarBurst } from '@/components/illustration/primitives';
+import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
 import {
   ACCESSIBLE,
@@ -112,6 +113,7 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
   attackStrikeDelayMs = ENEMY_ATTACK.windMs + ENEMY_ATTACK.coilHoldMs,
   entranceLandingDelayMs = CREATURE_FX.entranceDropMs,
 }) => {
+  const appActive = useAppActive();
   const reducedMotion = Boolean(useReducedMotion());
   const isStillMode = !animate || stillBurst || reducedMotion;
   const showAmbient = !activeReaction;
@@ -131,6 +133,14 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
     if (exitTimerRef.current) {
       clearTimeout(exitTimerRef.current);
       exitTimerRef.current = null;
+    }
+
+    if (!appActive) {
+      cancelAnimation(reducedBurstOpacity);
+      reducedBurstOpacity.value = 0;
+      renderedReactionRef.current = null;
+      setRenderedReaction(null);
+      return;
     }
 
     if (effectiveBurstReaction) {
@@ -172,7 +182,7 @@ export const EnemyEffectsOverlay: React.FC<EnemyEffectsOverlayProps> = ({
         exitTimerRef.current = null;
       }
     };
-  }, [effectiveBurstReaction, reactionId, isStillMode, reducedBurstOpacity]);
+  }, [appActive, effectiveBurstReaction, reactionId, isStillMode, reducedBurstOpacity]);
 
   useEffect(() => {
     return () => {

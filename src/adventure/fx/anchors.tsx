@@ -21,6 +21,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { useAppActive } from '@/hooks/useAppActive';
 import { EASE, MS, SPRING } from '@/utils/motion';
 import { fxClock, fxMs } from './clock';
 import type { AnchorName, Rect } from './types';
@@ -185,16 +186,19 @@ export const Anchor: React.FC<{
 }> = ({ name, style, children, testID, skipFoeJump, quiet }) => {
   const anchors = useAnchorsContext();
   const config = useContext(AnchorsConfigContext);
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
 
   const effectiveSkipFoe = skipFoeJump ?? config.skipFoeJump;
   const effectiveQuiet = quiet ?? config.quiet;
-  const skip = shouldSkipAnchorJump(name, {
-    skipFoeJump: effectiveSkipFoe,
-    quiet: effectiveQuiet,
-    reducedMotion: Boolean(reducedMotion),
-  });
+  const skip =
+    !appActive ||
+    shouldSkipAnchorJump(name, {
+      skipFoeJump: effectiveSkipFoe,
+      quiet: effectiveQuiet,
+      reducedMotion: Boolean(reducedMotion),
+    });
 
   useEffect(() => {
     if (skip) {

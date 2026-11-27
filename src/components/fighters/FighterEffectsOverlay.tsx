@@ -14,6 +14,7 @@ import {
   useEffectsDriver,
 } from '@/components/creatures/useEffectsDriver';
 import { STROKE, Sparkle4 } from '@/components/illustration/primitives';
+import { useAppActive } from '@/hooks/useAppActive';
 import { COLORS } from '@/utils/colors';
 import { ACCESSIBLE, CHEER, CREATURE_FX, EASE, HIT, OVERLAP, STAYS, THROW } from '@/utils/motion';
 import { TAU } from '@/utils/proceduralMotion';
@@ -239,6 +240,7 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
   intensity = 0,
   cheerReleaseMs,
 }) => {
+  const appActive = useAppActive();
   const isStaticBurst = !animate || stillBurst;
 
   // Mount-until-exited reaction latch so reduced-motion / still bursts fade out cleanly (zero POP-OUT!)
@@ -249,10 +251,10 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
   const burstExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reducedOpacity = useSharedValue(activeReaction && isStaticBurst ? 1 : 0);
 
-  if (activeReaction && displayedReaction !== activeReaction) {
+  if (appActive && activeReaction && displayedReaction !== activeReaction) {
     setDisplayedReaction(activeReaction);
   }
-  if (activeReaction && displayedIntensity !== intensity) {
+  if (appActive && activeReaction && displayedIntensity !== intensity) {
     setDisplayedIntensity(intensity);
   }
 
@@ -260,6 +262,12 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
     if (burstExitTimerRef.current) {
       clearTimeout(burstExitTimerRef.current);
       burstExitTimerRef.current = null;
+    }
+    if (!appActive) {
+      cancelAnimation(reducedOpacity);
+      reducedOpacity.value = 0;
+      if (displayedReaction) setDisplayedReaction(null);
+      return;
     }
     if (activeReaction) {
       if (isStaticBurst) {
@@ -296,7 +304,7 @@ export const FighterEffectsOverlay: React.FC<FighterEffectsOverlayProps> = ({
         burstExitTimerRef.current = null;
       }
     };
-  }, [activeReaction, reactionId, isStaticBurst, displayedReaction, reducedOpacity]);
+  }, [appActive, activeReaction, reactionId, isStaticBurst, displayedReaction, reducedOpacity]);
 
   useEffect(() => {
     return () => {

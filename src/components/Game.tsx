@@ -10,6 +10,7 @@ import type { CharacterName } from '@/types';
 import { useTutorial } from '@/context/TutorialContext';
 import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import { COLORS } from '@/utils/colors';
+import { MS } from '@/utils/motion';
 import {
   FreePlayDifficultyStorage,
   FreePlayRecordsStorage,
@@ -116,7 +117,8 @@ const Game: React.FC<GameProps> = ({
       : null
   );
   const [phase, setPhase] = useState<AppPhase>(() => initialPhaseFor(initialMode));
-  const transition = useScreenTransition({ enterOnMount: false });
+  // Crisp vertical route transition (0px horizontal viewport drift even under heavy CI CPU throttling)
+  const transition = useScreenTransition({ enterOnMount: false, axis: 'y', durationMs: MS.quick });
 
   const { resetTutorial } = useTutorial();
 
@@ -260,7 +262,7 @@ const Game: React.FC<GameProps> = ({
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.paperBeige },
+  root: { flex: 1, backgroundColor: COLORS.paperBeige, overflow: 'hidden' },
   screen: { flex: 1 },
 });
 

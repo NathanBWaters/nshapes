@@ -15,6 +15,7 @@ import { useScreenTransition, type ScreenDirection } from '@/components/ScreenTr
 import Icon from '@/components/Icon';
 import { FightEffectsStorage, SettingsSheet } from '@/components/SettingsSheet';
 import { COLORS } from '@/utils/colors';
+import { MS } from '@/utils/motion';
 import { MusicStorage, SoundStorage } from '@/utils/storage';
 import { band, music, setMusicEnabled, setSfxOverride, sfx } from '@/audio';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -179,8 +180,9 @@ const AdventureMode: React.FC<Props> = ({
         ? { kind: 'story' }
         : { kind: 'map' }
   );
-  // Every change of screen goes through the one shared transition (src/components/ScreenTransition.tsx)
-  const transition = useScreenTransition({ enterOnMount: !hostTransition });
+  // Every change of screen goes through the one shared transition (src/components/ScreenTransition.tsx);
+  // vertical axis keeps transitions crisp (`<= 180ms` enter) with zero horizontal viewport overflow on slow devices.
+  const transition = useScreenTransition({ enterOnMount: !hostTransition, axis: 'y', durationMs: MS.quick });
   const screenRef = useRef(screen);
   screenRef.current = screen;
   const reducedMotion = useReducedMotion();
@@ -1022,7 +1024,7 @@ const AdventureMode: React.FC<Props> = ({
 
 const st = StyleSheet.create({
   // Paper shows for the frame or two between one screen leaving and the next arriving
-  root: { flex: 1, backgroundColor: COLORS.paperBeige },
+  root: { flex: 1, backgroundColor: COLORS.paperBeige, overflow: 'hidden' },
   screen: { flex: 1 },
   settingsFab: {
     position: 'absolute',

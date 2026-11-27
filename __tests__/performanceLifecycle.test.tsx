@@ -12,6 +12,7 @@ import GameBoard from '@/components/GameBoard';
 import { EnemyAvatar } from '@/components/enemies/EnemyAvatar';
 import { FighterAvatar } from '@/components/fighters/FighterAvatar';
 import { useAppActive } from '@/hooks/useAppActive';
+import { useGuardedFrameCallback } from '@/hooks/useGuardedFrameCallback';
 import { useAutoHint } from '@/hooks/useAutoHint';
 import { useAutoPlayer } from '@/hooks/useAutoPlayer';
 import { useBurnTimer } from '@/hooks/useBurnTimer';
@@ -28,6 +29,7 @@ import {
 } from '@/utils/perfWatchdog';
 
 const mockUseFrameCallback = jest.fn();
+const mockSetActive = jest.fn();
 jest.mock('react-native-reanimated', () => {
   const actual = jest.requireActual('react-native-reanimated');
   return {
@@ -37,9 +39,20 @@ jest.mock('react-native-reanimated', () => {
     useFrameCallback: (...args: unknown[]) => {
       mockUseFrameCallback(...args);
       if (typeof actual.useFrameCallback === 'function') {
-        return actual.useFrameCallback(...args);
+        const handle = actual.useFrameCallback(...args);
+        if (handle && typeof handle.setActive === 'function') {
+          const origSetActive = handle.setActive;
+          return {
+            ...handle,
+            setActive: (next: boolean) => {
+              mockSetActive(next);
+              return origSetActive(next);
+            },
+          };
+        }
+        return handle;
       }
-      return { setActive: jest.fn(), callbackId: 0, isActive: Boolean(args[1] ?? true) };
+      return { setActive: mockSetActive, callbackId: 0, isActive: Boolean(args[1] ?? true) };
     },
   };
 });
@@ -187,6 +200,7 @@ const makeBoardCards = (): CardType[] => {
 
 beforeEach(() => {
   mockUseFrameCallback.mockClear();
+  mockSetActive.mockClear();
   mockUseBurnTimer.mockClear();
   mockUseAutoHint.mockClear();
   resetPerfViolations();
@@ -195,6 +209,7 @@ beforeEach(() => {
 afterEach(() => {
   __setAppActiveForTests(true);
   mockUseFrameCallback.mockClear();
+  mockSetActive.mockClear();
   mockUseBurnTimer.mockClear();
   mockUseAutoHint.mockClear();
   resetPerfViolations();
@@ -458,6 +473,33 @@ describe('Performance, Battery, and Background Lifecycle', () => {
       });
       expect(mockUseFrameCallback).toHaveBeenCalled();
       expect(mockUseFrameCallback.mock.calls.every(call => call[1] === false)).toBe(true);
+    });
+
+    it('synchronizes frameCallback.setActive(false/true) when appActive or isActive toggles', () => {
+      const cb = () => {
+        'worklet';
+      };
+      const { rerender } = renderHook(
+        ({ active }: { active: boolean }) => useGuardedFrameCallback(cb, active, 'test-sync'),
+        { initialProps: { active: true } }
+      );
+      expect(mockSetActive).toHaveBeenLastCalledWith(true);
+
+      mockSetActive.mockClear();
+      act(() => {
+        __setAppActiveForTests(false);
+      });
+      expect(mockSetActive).toHaveBeenLastCalledWith(false);
+
+      mockSetActive.mockClear();
+      act(() => {
+        __setAppActiveForTests(true);
+      });
+      expect(mockSetActive).toHaveBeenLastCalledWith(true);
+
+      mockSetActive.mockClear();
+      rerender({ active: false });
+      expect(mockSetActive).toHaveBeenLastCalledWith(false);
     });
   });
 

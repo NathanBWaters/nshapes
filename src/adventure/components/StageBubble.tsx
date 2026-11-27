@@ -20,6 +20,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
+import { useAppActive } from '@/hooks/useAppActive';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { ACCESSIBLE, EASE, MS, STAYS } from '@/utils/motion';
@@ -65,12 +66,13 @@ const StageBubble: React.FC<Props> = ({
   enterDelayMs = 0,
   testID,
 }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const [bg, edge] = TONE[kind];
   const foeSide = tail === 'right' || tail === 'down-right';
 
-  const opacity = useSharedValue(0);
-  const scale = useSharedValue(reducedMotion ? 1 : 0.92);
+  const opacity = useSharedValue(appActive ? 0 : 1);
+  const scale = useSharedValue(!appActive || reducedMotion ? 1 : 0.92);
   const shiftX = useSharedValue(0);
   const shiftY = useSharedValue(0);
 
@@ -79,6 +81,14 @@ const StageBubble: React.FC<Props> = ({
     cancelAnimation(scale);
     cancelAnimation(shiftX);
     cancelAnimation(shiftY);
+
+    if (!appActive) {
+      opacity.value = 1;
+      scale.value = 1;
+      shiftX.value = 0;
+      shiftY.value = 0;
+      return;
+    }
 
     const delay = enterDelayMs > 0 ? enterDelayMs : 0;
 
@@ -111,7 +121,7 @@ const StageBubble: React.FC<Props> = ({
       cancelAnimation(shiftX);
       cancelAnimation(shiftY);
     };
-  }, [text, kind, tail, enterDelayMs, reducedMotion, opacity, scale, shiftX, shiftY]);
+  }, [text, kind, tail, enterDelayMs, appActive, reducedMotion, opacity, scale, shiftX, shiftY]);
 
   const animStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

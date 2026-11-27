@@ -642,9 +642,11 @@ const FlameTongue: React.FC<{ color: string; offset: number; delay: number; acti
   delay,
   active,
 }) => {
+  const appActive = useAppActive();
+  const running = active && appActive;
   const bob = useSharedValue(0);
   useEffect(() => {
-    if (!active) {
+    if (!running) {
       cancelAnimation(bob);
       bob.value = 0;
       return;
@@ -662,7 +664,7 @@ const FlameTongue: React.FC<{ color: string; offset: number; delay: number; acti
       clearTimeout(t);
       cancelAnimation(bob);
     };
-  }, [active, delay, bob]);
+  }, [running, delay, bob]);
 
   const anim = useAnimatedStyle(() => ({
     opacity: 0.72 + bob.value * 0.28,

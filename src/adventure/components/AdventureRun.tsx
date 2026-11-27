@@ -418,13 +418,7 @@ const AdventureRun: React.FC<Props> = ({
   const taunt = tauntDurationMs > 0 ? rawTaunt : undefined;
   const [taunting, setTaunting] = useState(!!taunt);
   useEffect(() => {
-    if (!taunt || tauntDurationMs <= 0) {
-      setTaunting(false);
-      return;
-    }
-    setTaunting(true);
-    const t = setTimeout(() => setTaunting(false), tauntDurationMs);
-    return () => clearTimeout(t);
+    setTaunting(Boolean(taunt && tauntDurationMs > 0));
   }, [run.wave, taunt, tauntDurationMs, attemptKey]);
 
   // If the player starts picking right away, cede the stage to live guidance at once
@@ -443,11 +437,22 @@ const AdventureRun: React.FC<Props> = ({
       return;
     }
     openingBellFiredRef.current = false;
-    const t = setTimeout(() => setOpening(false), 1100);
-    return () => {
-      clearTimeout(t);
-    };
+    setOpening(true);
   }, [isRetry, attemptKey]);
+
+  // Pause opening & foe-taunt dismiss timers whenever backgrounded or paused so zero
+  // React re-renders or StageBubble animations fire in a hidden tab.
+  useEffect(() => {
+    if (!taunting || !taunt || tauntDurationMs <= 0 || !appActive || paused) return;
+    const t = setTimeout(() => setTaunting(false), tauntDurationMs);
+    return () => clearTimeout(t);
+  }, [taunting, taunt, tauntDurationMs, appActive, paused]);
+
+  useEffect(() => {
+    if (!opening || isRetry || !appActive || paused) return;
+    const t = setTimeout(() => setOpening(false), 1100);
+    return () => clearTimeout(t);
+  }, [opening, isRetry, appActive, paused]);
 
   const openingBoardRect = anchors.rect('board');
   const hasOpeningBoardRect = Boolean(openingBoardRect);
@@ -1503,7 +1508,7 @@ const AdventureRun: React.FC<Props> = ({
     coachKind !== 'rescue';
 
   // [OB-15] Visibility-gated remark & foe-bark timers so compact-phone cascades never starve passing quips!
-  const remarkVisible = remark !== null && coachText === remark && !ended && !halted && !holdTransientBubble && (isWide || !foeTalking);
+  const remarkVisible = appActive && remark !== null && coachText === remark && !ended && !halted && !holdTransientBubble && (isWide || !foeTalking);
   useEffect(() => {
     if (!remarkVisible || !remark) return;
     const text = remark;
@@ -1511,7 +1516,7 @@ const AdventureRun: React.FC<Props> = ({
     return () => clearTimeout(t);
   }, [remarkVisible, remark]);
 
-  const foeBarkVisible = foeBark !== null && !(taunting && taunt) && !ended && !halted && !explaining && !(compactStage && (fx.busy || fx.beats.length > 0));
+  const foeBarkVisible = appActive && foeBark !== null && !(taunting && taunt) && !ended && !halted && !explaining && !(compactStage && (fx.busy || fx.beats.length > 0));
   useEffect(() => {
     if (!foeBarkVisible || !foeBark) return;
     const text = foeBark;
@@ -2780,6 +2785,7 @@ const PowerDeltaBadge: React.FC<{ text: string; animate: boolean }> = ({ text, a
  * (zero per-frame Yoga/CSS layout `width` recalculation). A practice dummy's bar reads ∞.
  */
 const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, max, endless }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const pct = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
   const fill = useSharedValue(pct);
@@ -2791,7 +2797,7 @@ const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, m
     const prevTarget = trailTargetRef.current;
     trailTargetRef.current = pct;
 
-    if (reducedMotion) {
+    if (!appActive || reducedMotion) {
       if (trailTimerRef.current) {
         clearTimeout(trailTimerRef.current);
         trailTimerRef.current = null;
@@ -2821,7 +2827,7 @@ const HpBar: React.FC<{ hp: number; max: number; endless?: boolean }> = ({ hp, m
     } else {
       // Trail catch-up is already scheduled; when it fires it will read the latest trailTargetRef.current
     }
-  }, [pct, reducedMotion, fill, trail]);
+  }, [pct, appActive, reducedMotion, fill, trail]);
 
   useEffect(() => () => {
     if (trailTimerRef.current) {
@@ -2999,7 +3005,11 @@ const EvolutionGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ activ
   useEffect(() => {
     cancelAnimation(o);
     if (!shouldPulse) {
-      o.value = withTiming(0.32, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS });
+      if (!appActive) {
+        o.value = 0.32;
+      } else {
+        o.value = withTiming(0.32, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS });
+      }
       return () => cancelAnimation(o);
     }
     o.value = withSequence(
@@ -3007,7 +3017,7 @@ const EvolutionGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ activ
       withRepeat(withTiming(0.54, { duration: 680, easing: EASE.drift }), -1, true)
     );
     return () => cancelAnimation(o);
-  }, [shouldPulse, o]);
+  }, [shouldPulse, appActive, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View testID="evolution-glow" pointerEvents="none" style={[st.glow, style]} />;
 };
@@ -3130,7 +3140,11 @@ const SurgeGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ active, e
   useEffect(() => {
     cancelAnimation(o);
     if (!shouldPulse) {
-      o.value = withTiming(0.28, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS });
+      if (!appActive) {
+        o.value = 0.28;
+      } else {
+        o.value = withTiming(0.28, { duration: ACCESSIBLE.fadeMs, easing: EASE.ui, ...STAYS });
+      }
       return () => cancelAnimation(o);
     }
     o.value = withSequence(
@@ -3138,7 +3152,7 @@ const SurgeGlow: React.FC<{ active: boolean; effects?: boolean }> = ({ active, e
       withRepeat(withTiming(0.48, { duration: 540, easing: EASE.drift }), -1, true)
     );
     return () => cancelAnimation(o);
-  }, [shouldPulse, o]);
+  }, [shouldPulse, appActive, o]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
   return <Animated.View testID="surge-glow" pointerEvents="none" style={[st.glow, { backgroundColor: TONE.surge }, style]} />;
 };

@@ -285,13 +285,22 @@ export const PopIn: React.FC<{
   onExited?: () => void;
   style?: StyleProp<ViewStyle>;
 }> = ({ children, delay = 0, visible = true, onExited, style }) => {
+  const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
   const s = useSharedValue(
-    visible ? (reducedMotion ? 1 : MODAL_MOTION.popInFromScale) : MODAL_MOTION.popOutToScale
+    visible ? (!appActive || reducedMotion ? 1 : MODAL_MOTION.popInFromScale) : MODAL_MOTION.popOutToScale
   );
-  const o = useSharedValue(0);
+  const o = useSharedValue(!appActive && visible ? 1 : 0);
 
   useEffect(() => {
+    if (!appActive) {
+      cancelAnimation(s);
+      cancelAnimation(o);
+      s.value = 1;
+      o.value = visible ? 1 : 0;
+      if (!visible && onExited) onExited();
+      return;
+    }
     if (visible) {
       if (reducedMotion) {
         s.value = 1;
@@ -324,7 +333,7 @@ export const PopIn: React.FC<{
       const timer = setTimeout(onExited, outDur);
       return () => clearTimeout(timer);
     }
-  }, [visible, delay, reducedMotion, onExited, s, o]);
+  }, [visible, delay, appActive, reducedMotion, onExited, s, o]);
 
   useEffect(() => () => {
     cancelAnimation(s);
