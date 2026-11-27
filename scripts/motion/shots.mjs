@@ -40,10 +40,11 @@ import board from './shots/board.mjs';
 import creatures from './shots/creatures.mjs';
 import fight from './shots/fight.mjs';
 import fx from './shots/fx.mjs';
+import pr from './shots/pr.mjs';
 import results from './shots/results.mjs';
 import screens from './shots/screens.mjs';
 
-const AREAS = { fx, fight, board, creatures, results, screens };
+const AREAS = { fx, fight, board, creatures, results, screens, pr };
 const SHOTS = {};
 for (const [area, shots] of Object.entries(AREAS)) {
   for (const [name, shot] of Object.entries(shots)) {

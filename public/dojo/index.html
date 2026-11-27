@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NShapes DOJO — Pattern-Matching Roguelike</title>
+  <meta
+    name="description"
+    content="Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike."
+  />
+
+  <!-- Open Graph & Social Preview -->
+  <meta property="og:title" content="NShapes — Pattern-Matching Roguelike" />
+  <meta
+    property="og:description"
+    content="Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike."
+  />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://nathanbwaters.github.io/nshapes/dojo/" />
+  <meta property="og:image" content="https://nathanbwaters.github.io/nshapes/og-hero.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="NShapes — Pattern-Matching Roguelike" />
+  <meta
+    name="twitter:description"
+    content="Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike."
+  />
+  <meta name="twitter:image" content="https://nathanbwaters.github.io/nshapes/og-hero.png" />
+  <meta name="theme-color" content="#F4EFE6" />
+
+  <link rel="icon" type="image/png" href="../icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="../icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Top Navigation -->
+  <header class="site-nav">
+    <div class="container nav-inner">
+      <a class="brand" href="./" aria-label="NShapes DOJO Home">
+        <svg class="brand-emblem" viewBox="0 0 64 64" width="34" height="34" aria-hidden="true">
+          <rect x="3" y="3" width="58" height="58" rx="14" fill="#FAF7F0" stroke="#2C2C2C" stroke-width="4" />
+          <polygon points="32,10 43,30 21,30" fill="#007ED9" stroke="#007ED9" stroke-width="1.5" stroke-linejoin="round" />
+          <circle cx="20" cy="44" r="9.5" fill="#940E65" />
+          <g transform="translate(34 32) scale(0.75)">
+            <polygon points="12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2" fill="#DF5A00" stroke="#DF5A00" stroke-width="1.4" stroke-linejoin="round" />
+          </g>
+        </svg>
+        <span class="brand-text">NSHAPES <span class="brand-tag">DOJO</span></span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#how-to-play">How to Play</a>
+        <a href="#critters">Critters</a>
+        <a href="#combo-spotlight">Combos</a>
+        <a href="https://discord.gg/JFkUmp54Sp" target="_blank" rel="noopener noreferrer">Discord</a>
+        <a class="btn btn-primary btn-sm" href="../">Play Free</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <div class="eyebrow">PLAYABLE IN BROWSER · ZERO INSTALL</div>
+          <h1>NSHAPES</h1>
+          <p class="lead">
+            Spot 3-card Sets to fire explosive combos, parry boss attacks, and build screen-clearing critter loadouts in a fast pattern-matching roguelike.
+          </p>
+          <div class="hero-cta">
+            <a class="btn btn-primary btn-lg" href="../">
+              <span>Play Free in Browser</span>
+              <span class="btn-arrow" aria-hidden="true">▶</span>
+            </a>
+            <a class="btn btn-discord btn-lg" href="https://discord.gg/JFkUmp54Sp" target="_blank" rel="noopener noreferrer">
+              Join Discord
+            </a>
+          </div>
+          <ul class="proof-pills" aria-label="Game highlights">
+            <li>59 Campaign Levels</li>
+            <li>64 Armory Weapons</li>
+            <li>208 Evolutions</li>
+            <li>Colorblind-Safe Palette</li>
+            <li>Works Offline</li>
+          </ul>
+        </div>
+
+        <figure class="hero-art">
+          <img
+            src="../og-hero.png"
+            width="1200"
+            height="630"
+            alt="NShapes combat key art showing Orange Tabby cheering beside a glowing starburst of Circle, Triangle, and Bolt cards"
+          />
+          <figcaption class="hero-caption">
+            Match <strong>Circles, Triangles &amp; Bolts</strong> in <strong>Orange, Blue &amp; Pink</strong> to ignite weapon chains.
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 3 Visual One-Liner Cards -->
+    <section id="how-to-play" class="section">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-kicker">LEARN IN 10 SECONDS</span>
+          <h2>How NShapes Plays</h2>
+          <p>Classic SET pattern-spotting fused with real-time roguelike weapons, parries, and evolutions.</p>
+        </div>
+
+        <div class="pillar-grid">
+          <!-- Pillar 1: Spot a 3-Card Set -->
+          <article class="pillar-card">
+            <div class="pillar-step">1</div>
+            <div class="diagram-box" aria-label="Three cards forming an all-different Set: 1 Orange Outlined Circle, 2 Blue Hatched Triangles, and 3 Pink Solid Bolts">
+              <svg viewBox="0 0 320 156" width="100%" height="156" role="img">
+                <defs>
+                  <pattern id="dojoBlueHatch" patternUnits="userSpaceOnUse" width="5" height="5" patternTransform="rotate(45)">
+                    <rect x="0" y="0" width="5" height="2.5" fill="#007ED9" />
+                  </pattern>
+                </defs>
+                <!-- Card 1: 1 Orange Outlined Circle -->
+                <g transform="translate(14 14)">
+                  <rect width="84" height="114" rx="12" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="3.2" />
+                  <circle cx="42" cy="57" r="22" fill="none" stroke="#DF5A00" stroke-width="5.5" />
+                  <text x="42" y="132" text-anchor="middle" font-size="11" font-weight="800" fill="#DF5A00">1 · CIRCLE</text>
+                </g>
+                <!-- Card 2: 2 Blue Hatched Triangles -->
+                <g transform="translate(118 14)">
+                  <rect width="84" height="114" rx="12" fill="#E2ECF7" stroke="#2C2C2C" stroke-width="3.2" />
+                  <g transform="translate(26 15) scale(1.35)">
+                    <polygon points="12,2.2 22,26.8 2,26.8" fill="url(#dojoBlueHatch)" stroke="#007ED9" stroke-width="2" stroke-linejoin="round" />
+                  </g>
+                  <g transform="translate(26 62) scale(1.35)">
+                    <polygon points="12,2.2 22,26.8 2,26.8" fill="url(#dojoBlueHatch)" stroke="#007ED9" stroke-width="2" stroke-linejoin="round" />
+                  </g>
+                  <text x="42" y="132" text-anchor="middle" font-size="11" font-weight="800" fill="#007ED9">2 · TRIANGLES</text>
+                </g>
+                <!-- Card 3: 3 Pink Solid Bolts -->
+                <g transform="translate(222 14)">
+                  <rect width="84" height="114" rx="12" fill="#FFFFFF" stroke="#FFDE00" stroke-width="4" />
+                  <rect width="84" height="114" rx="12" fill="none" stroke="#2C2C2C" stroke-width="2.6" />
+                  <g transform="translate(6 40) scale(1.05)">
+                    <polygon points="12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2" fill="#940E65" stroke="#940E65" stroke-width="1.4" stroke-linejoin="round" />
+                  </g>
+                  <g transform="translate(30 40) scale(1.05)">
+                    <polygon points="12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2" fill="#940E65" stroke="#940E65" stroke-width="1.4" stroke-linejoin="round" />
+                  </g>
+                  <g transform="translate(54 40) scale(1.05)">
+                    <polygon points="12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2" fill="#940E65" stroke="#940E65" stroke-width="1.4" stroke-linejoin="round" />
+                  </g>
+                  <text x="42" y="132" text-anchor="middle" font-size="11" font-weight="800" fill="#940E65">3 · BOLTS</text>
+                </g>
+              </svg>
+            </div>
+            <h3>1. Spot a 3-Card Set</h3>
+            <p>
+              Pick 3 cards where every trait — <strong>Shape, Color, Count, Shading</strong> — is all the same or all different. Instant Rainbow Sets deal double punch.
+            </p>
+          </article>
+
+          <!-- Pillar 2: Fire Explosive Weapons -->
+          <article class="pillar-card">
+            <div class="pillar-step">2</div>
+            <div class="diagram-box" aria-label="Diagram of Blast Powder explosions, Prismatic Ray laser beams, and Echo Stone repeats firing across the board">
+              <svg viewBox="0 0 320 156" width="100%" height="156" role="img">
+                <!-- Mini 3x3 board -->
+                <g transform="translate(18 16)">
+                  <rect x="0" y="0" width="44" height="34" rx="6" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="2.2" />
+                  <rect x="52" y="0" width="44" height="34" rx="6" fill="#FFDE00" stroke="#DF5A00" stroke-width="2.6" />
+                  <rect x="104" y="0" width="44" height="34" rx="6" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="2.2" />
+
+                  <rect x="0" y="42" width="44" height="34" rx="6" fill="#E2ECF7" stroke="#007ED9" stroke-width="2.6" />
+                  <rect x="52" y="42" width="44" height="34" rx="6" fill="#FF9538" stroke="#2C2C2C" stroke-width="2.6" />
+                  <rect x="104" y="42" width="44" height="34" rx="6" fill="#E2ECF7" stroke="#007ED9" stroke-width="2.6" />
+
+                  <rect x="0" y="84" width="44" height="34" rx="6" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="2.2" />
+                  <rect x="52" y="84" width="44" height="34" rx="6" fill="#FFDE00" stroke="#940E65" stroke-width="2.6" />
+                  <rect x="104" y="84" width="44" height="34" rx="6" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="2.2" />
+
+                  <!-- Prismatic Ray row laser beam -->
+                  <rect x="-4" y="55" width="156" height="8" rx="4" fill="#007ED9" opacity="0.88" />
+                  <rect x="-4" y="57.5" width="156" height="3" rx="1.5" fill="#FFFFFF" />
+                  <!-- Blast Powder burst -->
+                  <polygon points="74,34 80,48 95,49 83,59 88,74 74,65 60,74 65,59 53,49 68,48" fill="#FFDE00" stroke="#2C2C2C" stroke-width="2.2" stroke-linejoin="round" />
+                  <!-- Tiny shapes on remaining cards -->
+                  <circle cx="22" cy="17" r="7" fill="#940E65" />
+                  <polygon points="126,9 133,24 119,24" fill="#007ED9" />
+                  <polygon points="22,94 28,94 23,102 28,102 21,111 16,111 20,104 15,104" fill="#DF5A00" />
+                </g>
+
+                <!-- Weapon Callout Stack -->
+                <g transform="translate(182 18)">
+                  <rect x="0" y="0" width="122" height="32" rx="8" fill="#FFF7ED" stroke="#DF5A00" stroke-width="2.4" />
+                  <text x="12" y="20" font-size="12" font-weight="900" fill="#2C2C2C">Blast Powder</text>
+
+                  <rect x="0" y="42" width="122" height="32" rx="8" fill="#EBF6FF" stroke="#007ED9" stroke-width="2.4" />
+                  <text x="12" y="62" font-size="12" font-weight="900" fill="#2C2C2C">Prismatic Ray</text>
+
+                  <rect x="0" y="84" width="122" height="32" rx="8" fill="#FDF2F8" stroke="#940E65" stroke-width="2.4" />
+                  <text x="12" y="104" font-size="12" font-weight="900" fill="#2C2C2C">Echo Stone</text>
+                </g>
+              </svg>
+            </div>
+            <h3>2. Fire Explosive Weapons</h3>
+            <p>
+              Every valid Set fires your equipped belt — chaining <strong>Blast Powder</strong> explosions, <strong>Prismatic Ray</strong> beams, and <strong>Echo Stone</strong> repeats as <code>POWER ×N</code> climbs.
+            </p>
+          </article>
+
+          <!-- Pillar 3: Parry & Evolve -->
+          <article class="pillar-card">
+            <div class="pillar-step">3</div>
+            <div class="diagram-box" aria-label="Diagram of an All Orange Counter-Parry shattering a boss wind-up and triggering Phoenix Pyre Evolution">
+              <svg viewBox="0 0 320 156" width="100%" height="156" role="img">
+                <!-- Boss windup bar -->
+                <rect x="16" y="16" width="288" height="34" rx="9" fill="#2C2C2C" />
+                <rect x="20" y="20" width="206" height="26" rx="6" fill="#DF5A00" />
+                <rect x="226" y="20" width="74" height="26" rx="6" fill="#FFDE00" />
+                <text x="116" y="37" text-anchor="middle" font-size="12" font-weight="900" fill="#FFFFFF" letter-spacing="0.8">COUNTER: ALL ORANGE</text>
+                <text x="263" y="37" text-anchor="middle" font-size="11" font-weight="900" fill="#2C2C2C">GOLD</text>
+
+                <!-- 3 Orange shapes snapping the parry -->
+                <g transform="translate(26 62)">
+                  <rect x="0" y="0" width="46" height="44" rx="8" fill="#FFFFFF" stroke="#DF5A00" stroke-width="2.6" />
+                  <circle cx="23" cy="22" r="11" fill="#DF5A00" />
+
+                  <rect x="54" y="0" width="46" height="44" rx="8" fill="#FFFFFF" stroke="#DF5A00" stroke-width="2.6" />
+                  <polygon points="77,10 88,33 66,33" fill="#DF5A00" stroke="#DF5A00" stroke-width="1.5" stroke-linejoin="round" />
+
+                  <rect x="108" y="0" width="46" height="44" rx="8" fill="#FFFFFF" stroke="#DF5A00" stroke-width="2.6" />
+                  <g transform="translate(120 8) scale(0.92)">
+                    <polygon points="12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2" fill="#DF5A00" />
+                  </g>
+                </g>
+
+                <!-- Perfect Parry + Evolution badges -->
+                <g transform="translate(194 62)">
+                  <rect x="0" y="0" width="110" height="44" rx="10" fill="#FFDE00" stroke="#2C2C2C" stroke-width="2.6" />
+                  <text x="55" y="20" text-anchor="middle" font-size="11" font-weight="900" fill="#2C2C2C">PERFECT PARRY</text>
+                  <text x="55" y="36" text-anchor="middle" font-size="12" font-weight="900" fill="#DF5A00">2× STAGGER</text>
+                </g>
+
+                <!-- Phoenix Pyre bar -->
+                <rect x="16" y="116" width="288" height="28" rx="8" fill="#16AA98" stroke="#2C2C2C" stroke-width="2.4" />
+                <text x="160" y="135" text-anchor="middle" font-size="12.5" font-weight="900" fill="#FFFFFF" letter-spacing="0.6">★ EVOLUTION: PHOENIX PYRE (3×2 BLAST + HEAL)</text>
+              </svg>
+            </div>
+            <h3>3. Parry &amp; Evolve</h3>
+            <p>
+              Shatter boss attacks in the golden final window for <strong>2× Stagger</strong>, then match a Catalyst to unleash <strong>208 bespoke Evolutions</strong> like <em>Phoenix Pyre</em>.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Meet the 6 Critters -->
+    <section id="critters" class="section section-alt">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-kicker">6 PLAYABLE FIGHTERS</span>
+          <h2>Meet the 6 Critters</h2>
+          <p>Rescue woodland allies across 5 worlds — each brings two signature passives and a dedicated star skill tree.</p>
+        </div>
+
+        <div class="critter-grid">
+          <!-- 1. Orange Tabby -->
+          <article class="critter-card">
+            <div class="critter-portrait portrait-orange">
+              <svg viewBox="0 0 100 100" width="84" height="84" aria-hidden="true">
+                <path d="M 31 58 C 25 69, 26 86, 36 89 L 64 89 C 74 86, 75 69, 69 58 Z" fill="#FF9538" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <ellipse cx="50" cy="76" rx="12" ry="10" fill="#FFF7ED" />
+                <path d="M 34 61 Q 50 67 66 61" stroke="#16AA98" stroke-width="5" stroke-linecap="round" fill="none" />
+                <circle cx="50" cy="66.5" r="4.2" fill="#FFDE00" stroke="#2C2C2C" stroke-width="2.2" />
+                <path d="M 24 35 L 20 12 L 41 25 Z" fill="#FF9538" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <polygon points="25,31 23,17 36,25" fill="#FF7169" />
+                <path d="M 76 35 L 80 12 L 59 25 Z" fill="#FF9538" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <polygon points="75,31 77,17 64,25" fill="#FF7169" />
+                <path d="M 24 45 C 24 27, 36 22, 50 22 C 64 22, 76 27, 76 45 C 77 56, 65 63, 50 63 C 35 63, 23 56, 24 45 Z" fill="#FF9538" stroke="#2C2C2C" stroke-width="3.3" />
+                <path d="M 43 24 L 45 31 M 50 23 L 50 32 M 57 24 L 55 31" stroke="#C2410C" stroke-width="2.8" stroke-linecap="round" />
+                <ellipse cx="50" cy="52.5" rx="12" ry="7.5" fill="#FFF7ED" />
+                <circle cx="38.5" cy="42.5" r="4.5" fill="#2C2C2C" />
+                <circle cx="39.8" cy="41.2" r="1.5" fill="#FFFFFF" />
+                <circle cx="61.5" cy="42.5" r="4.5" fill="#2C2C2C" />
+                <circle cx="62.8" cy="41.2" r="1.5" fill="#FFFFFF" />
+                <polygon points="46.8,48.5 53.2,48.5 50,52.2" fill="#FF7169" stroke="#2C2C2C" stroke-width="1.6" />
+                <path d="M 43.8 53.8 Q 47 57.5 50 53.5 Q 53 57.5 56.2 53.8" stroke="#2C2C2C" stroke-width="2.4" stroke-linecap="round" fill="none" />
+              </svg>
+            </div>
+            <span class="critter-role">Scrappy Brawler</span>
+            <h3>Orange Tabby</h3>
+            <p>Hits harder every time hearts drop, starts every Wave 1 with a Pounce Shield, and shrugs off defeat with Nine Lives.</p>
+          </article>
+
+          <!-- 2. Sly Fox -->
+          <article class="critter-card">
+            <div class="critter-portrait portrait-fox">
+              <svg viewBox="0 0 100 100" width="84" height="84" aria-hidden="true">
+                <path d="M 33 57 C 28 69, 29 85, 37 89 L 63 89 C 71 85, 72 69, 67 57 Z" fill="#EA580C" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <path d="M 39 59 L 50 61 L 61 59 L 58 72 L 50 76 L 42 72 Z" fill="#FFFBF5" stroke="#2C2C2C" stroke-width="2" />
+                <path d="M 23 34 L 15 9 L 40 24 Z" fill="#EA580C" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <polygon points="15,9 21,21 26,16" fill="#2C2C2C" />
+                <path d="M 77 34 L 85 9 L 60 24 Z" fill="#EA580C" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <polygon points="85,9 79,21 74,16" fill="#2C2C2C" />
+                <path d="M 50 21 C 64 21, 74 28, 76 40 L 84 46 L 75 53 L 50 63 L 25 53 L 16 46 L 24 40 C 26 28, 36 21, 50 21 Z" fill="#FF7A1A" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <path d="M 18 46.5 Q 34 45 45 53 L 50 61.5 L 25 52.5 Z" fill="#FFFBF5" />
+                <path d="M 82 46.5 Q 66 45 55 53 L 50 61.5 L 75 52.5 Z" fill="#FFFBF5" />
+                <circle cx="38" cy="42" r="4.4" fill="#2C2C2C" />
+                <circle cx="39.3" cy="40.8" r="1.4" fill="#FFFFFF" />
+                <circle cx="62" cy="42" r="4.4" fill="#2C2C2C" />
+                <circle cx="63.3" cy="40.8" r="1.4" fill="#FFFFFF" />
+                <path d="M 57 35.5 L 67 33.5" stroke="#2C2C2C" stroke-width="2.5" stroke-linecap="round" />
+                <ellipse cx="50" cy="52.5" rx="3.8" ry="2.8" fill="#2C2C2C" />
+                <path d="M 45 56.5 Q 52 58.5 58.5 53.5" stroke="#2C2C2C" stroke-width="2.4" stroke-linecap="round" fill="none" />
+              </svg>
+            </div>
+            <span class="critter-role">Speed Combo</span>
+            <h3>Sly Fox</h3>
+            <p>Chains Sets inside 5 seconds to stack Combo speed, then cashes out a max Hot Streak for explosive double damage.</p>
+          </article>
+
+          <!-- 3. Badger -->
+          <article class="critter-card">
+            <div class="critter-portrait portrait-badger">
+              <svg viewBox="0 0 100 100" width="84" height="84" aria-hidden="true">
+                <path d="M 26 56 C 20 68, 22 86, 33 89 L 67 89 C 78 86, 80 68, 74 56 Z" fill="#334155" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <ellipse cx="50" cy="76" rx="15" ry="10" fill="#64748B" />
+                <polygon points="46,79 54,79 53,85 47,85" fill="#FFDE00" stroke="#2C2C2C" stroke-width="1.8" />
+                <circle cx="27" cy="25" r="8.5" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="3.2" />
+                <circle cx="27" cy="25.5" r="4.5" fill="#334155" />
+                <circle cx="73" cy="25" r="8.5" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="3.2" />
+                <circle cx="73" cy="25.5" r="4.5" fill="#334155" />
+                <path d="M 50 21 C 66 21, 78 30, 79 47 C 80 57, 68 63, 50 63 C 32 63, 20 57, 21 47 C 22 30, 34 21, 50 21 Z" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="3.3" />
+                <path d="M 38 22 C 31 28, 29 44, 33 56 L 44 54 C 43 42, 43 29, 45 22 Z" fill="#2C2C2C" />
+                <path d="M 62 22 C 69 28, 71 44, 67 56 L 56 54 C 57 42, 57 29, 55 22 Z" fill="#2C2C2C" />
+                <circle cx="38" cy="42.5" r="3.6" fill="#FFFFFF" />
+                <circle cx="62" cy="42.5" r="3.6" fill="#FFFFFF" />
+                <ellipse cx="50" cy="50.5" rx="5.2" ry="3.5" fill="#2C2C2C" />
+                <path d="M 42.5 56.5 Q 50 58 57.5 55" stroke="#2C2C2C" stroke-width="2.5" stroke-linecap="round" fill="none" />
+                <polygon points="53.5,56 57,55.6 55.3,51.8" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="1.6" />
+              </svg>
+            </div>
+            <span class="critter-role">Bold Gambler</span>
+            <h3>Badger</h3>
+            <p>Turns risky misses into loaded Grudge ammo (first slip per wave is free), then detonates every Grudge on your next real Set.</p>
+          </article>
+
+          <!-- 4. Emperor Penguin -->
+          <article class="critter-card">
+            <div class="critter-portrait portrait-penguin">
+              <svg viewBox="0 0 100 100" width="84" height="84" aria-hidden="true">
+                <circle cx="50" cy="36" r="27" fill="none" stroke="#16AA98" stroke-width="2" stroke-dasharray="6 5" opacity="0.7" />
+                <path d="M 27 49 C 22 66, 25 86, 38 89 L 62 89 C 75 86, 78 66, 73 49 Z" fill="#1E293B" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <ellipse cx="50" cy="70" rx="16.5" ry="17" fill="#FFFFFF" />
+                <path d="M 35.5 62 C 37 52, 63 52, 64.5 62 C 60 67, 40 67, 35.5 62 Z" fill="#FBBF24" />
+                <polygon points="50,54 54,58.5 50,63 46,58.5" fill="#16AA98" stroke="#2C2C2C" stroke-width="2" />
+                <ellipse cx="50" cy="38" rx="21.5" ry="17.5" fill="#1E293B" stroke="#2C2C2C" stroke-width="3.3" />
+                <circle cx="39.5" cy="39.5" r="8.2" fill="#FFFFFF" />
+                <circle cx="60.5" cy="39.5" r="8.2" fill="#FFFFFF" />
+                <polygon points="37,23 39,12 45,18 50,9 55,18 61,12 63,23" fill="#FFDE00" stroke="#2C2C2C" stroke-width="2.6" stroke-linejoin="round" />
+                <circle cx="39.5" cy="39" r="4" fill="#2C2C2C" />
+                <circle cx="60.5" cy="39" r="4" fill="#2C2C2C" />
+                <polygon points="43,45.5 50,41.5 57,45.5 50,50.5" fill="#FF9538" stroke="#2C2C2C" stroke-width="2.4" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <span class="critter-role">Deliberate Sniper</span>
+            <h3>Emperor Penguin</h3>
+            <p>Charges Patience for massive methodical crits and freezes the battle clock solid whenever a Rainbow Strike lands.</p>
+          </article>
+
+          <!-- 5. Corgi -->
+          <article class="critter-card">
+            <div class="critter-portrait portrait-corgi">
+              <svg viewBox="0 0 100 100" width="84" height="84" aria-hidden="true">
+                <path d="M 29 58 C 23 68, 24 85, 34 89 L 66 89 C 76 85, 77 68, 71 58 Z" fill="#F59E0B" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <path d="M 35 60 C 31 67, 33 78, 41 81 C 45 84, 55 84, 59 81 C 67 78, 69 67, 65 60 Z" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="2.4" />
+                <path d="M 35 60 Q 50 65 65 60" stroke="#16AA98" stroke-width="4.5" stroke-linecap="round" fill="none" />
+                <path d="M 23 36 C 14 21, 16 7, 25 8 C 33 9, 39 20, 41 27 Z" fill="#F59E0B" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <path d="M 77 36 C 86 21, 84 7, 75 8 C 67 9, 61 20, 59 27 Z" fill="#F59E0B" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <path d="M 24 46 C 24 27, 35 22, 50 22 C 65 22, 76 27, 76 46 C 76 57, 65 63, 50 63 C 35 63, 24 57, 24 46 Z" fill="#F59E0B" stroke="#2C2C2C" stroke-width="3.3" />
+                <path d="M 50 24 C 53 30, 54 38, 57 45 C 63 47, 64 58, 50 60 C 36 58, 37 47, 43 45 C 46 38, 47 30, 50 24 Z" fill="#FFFFFF" />
+                <circle cx="37.5" cy="42.5" r="4.5" fill="#2C2C2C" />
+                <circle cx="62.5" cy="42.5" r="4.5" fill="#2C2C2C" />
+                <ellipse cx="50" cy="49" rx="4.6" ry="3.3" fill="#2C2C2C" />
+                <path d="M 46.8 55 C 46.8 61.5, 53.2 61.5, 53.2 55 Z" fill="#FF7169" stroke="#2C2C2C" stroke-width="2" />
+              </svg>
+            </div>
+            <span class="critter-role">Board Master</span>
+            <h3>Corgi</h3>
+            <p>Fetches empowered and golden cards straight onto the board, then tears across the table with Zoomies clears.</p>
+          </article>
+
+          <!-- 6. Pelican -->
+          <article class="critter-card">
+            <div class="critter-portrait portrait-pelican">
+              <svg viewBox="0 0 100 100" width="84" height="84" aria-hidden="true">
+                <path d="M 28 52 C 23 68, 26 85, 38 88 L 60 88 C 72 85, 74 68, 69 52 Z" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="3.3" stroke-linejoin="round" />
+                <path d="M 45 43 C 46 63, 79 65, 85 45 Z" fill="#FF9538" stroke="#2C2C2C" stroke-width="3.2" stroke-linejoin="round" />
+                <path d="M 38 22 C 31 11, 24 12, 29 21 C 23 16, 19 20, 28 26 Z" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="2.9" stroke-linejoin="round" />
+                <circle cx="42" cy="35" r="16.5" fill="#FFFFFF" stroke="#2C2C2C" stroke-width="3.3" />
+                <circle cx="35" cy="33.5" r="4" fill="#2C2C2C" />
+                <circle cx="49" cy="33.5" r="4" fill="#2C2C2C" />
+                <path d="M 45 40 L 87 41 C 90 41, 91 45, 87 46.5 L 45 45 Z" fill="#FFDE00" stroke="#2C2C2C" stroke-width="3" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <span class="critter-role">Relaxed &amp; Helpful</span>
+            <h3>Pelican</h3>
+            <p>Highlights hidden Sets with Keen Eye glows and scoops up bonus free Sets — cozy, rhythmic, and great for steady clears.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Combo of the Week & Modes -->
+    <section id="combo-spotlight" class="section">
+      <div class="container spotlight-grid">
+        <div class="spotlight-card">
+          <span class="section-kicker">COMBO OF THE WEEK</span>
+          <h2>Phoenix Pyre Cascade</h2>
+          <p>
+            Pair <strong>Blast Powder</strong> + <strong>Mending Charm</strong> to arm <em>Phoenix Pyre</em>. Match the glowing Catalyst and every 2nd Set heals <code>+1 ♥</code> while detonating a <code>3×2</code> board explosion — amplified by <strong>Prismatic Ray</strong> and <strong>Echo Stone</strong>.
+          </p>
+          <div class="combo-formula">
+            <span class="chip chip-orange">Blast Powder</span>
+            <span class="op">+</span>
+            <span class="chip chip-teal">Mending Charm</span>
+            <span class="op">=</span>
+            <span class="chip chip-yellow">★ Phoenix Pyre</span>
+          </div>
+          <p class="small-note">
+            Want to test your own loadout? Unlock the <strong>Training Lab</strong> in Camp or jump straight into a <strong>Daily Starfall Summit</strong> climb and share your seed in Discord!
+          </p>
+        </div>
+
+        <div class="modes-card">
+          <span class="section-kicker">THREE WAYS TO PLAY</span>
+          <ul class="mode-list">
+            <li>
+              <strong>Adventure Mode</strong>
+              <span>59 hand-crafted levels across 5 worlds, boss showdowns, secret branches, skill trees, and 208 evolutions.</span>
+            </li>
+            <li>
+              <strong>Starfall Summit</strong>
+              <span>Draft-as-you-climb roguelike runs with Ascension 0–20 and shareable UTC Daily Climbs.</span>
+            </li>
+            <li>
+              <strong>Free Play</strong>
+              <span>Jump straight into pure SET boards (2–5 traits) or the Daily 3-Minute Score Attack.</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Final Call to Action -->
+    <section class="cta-band">
+      <div class="container cta-inner">
+        <div>
+          <h2>Ready to spot your first Set?</h2>
+          <p>Opens instantly in any mobile or desktop browser — no signup, no ads, 100% offline-ready.</p>
+        </div>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-lg" href="../">
+            <span>Play Free in Browser</span>
+            <span class="btn-arrow" aria-hidden="true">▶</span>
+          </a>
+          <a class="btn btn-discord btn-lg" href="https://discord.gg/JFkUmp54Sp" target="_blank" rel="noopener noreferrer">
+            Join the NShapes Discord
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span>&copy; 2026 Nathan Waters &middot; NShapes</span>
+      <div class="footer-links">
+        <a href="../">Play on Web</a>
+        <a href="../support.html">Support &amp; FAQ</a>
+        <a href="../privacy.html">Privacy Policy</a>
+        <a href="https://discord.gg/JFkUmp54Sp" target="_blank" rel="noopener noreferrer">Discord</a>
+        <a href="https://github.com/NathanBWaters/nshapes" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
