@@ -19,9 +19,22 @@ import { ARCANA } from '@/adventure/data/arcana';
 import { ALL_ARMORY_WEAPON_IDS, charmWeapons, getArmoryWeapon } from '@/adventure/data/armory';
 import { startingLoadout, type Loadout } from '@/adventure/loadout';
 import type { RunOverrides } from '@/adventure/engine/run';
-import type { SpireEncounter, SpireRun } from '../types';
+import type { SpireCoopPartySize, SpireEncounter, SpireRun } from '../types';
 
 const A3: AttributeName[] = ['shape', 'color', 'number'];
+
+/** Authoritative 2P Co-Op Duo foe HP multiplier (1P stays 1.00× identical). */
+export const COOP_DUO_HP_MULTIPLIER = 1.75;
+
+export interface SpireEncounterToLevelOptions {
+  coopPartySize?: SpireCoopPartySize;
+}
+
+/** Scale a foe's HP for party size (1P is 100% identical; 2P scales by 1.75×). */
+export const scaleFoeHpForParty = (
+  hp: number,
+  coopPartySize: SpireCoopPartySize = 1
+): number => (coopPartySize === 2 ? Math.max(1, Math.round(hp * COOP_DUO_HP_MULTIPLIER)) : hp);
 
 /** All core combat features enabled inside Starfall Summit fights (no mid-fight wave shop/xp popups — progression lives on the Summit map!). */
 export const SPIRE_FIGHT_FEATURES: ReadonlySet<FeatureFlag> = new Set<FeatureFlag>([
@@ -172,35 +185,46 @@ export const clashesWithBelt = (
 };
 
 /** Convert a Summit encounter into a standard Adventure `LevelDef`. */
-export const spireEncounterToLevel = (run: SpireRun, encounter: SpireEncounter): LevelDef => ({
-  id: `spire-${run.act}-${run.floor}-${encounter.id}`,
-  biome: encounter.biome,
-  name: encounter.name,
-  introduces: 'timer',
-  rules: {
-    attributes: A3,
-    boardSize: encounter.boardSize,
-    timer: Math.max(45, encounter.timer),
-    hearts: run.maxHearts,
-    startingHints: run.startingHints,
-    startingGraces: run.startingGraces,
-    shadingSurge: encounter.shadingSurge,
-    ...(encounter.hazards ? { hazards: encounter.hazards } : {}),
-    ...(run.extraEvolutionDurationMs > 0 ? { extraEvolutionDurationMs: run.extraEvolutionDurationMs } : {}),
-    ...(run.extraEvolutionChargeBonus > 0 ? { extraEvolutionChargeBonus: run.extraEvolutionChargeBonus } : {}),
-  },
-  foes: encounter.foes,
-  challenge: { kind: 'noMistakes' },
-  coinMultiplier: 1 + run.act * 0.35,
-  difficulty: encounter.difficulty,
-  rewards: {
-    star1: { coins: 0 },
-    star2: { coins: encounter.coinReward },
-    star3: { coins: encounter.coinReward },
-  },
-  isBoss: encounter.kind === 'boss',
-  ...(encounter.kind === 'elite' ? { isElite: true } : {}),
-});
+export const spireEncounterToLevel = (
+  run: SpireRun,
+  encounter: SpireEncounter,
+  options?: SpireEncounterToLevelOptions
+): LevelDef => {
+  const partySize: SpireCoopPartySize = options?.coopPartySize ?? run.coopPartySize ?? 1;
+  const foes =
+    partySize === 2
+      ? encounter.foes.map(foe => ({ ...foe, hp: scaleFoeHpForParty(foe.hp, 2) }))
+      : encounter.foes;
+  return {
+    id: `spire-${run.act}-${run.floor}-${encounter.id}`,
+    biome: encounter.biome,
+    name: encounter.name,
+    introduces: 'timer',
+    rules: {
+      attributes: A3,
+      boardSize: encounter.boardSize,
+      timer: Math.max(45, encounter.timer),
+      hearts: run.maxHearts,
+      startingHints: run.startingHints,
+      startingGraces: run.startingGraces,
+      shadingSurge: encounter.shadingSurge,
+      ...(encounter.hazards ? { hazards: encounter.hazards } : {}),
+      ...(run.extraEvolutionDurationMs > 0 ? { extraEvolutionDurationMs: run.extraEvolutionDurationMs } : {}),
+      ...(run.extraEvolutionChargeBonus > 0 ? { extraEvolutionChargeBonus: run.extraEvolutionChargeBonus } : {}),
+    },
+    foes,
+    challenge: { kind: 'noMistakes' },
+    coinMultiplier: 1 + run.act * 0.35,
+    difficulty: encounter.difficulty,
+    rewards: {
+      star1: { coins: 0 },
+      star2: { coins: encounter.coinReward },
+      star3: { coins: encounter.coinReward },
+    },
+    isBoss: encounter.kind === 'boss',
+    ...(encounter.kind === 'elite' ? { isElite: true } : {}),
+  };
+};
 
 /** Build a virtual `AdventureSave` reflecting the Summit run's exact fighter, gear, equipped evolutions, skills, Arcana, and shared UPGRADES. */
 export const spireRunToVirtualSave = (
@@ -254,9 +278,13 @@ export const spireRunOverrides = (run: SpireRun): RunOverrides => ({
 });
 
 /** Compute the exact combat `Loadout` via Adventure's shared `startingLoadout`. */
-export const spireEncounterLoadout = (run: SpireRun, encounter: SpireEncounter): Loadout =>
+export const spireEncounterLoadout = (
+  run: SpireRun,
+  encounter: SpireEncounter,
+  options?: SpireEncounterToLevelOptions
+): Loadout =>
   startingLoadout(
-    spireEncounterToLevel(run, encounter),
+    spireEncounterToLevel(run, encounter, options),
     spireRunToVirtualSave(run),
     new Set(SPIRE_FIGHT_FEATURES),
     undefined,

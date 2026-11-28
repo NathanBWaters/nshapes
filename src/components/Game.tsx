@@ -35,6 +35,8 @@ interface GameProps {
   initialLevelId?: string;
   initialFighter?: CharacterName;
   initialAscension?: number;
+  initialCoopCode?: string;
+  initialCoopServer?: string;
 }
 
 type AppPhase = 'main_menu' | 'adventure' | 'spire' | 'prism' | 'free_play';
@@ -70,6 +72,8 @@ const Game: React.FC<GameProps> = ({
   initialLevelId,
   initialFighter,
   initialAscension,
+  initialCoopCode,
+  initialCoopServer,
 }) => {
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [resetRevision, setResetRevision] = useState(0);
@@ -89,14 +93,18 @@ const Game: React.FC<GameProps> = ({
     dailyDate?: string;
     fighter?: CharacterName;
     ascension?: number;
+    coopCode?: string;
+    coopServer?: string;
   } | null>(() =>
-    initialMode === 'summit'
+    initialMode === 'summit' || initialCoopCode
       ? {
           seed: initialNumericSeed,
           daily: initialDaily,
           dailyDate: initialDailyDate,
           fighter: initialFighter,
           ascension: initialAscension,
+          coopCode: initialCoopCode,
+          coopServer: initialCoopServer,
         }
       : null
   );
@@ -116,7 +124,9 @@ const Game: React.FC<GameProps> = ({
       ? { daily: true, dailyDate: initialDailyDate }
       : null
   );
-  const [phase, setPhase] = useState<AppPhase>(() => initialPhaseFor(initialMode));
+  const [phase, setPhase] = useState<AppPhase>(() =>
+    initialPhaseFor(initialMode ?? (initialCoopCode ? 'summit' : undefined))
+  );
   // Crisp vertical route transition (0px horizontal viewport drift even under heavy CI CPU throttling)
   const transition = useScreenTransition({ enterOnMount: false, axis: 'y', durationMs: MS.quick });
 
@@ -207,7 +217,7 @@ const Game: React.FC<GameProps> = ({
       case 'spire':
         return (
           <SpireMode
-            key={`spire-${resetRevision}-${summitLaunchParams?.seed ?? ''}-${summitLaunchParams?.daily ? '1' : '0'}`}
+            key={`spire-${resetRevision}-${summitLaunchParams?.seed ?? ''}-${summitLaunchParams?.daily ? '1' : '0'}-${summitLaunchParams?.coopCode ?? ''}`}
             onExit={() => {
               exitToMenu(() => setSummitLaunchParams(null));
             }}
@@ -217,6 +227,8 @@ const Game: React.FC<GameProps> = ({
             initialDailyDate={summitLaunchParams?.dailyDate}
             initialFighter={summitLaunchParams?.fighter}
             initialAscension={summitLaunchParams?.ascension}
+            initialCoopCode={summitLaunchParams?.coopCode}
+            initialCoopServer={summitLaunchParams?.coopServer}
           />
         );
 

@@ -435,6 +435,29 @@ export const buildFreePlayShareUrl = (options: {
   return `${base}/?mode=freeplay&daily=${encodeURIComponent(day)}`;
 };
 
+/** Normalize a 4-character alphanumeric Starfall Summit co-op room code to uppercase (returns undefined if invalid). */
+export const normalizeCoopRoomCode = (raw?: string | null): string | undefined => {
+  if (!raw || typeof raw !== 'string') return undefined;
+  const cleaned = raw.trim().toUpperCase();
+  return /^[A-Z0-9]{4}$/.test(cleaned) ? cleaned : undefined;
+};
+
+/** Build a shareable Starfall Summit 2P Co-Op invite URL (`?mode=summit&coop=FOX7[&coopServer=...]`). */
+export const buildSummitCoopShareUrl = (options: {
+  code: string;
+  baseUrl?: string;
+  coopServer?: string | null;
+}): string => {
+  const base = (options.baseUrl ?? DEFAULT_SHARE_BASE_URL).replace(/\/+$/, '');
+  const cleanCode = normalizeCoopRoomCode(options.code) ?? options.code.trim().toUpperCase();
+  const params: string[] = ['mode=summit', `coop=${encodeURIComponent(cleanCode)}`];
+  const server = options.coopServer?.trim();
+  if (server) {
+    params.push(`coopServer=${encodeURIComponent(server)}`);
+  }
+  return `${base}/?${params.join('&')}`;
+};
+
 export type ParsedModeParam = 'summit' | 'adventure' | 'freeplay' | 'prism';
 
 export interface ParsedShareUrlParams {
@@ -447,6 +470,8 @@ export interface ParsedShareUrlParams {
   fighter?: CharacterName;
   ascension?: number;
   deckId?: string;
+  coop?: string;
+  coopServer?: string;
 }
 
 const matchFighterName = (raw?: string): CharacterName | undefined => {
@@ -498,6 +523,8 @@ export const parseShareUrlParams = (urlOrSearch: string): ParsedShareUrlParams =
   const parsedAsc = rawAsc !== undefined && /^\d+$/.test(rawAsc.trim()) ? Number.parseInt(rawAsc.trim(), 10) : undefined;
   const ascension = parsedAsc !== undefined ? Math.max(0, Math.min(20, parsedAsc)) : undefined;
   const deckId = map.get('deck')?.trim() || undefined;
+  const coop = normalizeCoopRoomCode(map.get('coop'));
+  const coopServer = map.get('coopserver')?.trim() || undefined;
 
   return {
     ...(mode ? { mode } : {}),
@@ -509,6 +536,8 @@ export const parseShareUrlParams = (urlOrSearch: string): ParsedShareUrlParams =
     ...(fighter ? { fighter } : {}),
     ...(ascension !== undefined ? { ascension } : {}),
     ...(deckId ? { deckId } : {}),
+    ...(coop ? { coop } : {}),
+    ...(coopServer ? { coopServer } : {}),
   };
 };
 

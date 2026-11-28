@@ -6,7 +6,7 @@ import Game from "@/components/Game";
 import { COLORS } from "@/utils/colors";
 import { FIGHTERS } from "@/adventure/data/fighters";
 import { LEVELS } from "@/adventure/data/levels";
-import { isValidDateKey, parseNumericSeed } from "@/adventure/dailySeed";
+import { isValidDateKey, normalizeCoopRoomCode, parseNumericSeed } from "@/adventure/dailySeed";
 import { STARTER_DECK_BY_ID, normalizeSeed } from "@/prism";
 import type { StarterDeckId } from "@/prism";
 import type { CharacterName } from "@/types";
@@ -29,6 +29,9 @@ export default function Home() {
     level?: string;
     fighter?: string;
     asc?: string;
+    coop?: string;
+    coopServer?: string;
+    coopserver?: string;
   }>();
 
   const isAutoPlayer = firstParam(params.autoplayer) === 'true';
@@ -36,11 +39,16 @@ export default function Home() {
   const urlLabsEnabled = rawLabs === '1' || rawLabs === 'true';
   const labsEnabled = LabsStorage.isEnabled(urlLabsEnabled);
 
+  const initialCoopCode = normalizeCoopRoomCode(firstParam(params.coop));
+  const initialCoopServer = (
+    firstParam(params.coopServer) ?? firstParam(params.coopserver)
+  )?.trim() || undefined;
+
   const rawMode = firstParam(params.mode)?.toLowerCase();
   const initialMode =
     rawMode === 'prism' && labsEnabled
       ? ('prism' as const)
-      : rawMode === 'summit' || rawMode === 'spire'
+      : rawMode === 'summit' || rawMode === 'spire' || (!rawMode && Boolean(initialCoopCode))
         ? ('summit' as const)
         : rawMode === 'adventure'
           ? ('adventure' as const)
@@ -91,6 +99,8 @@ export default function Home() {
           initialLevelId={initialLevelId}
           initialFighter={initialFighter}
           initialAscension={initialAscension}
+          initialCoopCode={initialCoopCode}
+          initialCoopServer={initialCoopServer}
         />
       </View>
     </SafeAreaView>

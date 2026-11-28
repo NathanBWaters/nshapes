@@ -42,6 +42,10 @@ import {
   spireRunOverrides,
   spireRunToVirtualSave,
 } from '../engine/bridge';
+import { randomSeed } from '@/adventure/engine/rng';
+import { MAX_ASCENSION } from '../data/ascensions';
+import { useCoopSummit } from '../hooks/useCoopSummit';
+import type { CoopCombatSession } from '../hooks/coopContracts';
 import {
   campfireForge,
   campfireMeditate,
@@ -95,6 +99,7 @@ import {
 import type { SpireLastFightSnapshot, SpireMeta, SpireRun } from '../types';
 import SpireSetup from './SpireSetup';
 import SpireHeader from './SpireHeader';
+import SpireCoopBanner from './SpireCoopBanner';
 import SpireMap from './SpireMap';
 import SpireEncounterPreview from './SpireEncounterPreview';
 import SpireRewardScreen from './SpireRewardScreen';
@@ -111,13 +116,19 @@ interface Props {
   autoPlayer?: boolean;
   /** Dev helper: skip setup and immediately open a fresh run */
   initialRun?: SpireRun | null;
-  /** Optional URL deep-link parameters (`?mode=summit&seed=<N>&daily=YYYY-MM-DD&fighter=...&asc=...`) */
+  /** Optional URL deep-link parameters (`?mode=summit&seed=<N>&daily=YYYY-MM-DD&fighter=...&asc=...&coop=FOX7`) */
   initialSeed?: number;
   initialDaily?: boolean;
   initialDailyDate?: string;
   initialFighter?: CharacterName;
   initialAscension?: number;
+  initialCoopCode?: string;
+  initialCoopServer?: string;
 }
+
+const AdventureRunWithCoop = AdventureRun as React.ComponentType<
+  React.ComponentProps<typeof AdventureRun> & { coopSession?: CoopCombatSession }
+>;
 
 const SpireMode: React.FC<Props> = ({
   onExit,
@@ -128,6 +139,8 @@ const SpireMode: React.FC<Props> = ({
   initialDailyDate,
   initialFighter,
   initialAscension,
+  initialCoopCode,
+  initialCoopServer,
 }) => {
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
@@ -142,7 +155,19 @@ const SpireMode: React.FC<Props> = ({
   });
   const [meta, setMeta] = useState<SpireMeta>(loadSpireMeta);
   const [savedRun, setSavedRun] = useState<SpireRun | null>(() => initialRun ?? loadSpireRun());
+  const [coopRun, setCoopRun] = useState<SpireRun | null>(null);
   const [inSetup, setInSetup] = useState<boolean>(() => !initialRun);
+  const [coopFighter, setCoopFighter] = useState<CharacterName>(
+    initialFighter ?? savedRun?.fighter ?? 'Orange Tabby'
+  );
+  const [coopAscension, setCoopAscension] = useState<number>(() =>
+    typeof initialAscension === 'number' && Number.isFinite(initialAscension)
+      ? Math.max(0, Math.min(MAX_ASCENSION, Math.floor(initialAscension)))
+      : 0
+  );
+  const [coopSeed] = useState<number>(() =>
+    typeof initialSeed === 'number' && initialSeed > 0 ? initialSeed : randomSeed()
+  );
   const [buildOpen, setBuildOpen] = useState(false);
   const [lastFight, setLastFight] = useState<SpireLastFightSnapshot | null>(null);
   const [lastFightFeedback, setLastFightFeedback] = useState<{
@@ -153,12 +178,60 @@ const SpireMode: React.FC<Props> = ({
   const screenTx = useSpireScreenTransition({ enterOnMount: false });
   const roomTx = useSpireScreenTransition({ enterOnMount: false });
 
-  const run = savedRun;
+  const run = coopRun ?? savedRun;
 
   const updateRun = useCallback((next: SpireRun | null) => {
+    if (next?.coopPartySize === 2 || (next === null && coopRun !== null)) {
+      setCoopRun(next);
+      return;
+    }
     setSavedRun(next);
     writeSpireRun(next);
-  }, []);
+  }, [coopRun]);
+
+  const handleSetCoopRun = useCallback(
+    (next: SpireRun | null, opts?: { enterRun?: boolean; exitToSetup?: boolean }) => {
+      if (next?.phase === 'victory') {
+        setMeta(recordSpireRunEnd(next, true));
+      }
+      if (opts?.enterRun) {
+        screenTx.go(() => {
+          setLastFight(null);
+          setLastFightFeedback(null);
+          setCoopRun(next);
+          setInSetup(false);
+        }, 'ascend');
+        return;
+      }
+      if (opts?.exitToSetup) {
+        screenTx.go(() => {
+          setCoopRun(null);
+          setInSetup(true);
+        }, 'descend');
+        return;
+      }
+      setCoopRun(next);
+    },
+    [screenTx]
+  );
+
+  const coop = useCoopSummit({
+    initialCoopCode,
+    initialCoopServer,
+    selectedFighter: coopFighter,
+    ascension: coopAscension,
+    seed: coopSeed,
+    run: coopRun,
+    inSetup,
+    onSetCoopRun: handleSetCoopRun,
+  });
+
+  // Keep partner's top banner hearts synced whenever local co-op hearts change outside combat
+  useEffect(() => {
+    if (coop.isCoopClimbActive && coopRun) {
+      coop.syncHearts(coopRun.hearts, coopRun.maxHearts);
+    }
+  }, [coop.isCoopClimbActive, coopRun?.hearts, coopRun?.maxHearts, coop.syncHearts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useAndroidBackHandler(() => {
     if (buildOpen) {
@@ -251,18 +324,27 @@ const SpireMode: React.FC<Props> = ({
     options?: CreateSpireRunOptions
   ) => {
     commitSpireFight('spire_new_run');
+    if (coopRun) coop.leaveRoom();
     const fresh = createSpireRun(fighter, ascension, seed, options);
     screenTx.go(() => {
       setLastFight(null);
       setLastFightFeedback(null);
-      updateRun(fresh);
+      setCoopRun(null);
+      setSavedRun(fresh);
+      writeSpireRun(fresh);
       setInSetup(false);
     }, 'ascend');
-  }, [screenTx, updateRun]);
+  }, [coop, coopRun, screenTx]);
 
   const handleResume = useCallback(() => {
-    if (savedRun) screenTx.go(() => setInSetup(false), 'ascend');
-  }, [savedRun, screenTx]);
+    if (savedRun) {
+      if (coopRun) coop.leaveRoom();
+      screenTx.go(() => {
+        setCoopRun(null);
+        setInSetup(false);
+      }, 'ascend');
+    }
+  }, [coop, coopRun, savedRun, screenTx]);
 
   const handleAbandonActive = useCallback(() => {
     commitSpireFight('spire_abandon');
@@ -285,7 +367,10 @@ const SpireMode: React.FC<Props> = ({
 
   const handleBattleFinish = useCallback((fightRun: RunState, tape: FightTape) => {
     if (!run || !run.activeEncounter) return;
-    const level = spireEncounterToLevel(run, run.activeEncounter);
+    const isCoopRun = run.coopPartySize === 2;
+    const level = spireEncounterToLevel(run, run.activeEncounter, {
+      coopPartySize: run.coopPartySize,
+    });
     const won = fightRun.status === 'won' && fightRun.endReason === 'defeated';
     const at = Date.now();
     const fightId = `${at}-${tape.recording.seed}`;
@@ -311,8 +396,12 @@ const SpireMode: React.FC<Props> = ({
       setLastFight(snapshot);
       if (next.phase === 'defeat') {
         setMeta(recordSpireRunEnd(next, false));
-        writeSpireRun(null);
-        setSavedRun(next);
+        if (isCoopRun) {
+          setCoopRun(next);
+        } else {
+          writeSpireRun(null);
+          setSavedRun(next);
+        }
       } else {
         updateRun(next);
       }
@@ -333,6 +422,13 @@ const SpireMode: React.FC<Props> = ({
 
   const handleFinishRewards = useCallback(() => {
     if (!run) return;
+    if (coop.isCoopClimbActive && run.reward) {
+      const nextPhase =
+        run.reward.isActBoss && run.act === 3 && !run.endless ? 'victory' : 'map';
+      const nextAct = run.reward.isActBoss && nextPhase === 'map' ? run.act + 1 : run.act;
+      coop.markPhaseReady(nextPhase, { act: nextAct, floor: run.floor });
+      return;
+    }
     const next = finishSpireRewards(run);
     if (next.phase === 'victory') {
       screenTx.go(() => {
@@ -347,10 +443,13 @@ const SpireMode: React.FC<Props> = ({
         updateRun(next);
       }, ascendingAct ? 'ascend' : 'descend');
     }
-  }, [run, screenTx, roomTx, updateRun]);
+  }, [coop, run, screenTx, roomTx, updateRun]);
 
   const activeLevel = useMemo(
-    () => (run && run.activeEncounter ? spireEncounterToLevel(run, run.activeEncounter) : null),
+    () =>
+      run && run.activeEncounter
+        ? spireEncounterToLevel(run, run.activeEncounter, { coopPartySize: run.coopPartySize })
+        : null,
     [run]
   );
   const virtualSave = useMemo(
@@ -360,6 +459,12 @@ const SpireMode: React.FC<Props> = ({
   const overrides = useMemo(
     () => (run ? spireRunOverrides(run) : undefined),
     [run]
+  );
+
+  const maxSelectableAsc = Math.max(
+    1,
+    meta.highestAscensionUnlocked,
+    typeof initialAscension === 'number' ? Math.min(MAX_ASCENSION, initialAscension) : 0
   );
 
   let screenContent: React.ReactNode;
@@ -374,10 +479,42 @@ const SpireMode: React.FC<Props> = ({
         initialFighter={initialFighter}
         initialAscension={initialAscension}
         initialDailyDate={initialDailyDate}
+        initialCoopCode={initialCoopCode}
+        coopLobbyProps={{
+          roomCode: coop.roomCode,
+          connectionState: coop.connectionState,
+          errorMessage: coop.errorMessage,
+          isHost: coop.isHost,
+          localPlayer: coop.localPlayer,
+          allyPlayer: coop.allyPlayer,
+          selectedFighter: coopFighter,
+          ascension: coopAscension,
+          maxSelectableAsc,
+          initialCoopCode,
+          coopServer: initialCoopServer,
+          canStartClimb: coop.canStartClimb,
+          onSelectFighter: next => {
+            setCoopFighter(next);
+            coop.updateFighter(next);
+          },
+          onChangeAscension: next => {
+            setCoopAscension(next);
+            coop.updateAscension(next);
+          },
+          onCreateRoom: () => { void coop.createRoom(); },
+          onJoinRoom: code => coop.joinRoom(code),
+          onLeaveRoom: () => coop.leaveRoom(),
+          onToggleReady: () => coop.toggleLobbyReady(),
+          onStartClimb: () => coop.startDuoClimb(),
+        }}
         onStartNew={handleStartNew}
         onResume={handleResume}
         onAbandonActive={handleAbandonActive}
-        onExit={() => { music.stop(); onExit(); }}
+        onExit={() => {
+          coop.leaveRoom();
+          music.stop();
+          onExit();
+        }}
       />
     );
   } else if (run.phase === 'fight' && activeLevel && virtualSave && run.activeEncounter) {
@@ -392,12 +529,13 @@ const SpireMode: React.FC<Props> = ({
     ) >>> 0;
     const isLastHeart = run.hearts <= 1;
     screenContent = (
-      <AdventureRun
+      <AdventureRunWithCoop
         key={`spire-fight-${run.act}-${run.floor}-${enc.id}-${run.retreats ?? 0}`}
         level={activeLevel}
         save={virtualSave}
         seed={fightSeed}
         autoPlayer={autoPlayer}
+        coopSession={coop.combatSession}
         onFinish={(fightRun, tape) => handleBattleFinish(fightRun, tape)}
         onQuit={(fightRun, tape) => {
           // Record retreats once a move was made, then charge 1 ♥ (or forfeit on 1 ♥) so combat cannot be save-scummed
@@ -411,6 +549,10 @@ const SpireMode: React.FC<Props> = ({
             });
           }
           music.stop();
+          if (run.coopPartySize === 2) {
+            coop.leaveRoom();
+            return;
+          }
           const next = retreatSpireBattle(run, fightRun.foeName);
           screenTx.go(() => {
             if (next.phase === 'defeat') {
@@ -430,8 +572,11 @@ const SpireMode: React.FC<Props> = ({
         featuresOverride={new Set(SPIRE_FIGHT_FEATURES)}
         chrome={{
           statusBanner: {
-            icon: 'lorc/mountaintop',
-            text: `${floorLabel} · ${nodeLabel}`,
+            icon: run.coopPartySize === 2 ? 'lorc/two-shadows' : 'lorc/mountaintop',
+            text:
+              run.coopPartySize === 2 && run.coopRoomCode
+                ? `DUO ${run.coopRoomCode} · ${floorLabel} · ${nodeLabel}`
+                : `${floorLabel} · ${nodeLabel}`,
             testID: 'run-spire-bar',
           },
           pauseSubtitle: `${floorLabel} · ${enc.name}`,
@@ -440,10 +585,13 @@ const SpireMode: React.FC<Props> = ({
           requireKnockoutToWin: true,
           starlessVictory: true,
           isEliteEncounter: enc.kind === 'elite',
-          quitLabel: isLastHeart ? 'Forfeit Run' : 'Retreat (−1 ♥)',
-          quitHint: isLastHeart
-            ? 'You are at 1 ♥ — retreating ends this climb.'
-            : 'Costs 1 ♥ and reshuffles the board before returning to briefing.',
+          quitLabel: run.coopPartySize === 2 ? 'Leave Duo Climb' : isLastHeart ? 'Forfeit Run' : 'Retreat (−1 ♥)',
+          quitHint:
+            run.coopPartySize === 2
+              ? 'Disconnects from your Duo Room and returns to Setup.'
+              : isLastHeart
+                ? 'You are at 1 ♥ — retreating ends this climb.'
+                : 'Costs 1 ♥ and reshuffles the board before returning to briefing.',
         }}
       />
     );
@@ -458,7 +606,7 @@ const SpireMode: React.FC<Props> = ({
         onRateFun={lastFightFeedback ? handleRateFun : undefined}
         onReplayOpened={handleReplayOpened}
         onEnterEndless={
-          run.phase === 'victory'
+          run.phase === 'victory' && run.coopPartySize !== 2
             ? () => {
                 screenTx.go(() => {
                   commitSpireFight('spire_enter_endless');
@@ -472,15 +620,21 @@ const SpireMode: React.FC<Props> = ({
           screenTx.go(() => {
             commitSpireFight('spire_end_new_run');
             setLastFightFeedback(null);
-            writeSpireRun(null);
-            setSavedRun(null);
-            setInSetup(true);
+            if (run.coopPartySize === 2) {
+              coop.leaveRoom();
+            } else {
+              writeSpireRun(null);
+              setSavedRun(null);
+              setInSetup(true);
+            }
           }, 'descend');
         }}
         onExitToMenu={() => {
           commitSpireFight('spire_end_exit');
           setLastFightFeedback(null);
-          if (run.phase === 'victory' || run.phase === 'defeat') {
+          if (run.coopPartySize === 2) {
+            coop.leaveRoom();
+          } else if (run.phase === 'victory' || run.phase === 'defeat') {
             writeSpireRun(null);
             setSavedRun(null);
           }
@@ -506,11 +660,25 @@ const SpireMode: React.FC<Props> = ({
             screenTx.go(() => {
               commitSpireFight('spire_header_exit');
               setLastFightFeedback(null);
-              writeSpireRun(run);
-              setInSetup(true);
+              if (run.coopPartySize === 2) {
+                coop.leaveRoom();
+              } else {
+                writeSpireRun(run);
+                setInSetup(true);
+              }
             }, 'descend');
           }}
         />
+
+        {coop.isCoopClimbActive && coop.roomCode && (
+          <SpireCoopBanner
+            roomCode={coop.roomCode}
+            connectionState={coop.connectionState}
+            ally={coop.allyPlayer}
+            allyPhaseReady={coop.allyPhaseReady}
+            notice={coop.notice}
+          />
+        )}
 
         <Animated.View
           style={[st.roomViewport, roomTx.style]}
@@ -519,7 +687,14 @@ const SpireMode: React.FC<Props> = ({
           {run.phase === 'map' && (
             <SpireMap
               run={run}
-              onSelectNode={nodeId => roomTx.go(() => updateRun(selectSpireNode(run, nodeId)), 'ascend')}
+              coopVotes={coop.mapVotes}
+              onSelectNode={nodeId => {
+                if (coop.isCoopClimbActive) {
+                  coop.voteMapNode(nodeId);
+                  return;
+                }
+                roomTx.go(() => updateRun(selectSpireNode(run, nodeId)), 'ascend');
+              }}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
               onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
             />
@@ -529,12 +704,18 @@ const SpireMode: React.FC<Props> = ({
             <SpireEncounterPreview
               run={run}
               encounter={run.activeEncounter}
-              onFight={() => screenTx.go(() => updateRun(startSpireEncounter(run)), 'ascend')}
+              onFight={() => {
+                if (coop.isCoopClimbActive) {
+                  coop.markPhaseReady('fight');
+                  return;
+                }
+                screenTx.go(() => updateRun(startSpireEncounter(run)), 'ascend');
+              }}
               onInspectBuild={() => setBuildOpen(true)}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
               onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
               onBack={
-                run.prevNodeId !== undefined
+                !coop.isCoopClimbActive && run.prevNodeId !== undefined
                   ? () => roomTx.go(() => updateRun(cancelSpirePreview(run)), 'descend')
                   : undefined
               }
@@ -559,6 +740,7 @@ const SpireMode: React.FC<Props> = ({
               onSkipSkill={() => updateRun(skipRewardSkillNode(run))}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
               onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
+              coopReady={coop.rewardReadyBarrier}
               onContinue={handleFinishRewards}
             />
           )}
@@ -567,6 +749,7 @@ const SpireMode: React.FC<Props> = ({
             <SpireShop
               run={run}
               shop={run.shop}
+              coopShop={coop.shopConfig}
               onBuyWeapon={(idx, replaceId) => updateRun(shopBuyWeapon(run, idx, replaceId))}
               onBuyArcana={idx => updateRun(shopBuyArcana(run, idx))}
               onBuyUpgrade={idx => updateRun(shopBuyUpgrade(run, idx))}
@@ -578,7 +761,13 @@ const SpireMode: React.FC<Props> = ({
               onPurgeArcana={id => updateRun(shopPurgeArcana(run, id))}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
               onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
-              onLeave={() => roomTx.go(() => updateRun(leaveShop(run)), 'descend')}
+              onLeave={() => {
+                if (coop.isCoopClimbActive) {
+                  coop.markPhaseReady('map');
+                  return;
+                }
+                roomTx.go(() => updateRun(leaveShop(run)), 'descend');
+              }}
             />
           )}
 
@@ -586,12 +775,19 @@ const SpireMode: React.FC<Props> = ({
             <SpireCampfire
               run={run}
               campfire={run.campfire}
+              coopCampfire={coop.campfireConfig}
               onRest={() => updateRun(campfireRest(run))}
               onForge={wId => updateRun(campfireForge(run, wId))}
               onMeditate={nodeId => updateRun(campfireMeditate(run, nodeId))}
               onReorderWeapon={(from, to) => updateRun(reorderSpireWeapon(run, from, to))}
               onSelectEvolution={(weaponId, evoId) => updateRun(equipSpireWeaponEvolution(run, weaponId, evoId))}
-              onLeave={() => roomTx.go(() => updateRun(leaveCampfire(run)), 'descend')}
+              onLeave={() => {
+                if (coop.isCoopClimbActive) {
+                  coop.markPhaseReady('map');
+                  return;
+                }
+                roomTx.go(() => updateRun(leaveCampfire(run)), 'descend');
+              }}
             />
           )}
 
@@ -606,6 +802,10 @@ const SpireMode: React.FC<Props> = ({
               onPickForge={wId => updateRun(resolveEventPendingForge(run, wId))}
               onResolveArcana={accept => updateRun(resolveEventPendingArcana(run, accept))}
               onLeave={() => {
+                if (coop.isCoopClimbActive) {
+                  coop.markPhaseReady('map');
+                  return;
+                }
                 const next = leaveEvent(run);
                 roomTx.go(() => updateRun(next), next.phase === 'preview' ? 'ascend' : 'descend');
               }}
@@ -617,7 +817,13 @@ const SpireMode: React.FC<Props> = ({
               run={run}
               treasure={run.treasure}
               onClaim={(choice, replaceId) => updateRun(claimTreasure(run, choice, replaceId))}
-              onLeave={() => roomTx.go(() => updateRun(leaveTreasure(run)), 'descend')}
+              onLeave={() => {
+                if (coop.isCoopClimbActive) {
+                  coop.markPhaseReady('map');
+                  return;
+                }
+                roomTx.go(() => updateRun(leaveTreasure(run)), 'descend');
+              }}
             />
           )}
         </Animated.View>
