@@ -279,6 +279,80 @@ export interface SpireRun {
   dailyDate?: string;
   /** Rotating daily mutator active for a Daily Summit Climb */
   dailyMutatorId?: SummitDailyMutatorId;
+  /** Party size for this climb (undefined or 1 = solo, 2 = 2P Co-Op Duo with 1.75× foe HP) */
+  coopPartySize?: SpireCoopPartySize;
+  /** 4-character co-op room code when climbing in 2P Co-Op Duo mode */
+  coopRoomCode?: string;
+}
+
+export type SpireCoopPartySize = 1 | 2;
+
+export type SpireCoopConnectionState =
+  | 'idle'
+  | 'creating'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'error';
+
+export interface SpireCoopPlayerView {
+  playerId: string;
+  role: 'host' | 'guest';
+  name: string;
+  fighter: CharacterName;
+  ready: boolean;
+  connected: boolean;
+  hearts: number;
+  maxHearts: number;
+  caged?: boolean;
+}
+
+export interface SpireCoopMapVotes {
+  localPlayerId: string;
+  localFighter: CharacterName;
+  localVoteNodeId: string | null;
+  allyFighter: CharacterName | null;
+  allyName: string;
+  allyVoteNodeId: string | null;
+  allyConnected: boolean;
+  votesDiffer: boolean;
+}
+
+export interface SpireCoopShopConfig {
+  allyName: string;
+  allyFighter: CharacterName;
+  allyHearts: number;
+  allyMaxHearts: number;
+  allyConnected: boolean;
+  giftHealCost: number;
+  giftHealAmount: number;
+  giftedHeal: boolean;
+  localReady: boolean;
+  allyReady: boolean;
+  onGiftHealToAlly: () => void;
+  onGiftWeaponToAlly: (offerIndex: number) => void;
+}
+
+export interface SpireCoopCampfireConfig {
+  allyName: string;
+  allyFighter: CharacterName;
+  allyHearts: number;
+  allyMaxHearts: number;
+  allyConnected: boolean;
+  allyHealAmount: number;
+  localReady: boolean;
+  allyReady: boolean;
+  onHealAlly: () => void;
+  onDuoForge: (weaponId: string) => void;
+}
+
+export interface SpireCoopReadyBarrier {
+  allyName: string;
+  allyFighter?: CharacterName;
+  localReady: boolean;
+  allyReady: boolean;
+  allyConnected: boolean;
+  readyLabel?: string;
 }
 
 export interface SpireMeta {

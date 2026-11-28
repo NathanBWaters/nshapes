@@ -48,7 +48,12 @@ import {
   spireWeaponSynergyOverlap,
 } from '../engine/bridge';
 import { MAX_SUMMIT_WEAPONS, REWARD_REROLL_COST, SKIP_WEAPON_COINS } from '../engine/runState';
-import type { SpireLastFightSnapshot, SpireRewardBundle, SpireRun } from '../types';
+import type {
+  SpireCoopReadyBarrier,
+  SpireLastFightSnapshot,
+  SpireRewardBundle,
+  SpireRun,
+} from '../types';
 import SpireBeltBar from './SpireBeltBar';
 import SpireSwapPicker from './SpireSwapPicker';
 import {
@@ -77,6 +82,7 @@ interface Props {
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onContinue: () => void;
+  coopReady?: SpireCoopReadyBarrier;
 }
 
 const SpireRewardScreen: React.FC<Props> = ({
@@ -97,6 +103,7 @@ const SpireRewardScreen: React.FC<Props> = ({
   onReorderWeapon,
   onSelectEvolution,
   onContinue,
+  coopReady,
 }) => {
   const reduced = useReducedMotion();
   const [inspectIdx, setInspectIdx] = useState<number>(0);
@@ -567,6 +574,22 @@ const SpireRewardScreen: React.FC<Props> = ({
           />
         )}
 
+        {coopReady && (coopReady.localReady || coopReady.allyReady) && (
+          <View style={st.coopReadyStrip} testID="spire-reward-coop-status">
+            <Icon
+              name={coopReady.localReady && !coopReady.allyReady ? 'lorc/hourglass' : 'lorc/checked-shield'}
+              size={14}
+              color="#0F766E"
+              noShadow
+            />
+            <Text style={st.coopReadyText}>
+              {coopReady.localReady && !coopReady.allyReady
+                ? `Waiting for ${coopReady.allyName}…`
+                : `${coopReady.allyName} is ready ✓`}
+            </Text>
+          </View>
+        )}
+
         {confirmSkip && !allDone ? (
           <View style={st.confirmSkipBox} testID="spire-reward-confirm-skip">
             <Text style={st.confirmSkipHint}>
@@ -584,7 +607,7 @@ const SpireRewardScreen: React.FC<Props> = ({
                 testID="spire-reward-continue"
                 small
                 variant="dark"
-                label="Skip Unclaimed Rewards?"
+                label={coopReady ? 'Ready & Skip Rewards?' : 'Skip Unclaimed Rewards?'}
                 onPress={() => { sfx('confirm'); setConfirmSkip(false); onContinue(); }}
                 style={st.confirmSkipBtn}
               />
@@ -593,16 +616,36 @@ const SpireRewardScreen: React.FC<Props> = ({
         ) : (
           <Btn
             testID="spire-reward-continue"
+            disabled={Boolean(coopReady && coopReady.localReady && !coopReady.allyReady)}
             label={
-              reward.isActBoss
-                ? run.act === 3 && !run.endless
-                  ? 'Claim Summit Victory!'
-                  : `Ascend to Act ${run.act + 1} (+1 Max ♥)`
-                : allDone
-                  ? 'Continue Climb'
-                  : 'Proceed to Map'
+              coopReady
+                ? coopReady.localReady && !coopReady.allyReady
+                  ? `Waiting for ${coopReady.allyName}…`
+                  : coopReady.readyLabel ??
+                    (reward.isActBoss
+                      ? run.act === 3 && !run.endless
+                        ? 'Ready — Claim Victory!'
+                        : `Ready — Ascend to Act ${run.act + 1}`
+                      : coopReady.allyReady
+                        ? 'Ready — Continue Together!'
+                        : 'Ready')
+                : reward.isActBoss
+                  ? run.act === 3 && !run.endless
+                    ? 'Claim Summit Victory!'
+                    : `Ascend to Act ${run.act + 1} (+1 Max ♥)`
+                  : allDone
+                    ? 'Continue Climb'
+                    : 'Proceed to Map'
             }
-            icon={reward.isActBoss ? 'lorc/crown' : 'lorc/mountaintop'}
+            icon={
+              coopReady
+                ? coopReady.localReady && !coopReady.allyReady
+                  ? 'lorc/hourglass'
+                  : 'lorc/checked-shield'
+                : reward.isActBoss
+                  ? 'lorc/crown'
+                  : 'lorc/mountaintop'
+            }
             onPress={() => {
               if (!allDone) {
                 sfx('click');
@@ -744,6 +787,8 @@ const st = StyleSheet.create({
   confirmSkipHint: { fontSize: 12, fontWeight: '800', color: '#92400E', textAlign: 'center' },
   confirmSkipRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   confirmSkipBtn: { flex: 1, backgroundColor: '#B91C1C', borderColor: '#7F1D1D' },
+  coopReadyStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#CCFBF1', borderRadius: 8, borderWidth: 1.5, borderColor: '#0F766E', paddingHorizontal: 10, paddingVertical: 6 },
+  coopReadyText: { fontSize: 11.5, fontWeight: '900', color: '#115E59' },
 });
 
 export default SpireRewardScreen;

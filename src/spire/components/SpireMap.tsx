@@ -10,7 +10,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Svg, Line } from 'react-native-svg';
 import Icon, { type IconName } from '@/components/Icon';
 import { EnemyAvatar } from '@/components/enemies';
+import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import type { CharacterName } from '@/types';
 import { COLORS } from '@/utils/colors';
 import { IDLE_LOOP } from '@/utils/motion';
 import { getBiome } from '@/adventure/data/biomes';
@@ -19,9 +21,9 @@ import ParryPreviewCard from '@/adventure/components/ParryPreviewCard';
 import { FoeAbilityCard, HazardNotices, ShadingSurgeNotice } from '@/adventure/components/SharedCards';
 import { Bob, Btn, Eyebrow, INK, Skulls, TONE } from '@/adventure/components/ui';
 import { sfx } from '@/audio';
-import { spireEncounterLoadout } from '../engine/bridge';
+import { scaleFoeHpForParty, spireEncounterLoadout } from '../engine/bridge';
 import { reachableNodeIds } from '../engine/mapGen';
-import type { SpireNode, SpireNodeKind, SpireRun } from '../types';
+import type { SpireCoopMapVotes, SpireNode, SpireNodeKind, SpireRun } from '../types';
 import SpireBeltBar from './SpireBeltBar';
 import { SpireModalShell, SpireStaggerItem, SpireTactilePressable } from './SpireMotion';
 
@@ -30,6 +32,7 @@ interface Props {
   onSelectNode: (nodeId: string) => void;
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onSelectEvolution?: (weaponId: string, evoId: string) => void;
+  coopVotes?: SpireCoopMapVotes;
 }
 
 const NODE_STYLE: Record<SpireNodeKind, { label: string; icon: IconName; bg: string; fg: string; border: string }> = {
@@ -46,7 +49,7 @@ const ROW_H = 82;
 const TOP_PAD = 36;
 const BOSS_ROW_EXTRA = 22;
 
-const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon, onSelectEvolution }) => {
+const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon, onSelectEvolution, coopVotes }) => {
   const reducedMotion = useReducedMotion();
   const scrollRef = useRef<ScrollView>(null);
   const didInitialScrollRef = useRef(false);
@@ -136,9 +139,36 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon, onSelec
         contentContainerStyle={st.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={st.prompt}>
-          {run.currentNodeId ? 'Choose your next room upward ↑' : 'Pick any entrance battle to begin ↑'}
-        </Text>
+        {coopVotes ? (
+          <View
+            testID="spire-map-coop-status"
+            style={[
+              st.coopPromptChip,
+              coopVotes.votesDiffer && st.coopPromptMismatch,
+              !coopVotes.votesDiffer && (coopVotes.localVoteNodeId || coopVotes.allyVoteNodeId) && st.coopPromptWaiting,
+            ]}
+          >
+            <Icon
+              name={coopVotes.votesDiffer ? 'lorc/hourglass' : 'lorc/two-shadows'}
+              size={13}
+              color={coopVotes.votesDiffer ? '#92400E' : INK}
+              noShadow
+            />
+            <Text style={[st.coopPromptText, coopVotes.votesDiffer && { color: '#92400E' }]}>
+              {coopVotes.votesDiffer
+                ? 'Waiting for ally to agree…'
+                : coopVotes.localVoteNodeId && !coopVotes.allyVoteNodeId
+                  ? `Voted! Waiting for ${coopVotes.allyName}…`
+                  : !coopVotes.localVoteNodeId && coopVotes.allyVoteNodeId
+                    ? `${coopVotes.allyName} voted — tap the same room to launch!`
+                    : `Vote on the same room with ${coopVotes.allyName} to climb ↑`}
+            </Text>
+          </View>
+        ) : (
+          <Text style={st.prompt}>
+            {run.currentNodeId ? 'Choose your next room upward ↑' : 'Pick any entrance battle to begin ↑'}
+          </Text>
+        )}
 
         <View
           style={[st.canvas, { height: totalH }]}
@@ -179,6 +209,8 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon, onSelec
           {map.nodes.map((node, nodeIdx) => {
             const isReachable = reachable.has(node.id);
             const canInspectBoss = node.kind === 'boss' && !isReachable && Boolean(bossEncounter);
+            const localVoted = Boolean(coopVotes && coopVotes.localVoteNodeId === node.id);
+            const allyVoted = Boolean(coopVotes && coopVotes.allyVoteNodeId === node.id);
             return (
               <MapNodeButton
                 key={node.id}
@@ -191,6 +223,10 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon, onSelec
                 isCurrent={node.id === run.currentNodeId}
                 isReachable={isReachable}
                 canInspectBoss={canInspectBoss}
+                localVoted={localVoted}
+                allyVoted={allyVoted}
+                localFighter={coopVotes?.localFighter}
+                allyFighter={coopVotes?.allyFighter ?? undefined}
                 onPress={() => {
                   if (isReachable) {
                     sfx('confirm');
@@ -251,7 +287,7 @@ const SpireMap: React.FC<Props> = ({ run, onSelectNode, onReorderWeapon, onSelec
                 <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                   <Text style={st.bossSheetTitle}>{bossFoe.name}</Text>
                   <Text style={st.bossHpLine}>
-                    {bossFoeDef.hp.toLocaleString()} HP · {bossLoadout?.timer ?? bossEncounter.timer}s clock
+                    {scaleFoeHpForParty(bossFoeDef.hp, run.coopPartySize).toLocaleString()} HP · {bossLoadout?.timer ?? bossEncounter.timer}s clock
                   </Text>
                   {bossFoeDef.taunt && (
                     <Text style={st.bossTaunt} numberOfLines={2}>“{bossFoeDef.taunt}”</Text>
@@ -297,6 +333,10 @@ const MapNodeButton: React.FC<{
   bobPhase: number;
   bobPeriodMs: number;
   canInspectBoss?: boolean;
+  localVoted?: boolean;
+  allyVoted?: boolean;
+  localFighter?: CharacterName;
+  allyFighter?: CharacterName;
   onPress: () => void;
 }> = ({
   node,
@@ -308,6 +348,10 @@ const MapNodeButton: React.FC<{
   bobPhase,
   bobPeriodMs,
   canInspectBoss = false,
+  localVoted = false,
+  allyVoted = false,
+  localFighter,
+  allyFighter,
   onPress,
 }) => {
   const cfg = NODE_STYLE[node.kind];
@@ -317,6 +361,7 @@ const MapNodeButton: React.FC<{
   const foeDef = node.encounter?.foes[0] ?? null;
   const foeName = node.encounter?.name;
   const liveFoe = (isReachable || isBoss) && !node.visited && foeDef ? foeDisplay(foeDef) : null;
+  const anyVote = localVoted || allyVoted;
 
   const inner = (
     <SpireTactilePressable
@@ -331,10 +376,10 @@ const MapNodeButton: React.FC<{
         {
           width: w,
           height: h,
-          backgroundColor: node.visited ? '#E5E0D8' : cfg.bg,
-          borderColor: isReachable ? INK : isCurrent ? TONE.upside : cfg.border,
-          borderWidth: isReachable ? 3 : 2,
-          borderBottomWidth: isReachable ? 5 : 3,
+          backgroundColor: node.visited ? '#E5E0D8' : anyVote ? '#FEF9C3' : cfg.bg,
+          borderColor: anyVote ? '#0F766E' : isReachable ? INK : isCurrent ? TONE.upside : cfg.border,
+          borderWidth: isReachable || anyVote ? 3 : 2,
+          borderBottomWidth: isReachable || anyVote ? 5 : 3,
           opacity: isReachable || isCurrent || canInspectBoss ? 1 : node.visited ? 0.65 : 0.72,
         },
       ]}
@@ -358,6 +403,16 @@ const MapNodeButton: React.FC<{
       {isReachable && (
         <View style={st.goBadge}>
           <Text style={st.goText}>GO</Text>
+        </View>
+      )}
+      {localVoted && localFighter && (
+        <View style={st.votePinLocal} testID={`spire-node-vote-local-${node.id}`}>
+          <FighterAvatar character={localFighter} size={18} animate={false} />
+        </View>
+      )}
+      {allyVoted && allyFighter && (
+        <View style={st.votePinAlly} testID={`spire-node-vote-ally-${node.id}`}>
+          <FighterAvatar character={allyFighter} size={18} animate={false} />
         </View>
       )}
     </SpireTactilePressable>
@@ -387,6 +442,12 @@ const st = StyleSheet.create({
   bossInspectText: { fontSize: 7.5, fontWeight: '900', color: INK, letterSpacing: 0.4 },
   scrollContent: { paddingHorizontal: 10, paddingTop: 10, paddingBottom: 28, alignItems: 'center', width: '100%' },
   prompt: { fontSize: 12, fontWeight: '900', color: INK, backgroundColor: 'rgba(255,255,255,0.85)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, borderWidth: 1.5, borderColor: INK, overflow: 'hidden' },
+  coopPromptChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.94)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 2, borderColor: INK },
+  coopPromptWaiting: { backgroundColor: '#CCFBF1', borderColor: '#0F766E' },
+  coopPromptMismatch: { backgroundColor: '#FEF3C7', borderColor: '#D97706' },
+  coopPromptText: { fontSize: 11.5, fontWeight: '900', color: INK },
+  votePinLocal: { position: 'absolute', bottom: -10, left: -8, width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.actionYellow, borderWidth: 2, borderColor: INK, alignItems: 'center', justifyContent: 'center' },
+  votePinAlly: { position: 'absolute', bottom: -10, right: -8, width: 24, height: 24, borderRadius: 12, backgroundColor: '#CCFBF1', borderWidth: 2, borderColor: '#0F766E', alignItems: 'center', justifyContent: 'center' },
   canvas: { width: '100%', maxWidth: 480, position: 'relative', marginTop: 6 },
   node: { borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, gap: 2 },
   nodeTop: { flexDirection: 'row', alignItems: 'center', gap: 3 },

@@ -27,7 +27,7 @@ import { SkillNodeRow, WeaponOfferRow } from '@/adventure/components/SharedCards
 import { Btn, DARK, Eyebrow, INK, TONE } from '@/adventure/components/ui';
 import { band, sfx } from '@/audio';
 import { buildSpireWeaponBuilds, spireEquippedEvolutions, spireHeldWeapons } from '../engine/bridge';
-import type { SpireCampfireState, SpireRun } from '../types';
+import type { SpireCampfireState, SpireCoopCampfireConfig, SpireRun } from '../types';
 import SpireBeltBar from './SpireBeltBar';
 import {
   SPIRE_MOTION_INSTANT,
@@ -45,6 +45,7 @@ interface Props {
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onLeave: () => void;
+  coopCampfire?: SpireCoopCampfireConfig;
 }
 
 const SpireCampfire: React.FC<Props> = ({
@@ -56,9 +57,10 @@ const SpireCampfire: React.FC<Props> = ({
   onReorderWeapon,
   onSelectEvolution,
   onLeave,
+  coopCampfire,
 }) => {
   const reduced = useReducedMotion();
-  const [subMode, setSubMode] = useState<'main' | 'forge' | 'meditate'>('main');
+  const [subMode, setSubMode] = useState<'main' | 'forge' | 'duo_forge' | 'meditate'>('main');
   const [focusedForgeId, setFocusedForgeId] = useState<string | null>(null);
   const [reaction, setReaction] = useState<FighterAvatarReactionEvent | null>(null);
   const [actedMood, setActedMood] = useState<'idle' | 'victory'>('idle');
@@ -138,6 +140,20 @@ const SpireCampfire: React.FC<Props> = ({
                 <Icon name="lorc/campfire" size={38} color="#F97316" />
               </Animated.View>
             </View>
+            {coopCampfire && (
+              <View style={st.allyFireWrap} testID="spire-campfire-ally-avatar">
+                <FighterAvatar
+                  character={coopCampfire.allyFighter}
+                  size={48}
+                  health={coopCampfire.allyHearts}
+                  maxHealth={coopCampfire.allyMaxHearts}
+                  mood={coopCampfire.allyReady ? 'victory' : 'idle'}
+                />
+                <Text style={st.allyFireHearts}>
+                  ♥ {coopCampfire.allyHearts}/{coopCampfire.allyMaxHearts}
+                </Text>
+              </View>
+            )}
           </View>
         </SpireStaggerItem>
 
@@ -149,7 +165,34 @@ const SpireCampfire: React.FC<Props> = ({
               </View>
               <Text style={st.outcomeTitle}>Ready to Climb!</Text>
               <Text style={st.outcomeText}>{campfire.outcomeText}</Text>
-              <Btn testID="spire-campfire-leave" label="Return to Map" icon="lorc/mountaintop" onPress={() => { sfx('confirm'); onLeave(); }} />
+              {coopCampfire && (coopCampfire.localReady || coopCampfire.allyReady) && (
+                <Text style={st.coopWaitNote} testID="spire-campfire-coop-status">
+                  {coopCampfire.localReady && !coopCampfire.allyReady
+                    ? `Waiting for ${coopCampfire.allyName} by the fire…`
+                    : `${coopCampfire.allyName} is ready ✓`}
+                </Text>
+              )}
+              <Btn
+                testID="spire-campfire-leave"
+                label={
+                  coopCampfire
+                    ? coopCampfire.localReady && !coopCampfire.allyReady
+                      ? `Waiting for ${coopCampfire.allyName}…`
+                      : coopCampfire.allyReady
+                        ? 'Ready — Climb Together!'
+                        : 'Ready to Climb'
+                    : 'Return to Map'
+                }
+                icon={
+                  coopCampfire
+                    ? coopCampfire.localReady && !coopCampfire.allyReady
+                      ? 'lorc/hourglass'
+                      : 'lorc/checked-shield'
+                    : 'lorc/mountaintop'
+                }
+                disabled={Boolean(coopCampfire && coopCampfire.localReady && !coopCampfire.allyReady)}
+                onPress={() => { sfx('confirm'); onLeave(); }}
+              />
             </View>
           ) : subMode === 'main' ? (
             <View style={st.options}>
@@ -194,7 +237,7 @@ const SpireCampfire: React.FC<Props> = ({
                 </SpireTactilePressable>
               </SpireStaggerItem>
 
-              <SpireStaggerItem index={2} count={3} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
+              <SpireStaggerItem index={2} count={coopCampfire ? 5 : 3} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
                 <SpireTactilePressable
                   testID="spire-campfire-meditate-open"
                   disabled={availSkills.length === 0}
@@ -210,13 +253,70 @@ const SpireCampfire: React.FC<Props> = ({
                   </View>
                 </SpireTactilePressable>
               </SpireStaggerItem>
+
+              {coopCampfire && (
+                <>
+                  <SpireStaggerItem index={3} count={5} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
+                    <SpireTactilePressable
+                      testID="spire-campfire-heal-ally"
+                      disabled={!coopCampfire.allyConnected}
+                      onPress={() => {
+                        band.cue('heal');
+                        setActedMood('victory');
+                        setReaction({ type: 'heal', id: ++reactionSeqRef.current });
+                        pulseFire();
+                        coopCampfire.onHealAlly();
+                      }}
+                      style={[st.optCard, st.duoOptCard, !coopCampfire.allyConnected && { opacity: 0.45 }]}
+                    >
+                      <View style={[st.optIcon, { backgroundColor: '#CCFBF1', borderColor: '#0F766E' }]}>
+                        <Icon name="delapouite/present" size={26} color="#0F766E" />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={st.optTitle}>Heal Ally ({coopCampfire.allyName})</Text>
+                        <Text style={st.optDesc}>
+                          Send +{coopCampfire.allyHealAmount} ♥ to {coopCampfire.allyName} ({coopCampfire.allyHearts}/{coopCampfire.allyMaxHearts} ♥) and warm yourself +1 ♥.
+                        </Text>
+                      </View>
+                    </SpireTactilePressable>
+                  </SpireStaggerItem>
+
+                  <SpireStaggerItem index={4} count={5} baseDelayMs={OVERLAP.secondaryMs} gapMs={STAGGER.item}>
+                    <SpireTactilePressable
+                      testID="spire-campfire-duo-forge-open"
+                      disabled={forgeable.length === 0 || !coopCampfire.allyConnected}
+                      onPress={() => { sfx('click'); setSubMode('duo_forge'); }}
+                      style={[
+                        st.optCard,
+                        { borderColor: '#7C3AED' },
+                        (forgeable.length === 0 || !coopCampfire.allyConnected) && { opacity: 0.45 },
+                      ]}
+                    >
+                      <View style={[st.optIcon, { backgroundColor: '#F5F3FF', borderColor: '#7C3AED' }]}>
+                        <Icon name="lorc/anvil" size={26} color="#7C3AED" />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={st.optTitle}>Duo Forge</Text>
+                        <Text style={st.optDesc}>
+                          Upgrade 1 weapon +1 Level AND send a forge spark to empower {coopCampfire.allyName}&apos;s belt!
+                        </Text>
+                      </View>
+                    </SpireTactilePressable>
+                  </SpireStaggerItem>
+                </>
+              )}
             </View>
-          ) : subMode === 'forge' ? (
+          ) : subMode === 'forge' || subMode === 'duo_forge' ? (
             <View style={st.subCard}>
-              <Text style={st.secTitle}>CHOOSE A WEAPON TO FORGE (+1 LEVEL)</Text>
+              <Text style={st.secTitle}>
+                {subMode === 'duo_forge'
+                  ? `DUO FORGE (+1 LEVEL + SPARK TO ${coopCampfire?.allyName.toUpperCase() ?? 'ALLY'})`
+                  : 'CHOOSE A WEAPON TO FORGE (+1 LEVEL)'}
+              </Text>
               <View style={{ gap: 8 }}>
                 {forgeable.map((w, i) => {
                   const lv = builds[w.id]?.level ?? 1;
+                  const isDuo = subMode === 'duo_forge';
                   return (
                     <SpireStaggerItem key={w.id} index={i} count={forgeable.length} gapMs={STAGGER.card} distance={8}>
                       <WeaponOfferRow
@@ -227,15 +327,19 @@ const SpireCampfire: React.FC<Props> = ({
                         onPress={() => setFocusedForgeId(w.id)}
                         right={
                           <Btn
-                            testID={`spire-campfire-forge-${w.id}`}
+                            testID={isDuo ? `spire-campfire-duo-forge-${w.id}` : `spire-campfire-forge-${w.id}`}
                             small
-                            label="Forge"
+                            label={isDuo ? 'Duo Forge' : 'Forge'}
                             onPress={() => {
                               band.cue('levelUp');
                               setActedMood('victory');
                               setReaction({ type: 'powerup', id: ++reactionSeqRef.current });
                               pulseFire();
-                              onForge(w.id);
+                              if (isDuo && coopCampfire) {
+                                coopCampfire.onDuoForge(w.id);
+                              } else {
+                                onForge(w.id);
+                              }
                             }}
                           />
                         }
@@ -319,6 +423,10 @@ const st = StyleSheet.create({
   outcomeText: { fontSize: 14, color: INK, textAlign: 'center', lineHeight: 20 },
   subCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 10 },
   secTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1.2, color: TONE.spent },
+  allyFireWrap: { alignItems: 'center', gap: 2 },
+  allyFireHearts: { fontSize: 10.5, fontWeight: '900', color: '#FED7AA', fontVariant: ['tabular-nums'] },
+  duoOptCard: { borderColor: '#0F766E', backgroundColor: '#F0FDFA' },
+  coopWaitNote: { fontSize: 12, fontWeight: '900', color: '#0F766E', textAlign: 'center' },
 });
 
 export default SpireCampfire;

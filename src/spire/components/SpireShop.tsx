@@ -16,6 +16,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Icon from '@/components/Icon';
+import { FighterAvatar } from '@/components/fighters';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { COLORS } from '@/utils/colors';
 import { MONO_FONT } from '@/utils/fonts';
@@ -48,7 +49,7 @@ import {
   MAX_SUMMIT_WEAPONS,
   maxSpireUpgradeTier,
 } from '../engine/runState';
-import type { SpireRun, SpireShopState } from '../types';
+import type { SpireCoopShopConfig, SpireRun, SpireShopState } from '../types';
 import SpireBeltBar from './SpireBeltBar';
 import SpireSwapPicker from './SpireSwapPicker';
 import {
@@ -76,6 +77,7 @@ interface Props {
   onReorderWeapon?: (fromIndex: number, toIndex: number) => void;
   onSelectEvolution?: (weaponId: string, evoId: string) => void;
   onLeave: () => void;
+  coopShop?: SpireCoopShopConfig;
 }
 
 const SpireShop: React.FC<Props> = ({
@@ -93,12 +95,15 @@ const SpireShop: React.FC<Props> = ({
   onReorderWeapon,
   onSelectEvolution,
   onLeave,
+  coopShop,
 }) => {
   const [inspectWeaponId, setInspectWeaponId] = useState<string | null>(shop.weapons[0]?.weaponId ?? null);
   const [pickingForge, setPickingForge] = useState(false);
   const [swapIdx, setSwapIdx] = useState<number | null>(null);
+  const [giftMode, setGiftMode] = useState(false);
   const [flourishMap, setFlourishMap] = useState<Record<string, number>>({});
   const beltFull = run.weapons.length >= MAX_SUMMIT_WEAPONS;
+  const giftingWeapons = Boolean(coopShop && giftMode);
 
   const bumpFlourish = (key: string) =>
     setFlourishMap(prev => ({ ...prev, [key]: (prev[key] ?? 0) + 1 }));
@@ -185,6 +190,33 @@ const SpireShop: React.FC<Props> = ({
               </View>
             </SpireStatPop>
           )}
+          {coopShop && (
+            <SpireTactilePressable
+              testID="spire-shop-gift-toggle"
+              small
+              accessibilityRole="button"
+              accessibilityState={{ selected: giftMode }}
+              onPress={() => {
+                sfx('click');
+                setSwapIdx(null);
+                setGiftMode(prev => !prev);
+              }}
+              style={[st.giftToggleBar, giftMode && st.giftToggleBarActive]}
+            >
+              <FighterAvatar character={coopShop.allyFighter} size={22} animate={false} />
+              <Icon
+                name="delapouite/present"
+                size={14}
+                color={giftMode ? COLORS.canvasWhite : '#0F766E'}
+                noShadow
+              />
+              <Text style={[st.giftToggleText, giftMode && st.giftToggleTextActive]}>
+                {giftMode
+                  ? `GIFT MODE ON · Weapons send to ${coopShop.allyName}!`
+                  : `Gift to ${coopShop.allyName} (tap to gift weapons)`}
+              </Text>
+            </SpireTactilePressable>
+          )}
         </SpireStaggerItem>
 
         {/* Weapons Shelf */}
@@ -251,11 +283,13 @@ const SpireShop: React.FC<Props> = ({
                   }
                   const btnLabel = offer.sold
                     ? 'SOLD'
-                    : needsSwap
-                      ? `Swap ${offer.price}¢`
-                      : isUpgrade
-                        ? `UP ${offer.price}¢`
-                        : `${offer.price}¢`;
+                    : giftingWeapons
+                      ? `Gift ${offer.price}¢`
+                      : needsSwap
+                        ? `Swap ${offer.price}¢`
+                        : isUpgrade
+                          ? `UP ${offer.price}¢`
+                          : `${offer.price}¢`;
                   const fKey = `${shop.rerolls}-${offer.weaponId}-${i}`;
                   return (
                     <SpireStaggerItem key={`${offer.weaponId}-${i}`} index={i} count={shop.weapons.length} gapMs={STAGGER.card} distance={8}>
@@ -264,7 +298,11 @@ const SpireShop: React.FC<Props> = ({
                           <WeaponOfferRow
                             weapon={w}
                             level={offer.level}
-                            badges={badges}
+                            badges={
+                              giftingWeapons && !offer.sold
+                                ? [{ icon: 'delapouite/present', text: `GIFT → ${coopShop?.allyName.toUpperCase()}`, bg: '#0F766E' }, ...badges]
+                                : badges
+                            }
                             focused={inspectWeaponId === offer.weaponId}
                             dimmed={offer.sold}
                             triggerKey={flourishMap[fKey]}
@@ -282,10 +320,18 @@ const SpireShop: React.FC<Props> = ({
                                   onPress: () => onToggleLock?.('weapon', i),
                                 })}
                                 {priceBtn({
-                                  testID: `spire-shop-weapon-${i}`,
-                                  disabled: !afford,
+                                  testID: giftingWeapons ? `spire-shop-gift-weapon-${i}` : `spire-shop-weapon-${i}`,
+                                  disabled: !afford || (giftingWeapons && !coopShop?.allyConnected),
                                   label: btnLabel,
                                   onPress: () => {
+                                    if (giftingWeapons && coopShop) {
+                                      band.cue('register');
+                                      band.fire(w.id, 4);
+                                      bumpFlourish(fKey);
+                                      setSwapIdx(null);
+                                      coopShop.onGiftWeaponToAlly(i);
+                                      return;
+                                    }
                                     if (needsSwap) {
                                       sfx('click');
                                       setInspectWeaponId(offer.weaponId);
@@ -302,7 +348,7 @@ const SpireShop: React.FC<Props> = ({
                               </View>
                             }
                           />
-                          {needsSwap && afford && (
+                          {!giftingWeapons && needsSwap && afford && (
                             <SpireSwapPicker
                               visible={swapIdx === i}
                               run={run}
@@ -448,6 +494,48 @@ const SpireShop: React.FC<Props> = ({
                 </View>
               </SpireStatPop>
 
+              {/* Co-Op Gift Heal to Ally */}
+              {coopShop && (
+                <SpireStatPop value={coopShop.giftedHeal ? 'gifted' : coopShop.allyHearts}>
+                  <View
+                    style={[
+                      st.serviceRow,
+                      st.giftServiceRow,
+                      (coopShop.giftedHeal || coopShop.allyHearts >= coopShop.allyMaxHearts) && { opacity: 0.55 },
+                    ]}
+                  >
+                    <View style={st.serviceLeft}>
+                      <View style={[st.iconBox, { backgroundColor: '#CCFBF1', borderColor: '#0F766E' }]}>
+                        <Icon name="delapouite/present" size={20} color="#0F766E" noShadow />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={st.itemName}>
+                          Gift Heal to {coopShop.allyName} (+{coopShop.giftHealAmount} ♥)
+                        </Text>
+                        <Text style={st.itemDesc}>
+                          {coopShop.allyHearts >= coopShop.allyMaxHearts
+                            ? `${coopShop.allyName} is at full Hearts.`
+                            : `${coopShop.allyName}: ${coopShop.allyHearts}/${coopShop.allyMaxHearts} ♥`}
+                        </Text>
+                      </View>
+                    </View>
+                    {priceBtn({
+                      testID: 'spire-shop-gift-heal',
+                      disabled:
+                        coopShop.giftedHeal ||
+                        !coopShop.allyConnected ||
+                        coopShop.allyHearts >= coopShop.allyMaxHearts ||
+                        run.coins < coopShop.giftHealCost,
+                      label: coopShop.giftedHeal ? 'USED' : `Gift ${coopShop.giftHealCost}¢`,
+                      onPress: () => {
+                        band.cue('heal');
+                        coopShop.onGiftHealToAlly();
+                      },
+                    })}
+                  </View>
+                </SpireStatPop>
+              )}
+
               {/* Weapon Forge Service */}
               <SpireStatPop value={shop.forged ? 'done' : 'ready'}>
                 <UpgradeOfferRow
@@ -582,7 +670,43 @@ const SpireShop: React.FC<Props> = ({
           </View>
         )}
 
-        <Btn testID="spire-shop-leave" label="Leave Shop & Continue" icon="lorc/mountaintop" onPress={() => { sfx('confirm'); onLeave(); }} />
+        {coopShop && (coopShop.localReady || coopShop.allyReady) && (
+          <View style={st.coopReadyStrip} testID="spire-shop-coop-status">
+            <Icon
+              name={coopShop.localReady && !coopShop.allyReady ? 'lorc/hourglass' : 'lorc/checked-shield'}
+              size={14}
+              color="#0F766E"
+              noShadow
+            />
+            <Text style={st.coopReadyText}>
+              {coopShop.localReady && !coopShop.allyReady
+                ? `Waiting for ${coopShop.allyName} to finish shopping…`
+                : `${coopShop.allyName} is ready to leave ✓`}
+            </Text>
+          </View>
+        )}
+
+        <Btn
+          testID="spire-shop-leave"
+          label={
+            coopShop
+              ? coopShop.localReady && !coopShop.allyReady
+                ? `Waiting for ${coopShop.allyName}…`
+                : coopShop.allyReady
+                  ? 'Ready — Continue Together!'
+                  : 'Ready to Leave Shop'
+              : 'Leave Shop & Continue'
+          }
+          icon={
+            coopShop
+              ? coopShop.localReady && !coopShop.allyReady
+                ? 'lorc/hourglass'
+                : 'lorc/checked-shield'
+              : 'lorc/mountaintop'
+          }
+          disabled={Boolean(coopShop && coopShop.localReady && !coopShop.allyReady)}
+          onPress={() => { sfx('confirm'); onLeave(); }}
+        />
       </ScrollView>
     </View>
   );
@@ -696,6 +820,13 @@ const st = StyleSheet.create({
   purgeBtnText: { fontSize: 11, fontWeight: '900', color: '#991B1B', fontVariant: ['tabular-nums'] },
   forgePicker: { backgroundColor: '#FFFBEB', borderRadius: 10, borderWidth: 2, borderColor: '#D97706', padding: 10, gap: 8 },
   forgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  giftToggleBar: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 8, backgroundColor: '#F0FDFA', borderRadius: 9, borderWidth: 2, borderColor: '#0F766E', paddingHorizontal: 10, paddingVertical: 7 },
+  giftToggleBarActive: { backgroundColor: '#0F766E', borderColor: INK },
+  giftToggleText: { flex: 1, fontSize: 11.5, fontWeight: '900', color: '#0F766E' },
+  giftToggleTextActive: { color: COLORS.canvasWhite },
+  giftServiceRow: { backgroundColor: '#F0FDFA', borderColor: '#0F766E' },
+  coopReadyStrip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#CCFBF1', borderRadius: 8, borderWidth: 1.5, borderColor: '#0F766E', paddingHorizontal: 10, paddingVertical: 6 },
+  coopReadyText: { fontSize: 11.5, fontWeight: '900', color: '#115E59' },
 });
 
 export default SpireShop;

@@ -53,6 +53,7 @@ import {
   SpireStatPop,
   SpireTactilePressable,
 } from './SpireMotion';
+import SpireCoopLobby, { type SpireCoopLobbyProps } from './SpireCoopLobby';
 
 export interface SpireSetupProps {
   activeRun: SpireRun | null;
@@ -62,6 +63,8 @@ export interface SpireSetupProps {
   initialFighter?: CharacterName;
   initialAscension?: number;
   initialDailyDate?: string;
+  initialCoopCode?: string;
+  coopLobbyProps?: SpireCoopLobbyProps;
   onStartNew: (
     fighter: CharacterName,
     ascension: number,
@@ -98,12 +101,17 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
   initialFighter,
   initialAscension,
   initialDailyDate,
+  initialCoopCode,
+  coopLobbyProps,
   onStartNew,
   onResume,
   onAbandonActive,
   onExit,
 }) => {
   const insets = useSafeAreaInsets();
+  const [climbMode, setClimbMode] = useState<'solo' | 'coop'>(() =>
+    initialCoopCode ? 'coop' : 'solo'
+  );
   const [tab, setTab] = useState<'standard' | 'daily'>(initialTab);
   const [fighter, setFighter] = useState<CharacterName>(
     initialFighter ?? activeRun?.fighter ?? 'Orange Tabby'
@@ -126,6 +134,10 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
   const hasSharedLaunch = Boolean(
     initialSeed || initialFighter || initialAscension !== undefined || initialDailyDate
   );
+
+  useEffect(() => {
+    if (initialCoopCode) setClimbMode('coop');
+  }, [initialCoopCode]);
 
   useEffect(() => {
     setConfirmAbandon(false);
@@ -220,6 +232,62 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
       </View>
 
       <ScrollView contentContainerStyle={st.body}>
+        {/* Party Mode Segmented Toggle: Solo Climb | 2P Co-Op Duo */}
+        <View style={st.partyToggleRow} testID="spire-party-toggle">
+          <SpireTactilePressable
+            testID="spire-mode-solo"
+            small
+            accessibilityRole="button"
+            accessibilityState={{ selected: climbMode === 'solo' }}
+            onPress={() => { sfx('click'); setClimbMode('solo'); }}
+            style={[st.partyBtn, climbMode === 'solo' && st.partyBtnActive]}
+          >
+            <Icon name="lorc/mountaintop" size={15} color={climbMode === 'solo' ? INK : TONE.onDusk} />
+            <Text style={[st.partyText, climbMode === 'solo' && st.partyTextActive]}>SOLO CLIMB</Text>
+          </SpireTactilePressable>
+          <SpireTactilePressable
+            testID="spire-mode-coop"
+            small
+            accessibilityRole="button"
+            accessibilityState={{ selected: climbMode === 'coop' }}
+            onPress={() => { sfx('click'); setClimbMode('coop'); }}
+            style={[st.partyBtn, climbMode === 'coop' && st.partyBtnCoopActive]}
+          >
+            <Icon name="lorc/two-shadows" size={15} color={climbMode === 'coop' ? COLORS.canvasWhite : COLORS.actionYellow} />
+            <Text style={[st.partyText, climbMode === 'coop' && st.partyTextCoopActive]}>2P CO-OP DUO</Text>
+          </SpireTactilePressable>
+        </View>
+
+        {climbMode === 'coop' ? (
+          <SpireCoopLobby
+            roomCode={coopLobbyProps?.roomCode ?? null}
+            connectionState={coopLobbyProps?.connectionState ?? 'idle'}
+            errorMessage={coopLobbyProps?.errorMessage}
+            isHost={coopLobbyProps?.isHost ?? false}
+            localPlayer={coopLobbyProps?.localPlayer ?? null}
+            allyPlayer={coopLobbyProps?.allyPlayer ?? null}
+            selectedFighter={coopLobbyProps?.selectedFighter ?? fighter}
+            ascension={coopLobbyProps?.ascension ?? ascension}
+            maxSelectableAsc={coopLobbyProps?.maxSelectableAsc ?? maxSelectableAsc}
+            initialCoopCode={coopLobbyProps?.initialCoopCode ?? initialCoopCode}
+            coopServer={coopLobbyProps?.coopServer}
+            canStartClimb={coopLobbyProps?.canStartClimb ?? false}
+            onSelectFighter={next => {
+              setFighter(next);
+              coopLobbyProps?.onSelectFighter(next);
+            }}
+            onChangeAscension={next => {
+              setAscension(next);
+              coopLobbyProps?.onChangeAscension?.(next);
+            }}
+            onCreateRoom={coopLobbyProps?.onCreateRoom ?? (() => {})}
+            onJoinRoom={coopLobbyProps?.onJoinRoom ?? (() => {})}
+            onLeaveRoom={coopLobbyProps?.onLeaveRoom ?? (() => {})}
+            onToggleReady={coopLobbyProps?.onToggleReady ?? (() => {})}
+            onStartClimb={coopLobbyProps?.onStartClimb ?? (() => {})}
+          />
+        ) : (
+        <>
         {/* Shared Seed Deep-Link Banner */}
         {hasSharedLaunch && (
           <View style={st.sharedBanner} testID="spire-shared-banner">
@@ -575,28 +643,32 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
             </View>
           )}
         </SpireCrossfadeSwap>
+        </>
+        )}
       </ScrollView>
 
-      <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        {tab === 'daily' ? (
-          <Btn
-            testID="spire-start-daily"
-            label={dailyClearedToday ? "Replay Today's Daily Climb" : 'Begin Daily Climb'}
-            icon="lorc/rainbow-star"
-            onPress={startDailyClimb}
-          />
-        ) : (
-          <Btn
-            testID="spire-start-climb"
-            label={activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' ? 'Start Fresh Climb' : 'Begin Summit Climb'}
-            icon="lorc/mountaintop"
-            onPress={() => {
-              sfx('confirm');
-              onStartNew(fighter, ascension, seed, { themePacks: [...activePacks] });
-            }}
-          />
-        )}
-      </View>
+      {climbMode === 'solo' && (
+        <View style={[st.footer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+          {tab === 'daily' ? (
+            <Btn
+              testID="spire-start-daily"
+              label={dailyClearedToday ? "Replay Today's Daily Climb" : 'Begin Daily Climb'}
+              icon="lorc/rainbow-star"
+              onPress={startDailyClimb}
+            />
+          ) : (
+            <Btn
+              testID="spire-start-climb"
+              label={activeRun && activeRun.phase !== 'defeat' && activeRun.phase !== 'victory' ? 'Start Fresh Climb' : 'Begin Summit Climb'}
+              icon="lorc/mountaintop"
+              onPress={() => {
+                sfx('confirm');
+                onStartNew(fighter, ascension, seed, { themePacks: [...activePacks] });
+              }}
+            />
+          )}
+        </View>
+      )}
     </View>
   );
 };
@@ -689,6 +761,13 @@ const st = StyleSheet.create({
   resumeSub: { fontSize: 12, fontWeight: '700', color: TONE.spent },
   resumeBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   confirmDangerBtn: { flex: 1, backgroundColor: '#B91C1C', borderColor: '#7F1D1D' },
+  partyToggleRow: { flexDirection: 'row', gap: 8, backgroundColor: '#231A13', padding: 4, borderRadius: 12, borderWidth: 2, borderColor: '#6B5A49' },
+  partyBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 8 },
+  partyBtnActive: { backgroundColor: COLORS.canvasWhite, borderWidth: 2, borderBottomWidth: 3, borderColor: INK },
+  partyBtnCoopActive: { backgroundColor: '#0F766E', borderWidth: 2, borderBottomWidth: 3, borderColor: INK },
+  partyText: { fontSize: 11.5, fontWeight: '900', color: TONE.onDusk, letterSpacing: 0.7 },
+  partyTextActive: { color: INK },
+  partyTextCoopActive: { color: COLORS.canvasWhite },
   tabRow: { flexDirection: 'row', gap: 8 },
   tabBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#3A2D21', borderRadius: 10, borderWidth: 2, borderColor: '#6B5A49', paddingVertical: 9, paddingHorizontal: 8 },
   tabBtnActive: { backgroundColor: COLORS.actionYellow, borderColor: INK, borderBottomWidth: 4 },
