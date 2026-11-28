@@ -15,6 +15,7 @@ module.exports = defineConfig([
       'public/*',
       'specs/*',
       'motion-out/*',
+      'workers/**',
     ],
   },
   {

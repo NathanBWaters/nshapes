@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nshapes-coop-room",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-05-01",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COOP_ROOM",
+        "class_name": "CoopRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CoopRoom"]
+    }
+  ]
+}
