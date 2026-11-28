@@ -4,7 +4,7 @@
  * Shapes (compact 24x30 / 1:1.25 viewBox, strokeWidth 1.9, round joins, -45° \ diagonal hatch):
  *   - `oval`     slot → Circle   (smooth symmetric convex; r=9.4)
  *   - `diamond`  slot → Triangle (sharp straight-edge convex; bottom-heavy apex)
- *   - `squiggle` slot → Bolt     (chunky 8-vertex lightning bolt; crisp V1 diagonal pop-out)
+ *   - `squiggle` slot → Bolt     (6-vertex pointed lightning bolt; symmetric angled zigzag)
  *
  * Colors (universal CVD-safe by default; 3-way warm/cool/magenta split + L* staircase):
  *   - `red`    slot → Orange / Tangerine   (#DF5A00 light / #FFAC24 dark) · badge 'O'
@@ -29,8 +29,8 @@ export const CARD_STRIPE_PITCH = 3.8;
 export const CARD_SHAPE_GEOMETRY = {
   circle: { cx: 12, cy: 15, r: 9.4 },
   trianglePoints: '12,2.2 22,26.8 2,26.8',
-  /** Chunky 8-vertex Bolt (5.22u clear waist, 52.6% clear interior, 5 diagonal stripes, zero clip). */
-  boltPoints: '12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2',
+  /** Pointed 6-vertex lightning bolt (Pokemon-style angled zigzag, symmetric around (12,15), crisp hatch/open interior, zero clip). */
+  boltPoints: '14.8,1.8 12.5,11.8 22.4,9.2 9.2,28.2 11.5,18.2 1.6,20.8',
 } as const;
 
 export const SHAPE_DISPLAY_NAME: Record<Shape, string> = {

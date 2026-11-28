@@ -25,7 +25,7 @@ const HEIGHT = 630;
 const COLOR_ORANGE = '#DF5A00';
 const COLOR_BLUE = '#007ED9';
 const COLOR_PINK = '#940E65';
-const BOLT_POINTS_24x30 = '12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2';
+const BOLT_POINTS_24x30 = '14.8,1.8 12.5,11.8 22.4,9.2 9.2,28.2 11.5,18.2 1.6,20.8';
 const TRIANGLE_POINTS_24x30 = '12,2.2 22,26.8 2,26.8';
 
 // Storybook UI palette

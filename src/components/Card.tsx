@@ -944,7 +944,7 @@ const getShapeColor = (color: string, background?: Background, _colorblind = fal
 
 const getCardBackgroundColor = (background?: Background) => getCardStockBackground(background);
 
-// -45° diagonal hatch pattern ("\") for "striped" shading — cuts cleanly across Circle, Triangle, and chunky 8-vertex Bolt
+// -45° diagonal hatch pattern ("\") for "striped" shading — cuts cleanly across Circle, Triangle, and pointed 6-vertex Bolt
 const StripesPattern: React.FC<{ id: string; color: string }> = memo(function StripesPattern({ id, color }) {
   const pitch = CARD_STRIPE_PITCH;
   return (
@@ -1017,7 +1017,7 @@ const Diamond: React.FC<ShapeProps> = memo(function Diamond({ color, shading, ba
   );
 });
 
-// Slot 'squiggle' → Chunky 8-vertex Bolt (crisp diagonal V1 pop-out; 52.6% clear interior, zero clip)
+// Slot 'squiggle' → Pointed 6-vertex Bolt (angled zigzag silhouette, crisp hatch/open interior, zero clip)
 const Squiggle: React.FC<ShapeProps> = memo(function Squiggle({ color, shading, background, colorblind = false }) {
   const strokeColor = getShapeColor(color, background, colorblind);
   const patternId = `stripes-bolt-${color}-${background || 'white'}`;

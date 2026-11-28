@@ -915,4 +915,478 @@ describe('SPRITE-POP pixel-continuity & centroid-jump gate (scripts/motion/analy
     expect(res.violentWhipPops.map(p => p.at)).toContain(16);
     expect(res.isolatedPopPops.map(p => p.at)).toContain(16);
   });
+
+  it('auto-activates on enemy-sprite-viewport, honors explicit spriteGate.viewportKey when both viewports exist, and leaves non-sprite shots untouched', () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'nshapes-enemy-sprite-pop-'));
+    try {
+      const res = runNodeEsm<{
+        autoConfig: { auto: boolean; viewportKey: string } | null;
+        nonSpriteConfig: unknown;
+        autoEnemyPops: { code: string; at: number; who: string }[];
+        autoEnemyReport: string;
+        explicitEnemyPops: { code: string; at: number; who: string }[];
+        explicitEnemyWho: string;
+        nonSpriteHasContinuity: boolean;
+        nonSpritePopCount: number;
+      }>(
+        `
+        import fs from 'node:fs';
+        import path from 'node:path';
+        import { createRequire } from 'node:module';
+        import { analyze, resolveSpriteGateConfig } from './scripts/motion/analyze.mjs';
+
+        const require = createRequire(import.meta.url);
+        const { PNG } = require('pngjs');
+        const tmpBase = JSON.parse(process.env.MOTION_TEST_PAYLOAD).tmpBase;
+
+        function writePng(file, width, height, draw) {
+          const png = new PNG({ width, height });
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const o = (y * width + x) * 4;
+              const [r, g, b, a] = draw(x, y);
+              png.data[o] = r;
+              png.data[o + 1] = g;
+              png.data[o + 2] = b;
+              png.data[o + 3] = a;
+            }
+          }
+          fs.writeFileSync(file, PNG.sync.write(png));
+        }
+
+        function buildEnemyFixture(dir, { shotConfig, width = 96, height = 96, regions, clip, duelLayout = false }) {
+          const framesDir = path.join(dir, 'frames');
+          fs.mkdirSync(framesDir, { recursive: true });
+          const frameCount = 24;
+          for (let f = 0; f < frameCount; f++) {
+            const enemySnapped = f === 4;
+            const enemyPopped = f >= 14;
+            const fighterDecoyPop = duelLayout && f >= 10;
+            writePng(path.join(framesDir, 'f' + String(f).padStart(3, '0') + '.png'), width, height, (x, y) => {
+              if (duelLayout) {
+                // Left half [0..96): fighter-sprite-viewport with decoy pop at f10
+                if (x < 96) {
+                  const fcx = fighterDecoyPop ? 32 : 50 + (f % 4 === 0 ? 1 : 0);
+                  const fcol = fighterDecoyPop ? [210, 45, 45] : [225, 130, 40];
+                  if (Math.hypot(x - fcx, y - 48) <= 18) return [fcol[0], fcol[1], fcol[2], 255];
+                  return [255, 255, 255, 255];
+                }
+                // Right half [96..192): enemy-sprite-viewport with whitelisted snap at f4 and real pop at f14
+                const ecx = 96 + (enemySnapped ? 66 : enemyPopped ? 32 : 50 + (f % 4 === 0 ? 1 : 0));
+                const ecol = enemySnapped ? [40, 70, 220] : enemyPopped ? [30, 150, 90] : [135, 70, 190];
+                if (Math.hypot(x - ecx, y - 48) <= 18) return [ecol[0], ecol[1], ecol[2], 255];
+                return [255, 255, 255, 255];
+              }
+              const cx = enemySnapped ? 66 : enemyPopped ? 34 : 50 + (f % 4 === 0 ? 1 : 0);
+              const col = enemySnapped ? [40, 70, 220] : enemyPopped ? [30, 150, 90] : [135, 70, 190];
+              if (Math.hypot(x - cx, y - 48) <= 18) return [col[0], col[1], col[2], 255];
+              return [255, 255, 255, 255];
+            });
+          }
+          const capture = {
+            shot: shotConfig,
+            label: 'test',
+            url: 'http://localhost:8099/dev/fighters',
+            sha: 'testsha',
+            step: 16,
+            dpr: 1,
+            viewport: { width: 390, height: 844 },
+            clip: clip === undefined ? { x: 0, y: 0, width, height } : clip,
+            size: { x: 0, y: 0, width, height },
+            preroll: 0,
+            ambient: 0,
+            frames: frameCount,
+            activity: Array.from({ length: frameCount }, (_, i) => (i === 0 ? 0 : 10)),
+            boxes: Array.from({ length: frameCount }, () => [0, 0, width, height]),
+            regions,
+            tracks: [],
+          };
+          fs.writeFileSync(path.join(dir, 'capture.json'), JSON.stringify(capture));
+          return capture;
+        }
+
+        // 1. Auto-enabled clipped enemy-sprite-viewport shot (no explicit spriteGate)
+        const autoDir = path.join(tmpBase, 'auto-enemy');
+        const autoCapture = buildEnemyFixture(autoDir, {
+          shotConfig: { id: 'synthetic-auto-enemy', about: 'Auto clipped enemy shot', path: '/dev/fighters', mute: [] },
+          regions: { 'enemy-sprite-viewport': [0, 0, 96, 96] },
+        });
+        const autoConfig = resolveSpriteGateConfig(autoCapture);
+        const autoOut = analyze(autoDir);
+
+        // 2. Explicit viewportKey: 'enemy-sprite-viewport' when BOTH viewports appear in capture.regions
+        const explicitDir = path.join(tmpBase, 'explicit-enemy');
+        buildEnemyFixture(explicitDir, {
+          shotConfig: {
+            id: 'synthetic-explicit-enemy',
+            about: 'Explicit enemy viewportKey prefers enemy over fighter',
+            path: '/dev/adventure',
+            mute: [],
+            spriteGate: { viewportKey: 'enemy-sprite-viewport', snapFrames: [4, 5] },
+          },
+          width: 192,
+          height: 96,
+          duelLayout: true,
+          regions: {
+            'fighter-sprite-viewport': [0, 0, 96, 96],
+            'enemy-sprite-viewport': [96, 0, 96, 96],
+          },
+        });
+        const explicitOut = analyze(explicitDir);
+
+        // 3. Full-screen non-sprite shot (clip: null) containing enemy-sprite-viewport: untouched
+        const nonSpriteDir = path.join(tmpBase, 'non-sprite-enemy');
+        const nonSpriteCapture = buildEnemyFixture(nonSpriteDir, {
+          shotConfig: { id: 'synthetic-fullscreen-enemy', about: 'Full screen shot with enemy', path: '/', mute: [] },
+          clip: null,
+          regions: { 'enemy-sprite-viewport': [280, 64, 48, 48] },
+        });
+        const nonSpriteConfig = resolveSpriteGateConfig(nonSpriteCapture);
+        const nonSpriteOut = analyze(nonSpriteDir);
+
+        console.log(JSON.stringify({
+          autoConfig,
+          nonSpriteConfig,
+          autoEnemyPops: autoOut.hints.filter(h => h.code === 'SPRITE-POP'),
+          autoEnemyReport: autoOut.report,
+          explicitEnemyPops: explicitOut.hints.filter(h => h.code === 'SPRITE-POP'),
+          explicitEnemyWho: explicitOut.spriteContinuity?.summary?.who ?? '',
+          nonSpriteHasContinuity: Boolean(nonSpriteOut.spriteContinuity),
+          nonSpritePopCount: nonSpriteOut.hints.filter(h => h.code === 'SPRITE-POP').length,
+        }));
+      `,
+        { tmpBase }
+      );
+
+      expect(res.autoConfig).toEqual({ auto: true, viewportKey: 'enemy-sprite-viewport' });
+      expect(res.autoEnemyPops.map(p => p.at)).toEqual(expect.arrayContaining([4, 14]));
+      expect(res.autoEnemyPops.every(p => p.who === 'enemy-sprite-viewport')).toBe(true);
+      expect(res.autoEnemyReport).toContain('Sprite continuity (enemy-sprite-viewport');
+
+      // Explicit viewportKey inspects ONLY enemy-sprite-viewport (ignores fighter f10 decoy and whitelisted f4/f5, catches enemy f14)
+      expect(res.explicitEnemyWho).toBe('enemy-sprite-viewport');
+      const explicitFrames = res.explicitEnemyPops.map(p => p.at);
+      expect(explicitFrames).toContain(14);
+      expect(explicitFrames).not.toContain(4);
+      expect(explicitFrames).not.toContain(5);
+      expect(explicitFrames).not.toContain(10);
+
+      expect(res.nonSpriteConfig).toBeNull();
+      expect(res.nonSpriteHasContinuity).toBe(false);
+      expect(res.nonSpritePopCount).toBe(0);
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it('tracks moving enemy-sprite-viewport containers via trackViewport + roiInset (including track-only lookup without regions) while catching internal teleports', () => {
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'nshapes-enemy-track-'));
+    try {
+      const res = runNodeEsm<{
+        smoothPops: { code: string; at: number }[];
+        smoothWho: string;
+        teleportPops: { code: string; at: number; who: string }[];
+        trackOnlySmoothPops: { code: string; at: number }[];
+        trackOnlyWho: string;
+      }>(
+        `
+        import fs from 'node:fs';
+        import path from 'node:path';
+        import { createRequire } from 'node:module';
+        import { analyze } from './scripts/motion/analyze.mjs';
+
+        const require = createRequire(import.meta.url);
+        const { PNG } = require('pngjs');
+        const tmpBase = JSON.parse(process.env.MOTION_TEST_PAYLOAD).tmpBase;
+
+        function buildMovingEnemyCapture(dir, { injectTeleportAt = null, includeRegion = true, trackLabel = 'enemy-sprite-viewport›div' }) {
+          const framesDir = path.join(dir, 'frames');
+          fs.mkdirSync(framesDir, { recursive: true });
+          const W = 120;
+          const H = 96;
+          const frameCount = 32;
+          const trackRows = [];
+
+          for (let f = 0; f < frameCount; f++) {
+            const shifted = f >= 10 && f < 22;
+            const shiftX = shifted ? -6.0 : 0;
+            const shiftY = shifted ? 2.5 : 0;
+            const vpCx = 62 + shiftX;
+            const vpCy = 46 + shiftY;
+            trackRows.push([f, vpCx, vpCy, 74, 74, 1, 0]);
+
+            const cell = Math.floor(f / 4) % 8;
+            const phase = (cell / 8) * Math.PI * 2;
+            const teleported = injectTeleportAt != null && f >= injectTeleportAt;
+            const spriteCx = vpCx + (teleported ? 12 : Math.sin(phase) * 1.4);
+            const spriteCy = vpCy + Math.cos(phase) * 1.2;
+            const color = teleported ? [35, 165, 95] : [132, 68, 185];
+
+            const png = new PNG({ width: W, height: H });
+            for (let y = 0; y < H; y++) {
+              for (let x = 0; x < W; x++) {
+                const o = (y * W + x) * 4;
+                const cardRight = 102 + shiftX;
+                const cardTop = 6 + shiftY;
+                let r = 255;
+                let g = 255;
+                let b = 255;
+                if (x > cardRight || y < cardTop) {
+                  r = 124;
+                  g = 58;
+                  b = 237; // boss card outer accent border
+                } else if (x > cardRight - 3 || y < cardTop + 3) {
+                  r = 22;
+                  g = 22;
+                  b = 22; // ink outline
+                } else if (Math.hypot(x - spriteCx, y - spriteCy) <= 18) {
+                  r = color[0];
+                  g = color[1];
+                  b = color[2];
+                }
+                png.data[o] = r;
+                png.data[o + 1] = g;
+                png.data[o + 2] = b;
+                png.data[o + 3] = 255;
+              }
+            }
+            fs.writeFileSync(path.join(framesDir, 'f' + String(f).padStart(3, '0') + '.png'), PNG.sync.write(png));
+          }
+
+          const capture = {
+            shot: {
+              id: 'synthetic-moving-enemy-card',
+              about: 'Moving enemy viewport stabilization regression test',
+              path: '/dev/fighters',
+              mute: [],
+              spriteGate: { viewportKey: 'enemy-sprite-viewport', snapFrames: [], trackViewport: true, roiInset: 4 },
+            },
+            label: 'test',
+            url: 'http://localhost:8099/dev/fighters',
+            sha: 'testsha',
+            step: 16,
+            dpr: 1,
+            viewport: { width: 390, height: 844 },
+            clip: { x: 0, y: 0, width: W, height: H },
+            size: { x: 0, y: 0, width: W, height: H },
+            preroll: 0,
+            ambient: 0,
+            frames: frameCount,
+            activity: Array.from({ length: frameCount }, (_, i) => (i === 0 ? 0 : 12)),
+            boxes: Array.from({ length: frameCount }, () => [0, 0, W, H]),
+            regions: includeRegion ? { 'enemy-sprite-viewport': [19, 9, 80, 77] } : {},
+            tracks: [{ id: 1, label: trackLabel, first: 0, s: trackRows, last: frameCount - 1 }],
+          };
+          fs.writeFileSync(path.join(dir, 'capture.json'), JSON.stringify(capture));
+        }
+
+        const smoothDir = path.join(tmpBase, 'smooth-enemy-card');
+        buildMovingEnemyCapture(smoothDir, {});
+        const smoothOut = analyze(smoothDir);
+
+        const popDir = path.join(tmpBase, 'pop-enemy-card');
+        buildMovingEnemyCapture(popDir, { injectTeleportAt: 18 });
+        const popOut = analyze(popDir);
+
+        const trackOnlyDir = path.join(tmpBase, 'track-only-enemy-card');
+        buildMovingEnemyCapture(trackOnlyDir, { includeRegion: false, trackLabel: '#adventure-run-enemy' });
+        const trackOnlyOut = analyze(trackOnlyDir);
+
+        console.log(JSON.stringify({
+          smoothPops: smoothOut.hints.filter(h => h.code === 'SPRITE-POP'),
+          smoothWho: smoothOut.spriteContinuity?.summary?.who ?? '',
+          teleportPops: popOut.hints.filter(h => h.code === 'SPRITE-POP'),
+          trackOnlySmoothPops: trackOnlyOut.hints.filter(h => h.code === 'SPRITE-POP'),
+          trackOnlyWho: trackOnlyOut.spriteContinuity?.summary?.who ?? '',
+        }));
+      `,
+        { tmpBase }
+      );
+
+      expect(res.smoothPops).toHaveLength(0);
+      expect(res.smoothWho).toBe('enemy-sprite-viewport');
+      expect(res.teleportPops.map(p => p.at)).toContain(18);
+      expect(res.teleportPops[0]?.who).toBe('enemy-sprite-viewport');
+      expect(res.trackOnlySmoothPops).toHaveLength(0);
+      expect(res.trackOnlyWho).toBe('enemy-sprite-viewport');
+    } finally {
+      fs.rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  it('registers all 5 Wave 1 enemy sprite transition shots with enemy-sprite-viewport spriteGate configs', () => {
+    const listOut = execFileSync('node', [path.join(ROOT, 'scripts/motion/capture.mjs'), '--list'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+
+    const requiredEnemyShots = [
+      'enemy-sprite-idle-loop',
+      'enemy-tx-boss-attack',
+      'enemy-tx-hit-recoil',
+      'enemy-tx-sleepy-wake',
+      'enemy-tx-taunt-mood',
+    ];
+    for (const id of requiredEnemyShots) {
+      expect(listOut).toContain(id);
+    }
+
+    const specs = runNodeEsm<
+      Record<
+        string,
+        {
+          id: string;
+          frames: number;
+          path: string;
+          actionFrames: number[];
+          spriteGate?: {
+            viewportKey?: string;
+            snapFrames?: number[];
+            stabilizeStageShake?: boolean;
+          };
+        }
+      >
+    >(`
+      import enemies from './scripts/motion/shots/enemies.mjs';
+      const out = {};
+      for (const id of [
+        'enemy-sprite-idle-loop',
+        'enemy-tx-boss-attack',
+        'enemy-tx-hit-recoil',
+        'enemy-tx-sleepy-wake',
+        'enemy-tx-taunt-mood',
+      ]) {
+        const s = enemies[id];
+        out[id] = {
+          id: s.id,
+          frames: s.frames,
+          path: s.path,
+          actionFrames: Array.isArray(s.actions) ? s.actions.map(a => a.at) : [],
+          spriteGate: s.spriteGate,
+        };
+      }
+      console.log(JSON.stringify(out));
+    `);
+
+    expect(specs['enemy-sprite-idle-loop'].frames).toBe(68);
+    expect(specs['enemy-sprite-idle-loop'].path).toBe('/dev/fighters');
+    expect(specs['enemy-sprite-idle-loop'].spriteGate).toEqual({
+      viewportKey: 'enemy-sprite-viewport',
+      snapFrames: [],
+    });
+
+    expect(specs['enemy-tx-boss-attack'].frames).toBe(84);
+    expect(specs['enemy-tx-boss-attack'].path).toBe('/dev/fighters');
+    expect(specs['enemy-tx-boss-attack'].spriteGate?.viewportKey).toBe('enemy-sprite-viewport');
+    // Boss strikeStartMs = 192ms (+1f commit -> f13) + 2nd slash arc (f17) covered while windup & recovery stay gated
+    expect(specs['enemy-tx-boss-attack'].spriteGate?.snapFrames).toEqual(expect.arrayContaining([12, 17]));
+    expect(Math.max(...(specs['enemy-tx-boss-attack'].spriteGate?.snapFrames ?? []))).toBeLessThan(20);
+
+    expect(specs['enemy-tx-hit-recoil'].frames).toBe(84);
+    expect(specs['enemy-tx-hit-recoil'].path).toContain('/dev/adventure');
+    expect(specs['enemy-tx-hit-recoil'].path).toContain('level=1-3');
+    expect(specs['enemy-tx-hit-recoil'].spriteGate?.viewportKey).toBe('enemy-sprite-viewport');
+    expect(specs['enemy-tx-hit-recoil'].spriteGate?.stabilizeStageShake).toBe(true);
+    expect(specs['enemy-tx-hit-recoil'].spriteGate?.snapFrames).toEqual(
+      expect.arrayContaining([5, 20, 21])
+    );
+    expect(specs['enemy-tx-hit-recoil'].spriteGate?.snapFrames).not.toContain(10);
+    expect(Math.max(...(specs['enemy-tx-hit-recoil'].spriteGate?.snapFrames ?? []))).toBeLessThan(27);
+
+    expect(specs['enemy-tx-sleepy-wake'].frames).toBe(64);
+    expect(specs['enemy-tx-sleepy-wake'].path).toBe('/dev/fighters');
+    expect(specs['enemy-tx-sleepy-wake'].spriteGate).toEqual({
+      viewportKey: 'enemy-sprite-viewport',
+      snapFrames: [],
+    });
+    expect(specs['enemy-tx-sleepy-wake'].actionFrames).toHaveLength(2);
+
+    expect(specs['enemy-tx-taunt-mood'].frames).toBe(72);
+    expect(specs['enemy-tx-taunt-mood'].path).toBe('/dev/fighters');
+    expect(specs['enemy-tx-taunt-mood'].spriteGate).toEqual({
+      viewportKey: 'enemy-sprite-viewport',
+      snapFrames: [],
+    });
+    expect(specs['enemy-tx-taunt-mood'].actionFrames).toHaveLength(4);
+  });
+
+  it('locks foreground centroid background mode across the sequence so borderline border uniformity never fabricates a mid-shot centroid jump', () => {
+    const res = runNodeEsm<{
+      stablePops: { at: number; reason: string; centroidShiftPx: number }[];
+      stableMaxShiftPx: number;
+      teleportPops: { at: number; reason: string; centroidShiftPx: number }[];
+    }>(`
+      import { detectSpritePops } from './scripts/motion/analyze.mjs';
+
+      const W = 100;
+      const H = 100;
+
+      // Reproduces the exact enemy-tx-hit-recoil/w1r2 f47->f48 edge case:
+      // right+bottom borders hold white outer page margin (~53% of border on f0..f15),
+      // then a tiny 1px right-border shift on f16..f31 drops white border share to ~28%
+      // while the sprite itself stays completely stationary over banded meadow backdrop.
+      function makeBorderlineStageFrame({ rightEdgeIsWhite, spriteShiftX = 0, idleBob = 0 }) {
+        const data = new Uint8Array(W * H * 4);
+        for (let y = 0; y < H; y++) {
+          for (let x = 0; x < W; x++) {
+            const o = (y * W + x) * 4;
+            let r;
+            let g;
+            let b;
+            if (y >= H - 2) {
+              // Bottom page margin: always white
+              r = 255; g = 255; b = 255;
+            } else if (x >= W - 2 && rightEdgeIsWhite) {
+              // Right page margin sliver: white on f0..f15, nudged off white on f16..f31
+              r = 255; g = 255; b = 255;
+            } else if (x < 6 && y < 12 && rightEdgeIsWhite) {
+              r = 255; g = 255; b = 255;
+            } else if (y < 60) {
+              // Pale meadow sky band
+              r = 228; g = 236; b = 214;
+            } else {
+              // Darker meadow grass band
+              r = 122; g = 166; b = 96;
+            }
+            // Centered green sprite (stationary except tiny idle bob or injected teleport)
+            const sx = 64 + spriteShiftX;
+            const sy = 56 + idleBob;
+            if (Math.hypot(x - sx, y - sy) <= 18) {
+              r = 38; g = 132; b = 52;
+            }
+            data[o] = r;
+            data[o + 1] = g;
+            data[o + 2] = b;
+            data[o + 3] = 255;
+          }
+        }
+        return { width: W, height: H, data };
+      }
+
+      const stableFrames = [];
+      const teleportFrames = [];
+      for (let f = 0; f < 32; f++) {
+        const rightEdgeIsWhite = f < 16;
+        const idleBob = (Math.floor(f / 4) % 2) * 0.8;
+        stableFrames.push(makeBorderlineStageFrame({ rightEdgeIsWhite, idleBob }));
+        teleportFrames.push(makeBorderlineStageFrame({
+          rightEdgeIsWhite,
+          idleBob,
+          spriteShiftX: f >= 22 ? -18 : 0,
+        }));
+      }
+
+      const stable = detectSpritePops(stableFrames, { snapFrames: [] });
+      const teleport = detectSpritePops(teleportFrames, { snapFrames: [] });
+      console.log(JSON.stringify({
+        stablePops: stable.findings,
+        stableMaxShiftPx: stable.summary.maxCentroidShiftPx,
+        teleportPops: teleport.findings,
+      }));
+    `);
+
+    expect(res.stablePops).toHaveLength(0);
+    expect(res.stableMaxShiftPx).toBeLessThan(3);
+    expect(res.teleportPops.map(p => p.at)).toContain(22);
+  });
 });

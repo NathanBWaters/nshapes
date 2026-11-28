@@ -4,6 +4,7 @@ import path from 'path';
 import { render } from '@testing-library/react-native';
 import { Svg } from 'react-native-svg';
 import type { SharedValue } from 'react-native-reanimated';
+import { RigVisualProvider } from '@/components/creatures/RigLayers';
 import {
   EnemyAvatar,
   ENEMY_MOTION,
@@ -11,12 +12,15 @@ import {
   playEnemySpeciesFidget,
 } from '@/components/enemies/EnemyAvatar';
 import { EnemyEyes, EnemyBlinkProvider } from '@/components/enemies/EnemyEyes';
+import { getEnemySpriteAtlasSpec } from '@/components/enemies/enemySpriteRegistry';
 import {
+  EnemyCreatureRig,
   getEnemyDefaultTier,
   getEnemyMassClass,
   getEnemySpeciesClass,
   isBossEnemy,
 } from '@/components/enemies/enemyRegistry';
+import { SILHOUETTE_INK } from '@/components/illustration/primitives';
 import {
   buildEnemyPersonality,
   getEnemyAttackTimings,
@@ -394,7 +398,7 @@ describe('Lane 2: Loop seams, 3-step blinks, mass-scaled boss kinematics, specie
     });
   });
 
-  describe('4. All 9 upgraded 3/4 LEFT storybook bosses render with gradients & clean #121212 silhouettes', () => {
+  describe('4. All 9 upgraded 3/4 LEFT storybook bosses render with Option B sprite atlases, SVG craft & clean #121212 silhouettes', () => {
     const collectNodes = (node: any, out: any[] = []): any[] => {
       if (!node || typeof node !== 'object') return out;
       if (Array.isArray(node)) {
@@ -406,46 +410,140 @@ describe('Lane 2: Loop seams, 3-step blinks, mass-scaled boss kinematics, specie
       return out;
     };
 
-    it.each(UPGRADED_BOSSES)('%s renders with storybook gradients, 3/4 left lean, and solid #121212 silhouette', bossName => {
-      const tier = getEnemyDefaultTier(bossName);
-      const normal = render(
+    it.each(UPGRADED_BOSSES)(
+      '%s renders with Option B EnemySpriteRig atlas & #121212 silhouette, preserving underlying SVG rig craft',
+      bossName => {
+        const tier = getEnemyDefaultTier(bossName);
+        const spec = getEnemySpriteAtlasSpec(bossName);
+        expect(spec).toBeDefined();
+
+        // 1) Live EnemyAvatar renders the Option B dual-layer 8x8 sprite atlas + boss halo
+        const normal = render(
+          <EnemyAvatar
+            enemy={{ name: bossName, tier }}
+            size={84}
+            mood="menacing"
+            facing="left"
+            animate={false}
+          />
+        );
+        expect(normal.getByTestId('enemy-sprite-viewport')).toBeTruthy();
+        expect(normal.getByTestId('boss-atmospheric-halo')).toBeTruthy();
+        const atlas = normal.getByTestId('enemy-sprite-atlas');
+        const prevAtlas = normal.getByTestId('enemy-sprite-atlas-prev');
+        expect(atlas.props.source).toBe(spec?.source);
+        expect(prevAtlas.props.source).toBe(spec?.source);
+        const flatStyle = Array.isArray(atlas.props.style)
+          ? Object.assign({}, ...atlas.props.style.filter(Boolean))
+          : atlas.props.style;
+        expect(flatStyle.width).toBe(84 * 8);
+        expect(flatStyle.height).toBe(84 * 8);
+        normal.unmount();
+
+        // 2) Live EnemyAvatar silhouette mode flattens sprite atlas cleanly to #121212 with no prev layer
+        const sil = render(
+          <EnemyAvatar
+            enemy={{ name: bossName, tier }}
+            size={84}
+            mood="idle"
+            facing="left"
+            animate={false}
+            silhouette
+          />
+        );
+        expect(sil.getByTestId('enemy-sprite-silhouette')).toBeTruthy();
+        expect(sil.queryByTestId('enemy-sprite-atlas-prev')).toBeNull();
+        const silAtlas = sil.getByTestId('enemy-sprite-atlas');
+        const silFlat = Array.isArray(silAtlas.props.style)
+          ? Object.assign({}, ...silAtlas.props.style.filter(Boolean))
+          : silAtlas.props.style;
+        expect(
+          silAtlas.props.tintColor === SILHOUETTE_INK || silFlat?.filter === 'brightness(0)'
+        ).toBe(true);
+        sil.unmount();
+
+        // 3) Underlying storybook SVG EnemyCreatureRig retains gradients, 3/4 left lean & clean #121212 silhouette
+        const svgNormal = render(
+          <RigVisualProvider silhouette={false} facing="left" overheadLighting scaleTier="boss">
+            <EnemyCreatureRig
+              enemyName={bossName}
+              expression="menacing"
+              blinkStage={0}
+              healthState="pristine"
+              gazeOffset={{ x: 0, y: 0 }}
+              facing="left"
+              scaleTier="boss"
+              silhouette={false}
+              headStyle={{}}
+              leftEarStyle={{}}
+              rightEarStyle={{}}
+              tailStyle={{}}
+              pawStyle={{}}
+            />
+          </RigVisualProvider>
+        );
+        const svgNormalNodes = collectNodes(svgNormal.toJSON());
+        const gradients = svgNormalNodes.filter(n => n.type === 'LinearGradient');
+        const leftTranslates = svgNormalNodes.filter(
+          n => typeof n.props?.transform === 'string' && n.props.transform.includes('translate(-')
+        );
+        expect(gradients.length).toBeGreaterThanOrEqual(1);
+        expect(leftTranslates.length).toBeGreaterThanOrEqual(1);
+        svgNormal.unmount();
+
+        const svgSil = render(
+          <RigVisualProvider silhouette facing="left" overheadLighting scaleTier="boss">
+            <EnemyCreatureRig
+              enemyName={bossName}
+              expression="menacing"
+              blinkStage={0}
+              healthState="pristine"
+              gazeOffset={{ x: 0, y: 0 }}
+              facing="left"
+              scaleTier="boss"
+              silhouette
+              headStyle={{}}
+              leftEarStyle={{}}
+              rightEarStyle={{}}
+              tailStyle={{}}
+              pawStyle={{}}
+            />
+          </RigVisualProvider>
+        );
+        const silNodes = collectNodes(svgSil.toJSON());
+        const silGradients = silNodes.filter(n => n.type === 'LinearGradient');
+        expect(silGradients.length).toBe(0);
+
+        const nonBlackFills = silNodes.filter(n => {
+          const fill = n.props?.fill;
+          if (typeof fill !== 'string') return false;
+          const f = fill.toLowerCase();
+          return f !== 'none' && f !== '#121212' && f !== 'transparent';
+        });
+        expect(nonBlackFills).toEqual([]);
+        svgSil.unmount();
+      }
+    );
+
+    it('keeps World 2-5 SVG foes rendering gradients, 3/4 left lean, and solid #121212 silhouette through EnemyAvatar', () => {
+      const svgFoe = render(
         <EnemyAvatar
-          enemy={{ name: bossName, tier }}
+          enemy={{ name: 'Charging Boar', tier: 2 }}
           size={84}
           mood="menacing"
           facing="left"
           animate={false}
         />
       );
-      const normalNodes = collectNodes(normal.toJSON());
-      const gradients = normalNodes.filter(n => n.type === 'LinearGradient');
-      const leftTranslates = normalNodes.filter(
-        n => typeof n.props?.transform === 'string' && n.props.transform.includes('translate(-')
-      );
-      expect(gradients.length).toBeGreaterThanOrEqual(1);
-      expect(leftTranslates.length).toBeGreaterThanOrEqual(1);
-
-      const sil = render(
-        <EnemyAvatar
-          enemy={{ name: bossName, tier }}
-          size={84}
-          mood="idle"
-          facing="left"
-          animate={false}
-          silhouette
-        />
-      );
-      const silNodes = collectNodes(sil.toJSON());
-      const silGradients = silNodes.filter(n => n.type === 'LinearGradient');
-      expect(silGradients.length).toBe(0);
-
-      const nonBlackFills = silNodes.filter(n => {
-        const fill = n.props?.fill;
-        if (typeof fill !== 'string') return false;
-        const f = fill.toLowerCase();
-        return f !== 'none' && f !== '#121212' && f !== 'transparent';
-      });
-      expect(nonBlackFills).toEqual([]);
+      expect(svgFoe.queryByTestId('enemy-sprite-viewport')).toBeNull();
+      const nodes = collectNodes(svgFoe.toJSON());
+      expect(nodes.filter(n => n.type === 'LinearGradient').length).toBeGreaterThanOrEqual(1);
+      expect(
+        nodes.filter(
+          n => typeof n.props?.transform === 'string' && n.props.transform.includes('translate(-')
+        ).length
+      ).toBeGreaterThanOrEqual(1);
+      svgFoe.unmount();
     });
   });
 

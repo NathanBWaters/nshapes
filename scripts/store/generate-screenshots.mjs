@@ -127,7 +127,7 @@ const SCENES = [
     accent: '#F2C94C',
     bgTop: '#0F4D3A',
     bgBottom: '#072219',
-    url: '/?mode=prism&seed=PRISM42',
+    url: '/?labs=1&mode=prism&seed=PRISM42',
     waitMs: 1400,
     setup: async (page) => {
       // Dismiss first-run tutorial if open, then launch straight into Blind Select / Play

@@ -1,13 +1,21 @@
 /**
  * Lane 2 (`lane-enemies-bosses`) motion shots: loop seams, rage_spin settle,
- * 3-step eyelid blinks, species-class acting (winged, hydra, pincer), and
- * 3/4 left storybook bosses with mass-scaled kinematics.
+ * 3-step eyelid blinks, species-class acting (winged, hydra, pincer),
+ * 3/4 left storybook bosses with mass-scaled kinematics, and Wave 1
+ * enemy sprite-atlas continuity transition gates.
  */
+import { findCards, slotOf } from '../shot-kit.mjs';
 
 const pressEnemyReaction = (page, reaction) =>
   page.evaluate(
     sel => document.querySelector(sel)?.click(),
     `[data-testid="studio-enemy-react-${reaction}"]`
+  );
+
+const pressEnemyMood = (page, mood) =>
+  page.evaluate(
+    sel => document.querySelector(sel)?.click(),
+    `[data-testid="studio-mood-${mood}"]`
   );
 
 /** Click the Studio enemy roster page button ("Group 1" .. "Group 5") by exact text. */
@@ -48,8 +56,10 @@ const enemyStudioShot = (
     loop = undefined,
     facing = 'left',
     actions = undefined,
+    ambient = undefined,
     mute = undefined,
     silhouette = false,
+    spriteGate = undefined,
   }
 ) => {
   let resolvedCardId = 'studio-enemy-card-0';
@@ -77,7 +87,7 @@ const enemyStudioShot = (
         ? await findEnemyCardTestId(page, enemyName)
         : 'studio-enemy-card-0';
       await page.evaluate(
-        sel => document.querySelector(sel)?.scrollIntoView({ block: 'center' }),
+        sel => document.querySelector(sel)?.scrollIntoView({ block: 'center', behavior: 'instant' }),
         `[data-testid="${resolvedCardId}"]`
       );
       if (advanceBeforeMs > 0) {
@@ -90,7 +100,58 @@ const enemyStudioShot = (
     frames,
     ...(loop ? { loop } : {}),
     ...(actions ? { actions } : {}),
+    ...(ambient !== undefined ? { ambient } : {}),
     ...(mute ? { mute } : {}),
+    ...(spriteGate !== undefined ? { spriteGate } : {}),
+  };
+};
+
+/**
+ * Jumps straight into a clean weapon-free battle at `level` (e.g. `1-3` Clover Frog),
+ * pre-selects two cards of a deterministic Set, and captures the 3rd-card Set launch
+ * through enemy `pain` impact snap + hitstop + smooth recovery -> living idle.
+ */
+const fightEnemyHitRecoilShot = (id, level, about, extra = {}) => {
+  let third = null;
+  return {
+    id,
+    about,
+    path: `/dev/adventure?save=maxed&level=${level}&weapons=&arcana=&fighter=Orange%20Tabby&seed=4242&intro=false`,
+    ready: (page, h) => h.until('run-foe-hp'),
+    prepare: async (page, h) => {
+      await h.until(async () => !(await h.present('run-opening')));
+      await h.advance(2800);
+      const cards = await findCards(page, true);
+      if (!cards) throw new Error(`No Set available for ${id} (${level}) hit-recoil shot`);
+      await h.tap(slotOf(cards[0]));
+      await h.advance(220);
+      await h.tap(slotOf(cards[1]));
+      await h.advance(220);
+      third = slotOf(cards[2]);
+    },
+    trigger: (page, h) => h.tap(third),
+    clip: async page => {
+      const box = await page.locator('[data-testid="adventure-run-enemy"]').first().boundingBox();
+      if (!box) return null;
+      return {
+        x: Math.max(0, box.x - 40),
+        y: Math.max(0, box.y - 24),
+        width: box.width + 64,
+        height: box.height + 44,
+      };
+    },
+    frames: 84,
+    ambient: 0,
+    mute: ['ALL-AT-ONCE'],
+    // f1..f5 covers the 1-3 all-different coaching banner briefly flashing over the top of the foe viewport on Set tap;
+    // f17..f26 covers thrown Set card arrival + 0ms Sakurai pain snap (payout @ f21.8) + hitstop micro-vibration,
+    // while keeping pre-hit idle (f6..f16) and full recoil recovery + living idle (f27..f83) strictly gated.
+    spriteGate: {
+      viewportKey: 'enemy-sprite-viewport',
+      snapFrames: [1, 2, 3, 4, 5, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26],
+      stabilizeStageShake: true,
+    },
+    ...extra,
   };
 };
 
@@ -279,6 +340,99 @@ export default {
       hp: 0,
       reaction: 'attack',
       frames: 78,
+    }
+  ),
+
+  // ══════════════════ Wave 1 Enemy Sprite-Atlas Continuity Gates ══════════════════
+
+  'enemy-sprite-idle-loop': enemyStudioShot(
+    'enemy-sprite-idle-loop',
+    'Ancient Dragon Wave 1 32-frame 16fps seamless video-loop idle (2000ms cycle + wrap) in /dev/fighters Enemies tab',
+    {
+      group: 5,
+      enemyName: 'Ancient Dragon',
+      mood: 'idle',
+      hp: 0,
+      reaction: null,
+      frames: 68,
+      advanceBeforeMs: 400,
+      ambient: 0,
+      mute: ['DEAD-STRETCH'],
+      spriteGate: { viewportKey: 'enemy-sprite-viewport', snapFrames: [] },
+    }
+  ),
+
+  'enemy-tx-boss-attack': enemyStudioShot(
+    'enemy-tx-boss-attack',
+    'Iron Shell full boss attack in /dev/fighters: windup coil (f0..f11) -> 192ms strikeStartMs Sakurai snap -> recovery -> living idle',
+    {
+      group: 4,
+      enemyName: 'Iron Shell',
+      mood: 'menacing',
+      hp: 0,
+      reaction: 'attack',
+      frames: 84,
+      advanceBeforeMs: 600,
+      ambient: 0,
+      mute: ['DEAD-STRETCH'],
+      // Boss strikeStartMs = PHASE.bossWindMs (48ms) + PHASE.bossCoilHoldMs (144ms) = 192ms (+1f commit -> f13),
+      // covering attack[36..37] strike snap + 1st/2nd enemy-fx-attack slash arcs (f14..f17) while strictly gating windup (f1..f10) & recovery (f18..f83).
+      spriteGate: {
+        viewportKey: 'enemy-sprite-viewport',
+        snapFrames: [11, 12, 13, 14, 15, 16, 17],
+      },
+    }
+  ),
+
+  'enemy-tx-hit-recoil': fightEnemyHitRecoilShot(
+    'enemy-tx-hit-recoil',
+    '1-3',
+    'Clover Frog real 1-3 battle Set hit: thrown cards impact -> 0ms pain snap + hitstop -> smooth recovery -> living idle'
+  ),
+
+  'enemy-tx-sleepy-wake': enemyStudioShot(
+    'enemy-tx-sleepy-wake',
+    'Dozy Bunny sleepy curl & wake in /dev/fighters: living idle -> sleepy Phase A+B curl (f8) -> wake back to living idle (f36) with zero teleport',
+    {
+      group: 1,
+      enemyName: 'Dozy Bunny',
+      // Pristine Dozy Bunny auto-maps 'idle' -> 'sleepy' via naturallySleepy, whereas 'menacing' runs
+      // pure MODE_IDLE (0..31) with zero overlays so f8->sleepy and f36->menacing exercise full curl & wake!
+      mood: 'menacing',
+      hp: 0,
+      reaction: null,
+      frames: 64,
+      advanceBeforeMs: 600,
+      ambient: 0,
+      actions: [
+        { at: 8, do: page => pressEnemyMood(page, 'sleepy') },
+        { at: 36, do: page => pressEnemyMood(page, 'menacing') },
+      ],
+      mute: ['DEAD-STRETCH'],
+      spriteGate: { viewportKey: 'enemy-sprite-viewport', snapFrames: [] },
+    }
+  ),
+
+  'enemy-tx-taunt-mood': enemyStudioShot(
+    'enemy-tx-taunt-mood',
+    'Hyena Boss ambient mood tempo continuity (idle -> menacing f8 -> enraged f16 -> idle f26) + taunt (f34) in /dev/fighters',
+    {
+      group: 2,
+      enemyName: 'Hyena Boss',
+      mood: 'idle',
+      hp: 0,
+      reaction: null,
+      frames: 72,
+      advanceBeforeMs: 600,
+      ambient: 0,
+      actions: [
+        { at: 8, do: page => pressEnemyMood(page, 'menacing') },
+        { at: 16, do: page => pressEnemyMood(page, 'enraged') },
+        { at: 26, do: page => pressEnemyMood(page, 'idle') },
+        { at: 34, do: page => pressEnemyReaction(page, 'taunt') },
+      ],
+      mute: ['DEAD-STRETCH'],
+      spriteGate: { viewportKey: 'enemy-sprite-viewport', snapFrames: [] },
     }
   ),
 };

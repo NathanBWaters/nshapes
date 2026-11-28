@@ -13,6 +13,7 @@ import { useAndroidBackHandler } from '@/hooks/useAndroidBackHandler';
 import {
   CARD_DARK_COLORS,
   CARD_LIGHT_COLORS,
+  CARD_SHAPE_GEOMETRY,
   CARD_STOCK_BACKGROUND,
   COLOR_BADGE_LETTER,
   COLOR_DISPLAY_NAME,
@@ -244,6 +245,35 @@ describe('Mobile Store Readiness', () => {
       expect(formatParryCounterMeta({ kind: 'shape', shape: 'oval' }).shortLabel).toBe('ALL CIRCLES');
       expect(formatParryCounterMeta({ kind: 'shape', shape: 'diamond' }).shortLabel).toBe('ALL TRIANGLES');
       expect(formatParryCounterMeta({ kind: 'shape', shape: 'squiggle' }).shortLabel).toBe('ALL BOLTS');
+    });
+
+    it('uses a pointed 6-vertex Pokemon-style lightning bolt centered in the 24x30 viewBox without clipping', () => {
+      const vertices = CARD_SHAPE_GEOMETRY.boltPoints
+        .trim()
+        .split(/\s+/)
+        .map((pair) => pair.split(',').map(Number) as [number, number]);
+
+      expect(vertices).toHaveLength(6);
+      for (const [x, y] of vertices) {
+        expect(x).toBeGreaterThanOrEqual(1.1);
+        expect(x).toBeLessThanOrEqual(22.9);
+        expect(y).toBeGreaterThanOrEqual(1.1);
+        expect(y).toBeLessThanOrEqual(28.9);
+      }
+
+      // Single pointed top apex and single pointed bottom apex (no flat horizontal bars)
+      const minY = Math.min(...vertices.map(([, y]) => y));
+      const maxY = Math.max(...vertices.map(([, y]) => y));
+      expect(vertices.filter(([, y]) => Math.abs(y - minY) < 0.01)).toHaveLength(1);
+      expect(vertices.filter(([, y]) => Math.abs(y - maxY) < 0.01)).toHaveLength(1);
+
+      // 180-degree rotational symmetry around viewBox center (12, 15)
+      for (let i = 0; i < 3; i++) {
+        const [x1, y1] = vertices[i];
+        const [x2, y2] = vertices[i + 3];
+        expect((x1 + x2) / 2).toBeCloseTo(12, 4);
+        expect((y1 + y2) / 2).toBeCloseTo(15, 4);
+      }
     });
   });
 });
