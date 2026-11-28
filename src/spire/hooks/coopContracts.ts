@@ -8,7 +8,7 @@
  */
 import type { CharacterName } from '@/types';
 import type { RunState, SynergyCounters } from '@/adventure/types';
-import type { SummitThemePackId } from '../data/themePacks';
+import type { CoopThemePackId } from '@/coop/protocol';
 
 // ─── Combat-Coop Contract (`src/adventure/types.ts`) ────────────────────────
 
@@ -158,7 +158,7 @@ export interface CoopRoomSnapshot {
   updatedAt: number;
   seed: number;
   ascension: number;
-  themePacks: SummitThemePackId[];
+  themePacks: CoopThemePackId[];
   act: number;
   floor: number;
   currentNodeId: string | null;
@@ -255,10 +255,10 @@ export interface CoopClientLike {
     name?: string;
     ascension?: number;
     seed?: number;
-    themePacks?: SummitThemePackId[];
+    themePacks?: CoopThemePackId[];
     ready?: boolean;
   }): boolean;
-  startClimb(opts?: { seed?: number; ascension?: number; themePacks?: SummitThemePackId[] }): boolean;
+  startClimb(opts?: { seed?: number; ascension?: number; themePacks?: CoopThemePackId[] }): boolean;
   voteNode(
     nodeId: string | null,
     opts?: { nodeKind?: CoopNodeKind; nextPhase?: Exclude<CoopPhase, 'lobby' | 'map'>; confirm?: boolean }

@@ -21,18 +21,20 @@ import {
   canonicalLevelEnemyName,
   generateSpireEncounter,
 } from '@/spire/data/encounters';
-import {
-  SUMMIT_THEME_PACKS,
-  buildFocusedWeaponPool,
-} from '@/spire/data/themePacks';
+import { beltSynergyOverlap } from '@/adventure/data/synergy';
+import { weaponRole } from '@/adventure/data/weaponRoles';
 import {
   ARCANA_PURGE_COST,
+  BROTATO_FIGHTER_TAG_CHANCE,
+  BROTATO_RELATED_BASE_CHANCE,
+  FIGHTER_WANTED_TAGS,
   MAX_SHOP_LOCKS,
   MAX_SUMMIT_WEAPONS,
   SPIRE_EXCLUDED_ARCANA,
   SPIRE_EXCLUDED_WEAPONS,
   SPIRE_SHOP_UPGRADE_IDS,
   advanceToNextAct,
+  brotatoRelatedPoolChance,
   campfireForge,
   campfireMeditate,
   campfireRest,
@@ -2070,7 +2072,7 @@ describe('Starfall Summit — Strict 6-Weapon Cap (MAX_SUMMIT_WEAPONS = 6) & Inl
   });
 });
 
-describe('[GP-25] & [TP-19] Parry Ramp, 80/20 Theme Packs, Amber Clash Pills, Belt Order & Daily Summit UI', () => {
+describe('[GP-25] & [TP-19] Parry Ramp, Brotato Draft Weighting, Amber Clash Pills, Belt Order & Daily Summit UI', () => {
   it('ramps Act 1 Skirmishes from any (rows 0-2) to simple color/shape counters (rows 3-5) and complex counters later', () => {
     const simpleKinds = new Set(['color', 'shape']);
     const seenSimple = new Set<string>();
@@ -2102,48 +2104,68 @@ describe('[GP-25] & [TP-19] Parry Ramp, 80/20 Theme Packs, Amber Clash Pills, Be
     expect(seenComplexInAct2OrBoss.size).toBeGreaterThanOrEqual(2);
   });
 
-  it('keeps all 64 Armory weapons accessible via 80/20 Theme-Pack + Wildcard weighting with zero orphan IDs', () => {
+  it('uses invisible Brotato-style mostly-even weighting with subtle belt synergy & fighter-tag lift across all 62 Summit weapons', () => {
     expect(ALL_ARMORY_WEAPON_IDS).toHaveLength(64);
     expect(SPIRE_WEAPON_POOL).toHaveLength(64);
 
-    // Every weapon listed in SUMMIT_THEME_PACKS is a valid non-excluded Armory weapon,
-    // and the union of all 6 packs covers 100% of all 62 Summit-draftable weapons!
-    const validSummitIds = new Set(SPIRE_WEAPON_POOL.filter(id => !SPIRE_EXCLUDED_WEAPONS.has(id)));
-    const packUnion = new Set<string>();
-    for (const pack of SUMMIT_THEME_PACKS) {
-      for (const id of pack.weapons) {
-        expect(validSummitIds.has(id)).toBe(true);
-        packUnion.add(id);
-      }
+    // Every fighter has canonical invisible wanted tags (5% Brotato rule)
+    for (const fighter of FIGHTERS) {
+      expect(FIGHTER_WANTED_TAGS[fighter.name].length).toBeGreaterThanOrEqual(2);
     }
-    expect(packUnion.size).toBe(validSummitIds.size);
+    expect(BROTATO_FIGHTER_TAG_CHANCE).toBe(0.05);
+    expect(BROTATO_RELATED_BASE_CHANCE).toBe(0.15);
 
-    // Run focused pool stays tight (~22-38 weapons) while 80/20 rolls yield ~80% focused + ~20% wildcards
-    const run = createSpireRun('Orange Tabby', 0, 2026, { themePacks: ['pyro_blasts', 'webs_echoes'] });
-    expect(run.themePacks).toEqual(['pyro_blasts', 'webs_echoes']);
-    const focused = buildFocusedWeaponPool(run.fighter, run.themePacks);
-    expect(focused.size).toBeGreaterThanOrEqual(20);
-    expect(focused.size).toBeLessThanOrEqual(38);
+    // Early-floor ramp matches Brotato's Waves 1–5 taper (30% -> 27% -> 24% -> 21% -> 18% -> 15%)
+    expect(brotatoRelatedPoolChance(1)).toBe(0.3);
+    expect(brotatoRelatedPoolChance(2)).toBe(0.27);
+    expect(brotatoRelatedPoolChance(3)).toBe(0.24);
+    expect(brotatoRelatedPoolChance(4)).toBe(0.21);
+    expect(brotatoRelatedPoolChance(5)).toBe(0.18);
+    expect(brotatoRelatedPoolChance(6)).toBe(0.15);
+    expect(brotatoRelatedPoolChance(14)).toBe(0.15);
+
+    const validSummitIds = new Set(SPIRE_WEAPON_POOL.filter(id => !SPIRE_EXCLUDED_WEAPONS.has(id)));
+    const baseRun = createSpireRun('Emperor Penguin', 0, 2026);
+    const floor6Run = { ...baseRun, floor: 6 };
+    const unheld = [...validSummitIds].filter(id => !baseRun.weapons.includes(id));
+
+    const heldRoles = new Set(baseRun.weapons.map(id => weaponRole(id)));
+    const isStronglyRelated = (id: string) =>
+      beltSynergyOverlap(id, baseRun.weapons).length + (heldRoles.has(weaponRole(id)) ? 1 : 0) >= 2;
+    const isUnrelated = (id: string) =>
+      beltSynergyOverlap(id, baseRun.weapons).length === 0 && !heldRoles.has(weaponRole(id));
 
     const rng = createRng(88888);
-    let focusedHits = 0;
-    let wildcardHits = 0;
-    const allRolledAcrossSeeds = new Set<string>();
+    const counts = new Map<string, number>();
+    let totalRolls = 0;
 
-    for (let i = 0; i < 1200; i++) {
-      const offers = rollSynergyWeapons(run, rng, 3, 1, { allowUpgrade: false });
+    for (let i = 0; i < 2000; i++) {
+      const offers = rollSynergyWeapons(floor6Run, rng, 3, 1, { allowUpgrade: false });
       for (const o of offers) {
-        if (focused.has(o.weaponId)) focusedHits += 1;
-        else wildcardHits += 1;
-        allRolledAcrossSeeds.add(o.weaponId);
+        counts.set(o.weaponId, (counts.get(o.weaponId) ?? 0) + 1);
+        totalRolls += 1;
       }
     }
-    const focusedRatio = focusedHits / (focusedHits + wildcardHits);
-    expect(focusedRatio).toBeGreaterThanOrEqual(0.72);
-    expect(focusedRatio).toBeLessThanOrEqual(0.88);
-    expect(wildcardHits).toBeGreaterThan(200);
-    // Wildcards reach EVERY remaining unheld Summit weapon (62 - 2 starters = 60 unheld) even on a single run
-    expect(allRolledAcrossSeeds.size).toBe(validSummitIds.size - run.weapons.length);
+
+    // Every single unheld Summit weapon stays live and rollable on a single run!
+    expect(counts.size).toBe(unheld.length);
+
+    const uniformExpected = totalRolls / unheld.length;
+    const unrelatedIds = unheld.filter(isUnrelated);
+    const strongRelatedIds = unheld.filter(isStronglyRelated);
+    const meanUnrelatedMult =
+      unrelatedIds.reduce((sum, id) => sum + (counts.get(id) ?? 0) / uniformExpected, 0) /
+      unrelatedIds.length;
+    const meanStrongMult =
+      strongRelatedIds.reduce((sum, id) => sum + (counts.get(id) ?? 0) / uniformExpected, 0) /
+      strongRelatedIds.length;
+
+    // Mostly even: unrelated weapons still appear at ~0.80× uniform (never starved like 80/20 packs),
+    // while strongly belt-related weapons receive a subtle, organic lift (~1.35×–2.2×)!
+    expect(meanUnrelatedMult).toBeGreaterThanOrEqual(0.7);
+    expect(meanUnrelatedMult).toBeLessThanOrEqual(0.92);
+    expect(meanStrongMult).toBeGreaterThan(meanUnrelatedMult * 1.45);
+    expect(meanStrongMult).toBeLessThanOrEqual(2.5);
   });
 
   it('renders First-Counter callout once, amber CLASHES WITH [Name] pills, Understudy COPIED badge, and Daily Summit / Rating / Share Card UI with zero "Spire" text', () => {
@@ -2260,7 +2282,7 @@ describe('[GP-25] & [TP-19] Parry Ramp, 80/20 Theme Packs, Amber Clash Pills, Be
     );
     expect(assertZeroSpire(rewardView.toJSON())).toContain('CLASHES WITH CHAIN GANG');
 
-    // 3. SpireSetup Daily Climb tab + Theme Packs picker + SpireEndScreen Summit Rating & Share Card
+    // 3. SpireSetup Daily Climb tab (no visible Focused Draft Packs UI) + SpireEndScreen Summit Rating & Share Card
     const onStartNew = jest.fn();
     const setupView = render(
       <SafeAreaProvider initialMetrics={safeMetrics}>
@@ -2275,7 +2297,7 @@ describe('[GP-25] & [TP-19] Parry Ramp, 80/20 Theme Packs, Amber Clash Pills, Be
         />
       </SafeAreaProvider>
     );
-    expect(setupView.getByTestId('spire-theme-packs')).toBeTruthy();
+    expect(setupView.queryByTestId('spire-theme-packs')).toBeNull();
     assertZeroSpire(setupView.toJSON());
 
     fireEvent.press(setupView.getByTestId('spire-tab-daily'));

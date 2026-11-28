@@ -29,7 +29,10 @@ import {
 } from '@/adventure/dailySeed';
 import { createNewSave } from '@/adventure/progress';
 import { writeAdventureSave } from '@/adventure/save';
-import { createDailySpireRun, createSpireRun } from '@/spire/engine/runState';
+import { createRng } from '@/adventure/engine/rng';
+import { weaponRole } from '@/adventure/data/weaponRoles';
+import { createDailySpireRun, createSpireRun, rollSynergyWeapons } from '@/spire/engine/runState';
+import { dailyMutatorModifiers } from '@/spire/data/dailyModifiers';
 import { computeSpireRating, formatSpireShareCard } from '@/spire/engine/share';
 import { loadSpireMeta, recordSpireRunEnd, resetSpireStorage } from '@/spire/save';
 import { FreePlayDifficultyStorage, FreePlayRecordsStorage, LabsStorage } from '@/utils/freePlayStorage';
@@ -361,8 +364,23 @@ describe('[GP-24] & [TP-19] Daily Seeds, Free Play Score Attack, Share Cards & U
           expect(run.extraEvolutionChargeBonus).toBe(1);
         }
         if (mut.id === 'gamble_mastery') {
-          expect(run.themePacks).toContain('board_gambles');
+          expect(dailyMutatorModifiers(mut.id).favoredRole).toBe('gambles');
           expect(run.startingGraces).toBe(2);
+          // Gamble Mastery subtly boosts Board Gamble offer rates over a standard run
+          const rngGamble = createRng(9191);
+          const rngPlain = createRng(9191);
+          const plainRun = createSpireRun('Orange Tabby', 0, 7777);
+          let gambleHits = 0;
+          let plainHits = 0;
+          for (let i = 0; i < 300; i++) {
+            for (const o of rollSynergyWeapons(run, rngGamble, 3, 1, { allowUpgrade: false })) {
+              if (weaponRole(o.weaponId) === 'gambles') gambleHits += 1;
+            }
+            for (const o of rollSynergyWeapons(plainRun, rngPlain, 3, 1, { allowUpgrade: false })) {
+              if (weaponRole(o.weaponId) === 'gambles') plainHits += 1;
+            }
+          }
+          expect(gambleHits).toBeGreaterThan(plainHits * 1.4);
         }
         if (mut.id === 'glass_sprint') {
           expect(run.upgrades.heavy_hitter).toBe(2);

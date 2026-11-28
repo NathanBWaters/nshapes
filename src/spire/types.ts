@@ -19,7 +19,6 @@ import type {
 import type { WeaponBuilds } from '@/adventure/data/weaponStats';
 import type { SpireFloorDamageSnapshot, SpireSourceDamageEntry } from '@/adventure/engine/damageStory';
 import type { SummitDailyMutatorId } from '@/adventure/dailySeed';
-import type { SummitThemePackId } from './data/themePacks';
 
 export type SpireNodeKind = 'skirmish' | 'elite' | 'shop' | 'campfire' | 'event' | 'treasure' | 'boss';
 
@@ -269,8 +268,6 @@ export interface SpireRun {
   stats: SpireRunStats;
   /** Name of the foe that ended the run (on defeat) */
   defeatedBy?: string;
-  /** Active 2 Theme Packs shaping the climb's 80/20 Focused Draft Pool (`[GP-25]`) */
-  themePacks?: SummitThemePackId[];
   /** True once the player has entered at least one fight with a specific Counter-Parry (`[GP-25]`) */
   seenSpecificCounter?: boolean;
   /** True for Daily Starfall Summit Climbs seeded deterministically from UTC date (`[TP-19]`) */

@@ -1,7 +1,13 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BALANCE_ERAS, getMinValidVersion, nextPatchVersion, type BalanceEra } from '@/analytics/balanceEras';
+import {
+  BALANCE_ERAS,
+  CURRENT_BALANCE_ERA,
+  getMinValidVersion,
+  nextPatchVersion,
+  type BalanceEra,
+} from '@/analytics/balanceEras';
 import {
   analyzeFights,
   generateSimulatedCohort,
@@ -492,7 +498,7 @@ describe('dashboardEngine parser & filter upgrades', () => {
 
   it('produces valid current-era prod rows in generateSimulatedCohort and audits filters accurately', () => {
     const simRows = generateSimulatedCohort(20261115, 30);
-    expect(simRows.every(r => r.appVersion === CURRENT_ADV_MIN && r.env === 'prod')).toBe(true);
+    expect(simRows.every(r => r.appVersion === CURRENT_BALANCE_ERA.minVersion && r.env === 'prod')).toBe(true);
 
     const reportClean = analyzeFights(simRows, {
       eraScope: 'current',

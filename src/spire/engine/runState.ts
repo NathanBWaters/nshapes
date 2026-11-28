@@ -8,7 +8,7 @@
  * and can be simulated end-to-end by the headless balance bot!
  */
 import type { CharacterName } from '@/types';
-import type { ArcanaId, RunState } from '@/adventure/types';
+import type { ArcanaId, RunState, SynergyAttrId } from '@/adventure/types';
 import { ARCANA } from '@/adventure/data/arcana';
 import { getArmoryWeapon } from '@/adventure/data/armory';
 import { skillTreeOf } from '@/adventure/data/skillTrees';
@@ -23,15 +23,8 @@ import { ascensionModifiers } from '../data/ascensions';
 import { dailyMutatorModifiers, getDailySummitConfig } from '../data/dailyModifiers';
 import { generateSpireEncounter, SPIRE_WEAPON_POOL, STARTER_KITS } from '../data/encounters';
 import { getSpireEvent, SPIRE_EVENTS } from '../data/events';
-import {
-  buildFocusedWeaponPool,
-  FOCUSED_POOL_WEIGHT,
-  isValidThemePackId,
-  rollSummitThemePacks,
-  type SummitThemePackId,
-} from '../data/themePacks';
 import { defaultEvolutionForWeapon, getWeaponEvolution } from '@/adventure/data/evolutions';
-import { beltSynergyOverlap } from '@/adventure/data/synergy';
+import { beltSynergyOverlap, weaponSynergyAttrs } from '@/adventure/data/synergy';
 import { generateActMap, reachableNodeIds } from './mapGen';
 import type {
   SpireCampfireState,
@@ -71,18 +64,78 @@ const recordSeenEnemy = (seenEnemies: readonly string[] | undefined, name?: stri
 };
 
 /**
+ * Brotato-inspired invisible shop/draft weighting constants (adapted from Brotato's
+ * `item_service.gd` weapon & wanted-tag pool rules):
+ *  - Held weapon upgrades (Brotato's 20% Same Weapon pool) are handled via `upgradeSlots`,
+ *    shuffled evenly across all upgradeable weapons currently on the belt.
+ *  - For every new (unheld) weapon slot:
+ *    - `15%` base chance (+15% on Floor 1 tapering −3% per floor down to 0% by Floor 6+,
+ *      matching Brotato's Waves 1–5 early-build ramp) to draw from unheld weapons related
+ *      to your current belt (weighted by shared Synergy Graph attributes + matching role).
+ *    - `5%` flat chance (Brotato's Character `wanted_tags` rule) to draw from unheld
+ *      weapons matching your fighter's built-in synergy affinity.
+ *    - Remaining `65%` (Floor 1) → `80%` (Floor 6+) draws uniformly from ALL unheld Summit
+ *      weapons so every climb stays mostly even, surprising, and open across all 62 weapons.
+ */
+export const BROTATO_RELATED_BASE_CHANCE = 0.15;
+export const BROTATO_EARLY_FLOOR_BONUS_MAX = 0.15;
+export const BROTATO_EARLY_FLOOR_DECAY = 0.03;
+export const BROTATO_FIGHTER_TAG_CHANCE = 0.05;
+export const DAILY_FAVORED_ROLE_CHANCE = 0.25;
+
+/** Invisible per-fighter synergy tag affinities (Brotato's 5% `wanted_tags` equivalent). */
+export const FIGHTER_WANTED_TAGS: Readonly<Record<CharacterName, readonly SynergyAttrId[]>> = {
+  'Orange Tabby': ['destruction', 'vitality'],
+  'Sly Fox': ['streaks', 'marks'],
+  Corgi: ['field_size', 'destruction'],
+  Badger: ['destruction', 'vitality'],
+  'Emperor Penguin': ['prism', 'holo'],
+  Pelican: ['echoes', 'burn'],
+};
+
+/**
+ * Brotato-style belt-related sub-pool chance for a given climb floor:
+ *  - Floor 1: 30% (`15% + 15%`)
+ *  - Floor 2: 27% (`15% + 12%`)
+ *  - Floor 3: 24% (`15% + 9%`)
+ *  - Floor 4: 21% (`15% + 6%`)
+ *  - Floor 5: 18% (`15% + 3%`)
+ *  - Floor 6+: 15% baseline
+ */
+export const brotatoRelatedPoolChance = (floor: number): number => {
+  const effectiveFloor = Math.max(1, Math.floor(floor));
+  const earlyBonus = Math.max(
+    0,
+    BROTATO_EARLY_FLOOR_BONUS_MAX - (effectiveFloor - 1) * BROTATO_EARLY_FLOOR_DECAY
+  );
+  return Math.round((BROTATO_RELATED_BASE_CHANCE + earlyBonus) * 1000) / 1000;
+};
+
+const pickWeighted = <T>(entries: readonly { item: T; weight: number }[], rng: Rng): T => {
+  let total = 0;
+  for (const e of entries) total += e.weight;
+  let cursor = rng.next() * total;
+  for (const e of entries) {
+    cursor -= e.weight;
+    if (cursor <= 0) return e.item;
+  }
+  return entries[entries.length - 1].item;
+};
+
+/**
  * Roll `count` weapon offers for drafts, shops, vaults & events under the 6-weapon belt cap:
- *  - Below 6 weapons: new weapons lead (preferring Evolution-arming & engine roles) while
- *    offering a +1 Level upgrade slot often enough (especially at 3–5 weapons) to create
- *    genuine tall-vs-wide tension!
+ *  - Below 6 weapons: new weapons lead (mostly uniform across all 62 Summit weapons with
+ *    invisible Brotato-style subtle synergy & fighter-tag weighting) while offering a +1 Level
+ *    upgrade slot often enough (especially at 3–5 weapons) to create tall-vs-wide tension.
  *  - At 6/6 (belt full): prioritize held-weapon +1 Level upgrades (2 in 3-slot drafts,
- *    2–3 in 4-slot shops, 75% in 1-slot vaults) alongside 1–2 high-synergy swap/pivot
- *    candidates. If all 6 held weapons are already Lv 5, fill cleanly with fresh swap candidates.
+ *    2–3 in 4-slot shops, 75% in 1-slot vaults) alongside 1–2 swap/pivot candidates.
+ *    If all 6 held weapons are already Lv 5, fill cleanly with fresh swap candidates.
  */
 export const rollSynergyWeapons = (
   run: Pick<SpireRun, 'weapons' | 'weaponLevels' | 'act'> & {
     fighter?: CharacterName;
-    themePacks?: readonly SummitThemePackId[];
+    floor?: number;
+    dailyMutatorId?: SummitDailyMutatorId;
   },
   rng: Rng,
   count: number,
@@ -122,53 +175,50 @@ export const rollSynergyWeapons = (
   }
   const newCount = Math.min(unheld.length, count - upgradeSlots);
 
-  // 80/20 Theme-Pack Focused Pool + Wildcard Weighting (`[GP-25]`):
-  // All 62 Summit weapons (64 Armory minus 2 XP-only) remain rollable via the 20% Wildcard slice.
-  const focusedSet = run.fighter
-    ? buildFocusedWeaponPool(run.fighter, run.themePacks)
-    : null;
+  const effectiveFloor = run.floor !== undefined ? Math.max(1, run.floor) : run.act <= 1 ? 1 : 6;
+  const relatedChanceBase = brotatoRelatedPoolChance(effectiveFloor);
+  const wantedTags = run.fighter ? new Set(FIGHTER_WANTED_TAGS[run.fighter] ?? []) : null;
+  const favoredRole = run.dailyMutatorId
+    ? dailyMutatorModifiers(run.dailyMutatorId).favoredRole
+    : undefined;
 
   const chosen: string[] = [];
-  const pickFromPool = (pool: readonly string[], slotIndex: number, isWildcard: boolean): string | null => {
-    const avail = pool.filter(id => !chosen.includes(id));
-    if (avail.length === 0) return null;
-
-    if (slotIndex === 0 && !isWildcard) {
-      const synergy = avail.filter(id => beltSynergyOverlap(id, run.weapons).length > 0);
-      if (synergy.length > 0 && rng.next() < 0.82) {
-        const synEngine = synergy.filter(id => ENGINE_ROLES.has(weaponRole(id)));
-        const synPool = synEngine.length > 0 && rng.next() < 0.75 ? synEngine : synergy;
-        return rng.pick(synPool);
-      }
-    }
-
-    if (isWildcard) {
-      // Wildcard 20% slice samples cleanly across all off-pack Armory weapons so every weapon stays discoverable
-      return rng.pick(avail);
-    }
-
-    const availEngine = avail.filter(id => ENGINE_ROLES.has(weaponRole(id)));
-    const availSupport = avail.filter(id => !ENGINE_ROLES.has(weaponRole(id)));
-    const needEngine = slotIndex === 1 || rng.next() < 0.72;
-    if (needEngine && availEngine.length > 0) return rng.pick(availEngine);
-    if (availSupport.length > 0) return rng.pick(availSupport);
-    if (availEngine.length > 0) return rng.pick(availEngine);
-    return rng.pick(avail);
-  };
-
   for (let slot = 0; slot < newCount; slot++) {
-    let pick: string | null = null;
-    if (focusedSet) {
-      const focusedAvail = unheld.filter(id => !chosen.includes(id) && focusedSet.has(id));
-      const wildcardAvail = unheld.filter(id => !chosen.includes(id) && !focusedSet.has(id));
-      const useFocused =
-        focusedAvail.length > 0 &&
-        (wildcardAvail.length === 0 || rng.next() < FOCUSED_POOL_WEIGHT);
-      pick = pickFromPool(useFocused ? focusedAvail : wildcardAvail, slot, !useFocused);
-    } else {
-      pick = pickFromPool(unheld, slot, false);
+    const avail = unheld.filter(id => !chosen.includes(id));
+    if (avail.length === 0) break;
+
+    const mutatorAvail = favoredRole ? avail.filter(id => weaponRole(id) === favoredRole) : [];
+    // Weight the subtle related sub-pool by total synergy/role connections across held belt weapons
+    // so leaning into an archetype organically concentrates its related odds (like Brotato's weapon classes).
+    const relatedWeighted: { item: string; weight: number }[] = [];
+    for (const id of avail) {
+      let weight = 0;
+      const candRole = weaponRole(id);
+      for (const heldId of run.weapons) {
+        weight += beltSynergyOverlap(id, [heldId]).length;
+        if (weaponRole(heldId) === candRole) weight += 1;
+      }
+      if (weight > 0) relatedWeighted.push({ item: id, weight });
     }
-    if (!pick) break;
+    const fighterAvail = wantedTags
+      ? avail.filter(id => weaponSynergyAttrs(id).some(attr => wantedTags.has(attr)))
+      : [];
+
+    const mutatorChance = mutatorAvail.length > 0 ? DAILY_FAVORED_ROLE_CHANCE : 0;
+    const relatedChance = relatedWeighted.length > 0 ? relatedChanceBase : 0;
+    const fighterChance = fighterAvail.length > 0 ? BROTATO_FIGHTER_TAG_CHANCE : 0;
+
+    const roll = rng.next();
+    let pick: string;
+    if (roll < mutatorChance) {
+      pick = rng.pick(mutatorAvail);
+    } else if (roll < mutatorChance + relatedChance) {
+      pick = pickWeighted(relatedWeighted, rng);
+    } else if (roll < mutatorChance + relatedChance + fighterChance) {
+      pick = rng.pick(fighterAvail);
+    } else {
+      pick = rng.pick(avail);
+    }
     chosen.push(pick);
   }
 
@@ -179,13 +229,11 @@ export const rollSynergyWeapons = (
     return { weaponId, level };
   });
 
-  // +1 Level upgrades for existing held weapons (deepen Lv 2→5 power spikes!)
+  // +1 Level upgrades for existing held weapons — split evenly across distinct upgradeable belt weapons (Brotato's Same Weapon rule)
   const upgradeOffers: { weaponId: string; level: number }[] = [];
   const upgradeTarget = Math.min(upgradeable.length, count - newOffers.length);
   if (upgradeSlots > 0 && upgradeTarget > 0) {
-    const engineHeld = rng.shuffle(upgradeable.filter(id => ENGINE_ROLES.has(weaponRole(id))));
-    const otherHeld = rng.shuffle(upgradeable.filter(id => !ENGINE_ROLES.has(weaponRole(id))));
-    const orderedUp = [...engineHeld, ...otherHeld];
+    const orderedUp = rng.shuffle(upgradeable);
     for (const upId of orderedUp) {
       if (upgradeOffers.length >= upgradeTarget) break;
       const nextLv = Math.min(MAX_WEAPON_LEVEL, Math.max((run.weaponLevels[upId] ?? 1) + 1, minLevel));
@@ -575,7 +623,6 @@ const buildShopState = (
 // ─── Start Run ──────────────────────────────────────────────────────────────
 
 export interface CreateSpireRunOptions {
-  themePacks?: readonly SummitThemePackId[];
   daily?: { dateKey: string; mutatorId: SummitDailyMutatorId };
 }
 
@@ -593,15 +640,6 @@ export const createSpireRun = (
   const maxHearts = Math.max(3, kit.maxHearts + asc.maxHeartsDelta + dailyMod.maxHeartsDelta);
   const coins = Math.max(20, kit.startingCoins + asc.startingCoinsDelta + dailyMod.startingCoinsDelta);
   const map = generateActMap(1, seed, ascension, [], [], dailyMutatorId);
-
-  const rolledPacks = rollSummitThemePacks(fighter, rng, dailyMod.forcedThemePack);
-  const requestedPacks = (options?.themePacks ?? []).filter(isValidThemePackId);
-  const uniqueRequested = [...new Set(requestedPacks)];
-  let themePacks: SummitThemePackId[] =
-    uniqueRequested.length >= 2 ? uniqueRequested.slice(0, 2) : [...rolledPacks];
-  if (dailyMod.forcedThemePack && !themePacks.includes(dailyMod.forcedThemePack)) {
-    themePacks = [dailyMod.forcedThemePack, themePacks[0]];
-  }
 
   const upgrades: Record<string, number> = {
     evolution_lab: 1, // Starfall Summit starts with Evolution Lab active (+2s evolution duration)
@@ -644,7 +682,6 @@ export const createSpireRun = (
     activeEncounter: null,
     seenEvents: [],
     seenEnemies: [],
-    themePacks,
     seenSpecificCounter: false,
     ...(options?.daily
       ? {

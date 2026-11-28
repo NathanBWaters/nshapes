@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "currentEraId": "E15",
-  "currentAppVersion": "0.1.193",
+  "currentEraId": "E16",
+  "currentAppVersion": "0.1.194",
   "eras": [
     {
       "id": "E0",
@@ -352,6 +352,19 @@
           "levels"
         ]
       }
+    },
+    {
+      "id": "E16",
+      "minVersion": "0.1.194",
+      "date": "2026-11-28",
+      "commit": "124dc8c",
+      "summary": "Replace Starfall Summit Focused Draft Packs with invisible Brotato-style subtle synergy & fighter-tag weighting",
+      "scope": "mode",
+      "invalidated": {
+        "modes": [
+          "spire"
+        ]
+      }
     }
   ],
   "fingerprints": {
@@ -387,7 +400,7 @@
       "src/spire/data/encounters.ts": "73df814c5d2a8e24",
       "src/spire/data/events.ts": "578bc854e58b2589",
       "src/spire/engine/bridge.ts": "ff42f72c0727a86b",
-      "src/spire/engine/runState.ts": "66ca0652b2a603a1",
+      "src/spire/engine/runState.ts": "e4c9755c76821277",
       "src/spire/engine/mapGen.ts": "566c258874e2b094"
     },
     "items": {

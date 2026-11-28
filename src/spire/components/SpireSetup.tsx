@@ -1,11 +1,10 @@
 /**
- * Starfall Summit — Run Launch, Theme-Pack Curation, Ascension & Daily Climb Hub.
+ * Starfall Summit — Run Launch, Ascension & Daily Climb Hub.
  *
  * Lets the player resume an active climb, choose between Standard Climb (pick any
- * of the 6 Fighters, customize 2 Theme Packs for the 80/20 Focused Draft Pool,
- * tune Ascension 0..20, inspect Career Stats, or share/roll a deterministic seed)
- * and Daily Climb (today's UTC deterministic seed, featured climber, rotating
- * Daily Mutator spotlight, and streak tracking).
+ * of the 6 Fighters, tune Ascension 0..20, inspect Career Stats, or share/roll a
+ * deterministic seed) and Daily Climb (today's UTC deterministic seed, featured
+ * climber, rotating Daily Mutator spotlight, and streak tracking).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -33,17 +32,12 @@ import {
   normalizeDateKey,
   type SummitDailyMutatorId,
 } from '@/adventure/dailySeed';
-import { createRng, randomSeed } from '@/adventure/engine/rng';
+import { randomSeed } from '@/adventure/engine/rng';
 import { sfx } from '@/audio';
 import { FighterPassivesList } from '@/adventure/components/SharedCards';
 import { Btn, Eyebrow, Heart, INK, PopIn, TONE } from '@/adventure/components/ui';
 import { ASCENSION_DESCRIPTIONS, MAX_ASCENSION } from '../data/ascensions';
 import { STARTER_KITS } from '../data/encounters';
-import {
-  rollSummitThemePacks,
-  SUMMIT_THEME_PACKS,
-  type SummitThemePackId,
-} from '../data/themePacks';
 import { MAX_SUMMIT_WEAPONS, type CreateSpireRunOptions } from '../engine/runState';
 import type { SpireMeta, SpireRun } from '../types';
 import {
@@ -125,7 +119,6 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
   const [seed, setSeed] = useState<number>(() =>
     typeof initialSeed === 'number' && initialSeed > 0 ? initialSeed : randomSeed()
   );
-  const [customPacks, setCustomPacks] = useState<SummitThemePackId[] | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
   const [selectReactionSeq, setSelectReactionSeq] = useState(0);
@@ -152,28 +145,6 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
   useEffect(() => {
     setCopiedLink(false);
   }, [seed, fighter, ascension]);
-
-  const autoPacks = useMemo<[SummitThemePackId, SummitThemePackId]>(() => {
-    const previewRng = createRng((seed ^ 0x51a2fa11) >>> 0);
-    return rollSummitThemePacks(fighter, previewRng);
-  }, [fighter, seed]);
-
-  const activePacks: readonly SummitThemePackId[] =
-    customPacks && customPacks.length === 2 ? customPacks : autoPacks;
-
-  const toggleThemePack = (packId: SummitThemePackId) => {
-    sfx('click');
-    setCustomPacks(prev => {
-      const current = prev && prev.length === 2 ? [...prev] : [...autoPacks];
-      if (current.includes(packId)) {
-        // Keep 2 packs active: rotate the untouched pack + next available pack
-        const other = current.find(id => id !== packId) ?? autoPacks[0];
-        const nextFill = SUMMIT_THEME_PACKS.find(p => p.id !== packId && p.id !== other)?.id ?? autoPacks[1];
-        return [other, nextFill];
-      }
-      return [current[1], packId];
-    });
-  };
 
   const dailyDate = useMemo(() => normalizeDateKey(initialDailyDate), [initialDailyDate]);
   const dailyConfig = useMemo(() => getDailySummitConfig(dailyDate), [dailyDate]);
@@ -447,56 +418,6 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
                 </View>
               </SpireCrossfadeSwap>
 
-              {/* Focused Draft Pool Theme Packs (`[GP-25]`) */}
-              <View style={st.packCard} testID="spire-theme-packs">
-                <View style={st.packHeadRow}>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={st.packSecTitle}>FOCUSED DRAFT PACKS (2 ACTIVE · 80/20 POOL)</Text>
-                    <Text style={st.packSub}>
-                      80% of offers pull from your 2 packs; 20% Wildcards keep all 64 Armory weapons live.
-                    </Text>
-                  </View>
-                  {customPacks && (
-                    <SpireTactilePressable
-                      testID="spire-packs-auto"
-                      small
-                      onPress={() => { sfx('click'); setCustomPacks(null); }}
-                      style={st.autoPackBtn}
-                    >
-                      <Text style={st.autoPackText}>Auto</Text>
-                    </SpireTactilePressable>
-                  )}
-                </View>
-                <View style={st.packGrid}>
-                  {SUMMIT_THEME_PACKS.map(pack => {
-                    const selected = activePacks.includes(pack.id);
-                    return (
-                      <SpireTactilePressable
-                        key={pack.id}
-                        testID={`spire-pack-${pack.id}`}
-                        small
-                        onPress={() => toggleThemePack(pack.id)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        style={[
-                          st.packChip,
-                          selected && {
-                            backgroundColor: '#FFFBEB',
-                            borderColor: pack.accentColor,
-                            borderWidth: 2,
-                          },
-                        ]}
-                      >
-                        <Icon name={pack.icon} size={14} color={selected ? pack.accentColor : TONE.spent} />
-                        <Text style={[st.packChipName, selected && { color: INK }]} numberOfLines={1}>
-                          {pack.name}
-                        </Text>
-                      </SpireTactilePressable>
-                    );
-                  })}
-                </View>
-              </View>
-
               {/* Ascension Selector */}
               <Text style={st.section}>ASCENSION LEVEL</Text>
               <View style={st.ascCard}>
@@ -663,7 +584,7 @@ const SpireSetup: React.FC<SpireSetupProps> = ({
               icon="lorc/mountaintop"
               onPress={() => {
                 sfx('confirm');
-                onStartNew(fighter, ascension, seed, { themePacks: [...activePacks] });
+                onStartNew(fighter, ascension, seed);
               }}
             />
           )}
@@ -796,15 +717,6 @@ const st = StyleSheet.create({
   starterChip: { flex: 1, minWidth: 132, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: INK, padding: 7 },
   starterName: { fontSize: 12, fontWeight: '900', color: INK },
   starterDesc: { fontSize: 10, color: INK, opacity: 0.8, lineHeight: 13 },
-  packCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
-  packHeadRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
-  packSecTitle: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1, color: INK },
-  packSub: { fontSize: 11, fontWeight: '600', color: TONE.spent, marginTop: 2, lineHeight: 15 },
-  autoPackBtn: { backgroundColor: COLORS.paperBeige, borderRadius: 6, borderWidth: 1.5, borderColor: INK, paddingHorizontal: 8, paddingVertical: 3 },
-  autoPackText: { fontSize: 10.5, fontWeight: '900', color: INK },
-  packGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  packChip: { width: '48%', flexGrow: 1, minWidth: 130, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: COLORS.paperBeige, borderRadius: 8, borderWidth: 1.5, borderColor: '#D6CFC4', paddingHorizontal: 8, paddingVertical: 7 },
-  packChipName: { flex: 1, fontSize: 11.5, fontWeight: '900', color: TONE.spent },
   ascCard: { backgroundColor: COLORS.canvasWhite, borderRadius: 12, borderWidth: 2.5, borderBottomWidth: 5, borderColor: INK, padding: 12, gap: 8 },
   ascRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   stepBtn: { width: 38, height: 38, borderRadius: 8, borderWidth: 2, borderBottomWidth: 4, borderColor: INK, backgroundColor: COLORS.actionYellow, alignItems: 'center', justifyContent: 'center' },

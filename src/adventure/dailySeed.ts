@@ -124,7 +124,7 @@ export const SUMMIT_DAILY_MUTATORS: readonly SummitDailyMutator[] = [
     id: 'gamble_mastery',
     name: 'Gamble Mastery',
     tagline: 'High-stakes board tricks take center stage.',
-    description: 'Start with +45¢, +1 Grace, and Board Gambles locked into your Focused Pool.',
+    description: 'Start with +45¢, +1 Grace, and boosted Board Gamble offers.',
     icon: 'delapouite/rolling-dices',
     accentColor: '#D97706',
   },

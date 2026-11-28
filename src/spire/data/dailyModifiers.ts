@@ -12,7 +12,7 @@ import {
   type SummitDailyMutator,
   type SummitDailyMutatorId,
 } from '@/adventure/dailySeed';
-import type { SummitThemePackId } from './themePacks';
+import type { WeaponRole } from '@/adventure/data/weaponRoles';
 
 export {
   getDailySummitConfig,
@@ -36,7 +36,7 @@ export interface DailyMutatorModifiers {
   startingHintsDelta: number;
   maxHeartsDelta: number;
   heavyHitterBonus: number;
-  forcedThemePack?: SummitThemePackId;
+  favoredRole?: WeaponRole;
 }
 
 const DEFAULT_MODS: DailyMutatorModifiers = {
@@ -73,7 +73,7 @@ export const dailyMutatorModifiers = (id?: SummitDailyMutatorId | null): DailyMu
         ...DEFAULT_MODS,
         startingCoinsDelta: 45,
         startingGracesDelta: 1,
-        forcedThemePack: 'board_gambles',
+        favoredRole: 'gambles',
       };
     case 'hyper_parries':
       return {

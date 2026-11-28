@@ -19,7 +19,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CharacterName } from '@/types';
 import { normalizeCoopRoomCode } from '@/adventure/dailySeed';
 import { randomSeed } from '@/adventure/engine/rng';
-import type { SummitThemePackId } from '../data/themePacks';
 import { spireEncounterToLevel } from '../engine/bridge';
 import {
   applyCoopCampfireDuoForge,
@@ -193,9 +192,7 @@ export const reconstructCoopRunFromSnapshot = (
   localPlayer: CoopPlayerInfo
 ): SpireRun => {
   let next: SpireRun = {
-    ...createSpireRun(localPlayer.fighter, snapshot.ascension, snapshot.seed, {
-      themePacks: snapshot.themePacks?.length === 2 ? snapshot.themePacks : undefined,
-    }),
+    ...createSpireRun(localPlayer.fighter, snapshot.ascension, snapshot.seed),
     coopPartySize: 2,
     coopRoomCode: snapshot.code,
   };
@@ -247,7 +244,6 @@ export interface UseCoopSummitOptions {
   selectedFighter: CharacterName;
   ascension: number;
   seed: number;
-  themePacks?: readonly SummitThemePackId[];
   /** Current active SpireRun in SpireMode (null when in setup) */
   run: SpireRun | null;
   /** True while SpireMode is on SpireSetup */
@@ -304,7 +300,6 @@ export const useCoopSummit = ({
   selectedFighter,
   ascension,
   seed,
-  themePacks,
   run,
   inSetup,
   onSetCoopRun,
@@ -932,9 +927,8 @@ export const useCoopSummit = ({
     client.startClimb({
       seed: launchSeed,
       ascension,
-      ...(themePacks?.length === 2 ? { themePacks: [...themePacks] } : {}),
     });
-  }, [ascension, seed, themePacks]);
+  }, [ascension, seed]);
 
   // ─── Climb Actions ────────────────────────────────────────────────────────
 
