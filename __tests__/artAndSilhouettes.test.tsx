@@ -6,6 +6,17 @@ import { BIOMES } from '@/adventure/data/biomes';
 import { BiomeScenery } from '@/adventure/components/BiomeScenery';
 import CritterGallery from '@/adventure/components/CritterGallery';
 import { EnemyAvatar } from '@/components/enemies/EnemyAvatar';
+import {
+  ENEMY_ATLAS_COLS,
+  ENEMY_ATLAS_MAX_INDEX,
+  ENEMY_ATLAS_ROWS,
+  ENEMY_IDLE_FRAME_COUNT,
+} from '@/components/enemies/EnemySpriteRig';
+import {
+  ENEMY_SPRITE_ATLAS_SPECS,
+  WAVE1_ENEMY_SPRITE_NAMES,
+  WAVE1_ENEMY_SPRITE_SLUGS,
+} from '@/components/enemies/enemySpriteRegistry';
 import { FighterAvatar } from '@/components/fighters/FighterAvatar';
 import {
   FIGHTER_ATLAS_COLS,
@@ -263,7 +274,14 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
       }
     });
 
-    it('renders bosses with wider grounding shadow, cool atmospheric halo, 2-tone lighting, and 3/4 left combat facing', () => {
+    it('renders all 19 Wave 1 enemy sprite atlases (+ 2 aliases), boss grounding shadow/halo, and clean #121212 silhouettes while keeping World 2-5 SVG foes intact', () => {
+      expect(ENEMY_ATLAS_COLS).toBe(8);
+      expect(ENEMY_ATLAS_ROWS).toBe(8);
+      expect(ENEMY_IDLE_FRAME_COUNT).toBe(32);
+      expect(ENEMY_ATLAS_MAX_INDEX).toBe(63);
+      expect(WAVE1_ENEMY_SPRITE_SLUGS).toHaveLength(19);
+      expect(WAVE1_ENEMY_SPRITE_NAMES).toHaveLength(21);
+
       const stdView = render(
         <EnemyAvatar
           enemy={{ name: 'Junk Rat', tier: 1 }}
@@ -298,22 +316,31 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
       const bossWidth = bossShadowStyle.find((s) => s && typeof s.width === 'number')?.width as number;
       expect(bossWidth).toBeGreaterThan(stdWidth);
 
-      let bossGradients = 0;
+      // Wave 1 boss uses 8x8 dual-layer sprite atlas
+      expect(bossView.getByTestId('enemy-sprite-viewport')).toBeTruthy();
+      expect(bossView.getByTestId('enemy-sprite-atlas').props.source).toBe(
+        ENEMY_SPRITE_ATLAS_SPECS['Ancient Dragon'].source
+      );
+      expect(bossView.getByTestId('enemy-sprite-atlas-prev').props.source).toBe(
+        ENEMY_SPRITE_ATLAS_SPECS['Ancient Dragon'].source
+      );
+
+      // World 2-5 SVG foe keeps 2-tone LinearGradient lighting, 3/4 left facing & solid #121212 SVG silhouette
+      let svgGradients = 0;
       let leftFacingTransforms = 0;
-      walkJson(bossView.toJSON() as JsonNode, (node) => {
-        if (node.type === 'LinearGradient') bossGradients += 1;
+      walkJson(stdView.toJSON() as JsonNode, (node) => {
+        if (node.type === 'LinearGradient') svgGradients += 1;
         const tr = node.props?.transform;
         if (typeof tr === 'string' && tr.includes('translate(-')) {
           leftFacingTransforms += 1;
         }
       });
-      expect(bossGradients).toBeGreaterThanOrEqual(1);
+      expect(svgGradients).toBeGreaterThanOrEqual(1);
       expect(leftFacingTransforms).toBeGreaterThanOrEqual(1);
 
-      // Enemy silhouette mode also flattens cleanly to solid black
-      const silBoss = render(
+      const silSvgFoe = render(
         <EnemyAvatar
-          enemy={{ name: 'The Hydra', tier: 4 }}
+          enemy={{ name: 'Charging Boar', tier: 2 }}
           size={64}
           mood="menacing"
           animate={false}
@@ -321,17 +348,68 @@ describe('[UI-01..UI-07] Visual Cohesion, Typography, Lighting & Silhouettes', (
         />
       );
       const nonBlack: string[] = [];
-      walkJson(silBoss.toJSON() as JsonNode, (node) => {
+      walkJson(silSvgFoe.toJSON() as JsonNode, (node) => {
         const fill = node.props?.fill;
         if (typeof fill === 'string' && fill !== 'none' && fill !== 'transparent' && fill !== SILHOUETTE_INK) {
           nonBlack.push(fill);
         }
       });
       expect(nonBlack).toEqual([]);
+      silSvgFoe.unmount();
+
+      // Verify all 21 Wave 1 enemy sprite names render distinct 19 atlases and flatten cleanly to #121212 silhouettes
+      const enemyAtlasSources = new Set<unknown>();
+      for (const enemyName of WAVE1_ENEMY_SPRITE_NAMES) {
+        const spec = ENEMY_SPRITE_ATLAS_SPECS[enemyName];
+        expect(spec).toBeDefined();
+
+        const view = render(
+          <EnemyAvatar
+            enemy={{ name: enemyName, tier: spec.isBoss ? 4 : 1 }}
+            size={80}
+            mood="menacing"
+            animate={false}
+            testID={`wave1-${enemyName}`}
+          />
+        );
+        const atlas = view.getByTestId('enemy-sprite-atlas');
+        const prevAtlas = view.getByTestId('enemy-sprite-atlas-prev');
+        expect(view.getByTestId('enemy-sprite-viewport')).toBeTruthy();
+        expect(atlas.props.source).toBe(spec.source);
+        expect(prevAtlas.props.source).toBe(spec.source);
+        const flatStyle = Array.isArray(atlas.props.style)
+          ? Object.assign({}, ...atlas.props.style.filter(Boolean))
+          : atlas.props.style;
+        expect(flatStyle.width).toBe(80 * 8);
+        expect(flatStyle.height).toBe(80 * 8);
+        enemyAtlasSources.add(atlas.props.source);
+        view.unmount();
+
+        const silView = render(
+          <EnemyAvatar
+            enemy={{ name: enemyName, tier: spec.isBoss ? 4 : 1 }}
+            size={36}
+            animate={false}
+            silhouette
+          />
+        );
+        expect(silView.getByTestId('enemy-sprite-silhouette')).toBeTruthy();
+        const silAtlas = silView.getByTestId('enemy-sprite-atlas');
+        const silFlat = Array.isArray(silAtlas.props.style)
+          ? Object.assign({}, ...silAtlas.props.style.filter(Boolean))
+          : silAtlas.props.style;
+        expect(
+          silAtlas.props.tintColor === SILHOUETTE_INK || silFlat?.filter === 'brightness(0)'
+        ).toBe(true);
+        silView.unmount();
+      }
+      expect(enemyAtlasSources.size).toBe(19);
+      for (const slug of WAVE1_ENEMY_SPRITE_SLUGS) {
+        expect(fs.existsSync(path.join(ROOT, 'assets', 'enemies', `${slug}.webp`))).toBe(true);
+      }
 
       stdView.unmount();
       bossView.unmount();
-      silBoss.unmount();
     });
 
     it('exposes the solid-black Silhouette Audit toggle and 36px/80px audit strip in /dev/fighters & CritterGallery', () => {

@@ -45,7 +45,7 @@ export const RULES = {
   spriteActiveStepMinL1: 1.0,
   /** Half-window size (in frames) for the leave-one-out rolling median active step baseline */
   spriteRollingWindow: 16,
-  /** Minimum share of a clipped shot that fighter-sprite-viewport must occupy to auto-enable the gate */
+  /** Minimum share of a clipped shot that a sprite viewport (fighter or enemy) must occupy to auto-enable the gate */
   spriteAutoClipShare: 0.25,
   /** Smooth multi-frame bridge guard: minimum contiguous active-frame run (>= 2× activeStepMinL1) */
   spriteBridgeMinRun: 3,
@@ -122,22 +122,96 @@ export function cropStabilizedFrame(img, cx, cy, width, height) {
   return { width: w, height: h, data };
 }
 
+/** Known sprite-atlas viewport testIDs supported transparently by the SPRITE-POP continuity gate. */
+export const SPRITE_VIEWPORT_KEYS = ['fighter-sprite-viewport', 'enemy-sprite-viewport'];
+
+const SPRITE_VIEWPORT_TRACK_PREFIXES = {
+  'fighter-sprite-viewport': [
+    'fighter-sprite-viewport',
+    'main-menu-mascot',
+    'adventure-run-fighter',
+    'fighter-avatar',
+  ],
+  'enemy-sprite-viewport': [
+    'enemy-sprite-viewport',
+    'adventure-run-enemy',
+    'preview-enemy-avatar',
+    'results-enemy-avatar',
+    'enemy-avatar',
+  ],
+};
+
+function matchesTrackPrefix(label, pref) {
+  if (typeof label !== 'string' || label.includes('"')) return false;
+  const normalized = label.startsWith('#') ? label.slice(1) : label;
+  if (!normalized.startsWith(pref)) return false;
+  if (normalized.length === pref.length) return true;
+  const next = normalized[pref.length];
+  return next === '›' || next === ' ' || next === '[' || next === '.';
+}
+
+/**
+ * Resolve which sprite viewport key & region (`fighter-sprite-viewport`, `enemy-sprite-viewport`,
+ * or an explicit `spriteGate.viewportKey`) applies to a capture.
+ * Prefers `preferredKey` when configured; otherwise matches whichever known sprite viewport
+ * exists in `capture.regions` (choosing the largest by area if both appear) or `capture.tracks`.
+ */
+export function resolveSpriteViewport(capture, preferredKey = null) {
+  const regions = capture?.regions;
+  if (typeof preferredKey === 'string' && preferredKey.length > 0) {
+    const region = Array.isArray(regions?.[preferredKey]) ? regions[preferredKey] : null;
+    return { key: preferredKey, region };
+  }
+
+  let bestKey = null;
+  let bestRegion = null;
+  let bestArea = -1;
+  if (regions && typeof regions === 'object') {
+    for (const key of SPRITE_VIEWPORT_KEYS) {
+      const reg = regions[key];
+      if (!Array.isArray(reg) || reg.length < 4) continue;
+      const area = Math.max(0, reg[2]) * Math.max(0, reg[3]);
+      if (area > bestArea) {
+        bestArea = area;
+        bestKey = key;
+        bestRegion = reg;
+      }
+    }
+  }
+  if (bestKey) return { key: bestKey, region: bestRegion };
+
+  if (Array.isArray(capture?.tracks) && capture.tracks.length) {
+    for (const key of SPRITE_VIEWPORT_KEYS) {
+      const prefixes = SPRITE_VIEWPORT_TRACK_PREFIXES[key] ?? [key];
+      const matched = capture.tracks.some(t => prefixes.some(pref => matchesTrackPrefix(t?.label, pref)));
+      if (matched) return { key, region: null };
+    }
+  }
+
+  return { key: null, region: null };
+}
+
 /**
  * Resolve per-frame viewport center coordinates from `capture.tracks` so `runSpriteGate`
  * can follow a translating/scaling sprite container without outer-border bleed.
  */
-function resolveTrackedViewportCrops(capture, inset = 0) {
-  const vp = capture?.regions?.['fighter-sprite-viewport'];
-  if (!vp || !Array.isArray(capture?.tracks) || !capture.tracks.length) return null;
+function resolveTrackedViewportCrops(capture, inset = 0, preferredViewportKey = null) {
+  if (!Array.isArray(capture?.tracks) || !capture.tracks.length) return null;
+  const { key: vpKey, region: vp } = resolveSpriteViewport(capture, preferredViewportKey);
+  if (!vpKey) return null;
+
   const dpr = capture.dpr ?? 1;
-  const maxDim = Math.max(vp[2], vp[3]) * 1.25;
-  const minDim = Math.min(vp[2], vp[3]) * 0.55;
-  const prefixes = ['fighter-sprite-viewport', 'main-menu-mascot', 'adventure-run-fighter', 'fighter-avatar'];
+  const hasRegion = Array.isArray(vp) && vp.length >= 4 && vp[2] > 0 && vp[3] > 0;
+  const maxDim = hasRegion
+    ? Math.max(vp[2], vp[3]) * 1.25
+    : Math.max(capture.size?.width ?? 256, capture.size?.height ?? 256) * 1.25;
+  const minDim = hasRegion ? Math.min(vp[2], vp[3]) * 0.55 : 16;
+  const prefixes = SPRITE_VIEWPORT_TRACK_PREFIXES[vpKey] ?? [vpKey];
 
   let chosen = [];
   for (const pref of prefixes) {
     const matches = capture.tracks.filter(t => {
-      if (!t?.label || !t.label.startsWith(pref) || t.label.includes('"')) return false;
+      if (!matchesTrackPrefix(t?.label, pref)) return false;
       if (!Array.isArray(t.s) || !t.s.length) return false;
       const w0 = t.s[0][3];
       const h0 = t.s[0][4];
@@ -171,7 +245,7 @@ function resolveTrackedViewportCrops(capture, inset = 0) {
     last = r;
     centers.push({ cx: r[1] * dpr, cy: r[2] * dpr });
   }
-  return { centers, cropW, cropH };
+  return { key: vpKey, centers, cropW, cropH };
 }
 
 function insetRoiBox(roi, inset) {
@@ -290,14 +364,101 @@ function computeFrameStepDiff(prevImg, currImg, roi) {
   };
 }
 
+function sampleRoiBorder(img, roi) {
+  const { width } = img;
+  const d = img.data;
+  const x0 = roi.x;
+  const y0 = roi.y;
+  const x1 = roi.x + roi.width;
+  const y1 = roi.y + roi.height;
+  const total = roi.width * roi.height;
+  if (total <= 0) return { mode: 'per-row', bgR: 0, bgG: 0, bgB: 0 };
+
+  let transparent = 0;
+  for (let y = y0; y < y1; y++) {
+    let o = (y * width + x0) * 4;
+    for (let x = x0; x < x1; x++, o += 4) {
+      if (d[o + 3] < 24) transparent++;
+    }
+  }
+  if (transparent / total >= 0.15) return { mode: 'alpha', bgR: 0, bgG: 0, bgB: 0 };
+
+  const borderR = [];
+  const borderG = [];
+  const borderB = [];
+  for (let x = x0; x < x1; x++) {
+    for (const y of y1 - 1 === y0 ? [y0] : [y0, y1 - 1]) {
+      const o = (y * width + x) * 4;
+      borderR.push(d[o]);
+      borderG.push(d[o + 1]);
+      borderB.push(d[o + 2]);
+    }
+  }
+  for (let y = y0 + 1; y < y1 - 1; y++) {
+    for (const x of x1 - 1 === x0 ? [x0] : [x0, x1 - 1]) {
+      const o = (y * width + x) * 4;
+      borderR.push(d[o]);
+      borderG.push(d[o + 1]);
+      borderB.push(d[o + 2]);
+    }
+  }
+  const bgR = median(borderR);
+  const bgG = median(borderG);
+  const bgB = median(borderB);
+  let uniform = 0;
+  for (let i = 0; i < borderR.length; i++) {
+    if (Math.abs(borderR[i] - bgR) + Math.abs(borderG[i] - bgG) + Math.abs(borderB[i] - bgB) <= 36) uniform++;
+  }
+  const isUniformBg = borderR.length > 0 && uniform / borderR.length >= 0.5;
+  return { mode: isUniformBg ? 'uniform' : 'per-row', bgR, bgG, bgB };
+}
+
+/**
+ * Lock one consistent foreground-segmentation background model (`alpha`, `uniform`, or `per-row`)
+ * across an entire sprite sequence so slight border-pixel rounding (e.g. a sub-pixel shake crop
+ * nudging border uniformity across the 0.5 threshold) never switches centroid estimators mid-shot.
+ */
+function resolveSequenceBgModel(frames, roi, width, height) {
+  let alphaVotes = 0;
+  let uniformVotes = 0;
+  let total = 0;
+  const bgRs = [];
+  const bgGs = [];
+  const bgBs = [];
+  for (const img of frames) {
+    if (!img || img.width !== width || img.height !== height) continue;
+    total++;
+    const info = sampleRoiBorder(img, roi);
+    if (info.mode === 'alpha') {
+      alphaVotes++;
+    } else if (info.mode === 'uniform') {
+      uniformVotes++;
+      bgRs.push(info.bgR);
+      bgGs.push(info.bgG);
+      bgBs.push(info.bgB);
+    }
+  }
+  const n = total || 1;
+  if (alphaVotes > n * 0.5) return { mode: 'alpha' };
+  if (uniformVotes >= n * 0.5 && bgRs.length) {
+    return {
+      mode: 'uniform',
+      bgR: median(bgRs),
+      bgG: median(bgGs),
+      bgB: median(bgBs),
+    };
+  }
+  return { mode: 'per-row' };
+}
+
 /**
  * Estimate the foreground silhouette centroid `(cx, cy)` relative to `roi` origin.
- * Supports three image types cleanly:
+ * Supports three image types cleanly (locked sequence-wide by `resolveSequenceBgModel`):
  *  1. Alpha-transparent RGBA frames (`>= 15%` transparent pixels inside ROI)
- *  2. Opaque frames over a uniform card/studio background (border median RGB)
+ *  2. Opaque frames over a uniform card/studio background (sequence-median border RGB)
  *  3. Opaque frames over a horizontally banded/textured stage backdrop (per-row edge samples)
  */
-function computeForegroundCentroid(img, roi) {
+function computeForegroundCentroid(img, roi, bgModel = null) {
   const { width } = img;
   const d = img.data;
   const x0 = roi.x;
@@ -307,19 +468,12 @@ function computeForegroundCentroid(img, roi) {
   const total = roi.width * roi.height;
   if (total <= 0) return null;
 
-  let transparent = 0;
-  for (let y = y0; y < y1; y++) {
-    let o = (y * width + x0) * 4;
-    for (let x = x0; x < x1; x++, o += 4) {
-      if (d[o + 3] < 24) transparent++;
-    }
-  }
-
+  const model = bgModel ?? sampleRoiBorder(img, roi);
   let sx = 0;
   let sy = 0;
   let sw = 0;
 
-  if (transparent / total >= 0.15) {
+  if (model.mode === 'alpha') {
     for (let y = y0; y < y1; y++) {
       let o = (y * width + x0) * 4;
       for (let x = x0; x < x1; x++, o += 4) {
@@ -332,64 +486,35 @@ function computeForegroundCentroid(img, roi) {
         }
       }
     }
-  } else {
-    const borderR = [];
-    const borderG = [];
-    const borderB = [];
-    for (let x = x0; x < x1; x++) {
-      for (const y of y1 - 1 === y0 ? [y0] : [y0, y1 - 1]) {
-        const o = (y * width + x) * 4;
-        borderR.push(d[o]);
-        borderG.push(d[o + 1]);
-        borderB.push(d[o + 2]);
-      }
-    }
-    for (let y = y0 + 1; y < y1 - 1; y++) {
-      for (const x of x1 - 1 === x0 ? [x0] : [x0, x1 - 1]) {
-        const o = (y * width + x) * 4;
-        borderR.push(d[o]);
-        borderG.push(d[o + 1]);
-        borderB.push(d[o + 2]);
-      }
-    }
-    const bgR = median(borderR);
-    const bgG = median(borderG);
-    const bgB = median(borderB);
-    let uniform = 0;
-    for (let i = 0; i < borderR.length; i++) {
-      if (Math.abs(borderR[i] - bgR) + Math.abs(borderG[i] - bgG) + Math.abs(borderB[i] - bgB) <= 36) uniform++;
-    }
-    const isUniformBg = borderR.length > 0 && uniform / borderR.length >= 0.5;
-
-    if (isUniformBg) {
-      for (let y = y0; y < y1; y++) {
-        let o = (y * width + x0) * 4;
-        for (let x = x0; x < x1; x++, o += 4) {
-          const dist = Math.abs(d[o] - bgR) + Math.abs(d[o + 1] - bgG) + Math.abs(d[o + 2] - bgB);
-          if (dist > 42) {
-            sx += x - x0;
-            sy += y - y0;
-            sw += 1;
-          }
+  } else if (model.mode === 'uniform') {
+    const { bgR, bgG, bgB } = model;
+    for (let y = y0; y < y1; y++) {
+      let o = (y * width + x0) * 4;
+      for (let x = x0; x < x1; x++, o += 4) {
+        const dist = Math.abs(d[o] - bgR) + Math.abs(d[o + 1] - bgG) + Math.abs(d[o + 2] - bgB);
+        if (dist > 42) {
+          sx += x - x0;
+          sy += y - y0;
+          sw += 1;
         }
       }
-    } else {
-      for (let y = y0; y < y1; y++) {
-        const oL = (y * width + x0) * 4;
-        const oR = (y * width + (x1 - 1)) * 4;
-        const mR = (d[oL] + d[oR]) * 0.5;
-        const mG = (d[oL + 1] + d[oR + 1]) * 0.5;
-        const mB = (d[oL + 2] + d[oR + 2]) * 0.5;
-        let o = oL;
-        for (let x = x0; x < x1; x++, o += 4) {
-          const dL = Math.abs(d[o] - d[oL]) + Math.abs(d[o + 1] - d[oL + 1]) + Math.abs(d[o + 2] - d[oL + 2]);
-          const dR = Math.abs(d[o] - d[oR]) + Math.abs(d[o + 1] - d[oR + 1]) + Math.abs(d[o + 2] - d[oR + 2]);
-          const dM = Math.abs(d[o] - mR) + Math.abs(d[o + 1] - mG) + Math.abs(d[o + 2] - mB);
-          if (Math.min(dL, dR, dM) > 48) {
-            sx += x - x0;
-            sy += y - y0;
-            sw += 1;
-          }
+    }
+  } else {
+    for (let y = y0; y < y1; y++) {
+      const oL = (y * width + x0) * 4;
+      const oR = (y * width + (x1 - 1)) * 4;
+      const mR = (d[oL] + d[oR]) * 0.5;
+      const mG = (d[oL + 1] + d[oR + 1]) * 0.5;
+      const mB = (d[oL + 2] + d[oR + 2]) * 0.5;
+      let o = oL;
+      for (let x = x0; x < x1; x++, o += 4) {
+        const dL = Math.abs(d[o] - d[oL]) + Math.abs(d[o + 1] - d[oL + 1]) + Math.abs(d[o + 2] - d[oL + 2]);
+        const dR = Math.abs(d[o] - d[oR]) + Math.abs(d[o + 1] - d[oR + 1]) + Math.abs(d[o + 2] - d[oR + 2]);
+        const dM = Math.abs(d[o] - mR) + Math.abs(d[o + 1] - mG) + Math.abs(d[o + 2] - mB);
+        if (Math.min(dL, dR, dM) > 48) {
+          sx += x - x0;
+          sy += y - y0;
+          sw += 1;
         }
       }
     }
@@ -437,7 +562,10 @@ export function detectSpritePops(frames, options = {}) {
   const startFrame = options.startFrame ?? 0;
   const who = options.who ?? 'fighter-sprite-viewport';
 
-  const centroids = valid.map(img => computeForegroundCentroid(img, roi));
+  const bgModel = resolveSequenceBgModel(valid, roi, width, height);
+  const centroids = valid.map(img =>
+    img.width === width && img.height === height ? computeForegroundCentroid(img, roi, bgModel) : null
+  );
   const rawSteps = [];
   for (let i = 1; i < valid.length; i++) {
     const prev = valid[i - 1];
@@ -660,8 +788,8 @@ export function detectSpritePops(frames, options = {}) {
 /**
  * Determine whether the SPRITE-POP pixel-continuity gate applies to a capture.
  * Activates when a shot opts in via `spriteGate` (in capture.json or scripts/motion/shots/*.mjs)
- * OR automatically when `fighter-sprite-viewport` is the primary tracked clip.
- * Non-sprite shots (fight-set, map-open, spire-*, etc.) return null and stay unaffected.
+ * OR automatically when a sprite viewport (`fighter-sprite-viewport` or `enemy-sprite-viewport`)
+ * is the primary tracked clip. Non-sprite shots (fight-set, map-open, spire-*, etc.) return null.
  */
 export function resolveSpriteGateConfig(capture, shotDef = null) {
   let resolvedShot = shotDef;
@@ -678,11 +806,12 @@ export function resolveSpriteGateConfig(capture, shotDef = null) {
   if (explicit && typeof explicit === 'object') return { ...explicit, auto: false };
   if (explicit === true) return { auto: false };
 
-  const vp = capture?.regions?.['fighter-sprite-viewport'];
-  if (!vp || !capture?.clip) return null;
+  if (!capture?.clip) return null;
+  const { key, region: vp } = resolveSpriteViewport(capture);
+  if (!vp || !key) return null;
   const clipArea = Math.max(1, (capture.size?.width ?? 0) * (capture.size?.height ?? 0));
   const vpArea = Math.max(0, vp[2]) * Math.max(0, vp[3]);
-  if (vpArea / clipArea >= RULES.spriteAutoClipShare) return { auto: true };
+  if (vpArea / clipArea >= RULES.spriteAutoClipShare) return { auto: true, viewportKey: key };
   return null;
 }
 
@@ -702,14 +831,16 @@ function runSpriteGate(dir, capture) {
   if (decoded.length < 2) return null;
 
   const dpr = capture.dpr ?? 1;
-  const vp = capture.regions?.['fighter-sprite-viewport'];
+  const { key: vpKey, region: vp } = resolveSpriteViewport(capture, gate.viewportKey ?? null);
   const insetPx = Math.max(0, Math.round((gate.roiInset ?? 0) * dpr));
   let framesToAnalyze = decoded;
   let roi = gate.roi ?? null;
+  let trackedKey = null;
 
   if (!roi && gate.trackViewport) {
-    const tracked = resolveTrackedViewportCrops(capture, gate.roiInset ?? 0);
+    const tracked = resolveTrackedViewportCrops(capture, gate.roiInset ?? 0, gate.viewportKey ?? vpKey);
     if (tracked) {
+      trackedKey = tracked.key;
       framesToAnalyze = decoded.map((img, i) => {
         const c = tracked.centers[Math.min(i, tracked.centers.length - 1)];
         return cropStabilizedFrame(img, c.cx, c.cy, tracked.cropW, tracked.cropH);
@@ -751,7 +882,8 @@ function runSpriteGate(dir, capture) {
       roi = null;
     }
   }
-  const who = gate.who ?? (vp ? 'fighter-sprite-viewport' : capture.shot?.id || 'sprite');
+  const resolvedWhoKey = vp ? vpKey : trackedKey;
+  const who = gate.who ?? (resolvedWhoKey || capture.shot?.id || 'sprite');
   return detectSpritePops(framesToAnalyze, { ...gate, roi, who });
 }
 

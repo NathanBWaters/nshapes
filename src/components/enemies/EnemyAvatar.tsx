@@ -64,6 +64,12 @@ import {
 import { EnemyEffectsOverlay } from './EnemyEffectsOverlay';
 import { EnemyBlinkProvider } from './EnemyEyes';
 import {
+  ENEMY_CLIP_DURATION_MS,
+  EnemySpriteRig,
+  getEnemySpriteMoodTempo,
+} from './EnemySpriteRig';
+import { hasEnemySpriteAtlas } from './enemySpriteRegistry';
+import {
   EnemyCreatureRig,
   getEnemyDefaultTier,
   getEnemyMassClass,
@@ -610,19 +616,51 @@ export const ENEMY_MOTION: CreatureMotionConfig<EnemyAmbientMood, EnemyReactionT
   },
   resolveReactionHoldMs: (type, context) => {
     const massClass: MassClass = context.massClass ?? 'standard';
-    if (type === 'pain') {
-      const tier: HitTier = context.hitTier ?? 0;
-      const baseHold = hitstopHoldMs(tier, context.moveKind, context.chain);
-      const hold =
-        massClass === 'boss'
-          ? Math.min(HIT.maxHoldMs, Math.round(baseHold * 1.15))
-          : baseHold;
-      // Release expression cleanly right as tier-scaled hitstop + spring recoil settle (`[FX-12]`)
-      return HIT.painHoldMs + Math.max(0, hold - HIT.holdMs);
+    if (!context.atlasBakedIdle) {
+      if (type === 'pain') {
+        const tier: HitTier = context.hitTier ?? 0;
+        const baseHold = hitstopHoldMs(tier, context.moveKind, context.chain);
+        const hold =
+          massClass === 'boss'
+            ? Math.min(HIT.maxHoldMs, Math.round(baseHold * 1.15))
+            : baseHold;
+        // Release expression cleanly right as tier-scaled hitstop + spring recoil settle (`[FX-12]`)
+        return HIT.painHoldMs + Math.max(0, hold - HIT.holdMs);
+      }
+      const base = ENEMY_REACTION_HOLD_MS[type] ?? 850;
+      if (massClass === 'standard') return base;
+      return Math.round(base * (massClass === 'boss' ? 1.15 : MASS_CLASS[massClass].timeMult));
     }
-    const base = ENEMY_REACTION_HOLD_MS[type] ?? 850;
-    if (massClass === 'standard') return base;
-    return Math.round(base * (massClass === 'boss' ? 1.15 : MASS_CLASS[massClass].timeMult));
+
+    // Option B 8×8 sprite-atlas enemies: align reaction holds 1:1 with clip completion
+    switch (type) {
+      case 'attack':
+        return getEnemyAttackTimings(massClass).strikeStartMs + ENEMY_CLIP_DURATION_MS.attack;
+      case 'pain':
+      case 'crit_pain': {
+        const tier: HitTier = context.hitTier ?? (type === 'crit_pain' ? 1 : 0);
+        const baseHold = hitstopHoldMs(tier, context.moveKind, context.chain);
+        const hold =
+          massClass === 'boss'
+            ? Math.min(HIT.maxHoldMs, Math.round(baseHold * 1.15))
+            : baseHold;
+        return hold + ENEMY_CLIP_DURATION_MS.hurtRecovery;
+      }
+      case 'taunt':
+      case 'regen':
+      case 'poke':
+        return ENEMY_CLIP_DURATION_MS.taunt;
+      case 'rage_spin':
+        return CREATURE_FX.pokeStepMs + CREATURE_FX.spinMs;
+      case 'entrance':
+        return (
+          Math.round(CREATURE_FX.entranceDropMs * MASS_CLASS[massClass].timeMult) +
+          (massClass === 'boss' ? PHASE.bossApexHoldMs : CREATURE_FX.pokeStepMs) +
+          ENEMY_CLIP_DURATION_MS.windup
+        );
+      default:
+        return ENEMY_CLIP_DURATION_MS.taunt;
+    }
   },
   tapReaction: 'poke',
   tapStreakReaction: 'rage_spin',
@@ -1131,13 +1169,15 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
 }) {
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
-  const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
-  const shouldLightweightBreathe = animate && lightweight && !reducedMotion && appActive;
 
   const enemyName =
     typeof enemy === 'string'
       ? enemy
       : enemy?.name ?? 'Sparring Foe';
+  const usesSpriteAtlas = hasEnemySpriteAtlas(enemyName);
+  const shouldAnimate = animate && !lightweight && !reducedMotion && appActive;
+  const shouldLightweightBreathe =
+    animate && lightweight && !reducedMotion && appActive && !quiet && !usesSpriteAtlas;
   const explicitTier = typeof enemy === 'object' && enemy && enemy.tier ? enemy.tier : undefined;
   const rawTier = explicitTier ?? getEnemyDefaultTier(enemyName);
   const resolvedTier = Math.max(1, Math.min(4, rawTier)) as EnemyTier;
@@ -1166,6 +1206,7 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
     mood === 'idle' && personality.naturallySleepy && healthState === 'pristine'
       ? 'sleepy'
       : mood;
+  const spriteTempo = getEnemySpriteMoodTempo(effectiveMood);
 
   const resolvedHitKind: HitKind = reaction?.hitKind ?? reaction?.hitStyle ?? hitKind ?? 'throw';
 
@@ -1192,6 +1233,8 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
     healthState,
     personality,
     pivots,
+    atlasBakedIdle: usesSpriteAtlas,
+    spriteTempo,
     reaction,
     hitTier,
     hitKind: resolvedHitKind,
@@ -1367,27 +1410,47 @@ export const EnemyAvatar: React.FC<EnemyAvatarProps> = memo(function EnemyAvatar
             overheadLighting={!lightweight}
             scaleTier={resolvedScaleTier}
           >
-            <EnemyBlinkProvider blinkStage={motion.blinkStage}>
-              <EnemyCreatureRig
+            {usesSpriteAtlas ? (
+              <EnemySpriteRig
                 enemyName={enemyName}
-                expression={expression}
-                blinkStage={motion.blinkStage}
+                size={size}
+                mood={effectiveMood}
                 healthState={healthState}
-                gazeOffset={motion.gaze}
-                facing={resolvedFacing}
-                scaleTier={resolvedScaleTier}
+                activeReaction={motion.activeReaction}
+                reactionKey={motion.reactionKey}
+                attackStrikeStartMs={attackTimings.strikeStartMs}
+                massClass={massClass}
+                painHitstopMs={motion.reactionHitstopMs}
+                spriteClockMs={motion.spriteClockMs}
+                spriteIdleSec={motion.spriteIdleSec}
+                animate={animate}
+                lightweight={lightweight}
+                quiet={quiet}
                 silhouette={silhouette}
-                headStyle={motion.headStyle}
-                leftEarStyle={motion.leftEarStyle}
-                rightEarStyle={motion.rightEarStyle}
-                tailStyle={motion.tailStyle}
-                pawStyle={motion.pawStyle}
               />
-            </EnemyBlinkProvider>
+            ) : (
+              <EnemyBlinkProvider blinkStage={motion.blinkStage}>
+                <EnemyCreatureRig
+                  enemyName={enemyName}
+                  expression={expression}
+                  blinkStage={motion.blinkStage}
+                  healthState={healthState}
+                  gazeOffset={motion.gaze}
+                  facing={resolvedFacing}
+                  scaleTier={resolvedScaleTier}
+                  silhouette={silhouette}
+                  headStyle={motion.headStyle}
+                  leftEarStyle={motion.leftEarStyle}
+                  rightEarStyle={motion.rightEarStyle}
+                  tailStyle={motion.tailStyle}
+                  pawStyle={motion.pawStyle}
+                />
+              </EnemyBlinkProvider>
+            )}
             {!lightweight && !silhouette && (
               <CreatureDamageOverlay
                 healthState={healthState}
-                headStyle={motion.headStyle}
+                headStyle={usesSpriteAtlas ? undefined : motion.headStyle}
                 animate={shouldAnimate}
                 testID="enemy-damage-overlay"
               />
