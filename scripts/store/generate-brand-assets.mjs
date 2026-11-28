@@ -2,7 +2,7 @@
 /**
  * Reproducibly renders crisp, vector-sharp NShapes brand assets built around
  * our scientifically verified, zero-SET-overlap triad:
- *   Shapes: Circle · Triangle · Chunky 8-vertex Bolt
+ *   Shapes: Circle · Triangle · Pointed 6-vertex Bolt
  *   Colors: Tangerine Orange (#DF5A00) · Electric Sky Blue (#007ED9) · Berry Pink (#940E65)
  *
  * Strips alpha channels from Apple/Google opaque store assets so ITMS-90717
@@ -21,7 +21,7 @@ const ROOT = process.cwd();
 const COLOR_ORANGE = '#DF5A00';
 const COLOR_BLUE = '#007ED9';
 const COLOR_PINK = '#940E65';
-const BOLT_POINTS_24x30 = '12,1.8 21.5,1.8 14.8,12.8 22,12.8 12,28.2 2.5,28.2 9.2,17.2 2,17.2';
+const BOLT_POINTS_24x30 = '14.8,1.8 12.5,11.8 22.4,9.2 9.2,28.2 11.5,18.2 1.6,20.8';
 const TRIANGLE_POINTS_24x30 = '12,2.2 22,26.8 2,26.8';
 
 const ensureDir = (filePath) => {
