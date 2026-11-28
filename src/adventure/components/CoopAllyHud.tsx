@@ -84,7 +84,7 @@ const CoopAllyHud: React.FC<CoopAllyHudProps> = ({
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
 
-  const allySize = Math.max(26, Math.round(heroSize * (compact ? 0.78 : 0.8)));
+  const allySize = Math.max(24, Math.round(heroSize * (compact ? 0.72 : 0.8)));
   const safeMaxHearts = Math.max(1, allyMaxHearts);
   const safeHearts = Math.max(0, Math.min(safeMaxHearts, allyHearts));
   const safeRescueNeeded = Math.max(1, allyRescueNeeded);
@@ -161,21 +161,25 @@ const CoopAllyHud: React.FC<CoopAllyHudProps> = ({
       </View>
 
       <View style={[st.infoCol, compact && st.infoColCompact]}>
-        <View style={st.chipRow}>
-          <View
-            testID="coop-ally-connection"
-            style={[st.connDot, allyConnected ? st.connOnline : st.connOffline]}
-          />
-          <Text style={[st.nameText, compact && st.nameTextCompact]} numberOfLines={1}>
-            {allyName}
-          </Text>
-          <View testID="coop-ally-hearts" style={st.heartPill}>
-            <Heart size={compact ? 9 : 10} filled={safeHearts > 0 && !allyCaged} />
-            <Text style={st.heartText}>
-              {safeHearts}/{safeMaxHearts}
-            </Text>
+        {!(compact && (allyCaged || giftReady)) && (
+          <View style={[st.chipRow, compact && st.chipRowCompact]}>
+            <View
+              testID="coop-ally-connection"
+              style={[st.connDot, allyConnected ? st.connOnline : st.connOffline]}
+            />
+            {!compact && (
+              <Text style={st.nameText} numberOfLines={1}>
+                {allyName}
+              </Text>
+            )}
+            <View testID="coop-ally-hearts" style={st.heartPill}>
+              <Heart size={compact ? 9 : 10} filled={safeHearts > 0 && !allyCaged} />
+              <Text style={st.heartText}>
+                {safeHearts}/{safeMaxHearts}
+              </Text>
+            </View>
           </View>
-        </View>
+        )}
 
         {allyCaged ? (
           <Animated.View testID="coop-ally-rescue-badge" style={[st.rescuePill, rescueAnimStyle]}>
@@ -243,8 +247,11 @@ const st = StyleSheet.create({
     minWidth: 0,
   },
   wrapCompact: {
-    gap: 3,
-    paddingLeft: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 1,
+    paddingLeft: 2,
   },
   wrapOffline: {
     opacity: 0.65,
@@ -289,8 +296,9 @@ const st = StyleSheet.create({
     minWidth: 0,
   },
   infoColCompact: {
-    maxWidth: 102,
-    marginBottom: 2,
+    alignItems: 'center',
+    maxWidth: 74,
+    marginBottom: 0,
   },
   chipRow: {
     flexDirection: 'row',
@@ -303,6 +311,11 @@ const st = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
     maxWidth: '100%',
+  },
+  chipRowCompact: {
+    gap: 2.5,
+    paddingHorizontal: 4,
+    paddingVertical: 0.5,
   },
   connDot: {
     width: 6,
@@ -321,9 +334,6 @@ const st = StyleSheet.create({
     fontWeight: '900',
     color: INK,
     flexShrink: 1,
-  },
-  nameTextCompact: {
-    fontSize: 9.5,
   },
   heartPill: {
     flexDirection: 'row',

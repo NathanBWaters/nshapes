@@ -45,7 +45,6 @@ import {
 import { randomSeed } from '@/adventure/engine/rng';
 import { MAX_ASCENSION } from '../data/ascensions';
 import { useCoopSummit } from '../hooks/useCoopSummit';
-import type { CoopCombatSession } from '../hooks/coopContracts';
 import {
   campfireForge,
   campfireMeditate,
@@ -125,10 +124,6 @@ interface Props {
   initialCoopCode?: string;
   initialCoopServer?: string;
 }
-
-const AdventureRunWithCoop = AdventureRun as React.ComponentType<
-  React.ComponentProps<typeof AdventureRun> & { coopSession?: CoopCombatSession }
->;
 
 const SpireMode: React.FC<Props> = ({
   onExit,
@@ -529,7 +524,7 @@ const SpireMode: React.FC<Props> = ({
     ) >>> 0;
     const isLastHeart = run.hearts <= 1;
     screenContent = (
-      <AdventureRunWithCoop
+      <AdventureRun
         key={`spire-fight-${run.act}-${run.floor}-${enc.id}-${run.retreats ?? 0}`}
         level={activeLevel}
         save={virtualSave}

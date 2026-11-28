@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "currentEraId": "E14",
-  "currentAppVersion": "0.1.189",
+  "currentEraId": "E15",
+  "currentAppVersion": "0.1.193",
   "eras": [
     {
       "id": "E0",
@@ -330,12 +330,34 @@
           "levels"
         ]
       }
+    },
+    {
+      "id": "E15",
+      "minVersion": "0.1.193",
+      "date": "2026-11-28",
+      "commit": "ee3df9c",
+      "summary": "Add Starfall Summit 2P Co-Op mode (1.75x duo scaling & shared combat sync)",
+      "scope": "global",
+      "invalidated": {
+        "global": true,
+        "modes": [
+          "adventure",
+          "spire"
+        ],
+        "categories": [
+          "weapons",
+          "evolutions",
+          "fighters",
+          "arcana",
+          "levels"
+        ]
+      }
     }
   ],
   "fingerprints": {
     "engineFiles": {
       "virtual:globalConstants": "e141a701a9c4f126",
-      "src/adventure/engine/run.ts": "d42b7f81c6aba28a",
+      "src/adventure/engine/run.ts": "23c472a489ef15b8",
       "src/adventure/engine/fight.ts": "2d506b042c5447be",
       "src/adventure/engine/gear.ts": "b44cb3210f56c564",
       "src/adventure/engine/evolutions.ts": "779919e0a165f89b",
@@ -364,7 +386,7 @@
       "src/spire/data/ascensions.ts": "92fde46da64fb696",
       "src/spire/data/encounters.ts": "73df814c5d2a8e24",
       "src/spire/data/events.ts": "578bc854e58b2589",
-      "src/spire/engine/bridge.ts": "1eb0423848879114",
+      "src/spire/engine/bridge.ts": "ff42f72c0727a86b",
       "src/spire/engine/runState.ts": "66ca0652b2a603a1",
       "src/spire/engine/mapGen.ts": "566c258874e2b094"
     },

@@ -383,16 +383,21 @@ export const useCoopSummit = ({
 
       switch (msg.type) {
         case 'PLAYER_PRESENCE': {
-          setSnapshot(prev =>
-            prev
-              ? {
-                  ...prev,
-                  players: prev.players.map(p =>
-                    p.playerId === msg.playerId ? { ...p, connected: msg.connected } : p
-                  ),
-                }
-              : prev
-          );
+          setSnapshot(prev => {
+            if (!prev) return prev;
+            if (Array.isArray(msg.players)) {
+              return { ...prev, players: msg.players };
+            }
+            if (msg.playerId !== undefined && typeof msg.connected === 'boolean') {
+              return {
+                ...prev,
+                players: prev.players.map(p =>
+                  p.playerId === msg.playerId ? { ...p, connected: msg.connected! } : p
+                ),
+              };
+            }
+            return prev;
+          });
           break;
         }
 
@@ -733,6 +738,7 @@ export const useCoopSummit = ({
     const client = clientRef.current;
     const localPid = client?.getPlayerId();
     const local = nextSnap.players.find(p => p.playerId === localPid) ?? null;
+    const existingStored = loadStoredSession(nextSnap.code);
 
     if (local) {
       saveStoredSession({
@@ -740,7 +746,7 @@ export const useCoopSummit = ({
         playerId: local.playerId,
         sessionToken: client?.getSessionToken() ?? null,
         fighter: local.fighter,
-        run: runRef.current,
+        run: runRef.current ?? existingStored?.run ?? null,
       });
     }
 
@@ -752,7 +758,7 @@ export const useCoopSummit = ({
       const cur = runRef.current;
       const needsLaunch = !cur || cur.coopRoomCode !== nextSnap.code || inSetupRef.current;
       if (needsLaunch) {
-        const stored = loadStoredSession(nextSnap.code);
+        const stored = existingStored;
         let hydrated: SpireRun;
         if (stored?.run && stored.run.coopRoomCode === nextSnap.code && stored.run.seed === nextSnap.seed) {
           hydrated = stored.run;

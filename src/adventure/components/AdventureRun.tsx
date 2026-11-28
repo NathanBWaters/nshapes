@@ -125,6 +125,14 @@ import TrainingLabBar, { type DummyMode, type TrainingLabActions } from './Train
 
 const TICK_MS = 250;
 const COOP_GIFT_CHARGE_MAX = 4;
+const shortCoopName = (raw?: string): string => {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return 'Ally';
+  if (trimmed.length <= 8) return trimmed;
+  const parts = trimmed.split(/\s+/);
+  const last = parts[parts.length - 1];
+  return last && last.length <= 9 ? last : trimmed.slice(0, 8);
+};
 const COOP_EMOTE_LABELS: Readonly<Record<string, string>> = {
   cheer: 'cheers you on!',
   nice: 'says NICE SET!',
@@ -1291,6 +1299,7 @@ const AdventureRun: React.FC<Props> = ({
   // ── Starfall Summit 2P Co-Op Combat Synchronization (zero WebSocket coupling) ──
   const [localGiftSets, setLocalGiftSets] = useState(0);
   const [allyReaction, setAllyReaction] = useState<FighterAvatarReactionEvent | null>(null);
+  const [coopToast, setCoopToast] = useState<string | null>(null);
   const allyReactionSeqRef = useRef(0);
   const seenInboundEventIdsRef = useRef<Set<string>>(new Set());
   const lastSyncedBossHpRef = useRef<number | null>(null);
@@ -1311,8 +1320,8 @@ const AdventureRun: React.FC<Props> = ({
 
   const showCoopCallout = useCallback(
     (msg: string) => {
-      setEventBannerNote(msg);
-      later(() => setEventBannerNote(cur => (cur === msg ? null : cur)), 3200);
+      setCoopToast(msg);
+      later(() => setCoopToast(cur => (cur === msg ? null : cur)), 3000);
     },
     [later]
   );
@@ -1409,11 +1418,12 @@ const AdventureRun: React.FC<Props> = ({
       }
 
       if (ev.kind === 'ally_hit') {
-        const who = ev.allyName ?? cs.allyName;
+        const who = shortCoopName(ev.allyName ?? cs.allyName);
         const dmg = Math.max(1, Math.round(ev.amount));
         syncedBossInPulse = true;
         lastSyncedBossHpRef.current = cs.sharedBossHp;
         lastSyncedBossMaxHpRef.current = cs.sharedBossMaxHp;
+        setTaunting(false);
         dispatch({
           type: 'COOP_SYNC_BOSS',
           foeHp: cs.sharedBossHp,
@@ -1423,10 +1433,11 @@ const AdventureRun: React.FC<Props> = ({
         pulseAllyReaction(ev.isBig || ev.isRainbow || dmg >= 30 ? 'ecstatic' : 'throw');
         showCoopCallout(ev.isRainbow ? `${who} RAINBOW +${dmg}!` : `${who} landed +${dmg}!`);
       } else if (ev.kind === 'cross_parry') {
-        const who = ev.allyName ?? cs.allyName;
+        const who = shortCoopName(ev.allyName ?? cs.allyName);
         syncedBossInPulse = true;
         lastSyncedBossHpRef.current = cs.sharedBossHp;
         lastSyncedBossMaxHpRef.current = cs.sharedBossMaxHp;
+        setTaunting(false);
         dispatch({
           type: 'COOP_SYNC_BOSS',
           foeHp: cs.sharedBossHp,
@@ -1441,7 +1452,7 @@ const AdventureRun: React.FC<Props> = ({
         pulseAllyReaction('ecstatic');
         showCoopCallout(ev.perfect ? `${who} PERFECT CROSS-PARRY!` : `${who} CROSS-PARRIED!`);
       } else if (ev.kind === 'gift_received') {
-        const who = ev.fromName ?? cs.allyName;
+        const who = shortCoopName(ev.fromName ?? cs.allyName);
         dispatch({ type: 'COOP_RECEIVE_GIFT', gift: ev.gift, fromName: who });
         pulseAllyReaction('joy');
         if (ev.gift === 'heal') {
@@ -1456,17 +1467,18 @@ const AdventureRun: React.FC<Props> = ({
           showCoopCallout(`${who} CLEANSED your board!`);
         }
       } else if (ev.kind === 'ally_rescued') {
+        const who = shortCoopName(ev.rescuedName ?? cs.allyName);
         if (ev.isLocal) {
-          dispatch({ type: 'COOP_SET_CAGED', caged: false, rescuedByName: cs.allyName });
+          dispatch({ type: 'COOP_SET_CAGED', caged: false, rescuedByName: shortCoopName(cs.allyName) });
           conductor.triggerHeal();
           void triggerHealHaptic();
-          showCoopCallout(`${cs.allyName} broke your cage! +2 ♥`);
+          showCoopCallout(`${shortCoopName(cs.allyName)} broke your cage! +2 ♥`);
         } else {
           pulseAllyReaction('ecstatic');
-          showCoopCallout(`${ev.rescuedName ?? cs.allyName} broke free!`);
+          showCoopCallout(`${who} broke free!`);
         }
       } else if (ev.kind === 'ally_emote') {
-        const who = ev.fromName ?? cs.allyName;
+        const who = shortCoopName(ev.fromName ?? cs.allyName);
         const phrase = COOP_EMOTE_LABELS[ev.emote] ?? `says "${ev.emote}"`;
         pulseAllyReaction('joy');
         showCoopCallout(`${who} ${phrase}`);
@@ -1553,7 +1565,7 @@ const AdventureRun: React.FC<Props> = ({
       sfx('click');
       conductor.triggerPowerup();
       cs.callbacks.onSendGift(gift);
-      const who = cs.state.allyName;
+      const who = shortCoopName(cs.state.allyName);
       showCoopCallout(
         gift === 'heal'
           ? `Sent +1 ♥ Heal to ${who}!`
@@ -2187,6 +2199,17 @@ const AdventureRun: React.FC<Props> = ({
                   <Text style={st.xpBadgeText}>LV {run.xpLevel + 1}</Text>
                 </View>
               </Anchor>
+            </View>
+          )}
+          {/* Co-Op inbound callout toast anchored cleanly at top-center edge below Boss HP bar */}
+          {coopToast && !ended && (
+            <View pointerEvents="none" style={st.coopToastWrap} testID="coop-callout-toast">
+              <View style={st.coopToastPill}>
+                <Icon name="lorc/two-shadows" size={10} color="#0F766E" noShadow />
+                <Text style={st.coopToastText} numberOfLines={1}>
+                  {coopToast}
+                </Text>
+              </View>
             </View>
           )}
           {/* On roomy stages, speech bubble floats cleanly near the top without reserving blank sky when silent */}
@@ -3578,6 +3601,9 @@ const st = StyleSheet.create({
   xpBadge: { backgroundColor: COLORS.canvasWhite, borderRadius: 999, borderWidth: 1, borderColor: INK, paddingHorizontal: 6, paddingVertical: 0.5 },
   xpBadgeText: { fontSize: 11, lineHeight: 13, fontWeight: '900', color: INK, letterSpacing: 0.2 },
   stageSpeechOverlay: { position: 'absolute', top: 4, left: 8, right: 8, zIndex: 20 },
+  coopToastWrap: { position: 'absolute', top: -10, left: 10, right: 10, alignItems: 'center', zIndex: 40 },
+  coopToastPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F0FDFA', borderRadius: 999, borderWidth: 1.5, borderColor: '#0F766E', paddingHorizontal: 8, paddingVertical: 1.5, maxWidth: '84%' },
+  coopToastText: { flexShrink: 1, fontSize: 10.5, fontWeight: '900', color: '#115E59' },
   dualSpeechRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   dualSpeechHalf: { flex: 1, minWidth: 0 },
   stageFloor: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },

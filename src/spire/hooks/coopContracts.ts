@@ -171,7 +171,15 @@ export interface CoopRoomSnapshot {
 
 export type CoopServerMessage =
   | { type: 'SNAPSHOT'; snapshot: CoopRoomSnapshot; seq?: number }
-  | { type: 'PLAYER_PRESENCE'; playerId: string; connected: boolean; seq?: number }
+  | {
+      type: 'PLAYER_PRESENCE';
+      player?: CoopPlayerInfo;
+      event?: 'joined' | 'reconnected' | 'disconnected' | 'updated';
+      players?: CoopPlayerInfo[];
+      playerId?: string;
+      connected?: boolean;
+      seq?: number;
+    }
   | { type: 'VOTE_UPDATED'; playerId?: string; nodeId?: string | null; mapVotes?: Record<string, string | null>; seq?: number }
   | { type: 'NODE_SELECTED'; nodeId: string; nextPhase: CoopPhase; seq: number }
   | { type: 'PHASE_READY_UPDATED'; playerId?: string; ready?: boolean; phaseReady?: Record<string, boolean>; seq?: number }
