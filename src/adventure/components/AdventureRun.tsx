@@ -18,6 +18,7 @@ import Icon, { type IconName } from '@/components/Icon';
 import { PauseAudioPills, SettingsSheet } from '@/components/SettingsSheet';
 import { EnemyAvatar } from '@/components/enemies';
 import { FighterAvatar } from '@/components/fighters';
+import type { FighterAvatarReactionEvent } from '@/components/fighters/FighterAvatar';
 import { FighterBuildAura, deriveBuildTheme } from '@/components/fighters/FighterBuildAura';
 import { WeaponAvatar } from '@/components/weapons';
 import { useAppActive } from '@/hooks/useAppActive';
@@ -43,7 +44,20 @@ import type { Card, CardReward, CharacterName, Weapon } from '@/types';
 import { getAdjacentIndices, type WeaponEffectResult } from '@/utils/weaponEffects';
 import { band, music, sfx } from '@/audio';
 import { moodOf, playSounds, soundsFor } from '@/audio/fightAudio';
-import type { AdventureSave, FeatureFlag, LevelDef, ParryRequirement, PassiveId, RunEventType, RunReliefOptions, RunState } from '../types';
+import type {
+  AdventureSave,
+  CoopCombatGiftKind,
+  CoopCombatSession,
+  FeatureFlag,
+  LevelDef,
+  ParryRequirement,
+  PassiveId,
+  RunEventType,
+  RunReliefOptions,
+  RunState,
+  SynergyAttrId,
+  SynergyCounters,
+} from '../types';
 import type { WeaponBuilds } from '../data/weaponStats';
 import { activeEnemyCounters, computeStars, createRun, isSacrificeUnlocked, runReducer, shopPrice, rerollCost, xpForLevel, type RunAction, type RunOverrides } from '../engine/run';
 import { boardHasCounterSet } from '../engine/parry';
@@ -102,12 +116,23 @@ import DefeatOverlay from './DefeatOverlay';
 import WeaponExplainer from './WeaponExplainer';
 import HudInspector, { type HudInspectTarget } from './HudInspector';
 import ParryIntentBar from './ParryIntentBar';
+import CoopAllyHud from './CoopAllyHud';
+import CoopCageOverlay from './CoopCageOverlay';
 import { WeaponOfferRow } from './SharedCards';
 import { getDevOverrides, subscribeDevOverrides, type DevOverrides } from '../engine/devOverrides';
 import FightDebugDrawer, { type FightDebugActions } from './FightDebugDrawer';
 import TrainingLabBar, { type DummyMode, type TrainingLabActions } from './TrainingLabBar';
 
 const TICK_MS = 250;
+const COOP_GIFT_CHARGE_MAX = 4;
+const COOP_EMOTE_LABELS: Readonly<Record<string, string>> = {
+  cheer: 'cheers you on!',
+  nice: 'says NICE SET!',
+  parry: 'calls PARRY READY!',
+  help: 'needs backup!',
+  gift: 'sent a gift!',
+  ready: 'is ready!',
+};
 /** [FX-21] Picked Set cards refill right after thrown flight clears slots (was 560 ms) */
 const REPLACE_DELAY_MS = 260;
 /** [FX-21] Collateral weapon-destroyed cards refill after blast/beam bursts finish painting */
@@ -233,6 +258,8 @@ interface Props {
   /** [TP-12] Optional label & direct return handler when 1-4D Training Lab was launched from Camp or LevelPreview */
   sandboxReturnLabel?: string;
   onSandboxReturn?: () => void;
+  /** Optional decoupled 2P Co-Op session (Starfall Summit Duo; zero WebSocket dependency) */
+  coopSession?: CoopCombatSession;
 }
 
 const parryCounterForDummyMode = (mode?: DummyMode): ParryRequirement => {
@@ -293,8 +320,12 @@ const AdventureRun: React.FC<Props> = ({
   initialIsRetry = false,
   sandboxReturnLabel,
   onSandboxReturn,
+  coopSession,
 }) => {
   recordComponentRender('AdventureRun');
+  const isCoop = Boolean(coopSession || runOverrides?.isCoop);
+  const coopSessionRef = useRef(coopSession);
+  coopSessionRef.current = coopSession;
   const insets = useSafeAreaInsets();
   const appActive = useAppActive();
   const reducedMotion = useReducedMotion();
@@ -320,26 +351,54 @@ const AdventureRun: React.FC<Props> = ({
   const pendingDamageRef = useRef(0);
   // [OB-11] Dynamic 1-4D Back Field resolves only traits & features unlocked in save
   const effectiveLevel = useMemo(() => resolvePracticeLevel(level, startSave), [level, startSave]);
+  const effectiveOverrides = useMemo<RunOverrides | undefined>(() => {
+    if (!runOverrides && !isCoop) return undefined;
+    return isCoop ? { ...runOverrides, isCoop: true } : runOverrides;
+  }, [runOverrides, isCoop]);
   const [run, setRun] = useState(() => {
     const resolved = resolvePracticeLevel(level, save);
     const resolvedFeatures = featuresOverride ?? resolvePracticeFeatures(level, save);
     return createRun(resolved, save, {
       seed,
       ...(resolvedFeatures ? { features: resolvedFeatures } : {}),
-      ...(runOverrides ? { overrides: runOverrides } : {}),
+      ...(effectiveOverrides ? { overrides: effectiveOverrides } : {}),
       ...(relief ? { relief } : {}),
     });
   });
   const runRef = useRef(run);
   runRef.current = run;
   const recorder = useRef(new FightRecorder(seed));
+  const pendingCoopParryRef = useRef<{ perfect: boolean; staggerMs: number } | null>(null);
+  const pendingCoopSynergyRef = useRef<Partial<SynergyCounters>>({});
+  const [coopOutboundTick, setCoopOutboundTick] = useState(0);
   // Reduce here, synchronously, so each recorded action is paired with exactly the state it was applied to
   const dispatch = useCallback((a: RunAction) => {
     const before = runRef.current;
     recorder.current.record(a, before);
     const next = runReducer(before, a);
     runRef.current = next;
-    if (next !== before) setRun(next);
+    if (next !== before) {
+      if (coopSessionRef.current) {
+        let queuedOutbound = false;
+        if (a.type === 'MATCH' && next.parriesLanded > before.parriesLanded) {
+          const perfect = next.perfectParriesLanded > before.perfectParriesLanded;
+          const staggerMs = next.parry?.phase === 'staggered' ? next.parry.msLeft : 0;
+          pendingCoopParryRef.current = { perfect, staggerMs };
+          queuedOutbound = true;
+        }
+        if (a.type !== 'COOP_SYNC_SYNERGY' && a.type !== 'COOP_SYNC_BOSS') {
+          for (const key of Object.keys(next.synergy) as SynergyAttrId[]) {
+            const delta = next.synergy[key] - before.synergy[key];
+            if (delta > 0) {
+              pendingCoopSynergyRef.current[key] = (pendingCoopSynergyRef.current[key] ?? 0) + delta;
+              queuedOutbound = true;
+            }
+          }
+        }
+        if (queuedOutbound) setCoopOutboundTick(t => t + 1);
+      }
+      setRun(next);
+    }
   }, []);
   const recordingOf = useCallback((): FightTape => ({
     recording: recorder.current.toJSON(),
@@ -503,12 +562,12 @@ const AdventureRun: React.FC<Props> = ({
   const halted = paused || Boolean(tip) || Boolean(inspect) || Boolean(hudInspect);
   const playing = run.status === 'playing' && !halted;
 
-  // Auto-pause active timed fights whenever the user leaves the app/tab
+  // Auto-pause active timed fights whenever the user leaves the app/tab (solo only; co-op stays live)
   useEffect(() => {
-    if (!appActive && run.status === 'playing' && !practice) {
+    if (!appActive && !isCoop && run.status === 'playing' && !practice) {
       setPaused(true);
     }
-  }, [appActive, run.status, practice]);
+  }, [appActive, isCoop, run.status, practice]);
 
   // Zero blocking start-of-fight popups: guidance is shown live above the board while you play!
   useEffect(() => {
@@ -540,7 +599,7 @@ const AdventureRun: React.FC<Props> = ({
     targetScore: run.foeMaxHp,
     isActiveRound: playing,
   });
-  const fighterMood = run.status === 'won' ? 'victory' : run.status === 'lost' ? 'defeat' : conductor.mood;
+  const fighterMood = run.status === 'won' ? 'victory' : run.status === 'lost' || run.caged ? 'defeat' : conductor.mood;
 
   const ui = run.foe.getUIModifiers();
   const inactivityRatio = ui.showInactivityBar
@@ -681,8 +740,10 @@ const AdventureRun: React.FC<Props> = ({
     onLand,
   });
 
-  // The fight clock stands still while a cascade plays, a cut-in waits, or the app is backgrounded
-  const ticking = appActive && playing && !fx.busy;
+  // The fight clock stands still while a cascade plays, a cut-in waits, or the app is backgrounded.
+  // In 2P Co-Op, cascades stay non-blocking so remote sync never stalls either player's clock.
+  const ticking = appActive && playing && (isCoop || !fx.busy);
+  const clockHeld = !isCoop && fx.busy;
   useEffect(() => {
     if (!ticking) return;
     const stopTrack = registerInterval('AdventureRun.clock');
@@ -716,6 +777,7 @@ const AdventureRun: React.FC<Props> = ({
       skipCutIn: fightEnded,
       bannerOnlyEvolutions,
       bannerOnlyRecipes: bannerOnlyEvolutions,
+      forceBanner: isCoop,
     });
     const addedDamage = nextScript.segments.reduce(
       (sum, seg) => sum + (seg.kind === 'beats' ? seg.beats.reduce((d, b) => d + b.damage, 0) : 0),
@@ -730,7 +792,7 @@ const AdventureRun: React.FC<Props> = ({
           seenCutInEvosRef.current.add(eid);
         }
       }
-      if (!fightEnded && e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
+      if (!fightEnded && !isCoop && e.type === 'evolution_start' && !seenCoach.current.has(COACH_KEYS.evolution)) {
         seenCoach.current.add(COACH_KEYS.evolution);
         onCoachMarkSeen(COACH_KEYS.evolution);
         const eid = evolutionIdOfEvent(e);
@@ -1226,6 +1288,288 @@ const AdventureRun: React.FC<Props> = ({
     return boardHasCounterSet(run.board, run.attributes, run.parry.spec.counter);
   }, [run.parry, run.board, run.attributes]);
 
+  // ── Starfall Summit 2P Co-Op Combat Synchronization (zero WebSocket coupling) ──
+  const [localGiftSets, setLocalGiftSets] = useState(0);
+  const [allyReaction, setAllyReaction] = useState<FighterAvatarReactionEvent | null>(null);
+  const allyReactionSeqRef = useRef(0);
+  const seenInboundEventIdsRef = useRef<Set<string>>(new Set());
+  const lastSyncedBossHpRef = useRef<number | null>(null);
+  const lastSyncedBossMaxHpRef = useRef<number | null>(null);
+  const lastSyncedParryKeyRef = useRef<string | null>(null);
+  const prevPropLocalCagedRef = useRef<boolean>(Boolean(coopSession?.state.localCaged));
+  const lastReportedDmgRef = useRef(run.totalDamage);
+  const unackedLocalDmgRef = useRef(0);
+  const lastReportedMatchesRef = useRef(run.matches);
+  const lastReportedHeartRef = useRef<{ hearts: number; maxHearts: number; caged: boolean } | null>(null);
+  const lastReportedCounterRef = useRef<boolean | null>(null);
+  const coopOutcomeReportedRef = useRef(false);
+
+  const pulseAllyReaction = useCallback((type: FighterAvatarReactionEvent['type']) => {
+    allyReactionSeqRef.current += 1;
+    setAllyReaction({ type, id: allyReactionSeqRef.current });
+  }, []);
+
+  const showCoopCallout = useCallback(
+    (msg: string) => {
+      setEventBannerNote(msg);
+      later(() => setEventBannerNote(cur => (cur === msg ? null : cur)), 3200);
+    },
+    [later]
+  );
+
+  // Outbound: local damage & local gift charge meter
+  useEffect(() => {
+    if (!coopSession) return;
+    const dmgDelta = Math.round(run.totalDamage - lastReportedDmgRef.current);
+    const matchDelta = run.matches - lastReportedMatchesRef.current;
+    if (matchDelta > 0) {
+      lastReportedMatchesRef.current = run.matches;
+      const cap = coopSession.state.giftChargeMax ?? COOP_GIFT_CHARGE_MAX;
+      setLocalGiftSets(c => Math.min(cap, c + matchDelta));
+    }
+    if (dmgDelta > 0) {
+      lastReportedDmgRef.current = run.totalDamage;
+      unackedLocalDmgRef.current += dmgDelta;
+      coopSession.callbacks.onDealDamage({
+        amount: dmgDelta,
+        combo: run.combo,
+        isRainbow: Boolean(matchDelta > 0 && run.lastSetIgnition?.math.rainbow),
+        isSet: matchDelta > 0,
+      });
+    }
+  }, [coopSession, run.totalDamage, run.matches, run.combo, run.lastSetIgnition]);
+
+  // Outbound: local Parry / Perfect Parry and Synergy counter increments (never echoes remote syncs)
+  useEffect(() => {
+    if (!coopSession) return;
+    const parryOut = pendingCoopParryRef.current;
+    if (parryOut) {
+      pendingCoopParryRef.current = null;
+      coopSession.callbacks.onParryLanded(parryOut);
+    }
+    const synOut = pendingCoopSynergyRef.current;
+    if (Object.keys(synOut).length > 0) {
+      pendingCoopSynergyRef.current = {};
+      coopSession.callbacks.onSynergyDelta(synOut);
+    }
+  }, [coopSession, coopOutboundTick]);
+
+  // Outbound: local hearts & Golden Cage state transitions
+  useEffect(() => {
+    if (!coopSession || run.hearts === null || run.maxHearts === null) return;
+    const cur = {
+      hearts: run.hearts,
+      maxHearts: run.maxHearts,
+      caged: Boolean(run.caged),
+    };
+    const prev = lastReportedHeartRef.current;
+    if (prev && prev.hearts === cur.hearts && prev.maxHearts === cur.maxHearts && prev.caged === cur.caged) {
+      return;
+    }
+    lastReportedHeartRef.current = cur;
+    if (prev !== null) {
+      coopSession.callbacks.onHeartStateChange(cur);
+    }
+  }, [coopSession, run.hearts, run.maxHearts, run.caged]);
+
+  // Outbound: board counter availability during Parry wind-up (for duo fairness stall)
+  const inParryWindup = run.parry?.phase === 'windup';
+  useEffect(() => {
+    if (!coopSession) return;
+    if (!inParryWindup) {
+      lastReportedCounterRef.current = null;
+      return;
+    }
+    if (lastReportedCounterRef.current !== parryCounterAvailable) {
+      lastReportedCounterRef.current = parryCounterAvailable;
+      coopSession.callbacks.onBoardCounterStatus(parryCounterAvailable);
+    }
+  }, [coopSession, inParryWindup, parryCounterAvailable]);
+
+  // Outbound: notify co-op session once when fight settles
+  useEffect(() => {
+    if (!coopSession || !ended || coopOutcomeReportedRef.current) return;
+    coopOutcomeReportedRef.current = true;
+    coopSession.callbacks.onCoopFightOutcome?.(isVictoryRun(run) ? 'won' : 'lost', run);
+  }, [coopSession, ended, run]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Inbound: consume authoritative event pulses, boss HP, parry state, shared synergy, cage & outcome
+  useEffect(() => {
+    if (!coopSession) return;
+    const cs = coopSession.state;
+
+    // 1. Consume deduplicated inbound event pulses first (so ally_hit pairs atomically with boss HP drop)
+    let syncedBossInPulse = false;
+    for (const ev of cs.inboundEvents) {
+      if (seenInboundEventIdsRef.current.has(ev.id)) continue;
+      seenInboundEventIdsRef.current.add(ev.id);
+      if (seenInboundEventIdsRef.current.size > 240) {
+        const first = seenInboundEventIdsRef.current.values().next().value;
+        if (first !== undefined) seenInboundEventIdsRef.current.delete(first);
+      }
+
+      if (ev.kind === 'ally_hit') {
+        const who = ev.allyName ?? cs.allyName;
+        const dmg = Math.max(1, Math.round(ev.amount));
+        syncedBossInPulse = true;
+        lastSyncedBossHpRef.current = cs.sharedBossHp;
+        lastSyncedBossMaxHpRef.current = cs.sharedBossMaxHp;
+        dispatch({
+          type: 'COOP_SYNC_BOSS',
+          foeHp: cs.sharedBossHp,
+          foeMaxHp: cs.sharedBossMaxHp,
+          allyHit: { amount: dmg, allyName: who, isRainbow: ev.isRainbow },
+        });
+        pulseAllyReaction(ev.isBig || ev.isRainbow || dmg >= 30 ? 'ecstatic' : 'throw');
+        showCoopCallout(ev.isRainbow ? `${who} RAINBOW +${dmg}!` : `${who} landed +${dmg}!`);
+      } else if (ev.kind === 'cross_parry') {
+        const who = ev.allyName ?? cs.allyName;
+        syncedBossInPulse = true;
+        lastSyncedBossHpRef.current = cs.sharedBossHp;
+        lastSyncedBossMaxHpRef.current = cs.sharedBossMaxHp;
+        dispatch({
+          type: 'COOP_SYNC_BOSS',
+          foeHp: cs.sharedBossHp,
+          foeMaxHp: cs.sharedBossMaxHp,
+          parry: {
+            phase: 'staggered',
+            msLeft: ev.staggerMs ?? cs.sharedParryMsLeft,
+            durationMs: ev.staggerMs ?? cs.sharedParryDurationMs,
+            crossParry: { perfect: ev.perfect, allyName: who },
+          },
+        });
+        pulseAllyReaction('ecstatic');
+        showCoopCallout(ev.perfect ? `${who} PERFECT CROSS-PARRY!` : `${who} CROSS-PARRIED!`);
+      } else if (ev.kind === 'gift_received') {
+        const who = ev.fromName ?? cs.allyName;
+        dispatch({ type: 'COOP_RECEIVE_GIFT', gift: ev.gift, fromName: who });
+        pulseAllyReaction('joy');
+        if (ev.gift === 'heal') {
+          conductor.triggerHeal();
+          void triggerHealHaptic();
+          showCoopCallout(`${who} sent +1 ♥ HEAL!`);
+        } else if (ev.gift === 'wild_card') {
+          conductor.triggerPowerup();
+          showCoopCallout(`${who} sent a WILD CARD!`);
+        } else {
+          conductor.triggerPowerup();
+          showCoopCallout(`${who} CLEANSED your board!`);
+        }
+      } else if (ev.kind === 'ally_rescued') {
+        if (ev.isLocal) {
+          dispatch({ type: 'COOP_SET_CAGED', caged: false, rescuedByName: cs.allyName });
+          conductor.triggerHeal();
+          void triggerHealHaptic();
+          showCoopCallout(`${cs.allyName} broke your cage! +2 ♥`);
+        } else {
+          pulseAllyReaction('ecstatic');
+          showCoopCallout(`${ev.rescuedName ?? cs.allyName} broke free!`);
+        }
+      } else if (ev.kind === 'ally_emote') {
+        const who = ev.fromName ?? cs.allyName;
+        const phrase = COOP_EMOTE_LABELS[ev.emote] ?? `says "${ev.emote}"`;
+        pulseAllyReaction('joy');
+        showCoopCallout(`${who} ${phrase}`);
+      }
+    }
+
+    // 2. Reconcile authoritative shared Boss HP & Parry state (e.g. reconnect SNAPSHOT or server updates)
+    const hpChangedFromServer =
+      lastSyncedBossHpRef.current !== cs.sharedBossHp ||
+      lastSyncedBossMaxHpRef.current !== cs.sharedBossMaxHp;
+    const parryKey = cs.sharedParryPhase
+      ? `${cs.sharedParryPhase}:${Math.round((cs.sharedParryMsLeft ?? 0) / 500)}`
+      : null;
+    const parryChangedFromServer = parryKey !== null && lastSyncedParryKeyRef.current !== parryKey;
+
+    if (!syncedBossInPulse && (hpChangedFromServer || parryChangedFromServer)) {
+      const prevServerHp = lastSyncedBossHpRef.current;
+      const isInitialSync = prevServerHp === null;
+      if (prevServerHp !== null && cs.sharedBossHp < prevServerHp) {
+        unackedLocalDmgRef.current = Math.max(0, unackedLocalDmgRef.current - (prevServerHp - cs.sharedBossHp));
+      }
+      lastSyncedBossHpRef.current = cs.sharedBossHp;
+      lastSyncedBossMaxHpRef.current = cs.sharedBossMaxHp;
+      if (parryKey !== null) lastSyncedParryKeyRef.current = parryKey;
+      const upwardGap = cs.sharedBossHp - runRef.current.foeHp;
+      const shouldApplyHp =
+        cs.sharedBossHp === 0 ||
+        cs.sharedBossMaxHp !== runRef.current.foeMaxHp ||
+        cs.sharedBossHp < runRef.current.foeHp ||
+        (!isInitialSync && hpChangedFromServer && upwardGap > unackedLocalDmgRef.current);
+      if (shouldApplyHp || parryChangedFromServer) {
+        dispatch({
+          type: 'COOP_SYNC_BOSS',
+          foeHp: shouldApplyHp ? cs.sharedBossHp : runRef.current.foeHp,
+          foeMaxHp: cs.sharedBossMaxHp,
+          ...(parryChangedFromServer && cs.sharedParryPhase
+            ? {
+                parry: {
+                  phase: cs.sharedParryPhase,
+                  msLeft: cs.sharedParryMsLeft,
+                  durationMs: cs.sharedParryDurationMs,
+                },
+              }
+            : {}),
+        });
+      }
+    }
+
+    // 3. Reconcile party-wide Synergy Graph counters
+    if (cs.sharedSynergy) {
+      const hasIncrease = (Object.entries(cs.sharedSynergy) as [SynergyAttrId, number | undefined][]).some(
+        ([k, v]) => typeof v === 'number' && v > (runRef.current.synergy[k] ?? 0)
+      );
+      if (hasIncrease) {
+        dispatch({ type: 'COOP_SYNC_SYNERGY', counters: cs.sharedSynergy });
+      }
+    }
+
+    // 4. Reconcile authoritative local Golden Cage state (transitions only — never overrides optimistic cage)
+    const prevPropCaged = prevPropLocalCagedRef.current;
+    prevPropLocalCagedRef.current = cs.localCaged;
+    if (cs.localCaged && !runRef.current.caged) {
+      dispatch({ type: 'COOP_SET_CAGED', caged: true });
+    } else if (prevPropCaged && !cs.localCaged && runRef.current.caged) {
+      dispatch({ type: 'COOP_SET_CAGED', caged: false, rescuedByName: cs.allyName });
+      conductor.triggerHeal();
+      void triggerHealHaptic();
+      showCoopCallout(`${cs.allyName} broke your cage! +2 ♥`);
+    }
+
+    // 5. Reconcile authoritative room fight outcome (both caged, shared timeout, or authoritative KO)
+    if (cs.sharedOutcome === 'lost' && runRef.current.status === 'playing') {
+      dispatch({ type: 'COOP_FORCE_DEFEAT', reason: cs.sharedDefeatReason ?? 'both_caged' });
+    } else if (cs.sharedOutcome === 'won' && runRef.current.status === 'playing') {
+      dispatch({ type: 'COOP_SYNC_BOSS', foeHp: 0, foeMaxHp: cs.sharedBossMaxHp });
+    }
+  }, [coopSession, dispatch, pulseAllyReaction, showCoopCallout, conductor]);
+
+  const handleSendCoopGift = useCallback(
+    (gift: CoopCombatGiftKind) => {
+      const cs = coopSessionRef.current;
+      if (!cs) return;
+      setLocalGiftSets(0);
+      sfx('click');
+      conductor.triggerPowerup();
+      cs.callbacks.onSendGift(gift);
+      const who = cs.state.allyName;
+      showCoopCallout(
+        gift === 'heal'
+          ? `Sent +1 ♥ Heal to ${who}!`
+          : gift === 'wild_card'
+            ? `Sent WILD CARD to ${who}!`
+            : `Cleansed ${who}'s board!`
+      );
+    },
+    [conductor, showCoopCallout]
+  );
+
+  const handleCageCheer = useCallback((emote: string) => {
+    sfx('click');
+    coopSessionRef.current?.callbacks.onSendEmote?.(emote);
+  }, []);
+
   // [OB-10] Live Set-Parry & Counter-Parry onboarding StageBubble callout on first wind-up / golden window / counter
   useEffect(() => {
     if (ended || practice) return;
@@ -1285,6 +1629,7 @@ const AdventureRun: React.FC<Props> = ({
   const inspectorOpen = Boolean(inspect) || Boolean(hudInspect);
   const keyboardBoardBlocked =
     ended ||
+    Boolean(run.caged) ||
     Boolean(defeatOverlay) ||
     defeatFreezeActive ||
     Boolean(tip) ||
@@ -1847,33 +2192,57 @@ const AdventureRun: React.FC<Props> = ({
           {/* On roomy stages, speech bubble floats cleanly near the top without reserving blank sky when silent */}
           {roomyStage && coachBubble && <View style={st.stageSpeechOverlay} pointerEvents="box-none">{coachBubble}</View>}
           <View style={st.stageFloor}>
-            <View style={[st.stageSide, compactStage && st.stageSideCompact]}>
-              <Anchor name="fighter">
-                <View style={{ position: 'relative', width: fighterSize, height: fighterSize }}>
-                  <FighterBuildAura
-                    theme={buildTheme}
-                    size={fighterSize}
-                    quiet={!effects || reducedMotion}
-                    testID="adventure-run-fighter-aura"
-                  />
-                  <FighterAvatar
-                    testID="adventure-run-fighter"
-                    character={run.fighter}
-                    size={fighterSize}
-                    health={fighterHealth}
-                    maxHealth={fighterMaxHealth}
-                    mood={fighterMood}
-                    reaction={conductor.reaction}
-                    streak={conductor.streak}
-                    cheerReleaseMs={leadImpactMs}
-                    animate={appActive}
-                    quiet={!effects}
-                    interactive
-                  />
-                </View>
-              </Anchor>
-              {run.hearts !== null && run.maxHearts !== null && (
-                <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} compact={compactStage} /></Anchor>
+            <View style={coopSession ? st.stageHeroesGroup : undefined}>
+              <View style={[st.stageSide, compactStage && st.stageSideCompact]}>
+                <Anchor name="fighter">
+                  <View style={{ position: 'relative', width: fighterSize, height: fighterSize }}>
+                    <FighterBuildAura
+                      theme={buildTheme}
+                      size={fighterSize}
+                      quiet={!effects || reducedMotion}
+                      testID="adventure-run-fighter-aura"
+                    />
+                    <FighterAvatar
+                      testID="adventure-run-fighter"
+                      character={run.fighter}
+                      size={fighterSize}
+                      health={fighterHealth}
+                      maxHealth={fighterMaxHealth}
+                      mood={fighterMood}
+                      reaction={conductor.reaction}
+                      streak={conductor.streak}
+                      cheerReleaseMs={leadImpactMs}
+                      animate={appActive}
+                      quiet={!effects}
+                      interactive
+                    />
+                  </View>
+                </Anchor>
+                {run.hearts !== null && run.maxHearts !== null && (
+                  <Anchor name="hearts"><Hearts hearts={run.hearts} max={run.maxHearts} compact={compactStage} /></Anchor>
+                )}
+              </View>
+              {coopSession && (
+                <CoopAllyHud
+                  allyFighter={coopSession.state.allyFighter}
+                  allyName={coopSession.state.allyName}
+                  allyHearts={coopSession.state.allyHearts}
+                  allyMaxHearts={coopSession.state.allyMaxHearts}
+                  allyCaged={coopSession.state.allyCaged}
+                  allyRescueProgress={coopSession.state.allyRescueProgress}
+                  allyRescueNeeded={coopSession.state.allyRescueNeeded}
+                  allyConnected={coopSession.state.allyConnected}
+                  allyCombo={coopSession.state.allyCombo}
+                  allyReaction={allyReaction}
+                  heroSize={fighterSize}
+                  compact={compactStage}
+                  effects={effects}
+                  ended={ended}
+                  giftCharge={coopSession.state.giftCharge ?? localGiftSets}
+                  giftChargeMax={coopSession.state.giftChargeMax ?? COOP_GIFT_CHARGE_MAX}
+                  onSendGift={handleSendCoopGift}
+                  giftsDisabled={Boolean(run.caged) || halted}
+                />
               )}
             </View>
 
@@ -1946,10 +2315,10 @@ const AdventureRun: React.FC<Props> = ({
               <Anchor name="clock">
                 <View
                   testID="run-clock"
-                  accessibilityLabel={`${secondsLeft} seconds left${fx.busy ? ', waiting for effects' : ''}`}
-                  style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, fx.busy && st.statHeld]}
+                  accessibilityLabel={`${secondsLeft} seconds left${clockHeld ? ', waiting for effects' : ''}`}
+                  style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, clockHeld && st.statHeld]}
                 >
-                  <Icon name="lorc/stopwatch" size={13} color={fx.busy ? COLORS.logicTeal : INK} />
+                  <Icon name="lorc/stopwatch" size={13} color={clockHeld ? COLORS.logicTeal : INK} />
                   <Text style={st.statText}>{secondsLeft}s</Text>
                 </View>
               </Anchor>
@@ -1988,10 +2357,10 @@ const AdventureRun: React.FC<Props> = ({
                     <Anchor name="clock">
                       <View
                         testID="run-clock"
-                        accessibilityLabel={`${secondsLeft} seconds left${fx.busy ? ', waiting for effects' : ''}`}
-                        style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, fx.busy && st.statHeld]}
+                        accessibilityLabel={`${secondsLeft} seconds left${clockHeld ? ', waiting for effects' : ''}`}
+                        style={[st.stat, secondsLeft <= 10 && st.statWarn, ui.timerSpeedMultiplier && ui.timerSpeedMultiplier > 1 ? { borderColor: COLORS.impactOrange } : null, clockHeld && st.statHeld]}
                       >
-                        <Icon name="lorc/stopwatch" size={13} color={fx.busy ? COLORS.logicTeal : INK} />
+                        <Icon name="lorc/stopwatch" size={13} color={clockHeld ? COLORS.logicTeal : INK} />
                         <Text style={st.statText}>{secondsLeft}s</Text>
                       </View>
                     </Anchor>
@@ -2343,7 +2712,7 @@ const AdventureRun: React.FC<Props> = ({
               playerStats={run.stats}
               weapons={run.weapons}
               procAccum={run.procAccum}
-              isPlayerTurn={run.status === 'playing' && !halted && !fx.cutIn}
+              isPlayerTurn={run.status === 'playing' && !run.caged && !halted && !fx.cutIn}
               activeAttributes={run.attributes}
               onUseHint={handleUseHint}
               triggerHint={hintTrigger}
@@ -2367,6 +2736,16 @@ const AdventureRun: React.FC<Props> = ({
               triggerClearSelection={clearSelectionTrigger}
             />
           </CardBoardProvider>
+          {coopSession && Boolean(run.caged) && !ended && (
+            <CoopCageOverlay
+              visible={Boolean(run.caged)}
+              allyName={coopSession.state.allyName}
+              rescueProgress={coopSession.state.rescueProgress}
+              rescueNeeded={coopSession.state.rescueNeeded}
+              effects={effects}
+              onCheer={handleCageCheer}
+            />
+          )}
         </View>
       </View>
 
@@ -3202,6 +3581,7 @@ const st = StyleSheet.create({
   dualSpeechRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   dualSpeechHalf: { flex: 1, minWidth: 0 },
   stageFloor: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
+  stageHeroesGroup: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, flexShrink: 1, minWidth: 0 },
   stageSide: { alignItems: 'center', gap: 2 },
   stageSideCompact: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
   stageMiddle: { flex: 1, minWidth: 0, alignSelf: 'stretch', justifyContent: 'center', alignItems: 'center', paddingBottom: 3 },

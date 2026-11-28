@@ -26,6 +26,7 @@ import type {
   ArcanaDef,
   ArcanaId,
   BeltBadge,
+  CoopCombatGiftKind,
   FeatureFlag,
   FightLogMathItem,
   LevelDef,
@@ -35,6 +36,8 @@ import type {
   RunReliefOptions,
   RunState,
   SetFollowUpItem,
+  SynergyAttrId,
+  SynergyCounters,
 } from '../types';
 import type { Effect, WeaponTriggerKind } from '../rules/types';
 import { createRng } from './rng';
@@ -61,7 +64,7 @@ import {
   addCoins, addConnection, addRandomConnections, addTime, addXp, arcana, begin, bumpSynergy, chanceStatsOf,
   clearCardLocks, COLLATERAL_DAMAGE, dealDamage, drawCard, emit, empowerBoard, enqueue, ensureBoardHasSet,
   finish, foeMultiplier, growBoard, heal, hurt, igniteCards, markCards, mods, newLinkSlots, notifyEvoEvent,
-  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, syncEnemyCounters,
+  pruneConnections, recycle, refill, refreshSources, returnToDeck, rollBridges, setSynergy, syncEnemyCounters,
   syncLiveSynergy, syncTraps, synergyCtxOf, toDeckCard, touchable, tuning, updateCards,
   MAX_BOARD, type Draft, type FightHooks, TIME_HEADROOM, CLOCK_SLOW_CAP_PCT,
 } from './fight';
@@ -194,9 +197,71 @@ export type RunAction =
       toggleArcanaId?: ArcanaId;
     }
   | { type: 'DEV_SET_HEARTS'; hearts: number }
-  | { type: 'DEV_RESET_DUMMY' };
+  | { type: 'DEV_RESET_DUMMY' }
+  /** Pure deterministic 2P Co-Op reducer actions (inert in solo mode where `isCoop` is falsy). */
+  | {
+      type: 'COOP_SYNC_BOSS';
+      foeHp: number;
+      foeMaxHp?: number;
+      allyHit?: { amount: number; allyName?: string; isRainbow?: boolean };
+      parry?: {
+        phase: 'calm' | 'windup' | 'staggered';
+        msLeft?: number;
+        durationMs?: number;
+        crossParry?: { perfect: boolean; allyName?: string };
+      };
+    }
+  | {
+      type: 'COOP_SYNC_SYNERGY';
+      counters?: Partial<SynergyCounters>;
+      deltas?: Partial<SynergyCounters>;
+    }
+  | {
+      type: 'COOP_RECEIVE_GIFT';
+      gift: CoopCombatGiftKind;
+      fromName?: string;
+    }
+  | {
+      type: 'COOP_SET_CAGED';
+      caged: boolean;
+      reviveHearts?: number;
+      rescuedByName?: string;
+    }
+  | {
+      type: 'COOP_FORCE_DEFEAT';
+      reason?: 'hearts' | 'time_up' | 'both_caged' | 'retreat';
+    };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+const isCardCleansable = (c: Card): boolean =>
+  Boolean(
+    c.cursedUntil !== undefined ||
+      (c.frozen ?? 0) > 0 ||
+      c.isDud ||
+      c.isFaceDown ||
+      c.locked ||
+      c.hasBomb ||
+      c.hasCountdown ||
+      c.snare ||
+      c.thornAt !== undefined ||
+      c.fuseAt !== undefined ||
+      c.fuseDud
+  );
+
+const cleanseHazardCard = (c: Card): Card => ({
+  ...clearCardLocks(c),
+  frozen: undefined,
+  hasBomb: false,
+  bombTimer: undefined,
+  hasCountdown: false,
+  countdownTimer: undefined,
+  snare: undefined,
+  thornAt: undefined,
+  fuseAt: undefined,
+  fuseHot: false,
+  fuseDud: false,
+});
 
 const scaledFoeHp = (baseHp: number, arcanaIds: ArcanaId[], reliefScale = 1): number => {
   const scale = (arcanaRules(arcanaIds).foeHpScale ?? 1) * reliefScale;
@@ -303,6 +368,18 @@ const resolve = (d: Draft) => {
     if (d.level.rules.sandbox && d.maxHearts !== null) {
       d.hearts = d.maxHearts;
       emit(d, 'breather', d.maxHearts);
+    } else if (d.isCoop) {
+      if (!d.caged) {
+        d.caged = true;
+        d.purityChain = 0;
+        d.lastDiffCount = 0;
+        d.combo = 0;
+        d.bonusCombo = 0;
+        d.cleanStreak = 0;
+        d.passive.hotStreak = false;
+        syncLiveSynergy(d);
+        emit(d, 'rule', undefined, 'CAGED!');
+      }
     } else {
       d.status = 'lost';
       d.endReason = 'hearts';
@@ -1413,6 +1490,8 @@ export interface RunOverrides extends LoadoutOptions {
   startingHearts?: number;
   /** Lab-only override: omit each active Evolution's bespoke rules/modifiers (keeps universal chassis) */
   blankEvolutionRules?: boolean;
+  /** Enable 2P Co-Op combat rules (Golden Cage at 0 hearts & co-op sync actions; default false) */
+  isCoop?: boolean;
 }
 
 export interface CreateRunOptions {
@@ -1517,6 +1596,7 @@ export const createRun = (level: LevelDef, save: AdventureSave, opts: CreateRunO
     synergyPeak: { ...initialSynergy },
     fightBaseDamageBonus: 0,
     ...(ov?.blankEvolutionRules ? { blankEvolutionRules: true } : {}),
+    ...(ov?.isCoop ? { isCoop: true, caged: false } : {}),
     ...(opts.trackRuleFirings ? { ruleFirings: {}, ruleZeroOps: {} } : {}),
     sacrificeCooldownMs: 0,
     sacrificeUsedThisWave: false,
@@ -1805,7 +1885,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
 
   switch (action.type) {
     case 'MATCH': {
-      if (d.status !== 'playing') return state;
+      if (d.status !== 'playing' || d.caged) return state;
       const before = d.totalDamage;
       const isGraceSave =
         Boolean(action.graceUsed) || Boolean(action.rewards?.some(r => r.effectType === 'grace'));
@@ -1865,7 +1945,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
     }
 
     case 'GRACE_SAVE': {
-      if (d.status !== 'playing' || d.stats.graces <= 0) return state;
+      if (d.status !== 'playing' || d.caged || d.stats.graces <= 0) return state;
       const before = d.totalDamage;
       applyGraceSave(d, action.cards);
       drain(d);
@@ -1874,7 +1954,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
     }
 
     case 'SACRIFICE': {
-      if (d.status !== 'playing') return state;
+      if (d.status !== 'playing' || d.caged) return state;
       if (d.hearts === null || d.hearts <= 1) return state;
       const isTimed = d.timeLeft !== null;
       if (isTimed ? (d.sacrificeCooldownMs ?? 0) > 0 : Boolean(d.sacrificeUsedThisWave)) return state;
@@ -1946,7 +2026,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
     }
 
     case 'INVALID': {
-      if (d.status !== 'playing') return state;
+      if (d.status !== 'playing' || d.caged) return state;
       d.mistakes += 1;
       d.fightMetrics.mistakes += 1;
       d.purityChain = 0;
@@ -2113,7 +2193,7 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
     }
 
     case 'USE_HINT': {
-      if (d.status !== 'playing') return state;
+      if (d.status !== 'playing' || d.caged) return state;
       if (d.hintUsedThisSet) return state;
       d.hintUsedThisSet = true;
       d.stats = { ...d.stats, hints: Math.max(0, d.stats.hints - 1) };
@@ -2409,6 +2489,235 @@ export const runReducer = (state: RunState, action: RunAction): RunState => {
       syncStats(d);
       return finish(d, state);
     }
+
+    case 'COOP_SYNC_BOSS': {
+      if (!d.isCoop || d.status !== 'playing') return state;
+      d._clock = true;
+      if (action.foeMaxHp !== undefined && Number.isFinite(action.foeMaxHp) && action.foeMaxHp > 0) {
+        d.foeMaxHp = Math.max(1, Math.round(action.foeMaxHp));
+      }
+      const prevHp = d.foeHp;
+      const nextHp = Math.max(0, Math.min(d.foeMaxHp, Math.round(action.foeHp)));
+      d.foeHp = nextHp;
+      if (action.allyHit && action.allyHit.amount > 0) {
+        const dmg = Math.round(action.allyHit.amount);
+        const label = action.allyHit.allyName ? `${action.allyHit.allyName}` : 'Ally';
+        if (prevHp > nextHp) {
+          const applied = prevHp - nextHp;
+          emit(d, action.allyHit.isRainbow ? 'rainbow' : 'hit', applied, label);
+        } else {
+          emit(d, 'rule', dmg, `${label} hit`);
+        }
+      }
+      if (action.parry && d.parry) {
+        const p = d.parry;
+        const sync = action.parry;
+        const isNewCrossParry =
+          Boolean(sync.crossParry) || (sync.phase === 'staggered' && p.phase !== 'staggered');
+        if (isNewCrossParry && sync.phase === 'staggered') {
+          const perfect = Boolean(sync.crossParry?.perfect);
+          const defaultStagger = perfect
+            ? (p.spec.staggerMs ?? PARRY_RULES.perfectStaggerMs)
+            : (p.spec.staggerMs ?? PARRY_RULES.counterStaggerMs);
+          const staggerMs = Math.max(1000, Math.round(sync.msLeft ?? sync.durationMs ?? defaultStagger));
+          const durationMs = Math.max(staggerMs, Math.round(sync.durationMs ?? staggerMs));
+          d.parry = {
+            ...p,
+            phase: 'staggered',
+            msLeft: staggerMs,
+            durationMs,
+            warned: false,
+            stallsUsed: 0,
+            parries: p.parries + 1,
+            perfectParries: p.perfectParries + (perfect ? 1 : 0),
+          };
+          d.parriesLanded += 1;
+          d.fightMetrics.parries += 1;
+          if (perfect) {
+            d.perfectParriesLanded += 1;
+            d.fightMetrics.perfectParries += 1;
+          }
+          bumpSynergy(d, 'parries', perfect ? 2 : 1);
+          const mult = perfect ? PARRY_RULES.perfectParryMult : PARRY_RULES.counterParryMult;
+          const label = sync.crossParry?.allyName
+            ? `${sync.crossParry.allyName} Cross-Parry`
+            : p.spec.attackName;
+          emit(d, perfect ? 'perfect_parry' : 'parry', mult, label);
+          enqueue(d, 'parry', undefined, undefined, { perfect });
+          if (perfect) chargeWeaponEvolutions(d, 'all', 1);
+          drain(d);
+        } else {
+          const phaseChanged = sync.phase !== p.phase;
+          const fallbackDur =
+            sync.phase === 'windup'
+              ? p.spec.windupMs
+              : sync.phase === 'staggered'
+                ? (p.spec.staggerMs ?? PARRY_RULES.counterStaggerMs)
+                : p.spec.cooldownMs;
+          const nextDur = Math.max(1000, Math.round(sync.durationMs ?? (phaseChanged ? fallbackDur : p.durationMs)));
+          const nextMs = Math.max(0, Math.min(nextDur, Math.round(sync.msLeft ?? (phaseChanged ? nextDur : p.msLeft))));
+          d.parry = {
+            ...p,
+            phase: sync.phase,
+            msLeft: nextMs,
+            durationMs: nextDur,
+            warned:
+              sync.phase === 'windup'
+                ? phaseChanged
+                  ? nextMs <= p.spec.perfectWindowMs
+                  : p.warned || nextMs <= p.spec.perfectWindowMs
+                : false,
+            ...(phaseChanged ? { stallsUsed: 0 } : {}),
+          };
+        }
+      }
+      break;
+    }
+
+    case 'COOP_SYNC_SYNERGY': {
+      if (!d.isCoop || d.status !== 'playing') return state;
+      let changed = false;
+      if (action.counters) {
+        for (const [key, raw] of Object.entries(action.counters)) {
+          if (typeof raw !== 'number' || !Number.isFinite(raw) || !(key in d.synergy)) continue;
+          const attr = key as SynergyAttrId;
+          const merged = Math.max(d.synergy[attr], Math.round(raw));
+          if (merged !== d.synergy[attr]) {
+            setSynergy(d, attr, merged);
+            changed = true;
+          }
+        }
+      }
+      if (action.deltas) {
+        for (const [key, raw] of Object.entries(action.deltas)) {
+          if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0 || !(key in d.synergy)) continue;
+          const attr = key as SynergyAttrId;
+          bumpSynergy(d, attr, Math.round(raw));
+          changed = true;
+        }
+      }
+      if (!changed) return state;
+      refreshSources(d);
+      if (d._queue.length > 0) drain(d);
+      break;
+    }
+
+    case 'COOP_RECEIVE_GIFT': {
+      if (!d.isCoop || d.status !== 'playing') return state;
+      d._clock = true;
+      const sender = action.fromName ? `${action.fromName}: ` : '';
+      if (action.gift === 'wild_card') {
+        const selectableNonWild = d.board
+          .map((c, i) => (touchable(d, i) && isSelectable(c) && !c.isWild ? i : -1))
+          .filter(i => i >= 0);
+        const candidates =
+          selectableNonWild.length > 0
+            ? selectableNonWild
+            : d.board.map((c, i) => (touchable(d, i) && !c.isWild ? i : -1)).filter(i => i >= 0);
+        if (candidates.length > 0) {
+          const slot = d._rng.pick(candidates);
+          updateCards(d, [slot], c => ({ ...clearCardLocks(c), isWild: true }));
+          emit(d, 'rule', undefined, `${sender}WILD CARD!`, { slots: [slot] });
+        }
+      } else if (action.gift === 'heal') {
+        if (!d.caged && d.hearts !== null && d.maxHearts !== null) {
+          heal(d, 1);
+          drain(d);
+        }
+      } else if (action.gift === 'cleanse') {
+        const primary = d.board
+          .map((c, i) =>
+            touchable(d, i) &&
+            (c.cursedUntil !== undefined || (c.frozen ?? 0) > 0 || c.isDud || c.isFaceDown || c.locked)
+              ? i
+              : -1
+          )
+          .filter(i => i >= 0);
+        const candidates =
+          primary.length > 0
+            ? primary
+            : d.board.map((c, i) => (touchable(d, i) && isCardCleansable(c) ? i : -1)).filter(i => i >= 0);
+        if (candidates.length > 0) {
+          const slot = d._rng.pick(candidates);
+          const targetId = d.board[slot].id;
+          updateCards(d, [slot], cleanseHazardCard);
+          if (d.timeBombIds.includes(targetId)) {
+            d.timeBombIds = d.timeBombIds.filter(id => id !== targetId);
+          }
+          bumpSynergy(d, 'hazards', 1);
+          emit(d, 'rule', undefined, `${sender}CLEANSED!`, { slots: [slot] });
+          drain(d);
+        }
+      }
+      break;
+    }
+
+    case 'COOP_SET_CAGED': {
+      if (!d.isCoop || d.status !== 'playing') return state;
+      d._clock = true;
+      if (action.caged) {
+        if (d.caged && (d.hearts === null || d.hearts === 0)) return state;
+        d.caged = true;
+        if (d.hearts !== null) d.hearts = 0;
+        d.purityChain = 0;
+        d.lastDiffCount = 0;
+        d.combo = 0;
+        d.bonusCombo = 0;
+        d.cleanStreak = 0;
+        d.passive.hotStreak = false;
+        syncLiveSynergy(d);
+        emit(d, 'rule', undefined, 'CAGED!');
+      } else {
+        if (!d.caged && (d.hearts === null || d.hearts > 0)) return state;
+        d.caged = false;
+        const targetHearts = Math.max(1, Math.round(action.reviveHearts ?? 2));
+        if (d.hearts !== null && d.maxHearts !== null) {
+          d.hearts = Math.min(d.maxHearts, targetHearts);
+        }
+        const cleansedSlots: number[] = [];
+        d.board = d.board.map((c, idx) => {
+          if (isCardCleansable(c)) {
+            cleansedSlots.push(idx);
+            return cleanseHazardCard(c);
+          }
+          return c;
+        });
+        if (d.timeBombIds.length > 0) d.timeBombIds = [];
+        emit(
+          d,
+          'heal',
+          d.hearts ?? targetHearts,
+          action.rescuedByName ? `${action.rescuedByName} rescued you!` : 'RESCUED!'
+        );
+        if (cleansedSlots.length > 0) {
+          bumpSynergy(d, 'hazards', cleansedSlots.length);
+          emit(d, 'rule', undefined, 'CLEANSED!', { slots: cleansedSlots });
+        }
+        drain(d);
+      }
+      break;
+    }
+
+    case 'COOP_FORCE_DEFEAT': {
+      if (!d.isCoop) return state;
+      d._clock = true;
+      d.status = 'lost';
+      d.endReason = 'hearts';
+      if (action.reason === 'both_caged') {
+        d.caged = true;
+        if (d.hearts !== null) d.hearts = 0;
+      }
+      if (action.reason === 'time_up' && d.timeLeft !== null) {
+        d.timeLeft = 0;
+      }
+      emit(
+        d,
+        action.reason === 'time_up' ? 'time_up' : 'hurt',
+        action.reason === 'time_up' ? undefined : 1,
+        action.reason === 'both_caged' ? 'BOTH CAGED!' : undefined
+      );
+      break;
+    }
   }
 
   syncTraps(d);
@@ -2430,6 +2739,7 @@ const tickClock = (d: Draft, ms: number) => {
     d.simplified = remainingMs > 0 ? { ...d.simplified, remainingMs } : null;
     if (!d.simplified) emit(d, 'simplify_end');
   }
+  if (d.caged) return;
   tickTimeBombs(d, ms);
   tickParry(d, ms * speed);
 

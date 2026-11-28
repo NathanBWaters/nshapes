@@ -1520,4 +1520,115 @@ export interface RunState {
   cauldronWager?: 0 | 1 | 2;
   /** Dev/sandbox-only manual clock freeze toggled from FightDebugDrawer ([TP-11]) */
   devClockFrozen?: boolean;
+  /** True when running inside a 2P Co-Op fight (enables Golden Cage & co-op reducer actions; undefined in solo) */
+  isCoop?: boolean;
+  /** True when trapped in the Golden Cage at 0 hearts in Co-Op mode (board locked until ally rescue) */
+  caged?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Starfall Summit 2P Co-Op Combat Interface (decoupled from WebSockets)
+// ---------------------------------------------------------------------------
+
+/** In-fight ally gift kinds delivered from partner's board or quick-gift button. */
+export type CoopCombatGiftKind = 'wild_card' | 'heal' | 'cleanse';
+
+/** Inbound event pulses pushed from the co-op session layer into AdventureRun. */
+export type CoopInboundEvent =
+  | {
+      /** Unique event identifier for idempotent deduplication in AdventureRun */
+      id: string;
+      kind: 'ally_hit';
+      amount: number;
+      allyName?: string;
+      isRainbow?: boolean;
+      isBig?: boolean;
+    }
+  | {
+      id: string;
+      kind: 'cross_parry';
+      perfect: boolean;
+      staggerMs?: number;
+      allyName?: string;
+    }
+  | {
+      id: string;
+      kind: 'gift_received';
+      gift: CoopCombatGiftKind;
+      fromName?: string;
+    }
+  | {
+      id: string;
+      kind: 'ally_rescued';
+      rescuedName?: string;
+      /** True when the local player was the one rescued from the Golden Cage */
+      isLocal?: boolean;
+    }
+  | {
+      id: string;
+      kind: 'ally_emote';
+      emote: string;
+      fromName?: string;
+    };
+
+/** Authoritative live co-op combat state handed into AdventureRun. */
+export interface CoopCombatState {
+  allyFighter: CharacterName;
+  allyName: string;
+  allyHearts: number;
+  allyMaxHearts: number;
+  allyCaged: boolean;
+  allyRescueProgress?: number;
+  allyRescueNeeded?: number;
+  allyConnected: boolean;
+  allyCombo: number;
+  /** Optional quick-gift charge meter (if omitted, AdventureRun tracks local Sets toward gift charge) */
+  giftCharge?: number;
+  giftChargeMax?: number;
+
+  localCaged: boolean;
+  rescueProgress: number;
+  rescueNeeded: number;
+
+  sharedBossHp: number;
+  sharedBossMaxHp: number;
+  sharedParryPhase?: 'calm' | 'windup' | 'staggered';
+  sharedParryMsLeft?: number;
+  sharedParryDurationMs?: number;
+  sharedTimeLeft?: number;
+  sharedSynergy?: Partial<SynergyCounters>;
+  sharedOutcome?: 'playing' | 'won' | 'lost';
+  sharedDefeatReason?: 'both_caged' | 'time_up' | 'retreat';
+
+  inboundEvents: readonly CoopInboundEvent[];
+}
+
+/** Outbound callbacks emitted by AdventureRun to the co-op session layer. */
+export interface CoopCombatCallbacks {
+  onDealDamage: (payload: {
+    amount: number;
+    combo: number;
+    isRainbow?: boolean;
+    isSet?: boolean;
+  }) => void;
+  onParryLanded: (payload: {
+    perfect: boolean;
+    staggerMs: number;
+  }) => void;
+  onSynergyDelta: (deltas: Partial<SynergyCounters>) => void;
+  onHeartStateChange: (payload: {
+    hearts: number;
+    maxHearts: number;
+    caged: boolean;
+  }) => void;
+  onBoardCounterStatus: (hasCounter: boolean) => void;
+  onSendGift: (gift: CoopCombatGiftKind) => void;
+  onSendEmote?: (emote: string) => void;
+  onCoopFightOutcome?: (outcome: 'won' | 'lost', run: RunState) => void;
+}
+
+/** Decoupled Co-Op session prop accepted by AdventureRun (zero WebSocket dependency). */
+export interface CoopCombatSession {
+  state: CoopCombatState;
+  callbacks: CoopCombatCallbacks;
 }
